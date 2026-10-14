@@ -84,8 +84,11 @@ pub struct ContestedFile {
     pub path: String,
     /// Every active mod that ships it, in deployment order.
     pub mods: Vec<String>,
-    /// The one on disk: the last of them.
+    /// The one on disk: the last of them, unless a per-file pin chose another active provider.
     pub winner: String,
+    /// The winner comes from a pin (`Profile.file_winners`), not from the order.
+    #[serde(default)]
+    pub pinned: bool,
 }
 
 /// A file whose winner a new order changes.
@@ -122,19 +125,52 @@ fn rank_of(order: &[String]) -> HashMap<&str, usize> {
     order.iter().enumerate().map(|(i, id)| (id.as_str(), i)).collect()
 }
 
+/// Per-file winners chosen by the user: relative path (rel_key) -> mod id. See
+/// `Profile.file_winners`.
+pub type Pins = HashMap<String, String>;
+
+/// THE rule, in one place: who provides `path` on disk, given its active providers sorted in
+/// activation order. A pin wins when its mod is one of those providers; otherwise the LAST one
+/// does. `None` when nobody active ships it (the game's own file, or nothing).
+///
+/// Returns the winner and whether it came from the pin.
+pub fn winner_of<'a>(path: &str, providers_in_order: &[&'a String], pins: &Pins) -> Option<(&'a String, bool)> {
+    if let Some(p) = pins.get(path) {
+        if let Some(hit) = providers_in_order.iter().find(|id| id.as_str() == p.as_str()) {
+            return Some((*hit, true));
+        }
+    }
+    providers_in_order.last().map(|w| (*w, false))
+}
+
+/// The active providers of one path, in activation order.
+fn providers_sorted<'a>(ids: &'a [String], rank: &HashMap<&str, usize>) -> Vec<&'a String> {
+    let mut active: Vec<&String> = ids.iter().filter(|id| rank.contains_key(id.as_str())).collect();
+    active.sort_by_key(|id| rank[id.as_str()]);
+    active
+}
+
 /// Files provided by more than one mod of `order`, and who wins each (the last of them).
+/// The app always goes through `contested_pinned`; this is the order-only rule the tests state.
+#[cfg(test)]
 pub fn contested(index: &ProviderIndex, order: &[String]) -> Vec<ContestedFile> {
+    contested_pinned(index, order, &Pins::new())
+}
+
+/// `contested`, honouring per-file pins.
+pub fn contested_pinned(index: &ProviderIndex, order: &[String], pins: &Pins) -> Vec<ContestedFile> {
     let rank = rank_of(order);
     let mut out = Vec::new();
     for (path, ids) in index.iter() {
-        let mut active: Vec<&String> = ids.iter().filter(|id| rank.contains_key(id.as_str())).collect();
+        let active = providers_sorted(ids, &rank);
         if active.len() < 2 {
             continue;
         }
-        active.sort_by_key(|id| rank[id.as_str()]);
+        let (winner, pinned) = winner_of(path, &active, pins).map(|(w, p)| (w.clone(), p)).unwrap_or_default();
         out.push(ContestedFile {
             path: path.clone(),
-            winner: active.last().map(|s| s.to_string()).unwrap_or_default(),
+            winner,
+            pinned,
             mods: active.into_iter().cloned().collect(),
         });
     }
@@ -144,13 +180,102 @@ pub fn contested(index: &ProviderIndex, order: &[String]) -> Vec<ContestedFile> 
 
 /// The files whose winner differs between two orders of the same set.
 pub fn handovers(index: &ProviderIndex, before: &[String], after: &[String]) -> Vec<Handover> {
-    let was: HashMap<String, String> = contested(index, before).into_iter().map(|c| (c.path, c.winner)).collect();
-    contested(index, after)
+    let none = Pins::new();
+    plan_handovers(index, before, &none, after, &none)
+}
+
+/// What a plan changes on disk: every file contested BEFORE (two or more active providers)
+/// whose winner is different AFTER. `after` may be a subset of `before` (mods the plan
+/// disables): a file whose last provider leaves goes back to the game's own copy, reported
+/// with `to` empty.
+pub fn plan_handovers(index: &ProviderIndex, before: &[String], pins_before: &Pins, after: &[String], pins_after: &Pins) -> Vec<Handover> {
+    let rb = rank_of(before);
+    let ra = rank_of(after);
+    let mut out = Vec::new();
+    for (path, ids) in index.iter() {
+        let was = providers_sorted(ids, &rb);
+        if was.len() < 2 {
+            continue;
+        }
+        let now = providers_sorted(ids, &ra);
+        let w0 = winner_of(path, &was, pins_before).map(|(w, _)| w.clone()).unwrap_or_default();
+        let w1 = winner_of(path, &now, pins_after).map(|(w, _)| w.clone()).unwrap_or_default();
+        if w0 != w1 {
+            out.push(Handover { path: path.clone(), from: w0, to: w1 });
+        }
+    }
+    out.sort_by(|a, b| a.path.cmp(&b.path));
+    out
+}
+
+/// Two active mods that ship the same files, and how those files are shared out between them.
+#[derive(Debug, Serialize, Clone, PartialEq)]
+pub struct PairSummary {
+    /// The one applied first (higher up the list, lower position).
+    pub a: String,
+    /// The one applied later.
+    pub b: String,
+    /// Files both ship.
+    pub files: usize,
+    /// Of those, how many are `a`'s copy on disk.
+    pub a_wins: usize,
+    /// ... and `b`'s. The rest (files - a_wins - b_wins) are a third mod's.
+    pub b_wins: usize,
+    /// How many of those files have a pinned winner.
+    pub pinned: usize,
+}
+
+/// One summary per pair of mods that share at least one file, most files first.
+pub fn pair_summaries(contested: &[ContestedFile]) -> Vec<PairSummary> {
+    let mut acc: HashMap<(String, String), PairSummary> = HashMap::new();
+    for c in contested {
+        for i in 0..c.mods.len() {
+            for j in (i + 1)..c.mods.len() {
+                // `mods` is in activation order, so `i` is applied before `j`.
+                let (a, b) = (&c.mods[i], &c.mods[j]);
+                let e = acc.entry((a.clone(), b.clone())).or_insert_with(|| PairSummary {
+                    a: a.clone(),
+                    b: b.clone(),
+                    files: 0,
+                    a_wins: 0,
+                    b_wins: 0,
+                    pinned: 0,
+                });
+                e.files += 1;
+                if &c.winner == a {
+                    e.a_wins += 1;
+                } else if &c.winner == b {
+                    e.b_wins += 1;
+                }
+                if c.pinned {
+                    e.pinned += 1;
+                }
+            }
+        }
+    }
+    let mut out: Vec<PairSummary> = acc.into_values().collect();
+    out.sort_by(|x, y| y.files.cmp(&x.files).then(x.a.cmp(&y.a)).then(x.b.cmp(&y.b)));
+    out
+}
+
+/// Pins as a caller sent them: keys normalised, empty entries dropped.
+pub fn normalize_pins(raw: &Pins) -> Pins {
+    raw.iter()
+        .filter(|(k, v)| !k.trim().is_empty() && !v.trim().is_empty())
+        .map(|(k, v)| (rel_key(k), v.clone()))
+        .collect()
+}
+
+/// The pinned files whose pin overrides the order right now (the pinned mod is not the last
+/// provider): what has to be put back after an enable or a disable copied the order's winner
+/// over it. Empty when there are no pins, which is the common case and costs nothing.
+pub fn pins_to_reassert(index: &ProviderIndex, order: &[String], pins: &Pins) -> Vec<ContestedFile> {
+    if pins.is_empty() {
+        return Vec::new();
+    }
+    contested_pinned(index, order, pins)
         .into_iter()
-        .filter_map(|c| match was.get(&c.path) {
-            Some(w) if w != &c.winner => Some(Handover { path: c.path, from: w.clone(), to: c.winner }),
-            _ => None,
-        })
+        .filter(|c| c.pinned && c.mods.last() != Some(&c.winner))
         .collect()
 }
 
@@ -358,10 +483,10 @@ pub fn redeploy(
     for c in files {
         crate::fs_utils::checkpoint(ticket)?;
         let Some(rel) = crate::fs_utils::safe_relative_path(&c.path) else { continue };
-        let src = c
-            .mods
-            .iter()
-            .rev()
+        // The winner first (a pin may have chosen one that is not the last), then the others
+        // from the top down, for a winner whose copy is missing on disk.
+        let src = std::iter::once(&c.winner)
+            .chain(c.mods.iter().rev())
             .filter_map(|id| roots.get(id))
             .map(|root| root.join(&rel))
             .find(|p| p.is_file());
@@ -417,6 +542,7 @@ pub(crate) struct Snapshot {
     folders: HashMap<String, PathBuf>,
     names: HashMap<String, String>,
     added: HashMap<String, String>,
+    pub(crate) pins: Pins,
 }
 
 pub(crate) fn snapshot(state: &State<'_, AppState>, profile_id: Option<String>) -> Result<Snapshot, String> {
@@ -444,6 +570,7 @@ pub(crate) fn snapshot(state: &State<'_, AppState>, profile_id: Option<String>) 
         folders,
         names,
         added,
+        pins: prof.file_winners.clone(),
     })
 }
 
@@ -465,7 +592,7 @@ pub fn mod_order_get(
 ) -> Result<(Vec<OrderedMod>, Vec<ContestedFile>), String> {
     let snap = snapshot(&state, profile_id)?;
     let index = index_for(&state, &snap.order)?;
-    let contested = contested(&index, &snap.order);
+    let contested = contested_pinned(&index, &snap.order, &snap.pins);
     let (beats, beaten) = rivals(&contested, &snap.names);
     let mut count: HashMap<&str, (usize, usize)> = HashMap::new();
     for c in &contested {
@@ -512,33 +639,56 @@ pub fn mod_order_preview(
         return Err("order.errNotPermutation".to_string());
     }
     let index = index_for(&state, &snap.order)?;
-    Ok(handovers(&index, &snap.order, &order))
+    Ok(plan_handovers(&index, &snap.order, &snap.pins, &order, &snap.pins))
 }
 
 /// Save `after` as the profile's order, then make the disk agree: the files that changed hands
 /// (or, with `all`, every contested file) are re-copied from their winner. Returns how many.
 pub(crate) async fn commit(state: &State<'_, AppState>, snap: Snapshot, after: Vec<String>, all: bool) -> Result<usize, String> {
+    let pins = snap.pins.clone();
+    commit_with_pins(state, snap, after, pins, all).await
+}
+
+/// `commit`, also replacing the profile's per-file pins with `pins_after`.
+pub(crate) async fn commit_with_pins(
+    state: &State<'_, AppState>,
+    snap: Snapshot,
+    after: Vec<String>,
+    pins_after: Pins,
+    all: bool,
+) -> Result<usize, String> {
     let index = index_for(state, &after)?;
     let moved: Vec<ContestedFile> = if all {
-        contested(&index, &after)
+        contested_pinned(&index, &after, &pins_after)
     } else {
-        let changed: HashSet<String> = handovers(&index, &snap.order, &after).into_iter().map(|h| h.path).collect();
-        contested(&index, &after).into_iter().filter(|c| changed.contains(&c.path)).collect()
+        let changed: HashSet<String> =
+            plan_handovers(&index, &snap.order, &snap.pins, &after, &pins_after).into_iter().map(|h| h.path).collect();
+        contested_pinned(&index, &after, &pins_after).into_iter().filter(|c| changed.contains(&c.path)).collect()
     };
 
-    if after != snap.order {
+    let pins_changed = pins_after != snap.pins;
+    if after != snap.order || pins_changed {
         let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         for p in data.profiles.iter_mut() {
             // The profile itself, and its twins: enable/disable keep profiles that share the
             // game AND mods folders in step, so the order follows when they hold the same set.
+            // The pins follow the same way: they describe the same game folder.
             let twin = p.game_path == snap.game_path && p.mods_path == snap.mods_path && is_permutation(&p.active_mods, &after);
             if p.id == snap.pid || twin {
                 p.active_mods = after.clone();
+                if pins_changed {
+                    p.file_winners = pins_after.clone();
+                }
             }
         }
     }
     let _ = state.save();
 
+    redeploy_files(snap, moved).await
+}
+
+/// Copy each of `moved` from its winner, off the UI thread, one mod operation at a time.
+async fn redeploy_files(snap: Snapshot, moved: Vec<ContestedFile>) -> Result<usize, String> {
     if moved.is_empty() {
         return Ok(0);
     }
@@ -609,6 +759,131 @@ pub async fn mod_order_reapply(state: State<'_, AppState>, profile_id: Option<St
     commit(&state, snap, after, true).await
 }
 
+// ── The conflicts view ─────────────────────────────────────────────────────────────────────
+//
+// One screen for "which mod wins each file, and how do I change that": the active profile's
+// contested files under a DRAFT plan (an order, per-file pins, mods to disable), every pair of
+// mods that share files with how the files are shared out, and what the draft would change on
+// disk compared with now. The frontend never computes a winner itself; it sends the draft and
+// draws what comes back, so the screen and the deployment cannot disagree.
+
+/// How many contested files / handovers a plan answer carries. Two big texture packs can share
+/// tens of thousands of paths; the counts stay exact, the lists are cut.
+pub const PLAN_LIST_CAP: usize = 5000;
+
+/// The conflicts of a profile under a draft plan.
+#[derive(Debug, Serialize, Clone)]
+pub struct ConflictPlanView {
+    pub profile_id: String,
+    /// The draft's activation order (the disabled mods taken out).
+    pub order: Vec<String>,
+    /// id -> display name, for every mod the answer mentions.
+    pub names: HashMap<String, String>,
+    /// The draft's pins (normalised).
+    pub pins: Pins,
+    /// Contested files under the draft, path order, at most PLAN_LIST_CAP.
+    pub files: Vec<ContestedFile>,
+    pub files_total: usize,
+    /// Every pair of mods that share files under the draft.
+    pub pairs: Vec<PairSummary>,
+    /// What applying the draft would change on disk, at most PLAN_LIST_CAP.
+    pub handovers: Vec<Handover>,
+    pub handovers_total: usize,
+}
+
+/// Check a draft against the saved state and build the view. Pure, for the tests.
+pub fn plan_view(
+    index: &ProviderIndex,
+    current: &[String],
+    current_pins: &Pins,
+    order: Option<Vec<String>>,
+    pins: Option<Pins>,
+    disable: &[String],
+) -> Result<(Vec<String>, Pins, Vec<ContestedFile>, Vec<PairSummary>, Vec<Handover>), String> {
+    let order = order.unwrap_or_else(|| current.to_vec());
+    if !is_permutation(current, &order) {
+        return Err("order.errNotPermutation".to_string());
+    }
+    let pins = normalize_pins(&pins.unwrap_or_else(|| current_pins.clone()));
+    let leaving: HashSet<String> = disable.iter().cloned().collect();
+    let after: Vec<String> = order.iter().filter(|id| !leaving.contains(*id)).cloned().collect();
+    let files = contested_pinned(index, &after, &pins);
+    let pairs = pair_summaries(&files);
+    let moves = plan_handovers(index, current, current_pins, &after, &pins);
+    Ok((after, pins, files, pairs, moves))
+}
+
+/// The conflicts of a profile (None = the active one) under a draft. Every argument left out
+/// means "as saved": with none, this is simply the current state.
+#[tauri::command]
+pub fn conflict_plan(
+    state: State<'_, AppState>,
+    profile_id: Option<String>,
+    order: Option<Vec<String>>,
+    pins: Option<Pins>,
+    disable: Option<Vec<String>>,
+) -> Result<ConflictPlanView, String> {
+    let snap = snapshot(&state, profile_id)?;
+    let index = index_for(&state, &snap.order)?;
+    let disable = disable.unwrap_or_default();
+    let (after, pins, mut files, pairs, mut moves) = plan_view(&index, &snap.order, &snap.pins, order, pins, &disable)?;
+    let files_total = files.len();
+    let handovers_total = moves.len();
+    files.truncate(PLAN_LIST_CAP);
+    moves.truncate(PLAN_LIST_CAP);
+    let names = snap
+        .order
+        .iter()
+        .map(|id| (id.clone(), snap.names.get(id).cloned().unwrap_or_else(|| id.clone())))
+        .collect();
+    Ok(ConflictPlanView {
+        profile_id: snap.pid,
+        order: after,
+        names,
+        pins,
+        files,
+        files_total,
+        pairs,
+        handovers: moves,
+        handovers_total,
+    })
+}
+
+/// Save a draft's order and pins, and re-copy the files that change hands. Returns how many.
+/// Disabling is not done here: the frontend disables through `disable_mod`, which restores
+/// each file from the next provider and then puts the pins back (`reassert_pins`).
+#[tauri::command]
+pub async fn conflict_apply(
+    state: State<'_, AppState>,
+    profile_id: Option<String>,
+    order: Vec<String>,
+    pins: Pins,
+) -> Result<usize, String> {
+    let snap = snapshot(&state, profile_id)?;
+    if !is_permutation(&snap.order, &order) {
+        return Err("order.errNotPermutation".to_string());
+    }
+    let pins = normalize_pins(&pins);
+    commit_with_pins(&state, snap, order, pins, false).await
+}
+
+/// Put pinned files back after an enable or a disable: both copy the ORDER's winner (enable
+/// overwrites, disable restores from the last remaining provider), which is not the pinned
+/// one when a pin is set. Nothing to do, and nothing read, when the profile has no pins.
+pub async fn reassert_pins(state: &State<'_, AppState>) -> Result<usize, String> {
+    let snap = snapshot(state, None)?;
+    if snap.pins.is_empty() {
+        return Ok(0);
+    }
+    let index = index_for(state, &snap.order)?;
+    let moved = pins_to_reassert(&index, &snap.order, &snap.pins);
+    redeploy_files(snap, moved).await
+}
+
 #[cfg(test)]
 #[path = "mod_order_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "conflict_plan_tests.rs"]
+mod conflict_plan_tests;

@@ -25,14 +25,19 @@
 //     4000 × 4000 PNG (a 64 MB decode on the boot path for an 80 px picture). The mark is the
 //     SVG logo. All crisp at any DPI;
 //   · colours are theme tokens (accent, cyan, brand amber, text), not #00c2ff / #fbbf24;
-//   · it ends when the app is ready, not on a fixed delay: once the impact has happened
-//     (a floor, so it never flashes), whatever is left of the entrance is played fast and
-//     the splash fades. The app no longer waits 800 ms after it is ready;
+//   · it ends when the app is ready, not on a fixed delay, but never before the entrance has
+//     played in full (the floor): a fast boot used to cut it just after the impact and play
+//     the wordmark at six times its speed, so the owner saw almost no animation. The app no
+//     longer waits 800 ms after it is ready;
 //   · skippable: a click or any key jumps to the end; if the app is already ready the
 //     splash goes at once;
 //   · the orbit ticker is removed with the loader (it used to stay registered forever);
-//   · under reduced motion (the OS setting, or Settings → Graphics « Reduce animations »),
-//     or when the window starts hidden, nothing moves: a still splash, a short fade;
+//   · under BMM's own « Reduce animations » (Settings → Graphics), the « Off » style, or when
+//     the window starts hidden, nothing moves: a still splash, a short fade. The Windows
+//     setting (« Animation effects », seen by WebView2 as prefers-reduced-motion) is NOT
+//     followed here: many gaming PCs turn it off for speed, which froze the intro for
+//     everyone on them although they never asked BMM for that. The intro has its own
+//     setting, is skippable and ends with the boot; the rest of the app still follows it;
 //   · the version line shows the real version (it read a .titlebar-version that no longer
 //     exists, so it was always empty).
 //
@@ -53,9 +58,8 @@
         if (saved && STYLES[saved]) style = saved;
     } catch (_) { /* no storage: the default */ }
     try {
-        reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-            || localStorage.getItem('bmm.reduceAnimations') === '1';
-    } catch (_) { /* no matchMedia / storage: animate */ }
+        reduce = localStorage.getItem('bmm.reduceAnimations') === '1';
+    } catch (_) { /* no storage: animate */ }
     // Started minimised or behind another window: nobody sees a show, so there is none.
     if (document.hidden) reduce = true;
 
@@ -238,11 +242,13 @@
     }
 
     /* ─── the end ─── */
-    // The shortest time the splash stays, so a fast boot does not flash it: just past the
-    // impact for classic, the logo settled for logo. Skipping, still and off have none.
+    // The shortest time the splash stays: the whole entrance, so a fast boot still shows the
+    // show (classic ends with « By BetterCommunity » at ~2 s, logo at ~0.9 s). Skipping, still
+    // and off have none.
     function floorMs() {
         if (still || skipped) return 0;
-        return style === 'classic' ? 1150 : 550;
+        if (tl) return Math.ceil(tl.duration() * 1000) + 150;
+        return style === 'classic' ? 2150 : 900;
     }
 
     function finish() {

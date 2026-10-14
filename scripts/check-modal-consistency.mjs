@@ -77,7 +77,6 @@ export const OVERLAY_FAMILIES = {
     'tut-hub-overlay': 'tutorial hub: must sit above everything for lesson spotlights',
     'tut-unsaved-overlay': 'tutorial engine guard, above the tutorial layer',
     'cp-overlay': 'command palette, not a dialog card',
-    'bte-confirm-overlay': 'theme editor inline confirm/prompt, above the editor',
     'community-history-overlay': 'community history/comments panels',
     'flappy-overlay': 'easter-egg game',
     'mod-loading-overlay': 'the library loading veil, not a dialog',

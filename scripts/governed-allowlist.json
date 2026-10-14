@@ -255,8 +255,8 @@
   },
   "src/commands/tools.rs": {
     "spawn_blocking": {
-      "count": 2,
-      "why": "governed: tools_find_duplicates holds a Hash ticket (checkpoint per mod during the walk and per file before each BLAKE3, bytes reported); tools_disk_usage holds a Scan ticket with a checkpoint every 512 entries; both also stop on tools_cancel"
+      "count": 6,
+      "why": "governed: tools_find_duplicates holds a Hash ticket (checkpoint per mod during the walk and per file before each BLAKE3, bytes reported); tools_disk_usage, tools_large_files and tools_cache_preview hold a Scan ticket with a checkpoint every 512 entries; tools_check_deployed holds a Scan ticket (checkpoint per profile and every 64 folders); tools_cache_clean holds a Maintenance ticket with a checkpoint per entry; all but the clean also stop on tools_cancel"
     }
   },
   "src/commands/verify.rs": {

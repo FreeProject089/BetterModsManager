@@ -4,8 +4,9 @@
 // bc-endpoints.ts; this file feeds it the live switch (app.cfg via links-config's loadBcConfig,
 // links.json's site root) and adds a transport with a timeout and ONE error shape.
 //
-// No behaviour change by default: without `BCApiVersion=v2` in app.cfg, `bcUrl(route)` is
-// exactly `${bcRoot()}/api${route}` — the string every call site built by hand.
+// No behaviour change by default: unless the session runs on v2 (app.cfg `BCApiVersion=v2`, or
+// links.json `bc_api: "v2"`, AND a passing health check), `bcUrl(route)` is exactly
+// `${bcRoot()}/api${route}` — the string every call site built by hand.
 //
 // Transport goes through the native bridge (bc_api_get / bc_api_post), like every other BC call:
 // the webview origin is tauri.localhost and the BCWEB API sends no CORS header for it.
@@ -14,7 +15,7 @@
 // pure part of this module stays importable from anywhere (node tests included).
 import { getLinks, bcTestMode, bcTestBase, bcApiVersionCfg, bcV2BaseCfg } from './links-config.js';
 import {
-    resolveRoots, v1ApiUrl, v2ApiUrl, feedbackEndpointFor, signedFeedUrls,
+    resolveRoots, v1ApiUrl, v2ApiUrl, feedbackEndpointFor, signedFeedUrls, rehomeUrl,
     type BcRoots, type BcApiVersion,
 } from './bc-endpoints.js';
 
@@ -31,7 +32,8 @@ export function bcRoots(): BcRoots {
     });
 }
 
-/** `v1` unless app.cfg says `BCApiVersion=v2`. Adapters switch on this. */
+/** `v1` unless this session was activated on v2 (core/bc-v2.ts: app.cfg > links.json, then a
+ *  health check). Adapters switch on this. */
 export function bcApiVersion(): BcApiVersion { return bcRoots().version; }
 export function bcUsesV2(): boolean { return bcApiVersion() === 'v2'; }
 
@@ -43,6 +45,11 @@ export function bcV2Url(route: string): string { return v2ApiUrl(bcRoots(), rout
 export function bcV2Root(): string { return bcRoots().v2Root; }
 /** Where reports go when links.json does not say otherwise (v1 path in v1 mode). */
 export function bcFeedbackEndpoint(): string { return feedbackEndpointFor(bcRoots()); }
+/** A links.json URL on the v1 API root, moved to the v2 root when this session runs on v2 and v2
+ *  serves that route (contributors, the update fallback). Unchanged in v1 mode. */
+export function bcRehome(url: string): string { return rehomeUrl(bcRoots(), url); }
+/** Where BetterCommunity CONTENT lives (blog posts, their media): the v2 root in v2 mode. */
+export function bcContentRoot(): string { return bcRoots().v2Root; }
 /** v2 signed feed addresses, for catalog_format.rs `catalog_verify_signature` to check. */
 export function bcSignedFeeds(): ReturnType<typeof signedFeedUrls> { return signedFeedUrls(bcRoots()); }
 

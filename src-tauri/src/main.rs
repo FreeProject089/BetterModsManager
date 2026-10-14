@@ -525,9 +525,16 @@ fn main() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            // A panel's pop-out window (commands/popout.rs) is gone, however it went: the main
+            // window shows the panel again.
+            if let tauri::WindowEvent::Destroyed = event {
+                if let Some(id) = window.label().strip_prefix(commands::popout::PREFIX) {
+                    let _ = window.app_handle().emit(commands::popout::CLOSED_EVENT, id.to_string());
+                }
+            }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 // Only the main window ends the app. The benchmark's mini monitor (label
-                // "mini-monitor") just closes.
+                // "mini-monitor") and the pop-out windows ("popout-*") just close.
                 if window.label() != "main" { return; }
                 if commands::crash::is_shutting_down() { return; }
                 api.prevent_close();
@@ -559,6 +566,15 @@ fn main() {
             commands::tools::tools_disk_usage,
             commands::tools::tools_profile_diff,
             commands::tools::tools_find_orphans,
+            commands::tools::tools_check_deployed,
+            commands::tools::tools_large_files,
+            commands::tools::tools_names_report,
+            commands::tools::tools_duplicate_profiles,
+            commands::tools::tools_cache_preview,
+            commands::tools::tools_cache_clean,
+            commands::tools::tools_log_list,
+            commands::tools::tools_log_read,
+            commands::tools::tools_json_diff,
             commands::profile::get_profiles,
             commands::profile::get_active_profile_id,
             commands::profile::set_active_profile,
@@ -741,6 +757,19 @@ fn main() {
             commands::consent_ledger::consent_export,
             commands::consent_ledger::consent_sync,
             commands::bc_v2::consent_sync_bc_v2,
+            commands::bc_v2::bc_v2_activate,
+            commands::bc_v2::bc_v2_runtime,
+            commands::bc_v2::bc_v2_legal_status,
+            commands::bc_v2::bc_v2_legal_answer,
+            commands::bc_v2::bc_v2_legal_answers,
+            commands::bc_v2_auth::bc_v2_device_start,
+            commands::bc_v2_auth::bc_v2_device_poll,
+            commands::bc_v2_auth::bc_v2_device_cancel,
+            commands::bc_v2_auth::bc_v2_auth_status,
+            commands::bc_v2_auth::bc_v2_sign_out,
+            commands::bc_v2_auth::bc_v2_ensure_token,
+            commands::bc_v2_auth::bc_v2_feedback_send,
+            commands::bc_v2_auth::bc_v2_notifications,
             commands::consent_ledger::consent_prepare_launch,
             commands::analytics::analytics_request_deletion,
             commands::analytics::analytics_request_data,
@@ -850,6 +879,8 @@ fn main() {
             commands::benchmark::cancel_app_benchmark,
             commands::benchmark::open_mini_monitor,
             commands::benchmark::close_mini_monitor,
+            commands::popout::open_popout_window,
+            commands::popout::close_popout_window,
             commands::benchmark::read_file_text,
             commands::disk::get_system_disks,
             commands::hardware::get_hardware_info,
@@ -963,6 +994,8 @@ fn main() {
             commands::repo_ssh::ssh_list_dir,
             commands::repo_ssh::ssh_resolve_path,
             commands::repo_ssh::ssh_forget_host,
+            commands::repo_ssh::ssh_probe_host_key,
+            commands::repo_ssh::ssh_trust_host,
             commands::repo_server::start_repo_server,
             commands::repo_server::stop_repo_server,
             commands::repo_server::get_repo_require_login,
@@ -998,6 +1031,9 @@ fn main() {
             commands::repo_follow::repo_follow_set,
             commands::repo_follow::repo_follow_remove,
             commands::repo_follow::repo_follow_check,
+            commands::repo_follow::repo_follow_probe,
+            commands::repo_follow::repo_follow_set_secret,
+            commands::repo_addr::repo_addr_normalize,
             commands::crash::finalize_and_close_app,
             commands::disk::read_file_base64,
             // commands::debug::get_project_files and read_project_file
@@ -1097,6 +1133,8 @@ fn main() {
             commands::mod_order::mod_order_preview,
             commands::mod_order::mod_order_place,
             commands::mod_order::mod_order_reapply,
+            commands::mod_order::conflict_plan,
+            commands::mod_order::conflict_apply,
             commands::order_share::mod_order_export,
             commands::order_share::mod_order_import_preview,
             commands::order_share::mod_order_import,
@@ -1171,6 +1209,7 @@ fn main() {
             commands::apps::toggle_app_favorite,
             commands::apps::add_community_source,
             commands::apps::remove_community_source,
+            commands::apps::set_community_sources,
             commands::apps::get_default_apps_path,
             commands::apps::set_app_exe_path,
             commands::apps::open_app_folder,

@@ -664,5 +664,126 @@
         "winner": "demo-mod-04"
       }
     ]
-  ]
+  ],
+  "conflict_plan": {
+    "profile_id": "demo-profile-main",
+    "order": [
+      "demo-mod-01",
+      "demo-mod-02",
+      "demo-mod-03",
+      "demo-mod-04"
+    ],
+    "names": {
+      "demo-mod-01": "Enhanced Textures",
+      "demo-mod-02": "Weather Overhaul",
+      "demo-mod-03": "Quiet Footsteps",
+      "demo-mod-04": "Extended Inventory"
+    },
+    "pins": {
+      "Data/textures/rock_01.dds": "demo-mod-01"
+    },
+    "files": [
+      {
+        "path": "Data/sky.dds",
+        "mods": [
+          "demo-mod-01",
+          "demo-mod-02"
+        ],
+        "winner": "demo-mod-02",
+        "pinned": false
+      },
+      {
+        "path": "Data/textures/rock_01.dds",
+        "mods": [
+          "demo-mod-01",
+          "demo-mod-02"
+        ],
+        "winner": "demo-mod-01",
+        "pinned": true
+      },
+      {
+        "path": "Data/textures/water.dds",
+        "mods": [
+          "demo-mod-01",
+          "demo-mod-02"
+        ],
+        "winner": "demo-mod-02",
+        "pinned": false
+      },
+      {
+        "path": "Data/ui/hud.xml",
+        "mods": [
+          "demo-mod-01",
+          "demo-mod-04"
+        ],
+        "winner": "demo-mod-04",
+        "pinned": false
+      }
+    ],
+    "files_total": 4,
+    "pairs": [
+      {
+        "a": "demo-mod-01",
+        "b": "demo-mod-02",
+        "files": 3,
+        "a_wins": 1,
+        "b_wins": 2,
+        "pinned": 1
+      },
+      {
+        "a": "demo-mod-01",
+        "b": "demo-mod-04",
+        "files": 1,
+        "a_wins": 0,
+        "b_wins": 1,
+        "pinned": 0
+      }
+    ],
+    "handovers": [],
+    "handovers_total": 0
+  },
+  "get_all_mod_conflicts": {
+    "demo-mod-01": [
+      {
+        "category": "Intra",
+        "status": "Active",
+        "other_mod_id": "demo-mod-02",
+        "other_mod_name": "Weather Overhaul",
+        "other_profile_name": "Main",
+        "file_count": 3,
+        "activation_order": 1
+      },
+      {
+        "category": "Intra",
+        "status": "Active",
+        "other_mod_id": "demo-mod-04",
+        "other_mod_name": "Extended Inventory",
+        "other_profile_name": "Main",
+        "file_count": 1,
+        "activation_order": 3
+      }
+    ],
+    "demo-mod-02": [
+      {
+        "category": "Intra",
+        "status": "Active",
+        "other_mod_id": "demo-mod-01",
+        "other_mod_name": "Enhanced Textures",
+        "other_profile_name": "Main",
+        "file_count": 3,
+        "activation_order": 0
+      }
+    ],
+    "demo-mod-04": [
+      {
+        "category": "Intra",
+        "status": "Active",
+        "other_mod_id": "demo-mod-01",
+        "other_mod_name": "Enhanced Textures",
+        "other_profile_name": "Main",
+        "file_count": 1,
+        "activation_order": 0
+      }
+    ]
+  }
 }

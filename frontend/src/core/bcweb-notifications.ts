@@ -12,6 +12,15 @@ import { invoke } from './api.js';
 import { getLang } from './i18n.js';
 import { recordNotification } from '../ui/notification-center.js';
 import { bcApi } from './links-config.js';
+import { bcUsesV2 } from './bc-client.js';
+
+/** v2 mode with a device-flow sign-in: the poller reads v2's compatibility path
+ *  (`/api/v1/notifications`, ADR 0023) with the account's token, through Rust (bc_v2_auth.rs).
+ *  The answer has v1's shape, so everything below reads it unchanged. */
+async function v2Polling(): Promise<boolean> {
+    if (!bcUsesV2()) return false;
+    try { return await (await import('./bc-v2.js')).bcV2SignedIn(); } catch { return false; }
+}
 
 /** The newest createdAt already seen. Sent as `since` so the server returns only
  *  what arrived after it — a poller that re-reads the whole list every few minutes
@@ -46,7 +55,9 @@ function severityOf(kind: string): 'info' | 'success' | 'warning' | 'error' {
 export async function pullBcwebNotifications(): Promise<number> {
     let raw: string;
     try {
-        raw = await invoke('bcweb_notifications', { base: bcApi(), since: since() }) as string;
+        raw = (await v2Polling())
+            ? await invoke('bc_v2_notifications', { since: since() }, { quiet: true }) as string
+            : await invoke('bcweb_notifications', { base: bcApi(), since: since() }) as string;
     } catch (e) {
         // no_key is the normal state for anyone who has not linked an account, so it
         // is not an error to report — only a reason to stop. bad_key IS worth saying
@@ -118,8 +129,8 @@ export function bcwebNotificationsOff(): boolean {
 export async function startBcwebNotifications(): Promise<void> {
     stopBcwebNotifications();
     if (bcwebNotificationsOff()) return;
-    let ok = false;
-    try { ok = await invoke('has_bcweb_api_key') as boolean; } catch { ok = false; }
+    let ok = await v2Polling();
+    if (!ok) { try { ok = await invoke('has_bcweb_api_key') as boolean; } catch { ok = false; } }
     if (!ok) return;
     void pullBcwebNotifications();
     _timer = setInterval(() => { void pullBcwebNotifications(); }, POLL_MS);

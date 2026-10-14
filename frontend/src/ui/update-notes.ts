@@ -8,6 +8,9 @@ import { invoke } from '../core/api.js';
 import { lucideIconUrl, phosphorIconUrl } from '../core/icon-cdn.js';
 import { t } from '../core/i18n.js';
 import { toast, openExternal } from './app.js';
+import { registerNotifAction } from './notification-center.js';
+
+let _lastUpdateInfo: any = null;
 import { escHtml, escAttr } from '../core/utils.js';
 import { raiseAboveAll } from './layer.js';
 import { getLinks } from '../core/links-config.js';
@@ -98,7 +101,7 @@ export async function openUpdateNotesModal() {
 
             const note = allNotes.find(n => n.path === fullPath);
             return `
-                <div class="ptb-sidebar-item ${allNotes.length > 0 && note === defaultNote ? 'active' : ''}" data-path="${escAttr(fullPath)}" style="padding:8px ${paddingLeft + 8}px; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:10px; transition:var(--transition); border-left:2px solid transparent; min-width:0;">
+                <div class="ptb-sidebar-item ${allNotes.length > 0 && note === defaultNote ? 'active' : ''}" data-path="${escAttr(fullPath)}" style="padding:8px ${paddingLeft + 8}px; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:10px; transition:var(--transition); min-width:0;">
                     ${uiIcon('file', 14, { style: 'flex-shrink:0;' })}
                     <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0;">${escHtml(item.name)}</span>
                 </div>
@@ -498,11 +501,11 @@ if (typeof document !== 'undefined') {
         }
         
         .md-body blockquote {
-            border-left: 3px solid var(--accent);
-            padding: 2px 16px;
+            border: 1px solid var(--bmm-border);
+            padding: 8px 16px;
             margin: 16px 0;
-            background: rgba(59, 130, 246, 0.05);
-            border-radius: 0 8px 8px 0;
+            background: var(--bmm-s03);
+            border-radius: 8px;
             color: var(--text-secondary);
         }
         
@@ -520,19 +523,19 @@ if (typeof document !== 'undefined') {
             text-transform: uppercase;
             letter-spacing: 0.05em;
         }
-        .md-alert-note { border-left-color: var(--accent); background: rgba(59, 130, 246, 0.1) !important; }
+        .md-alert-note { border-color: color-mix(in srgb, var(--accent) 35%, transparent); background: rgba(59, 130, 246, 0.1) !important; }
         .md-alert-note .md-alert-title { color: var(--accent); }
         
-        .md-alert-tip { border-left-color: #10b981; background: rgba(16, 185, 129, 0.1) !important; }
+        .md-alert-tip { border-color: color-mix(in srgb, #10b981 35%, transparent); background: rgba(16, 185, 129, 0.1) !important; }
         .md-alert-tip .md-alert-title { color: var(--bmm-success); }
         
-        .md-alert-important { border-left-color: #a855f7; background: rgba(168, 85, 247, 0.1) !important; }
+        .md-alert-important { border-color: color-mix(in srgb, #a855f7 35%, transparent); background: rgba(168, 85, 247, 0.1) !important; }
         .md-alert-important .md-alert-title { color: var(--bmm-purple); }
         
-        .md-alert-warning { border-left-color: #f59e0b; background: rgba(245, 158, 11, 0.1) !important; }
+        .md-alert-warning { border-color: color-mix(in srgb, #f59e0b 35%, transparent); background: rgba(245, 158, 11, 0.1) !important; }
         .md-alert-warning .md-alert-title { color: var(--bmm-warning); }
         
-        .md-alert-caution { border-left-color: #ef4444; background: rgba(239, 68, 68, 0.1) !important; }
+        .md-alert-caution { border-color: color-mix(in srgb, #ef4444 35%, transparent); background: rgba(239, 68, 68, 0.1) !important; }
         .md-alert-caution .md-alert-title { color: var(--bmm-danger); }
         
         .md-body hr { height: 1px; border: none; border-top: 1px solid var(--border); margin: 20px 0; }
@@ -880,7 +883,10 @@ async function resolveUpdateInfo(): Promise<any> {
             apiBaseUrl: getLinks().autoupdate_api,
             // Empty string disables it, which is what an older links.json yields — the
             // Rust side treats blank as absent rather than as a URL to try.
-            fallbackApiUrl: getLinks().autoupdate_api_fallback || '',
+            // In BetterCommunity v2 mode the v1 feed path moves to the v2 root (ADR 0019, same
+            // GitHub shape). Only the feed moves: the installer is still checked against the
+            // release's signed update-manifest.json / update.json, exactly as before.
+            fallbackApiUrl: (await import('../core/bc-client.js')).bcRehome(getLinks().autoupdate_api_fallback || ''),
         });
     } catch (e) { ghErr = e; }
 
@@ -988,7 +994,12 @@ async function performUpdateCheck(manual = false) {
 
 /** A toast that opens the dialog when clicked (the « Updates » notification source). */
 function notifyUpdate(info) {
-    toast(t('update.availableToast', { version: info.latest_version }) || `BMM v${info.latest_version} is available.`, 'info', 10000, '', 'Updates');
+    // Keyed by version: a check that runs again finds the same update, which is one event (the
+    // entry is refreshed, not duplicated). « Open » in the notification centre shows the dialog.
+    _lastUpdateInfo = info;
+    registerNotifAction('update', () => { if (_lastUpdateInfo) showUpdateAvailableModal(_lastUpdateInfo); });
+    toast(t('update.availableToast', { version: info.latest_version }) || `BMM v${info.latest_version} is available.`, 'info', 10000, '', 'Updates',
+        { key: `update:${info.latest_version}`, action: { kind: 'update' } });
     setTimeout(() => {
         const el = document.querySelector('#toast-container .toast:last-child') as HTMLElement | null;
         if (!el) return;
@@ -1610,7 +1621,7 @@ async function showPtbModal(folderStructure, lang, initialFileName = null) {
             } else {
                 const note = allNotes.find(n => n.path === item.path);
                 return `
-                    <div class="ptb-sidebar-item ${allNotes.length > 0 && note === activeNote ? 'active' : ''}" data-path="${escAttr(item.path)}" style="padding:8px ${paddingLeft + 8}px; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:10px; transition:var(--transition); border-left:2px solid transparent; min-width:0;">
+                    <div class="ptb-sidebar-item ${allNotes.length > 0 && note === activeNote ? 'active' : ''}" data-path="${escAttr(item.path)}" style="padding:8px ${paddingLeft + 8}px; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:10px; transition:var(--transition); min-width:0;">
                         ${uiIcon('file', 14, { style: 'flex-shrink:0;' })}
                         <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0;">${escHtml(item.name)}</span>
                     </div>

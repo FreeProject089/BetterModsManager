@@ -468,7 +468,6 @@
     flex-wrap: wrap;
     padding: 14px 16px;
     border: 1px solid var(--bmm-border-accent);
-    border-left-width: 3px;
     border-radius: 10px;
     background: var(--bmm-accent-dim);
 }

@@ -368,17 +368,6 @@ body.is-maximized .titlebar-spacer {
     color: var(--accent);
 }
 
-.nav-item.active::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 25%;
-    bottom: 25%;
-    width: 3px;
-    background: var(--accent);
-    border-radius: 0 3px 3px 0;
-    box-shadow: 0 0 8px var(--accent);
-}
 
 .nav-icon {
     display: flex;
@@ -2260,7 +2249,6 @@ body.bmm-toolbar-opaque .lib-header-shell {
     gap: 14px;
     flex-wrap: wrap;
     transition: border-color 0.18s ease,
-                border-left-color 0.18s ease,
                 background-color 0.18s ease,
                 transform 0.15s ease,
                 box-shadow 0.18s ease,
@@ -2292,23 +2280,7 @@ body.bmm-toolbar-opaque .lib-header-shell {
     transform: translateX(2px) translateY(var(--bmm-card-hover-lift, 0px));
 }
 
-.mod-card.enabled {
-    border-left: 3px solid var(--success);
-    transition: border-left-color 0.2s ease, var(--transition);
-}
-
-.mod-card.enabled:hover {
-    border-left-color: var(--accent);
-}
-
-.mod-card.disabled {
-    border-left: 3px solid var(--border);
-    transition: border-left-color 0.2s ease, var(--transition);
-}
-
-.mod-card.disabled:hover {
-    border-left-color: var(--accent);
-}
+/* On or off is the switch's job: no coloured rail down the card's edge. */
 
 /* API / deep-link toggle pulse */
 @keyframes modApiToggle {
@@ -4125,28 +4097,14 @@ select.input-field option {
     flex-shrink: 0;
 }
 
-/* Accent rail down the left edge in the tutorial's colour. */
-.tut-card::after {
-    content: '';
-    position: absolute;
-    top: 0; bottom: 0; left: 0;
-    width: 3px;
-    background: linear-gradient(180deg, var(--tut-color, var(--accent)), color-mix(in srgb, var(--tut-color, var(--accent)) 30%, transparent));
-    border-radius: 18px 0 0 18px;
-    pointer-events: none;
-}
-
 .tut-card:hover {
     box-shadow: 0 10px 34px rgba(0,0,0,0.36), 0 0 0 1px color-mix(in srgb, var(--tut-color, var(--accent)) 26%, transparent);
     border-color: color-mix(in srgb, var(--tut-color, var(--accent)) 30%, var(--bmm-s07));
     transform: translateY(-3px);
 }
 
-.tut-card.is-complete::after { background: var(--success); }
-
 .tut-card.is-complete {
     opacity: 0.78;
-    border-left-color: var(--success);
 }
 
 /* Left color bar — hidden, replaced by border-left */
@@ -5018,7 +4976,6 @@ body.tut-docked.tut-min .app-shell {
     padding: 8px 11px;
     background: rgba(234, 179, 8, 0.07);
     border: 1px solid rgba(234, 179, 8, 0.22);
-    border-left: 3px solid #eab308;
     border-radius: 9px;
     margin-top: 10px;
 }
@@ -5110,7 +5067,6 @@ body.tut-docked.tut-min .app-shell {
     padding: 9px 13px;
     background: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.07);
     border: 1px solid rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.22);
-    border-left: 3px solid var(--accent);
     border-radius: 10px;
     transition: all 0.3s ease;
     flex-shrink: 0;
@@ -5119,7 +5075,6 @@ body.tut-docked.tut-min .app-shell {
 .tut-action-box.done {
     background: rgba(34, 197, 94, 0.07);
     border-color: rgba(34, 197, 94, 0.25);
-    border-left-color: var(--success);
     gap: 8px;
 }
 
@@ -5567,12 +5522,13 @@ body.tut-docked.tut-min .app-shell {
 }
 .nbe-eye.is-hidden { color: var(--text-muted); opacity: 0.7; }
 .nbe-eye:disabled { opacity: 0.3; cursor: not-allowed; }
-.nbe-actions { justify-content: stretch; }
-.nbe-act { display: inline-flex; align-items: center; gap: 6px; flex: 1 1 auto; min-width: 0; justify-content: center; }
+.nbe-actions { justify-content: flex-end; }
+/* The shell's footer order: Reset and Share/Import on the left, Done on the right at its own
+   width. The three used to stretch across the footer, a full-width blue bar for « Done ». */
+.nbe-act { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; min-width: 0; justify-content: center; }
 .nbe-act .nbe-act-ic { display: inline-flex; flex-shrink: 0; }
 .nbe-act .nbe-act-ic svg { width: 15px; height: 15px; }
 .nbe-act .nbe-act-tx { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#nbe-done { flex-basis: 100%; }   /* primary action gets its own row when space is tight */
 @media (min-width: 460px) { #nbe-done { flex-basis: auto; } }
 .nbe-edit { flex-shrink: 0; width: 26px; height: 28px; background: transparent; border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); cursor: pointer; }
 .nbe-edit:hover { color: var(--accent); border-color: var(--accent); }
@@ -5650,7 +5606,7 @@ body.tut-docked.tut-min .app-shell {
 .perm.s-clipboard{ color: #f472b6; border-color: #f472b655; background: #f472b618; }
 .perm.s-system   { color: var(--danger); border-color: #f8717155; background: #f8717118; }
 .api-note { color: var(--text-muted); font-size: 12px; margin-top: 10px; }
-.api-warn { color: var(--danger); font-size: 12.5px; background: rgba(248,113,113,0.08); border-left: 3px solid #f87171; border-radius: 6px; padding: 10px 12px; margin-top: 12px; }
+.api-warn { color: var(--danger); font-size: 12.5px; background: rgba(248,113,113,0.08); border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent); border-radius: 6px; padding: 10px 12px; margin-top: 12px; }
 
 /* ── Crash Reports & Sessions manager ── */
 /* The card, header, body and footer are the house shell (modal--lg modal--tall). The tabs and the
@@ -5826,8 +5782,8 @@ body.tut-docked.tut-min .app-shell {
 /* The Share/Import menu in the editor's actions bar — opens UPWARD (the bar is the
    modal's bottom edge). Opaque surface: a translucent menu renders its labels over
    whatever the modal shows behind it. */
-.nbe-share-menu-wrap { position: relative; display: inline-flex; flex: 1 1 auto; min-width: 0; }
-.nbe-share-menu-wrap > .nbe-act { flex: 1 1 auto; }
+.nbe-share-menu-wrap { position: relative; display: inline-flex; flex: 0 0 auto; min-width: 0; margin-right: auto; }
+.nbe-share-menu-wrap > .nbe-act { flex: 0 0 auto; }
 .nbe-share-menu {
     position: absolute;
     bottom: calc(100% + 6px);
@@ -7092,12 +7048,10 @@ select:focus {
     letter-spacing: 0.09em;
     color: var(--text-muted);
     margin-bottom: 10px;
-    border-left: 3px solid var(--bmm-s15);
 }
 
 /* Default accent = blue */
 .faq-category-header {
-    border-left-color: var(--accent);
     color: var(--text-secondary);
 }
 
@@ -7108,7 +7062,6 @@ select:focus {
 
 /* Cyan variant (Technique) */
 .faq-category-header--cyan {
-    border-left-color: #22d3ee;
     color: var(--text-secondary);
 }
 
@@ -7118,7 +7071,6 @@ select:focus {
 
 /* Danger / red variant (Critique) */
 .faq-category-header--danger {
-    border-left-color: #f87171;
     color: var(--text-secondary);
 }
 
@@ -7128,7 +7080,6 @@ select:focus {
 
 /* Green variant (Updates) */
 .faq-category-header--green {
-    border-left-color: #34d399;
     color: var(--text-secondary);
 }
 
@@ -7138,7 +7089,6 @@ select:focus {
 
 /* Purple variant (Other) */
 .faq-category-header--purple {
-    border-left-color: #c084fc;
     color: var(--text-secondary);
 }
 
@@ -7254,7 +7204,6 @@ select:focus {
     color: var(--text-secondary);
     cursor: pointer;
     transition: var(--transition-fast);
-    border-left: 3px solid transparent;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -7267,8 +7216,8 @@ select:focus {
 
 .archive-sidebar-item.active {
     background: var(--bg-active);
-    color: var(--accent);
-    border-left-color: var(--accent);
+    color: var(--text-primary);
+    font-weight: 600;
 }
 
 .archive-content {
@@ -7580,11 +7529,11 @@ select:focus {
 
 /* Blockquote */
 .archive-content blockquote {
-    border-left: 3px solid var(--accent);
+    border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
     background: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.06);
     padding: 10px 16px;
     margin: 16px 0;
-    border-radius: 0 8px 8px 0;
+    border-radius: 8px;
     color: var(--text-secondary);
     font-style: italic;
 }
@@ -8658,7 +8607,6 @@ select:focus {
     cursor: pointer;
     transition: var(--transition);
     position: relative;
-    border-left: 2px solid transparent;
 }
 
 .ptb-sidebar-item:hover {
@@ -8668,8 +8616,7 @@ select:focus {
 
 .ptb-sidebar-item.active {
     background: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.1);
-    color: var(--bmm-accent);
-    border-left-color: var(--bmm-accent);
+    color: var(--text-primary);
     font-weight: 600;
 }
 
@@ -8726,7 +8673,7 @@ select:focus {
     margin: 24px 0;
     padding: 16px 24px;
     background: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.05);
-    border-left: 4px solid var(--accent);
+    border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
     border-radius: 8px;
     color: var(--text-muted);
     font-style: italic;
@@ -8974,10 +8921,6 @@ select:focus {
     font-weight: 500;
 }
 
-.credit-link-card-github { border-left: 3px solid #64748b; }
-.credit-link-card-discord { border-left: 3px solid #5865F2; }
-.credit-link-card-ed { border-left: 3px solid #ff9800; }
-.credit-link-card-reddit { border-left: 3px solid #ff4500; }
 
 .credit-info-label-sub {
     margin-bottom: 4px;
@@ -9019,8 +8962,6 @@ select:focus {
     gap: 12px;
 }
 
-.credit-link-card-license { border-left: 3px solid #2563eb; }
-.credit-link-card-eula { border-left: 3px solid #8b5cf6; }
 
 .credit-icon-box-github { background: var(--bmm-s08); color: var(--text-primary); }
 .credit-icon-box-discord { background: rgba(88,101,242,0.1); color: #5865F2; }
@@ -10491,9 +10432,9 @@ body.tasky-hidden #app-mascot-container {
 /* The kit-callout geometry (kit.css), stated locally — this banner's markup predates
    the kit. Info tone; it hides with the Show-tips toggle like every advisory box. */
 .repo-info-banner {
-    background: var(--bmm-bg-elevated);
-    border: 1px solid var(--bmm-border);
-    border-inline-start: 3px solid var(--bmm-info, var(--cyan));
+    border-color: color-mix(in srgb, var(--bmm-info, var(--cyan)) 30%, var(--bmm-border)); background: color-mix(in srgb, var(--bmm-info, var(--cyan)) 5%, var(--bmm-bg-elevated));
+    border-width: 1px;
+    border-style: solid;
     border-radius: var(--bmm-radius-card, 12px);
     padding: 12px 16px;
     margin-bottom: 24px;
@@ -10674,14 +10615,6 @@ body.tasky-hidden #app-mascot-container {
     border-radius: 14px;
     overflow: hidden;
     transition: border-color .18s ease, box-shadow .18s ease;
-}
-.repo-card::before {
-    content: "";
-    position: absolute;
-    left: 0; top: 0; bottom: 0;
-    width: 3px;
-    background: var(--bmm-s08);
-    opacity: 0.6;
 }
 .repo-card:hover { border-color: var(--bmm-s09); box-shadow: 0 2px 14px rgba(0,0,0,0.16); }
 .repo-card-header {
@@ -11415,9 +11348,9 @@ body.tasky-hidden #app-mascot-container {
 /* Same callout geometry, WARNING tone — and deliberately NOT .bmm-tip: this is a trust
    warning, and the Show-tips comfort toggle must never silence it. */
 .plug-community-banner {
-    background: var(--bmm-bg-elevated);
-    border: 1px solid var(--bmm-border);
-    border-inline-start: 3px solid var(--bmm-warning, var(--warning));
+    border-color: color-mix(in srgb, var(--bmm-warning, var(--warning)) 30%, var(--bmm-border)); background: color-mix(in srgb, var(--bmm-warning, var(--warning)) 5%, var(--bmm-bg-elevated));
+    border-width: 1px;
+    border-style: solid;
     border-radius: var(--bmm-radius-card, 12px);
     padding: 12px 16px;
     font-size: 12.5px;
@@ -11465,9 +11398,6 @@ body.tasky-hidden #app-mascot-container {
     border:1px solid var(--border); border-radius:var(--bmm-radius-card, 12px);
     position:relative; overflow:hidden;
     transition:border-color .18s ease, transform .18s ease, box-shadow .18s ease; }
-.sched-row::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px;
-    background:var(--accent); opacity:0; transition:opacity .18s ease; }
-.sched-row.sched-on::before { opacity:.9; }
 .sched-row:hover { border-color:var(--bmm-border-hover, var(--border));
     transform:translateY(-1px); box-shadow:var(--bmm-shadow-card, 0 4px 14px rgba(0,0,0,0.18)); }
 .sched-row.sched-off { opacity:.62; }
@@ -11599,14 +11529,8 @@ body.tasky-hidden #app-mascot-container {
     color:var(--text-muted); margin:14px 0 6px; }
 .sched-steps { display:flex; flex-direction:column; gap:8px; }
 .sched-step { background:var(--bmm-s03, rgba(255,255,255,0.03)); border:1px solid var(--border); border-radius:10px; padding:9px 11px;
-    border-left-width:3px; transition:border-color .15s ease, background .15s ease; }
+    transition:border-color .15s ease, background .15s ease; }
 .sched-step:hover { background:var(--bmm-s05, rgba(255,255,255,0.05)); }
-/* Kind-coloured left rail so a long automation reads like a flow chart at a glance. */
-.sched-step-action  { border-left-color:#3b82f6; }
-.sched-step-if      { border-left-color:#f59e0b; }
-.sched-step-waitFor { border-left-color:#10b981; }
-.sched-step-delay   { border-left-color:#94a3b8; }
-.sched-step-repeat  { border-left-color:#a78bfa; }
 .sched-step-head { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .sched-step-tag { font-size:10px; font-weight:800; padding:2px 7px; border-radius:5px; letter-spacing:.05em; }
 /* Cross-container drag: while a step is held, every branch shows as a drop target;
@@ -11712,7 +11636,6 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
 /* ── Action editor card (redesigned — mirrors the script generator look) ───── */
 .sched-act-card {
     border:1px solid var(--border);
-    border-left:3px solid var(--accent);
     border-radius:10px;
     background:var(--bmm-s03, rgba(255,255,255,0.025));
     /* `visible` (not hidden) so the round-cornered icon tile / hover toolbar never
@@ -11809,7 +11732,7 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
 .sched-cmd-builder > .sched-cmd-label:first-child { margin-top:0; }
 /* A block that appears when an option is chosen, indented so it reads as belonging to it. */
 .sched-rs-newprof { display:flex; flex-direction:column; gap:4px; padding-left:10px;
-    border-left:2px solid var(--accent); margin-top:2px; }
+    border-left:2px solid var(--border); margin-top:2px; }
 .sched-rs-newprof[hidden] { display:none; }
 .sched-cmd-opt { font-weight:500; text-transform:none; letter-spacing:0; opacity:.7; }
 .sched-cmd-adv > summary { font-size:11px; color:var(--text-secondary); cursor:pointer; padding:7px 0; opacity:.85; }
@@ -12013,14 +11936,9 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
 .sched-step { transition:border-color .14s ease, box-shadow .14s ease; }
 /* Action steps render their own .sched-act-card → strip the generic wrapper. */
 .sched-step-action { background:transparent; border:none; padding:0; border-radius:0; }
-/* Scratch-style blocks: type identity is the left accent + a tinted HEADER BAND
+/* Scratch-style blocks: type identity is the kind icon + a tinted HEADER BAND
    (not a full-block background — that compounded into a solid orange wall when
    IFs nested). The body stays neutral so nesting is readable at any depth. */
-.sched-step-if      { border-left:3px solid #f59e0b; }
-.sched-step-waitFor { border-left:3px solid #10b981; }
-.sched-step-delay   { border-left:3px solid #94a3b8; }
-.sched-step-repeat  { border-left:3px solid #a78bfa; }
-.sched-step-repeat:hover { border-left-color:#a78bfa; }
 /* Tinted header band per control type (single row → never compounds) */
 .sched-step-if      > .sched-step-head { background:rgba(245,158,11,0.10); }
 .sched-step-waitFor > .sched-step-head { background:rgba(16,185,129,0.10); }
@@ -12064,9 +11982,6 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
 .sched-step-if:hover, .sched-step-waitFor:hover, .sched-step-delay:hover {
     border-color:var(--border-hover); box-shadow:0 2px 10px rgba(0,0,0,0.10);
 }
-.sched-step-if:hover { border-left-color:#f59e0b; }
-.sched-step-waitFor:hover { border-left-color:#10b981; }
-.sched-step-delay:hover { border-left-color:#94a3b8; }
 .sched-step .sched-step-head { gap:8px; row-gap:6px; }
 /* Measured: a FOR EACH head in a 363px panel is 24 + 8 + 71 + a 190px select + gaps = 325,
    and its 98px toolbar does not fit — so the toolbar wrapped onto its own line, alone,
@@ -12274,17 +12189,6 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
     border-color:var(--bmm-border-hover, var(--border));
     box-shadow:0 4px 14px rgba(0,0,0,0.14);
 }
-/* Kind-coloured left rail (overrides the legacy per-kind rules) */
-.sched-modal .sched-step-action  { border-left:3px solid var(--sk-do); }
-.sched-modal .sched-step-if      { border-left:3px solid var(--sk-if); }
-.sched-modal .sched-step-repeat  { border-left:3px solid var(--sk-loop); }
-.sched-modal .sched-step-waitFor { border-left:3px solid var(--sk-wait); }
-.sched-modal .sched-step-delay   { border-left:3px solid var(--sk-pause); }
-.sched-modal .sched-step-action:hover  { border-left-color:var(--sk-do); }
-.sched-modal .sched-step-if:hover      { border-left-color:var(--sk-if); }
-.sched-modal .sched-step-repeat:hover  { border-left-color:var(--sk-loop); }
-.sched-modal .sched-step-waitFor:hover { border-left-color:var(--sk-wait); }
-.sched-modal .sched-step-delay:hover   { border-left-color:var(--sk-pause); }
 /* The action card no longer draws its own chrome — the step IS the card now. */
 .sched-modal .sched-act-card,
 .sched-modal .sched-act-card:hover { width:auto; min-width:340px; border:none; background:transparent; border-radius:0; overflow:visible; box-shadow:none; }
@@ -12653,7 +12557,6 @@ body.sched-drag-live .sched-branch .sched-drop-zone:empty {
     letter-spacing: 0;
 }
 .plug-dl-path { color: var(--bmm-purple); font-weight: 600; }
-.plug-dl-row { border-left: 2px solid rgba(139,92,246,0.35); }
 .plug-dl-row:hover { background: rgba(139,92,246,0.07); }
 .plug-dl-noauth {
     display: inline-flex; align-items: center; gap: 4px;
@@ -13698,10 +13601,8 @@ button.plug-btn-modlist.plug-card-fact-btn:hover { background: color-mix(in srgb
     font-size: 11px;
     padding: 3px 6px;
     border-radius: 6px;
-    border-left: 2px solid transparent;
 }
-.plug-api-log-row.plug-api-log-ok  { border-left-color: #22c55e; }
-.plug-api-log-row.plug-api-log-err { border-left-color: var(--danger); background: rgba(239,68,68,0.06); }
+.plug-api-log-row.plug-api-log-err { background: rgba(239,68,68,0.06); }
 .plug-api-log-time {
     color: var(--text-muted);
     font-variant-numeric: tabular-nums;
@@ -14064,7 +13965,6 @@ button.plug-btn-modlist.plug-card-fact-btn:hover { background: color-mix(in srgb
 }
 .plug-mod-item:hover {
     background: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.07);
-    border-left: 2px solid rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.25);
 }
 .plug-mod-item-name {
     font-size: 12px;
@@ -15901,7 +15801,6 @@ body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-header-actions { flex-wrap: wrap
 .stackd-role {
     background: var(--bmm-s04);
     border-color: var(--bmm-border-accent, var(--accent));
-    border-left-width: 3px;
 }
 .stackd-label {
     font-size: 10px; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase;
@@ -16183,13 +16082,14 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 }
 .nc-item + .nc-item { margin-top: 2px; }
 .nc-item:hover { background: var(--bmm-s05); }
-/* An accent rail, not a coloured row: the message stays on text tokens so it is
-   legible in every theme, and severity is carried by the icon and the rail. */
+/* An accent dot, not a coloured row: the message stays on text tokens so it is
+   legible in every theme, and severity is carried by the icon. */
 .nc-item.unread::before {
     content: '';
     position: absolute;
-    left: 0; top: 8px; bottom: 8px;
-    width: 2px;
+    left: 2px; top: 50%;
+    width: 5px; height: 5px;
+    transform: translateY(-50%);
     border-radius: 999px;
     background: var(--accent);
 }
@@ -17642,6 +17542,11 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .repo-hide-btn { background: none; border: 0; color: var(--text-muted); cursor: pointer;
     padding: 3px; border-radius: 6px; display: inline-flex; align-items: center; }
 .repo-hide-btn:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
+/* « Follow » on a browse result / history entry: opens « Follow a repo » for it. */
+.repo-follow-btn { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--bmm-s04); color: var(--text-secondary);
+    font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
+.repo-follow-btn:hover { color: var(--text-primary); border-color: var(--bmm-border-hover); background: var(--bmm-s06); }
 .repo-hidden-note { display: flex; align-items: center; gap: 8px; font-size: 11px;
     color: var(--text-muted); padding: 6px 2px 10px; }
 .repo-cat-src {
@@ -19175,7 +19080,6 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 }
 /* The one that is not advice but a refusal: this task cannot run as configured. */
 .sched-hint-bad {
-    border-left-color: var(--danger, #ef4444);
     color: var(--danger, #ef4444);
 }
 
@@ -20108,8 +20012,9 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
 .dbg-panel.is-done .dbg-head { background: var(--bmm-bg-elevated); }
 .dbg-panel.is-done .dbg-step {
   color: var(--bmm-text-secondary);
-  border-left: 3px solid var(--bmm-border);
-  padding-left: 9px;
+  background: var(--bmm-s03);
+  border-radius: 8px;
+  padding: 6px 9px;
 }
 .dbg-panel.is-done .dbg-mode { opacity: .75; }
 /* Disabled means "there is no gate left to release", not "wait a moment". Said in the cursor
@@ -20279,8 +20184,7 @@ button.ssh-br-item:focus-visible { background: var(--bmm-s08, rgba(255, 255, 255
 .sec-current-pill:empty { display: none; }
 .sec-current-pill.is-limited { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
 .sec-mode-row { position: relative; }
-.sec-mode-row::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: transparent; transition: background .15s; }
-.sec-mode-row.active::before { background: var(--accent); }
+.sec-mode-row.active { background: color-mix(in srgb, var(--accent) 7%, transparent); }
 .sec-mode-row.active .sec-mode-icon { color: var(--accent);
     background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 22%, transparent), color-mix(in srgb, var(--accent) 8%, transparent));
     border-color: color-mix(in srgb, var(--accent) 45%, transparent); box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 22%, transparent); }
@@ -20651,7 +20555,7 @@ button.credits-code-repo:focus-visible { outline: 2px solid var(--bmm-accent); o
     transition: background var(--bmm-transition-fast), color var(--bmm-transition-fast);
 }
 .stk-nav-item:hover { background: var(--bmm-s05); color: var(--bmm-text-primary); }
-.stk-nav-item[aria-current="true"] { background: var(--bmm-accent-dim); color: var(--bmm-text-primary); box-shadow: inset 2px 0 0 var(--bmm-accent); }
+.stk-nav-item[aria-current="true"] { background: var(--bmm-accent-dim); color: var(--bmm-text-primary); font-weight: 600; }
 .stk-nav-item.is-empty { opacity: 0.55; }
 .stk-nav-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stk-nav-count {
@@ -20681,7 +20585,7 @@ button.credits-code-repo:focus-visible { outline: 2px solid var(--bmm-accent); o
     transition: background var(--bmm-transition-fast);
 }
 .stk-row:hover { background: var(--bmm-s04); }
-.stk-row[aria-selected="true"] { background: var(--bmm-accent-dim); box-shadow: inset 3px 0 0 var(--bmm-accent); }
+.stk-row[aria-selected="true"] { background: var(--bmm-accent-dim); }
 .stk-row:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: -2px; }
 .stk-name { grid-area: name; min-width: 0; font-family: var(--bmm-font-mono); font-size: 12.5px; font-weight: 700; color: var(--bmm-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stk-ver { grid-area: ver; justify-self: end; min-width: 0; max-width: 120px; font-family: var(--bmm-font-mono); font-size: 11px; color: var(--credits-accent-ink); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -20809,3 +20713,11 @@ button.credits-code-repo:focus-visible { outline: 2px solid var(--bmm-accent); o
    One family: Lucide, stroke 2, currentColor. A glyph never shrinks in a flex row
    and never takes a click away from its button. */
 .ic { flex-shrink: 0; pointer-events: none; }
+
+/* ── Pop-out windows (ui/popout.ts) ───────────────────────────────────────────
+   A panel shown in a window of its own stays here, hidden, and keeps doing the work.
+   Dragging its header past the window's edge says « let go to open it in a window ». */
+.bmm-popped-out { display: none !important; }
+/* No window to open in the browser preview: the button stays hidden until popout.ts wires it. */
+.bmm-popout-btn[hidden] { display: none !important; }
+.bmm-popout-armed { outline: 2px dashed var(--bmm-accent); outline-offset: 3px; opacity: 0.85; }

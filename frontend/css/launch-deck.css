@@ -136,7 +136,6 @@
 .ld-choice.is-on {
     border-color: var(--accent);
     background: var(--bmm-s05);
-    box-shadow: inset 3px 0 0 var(--accent);
 }
 .ld-choice input { accent-color: var(--accent); margin: 0; flex-shrink: 0; }
 .ld-choice--card { align-items: flex-start; }

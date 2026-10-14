@@ -100,7 +100,8 @@ async function waitForModalClosed(id: string): Promise<void> {
 
 // ── Tauri bridge ──────────────────────────────────────────
 import { loadTauri, invoke, listen, pickFolder, pickFile, saveFile, convertFileSrc, listenFileDrop, sendOsNotification, lastSavePath } from '../core/api.js';
-import { recordNotification, initNotificationCenter } from './notification-center.js';
+import { recordNotification, initNotificationCenter, readNotifPrefs, writeNotifPrefs, sendSystemNotification, appFocused, groupLabel, type RecordOptions } from './notification-center.js';
+import * as NotifRules from '../core/notif-model.js';
 // Imported from the tiny standalone module, NOT from debug-ui: the trap has to be
 // installed at boot to be worth anything, and pulling the whole DevTools surface
 // onto the boot path to get it would trade one diagnostic for a slower start.
@@ -153,63 +154,59 @@ export function toastsMuted(): boolean {
 }
 
 /**
- * The sources a popup can come from.
- *
- * Listed here so Settings can offer them without waiting for one to have fired at least once
- * — a preferences screen that only shows what has already interrupted you is a screen you can
- * only use after being interrupted.
+ * The groups a popup can come from (core/notif-model.ts NOTIF_GROUPS). Listed so Settings can
+ * offer them before one has fired: a preferences screen that only shows what has already
+ * interrupted you can only be used after being interrupted.
  */
-export const NOTIF_SOURCES = ['BMM', 'BCWEB', 'Repo', 'Tasks', 'Updates'] as const;
-export type NotifSource = (typeof NOTIF_SOURCES)[number];
+export const NOTIF_SOURCES = NotifRules.NOTIF_GROUPS;
+export type NotifSource = NotifRules.NotifGroup;
 
 /**
- * Is this source switched off?
- *
- * Read per call, like the global mute above and for the same reason: Settings writes it, and a
- * cached copy would need a restart to take effect — which is the kind of setting people
- * conclude is broken.
- *
- * DEFAULT ON. An unknown or newly added source is heard until somebody silences it; the other
- * way round, a source added in an update would be silent for everybody who had ever opened
- * this screen, and nothing would say why.
+ * Is this source's popup switched off? Per GROUP now (Settings, Notifications: in the app /
+ * also as a system notification / off). Read per call: Settings writes it, and a cached copy
+ * would need a restart to take effect. DEFAULT ON: a group nobody configured is heard.
  */
 export function sourceMuted(source: string): boolean {
-    try {
-        const raw = localStorage.getItem('bmm.muteSources');
-        if (!raw) return false;
-        const off = JSON.parse(raw);
-        return Array.isArray(off) && off.includes(source);
-    } catch { return false; }
+    return NotifRules.modeFor(readNotifPrefs(), NotifRules.groupOf(source)) === 'off';
 }
 
-export function toast(message, type = 'info', duration = 3000, icon = '', source = 'BMM') {
-    // Recorded here and ONLY here. A toast is a three-second window onto something
-    // that already happened — miss it and the information was simply gone, because
-    // there was no second place to look. Hooking the record into toast() rather
-    // than into each caller means the notification centre and the toast can never
-    // disagree about what the app said. (ui/notification-center.ts)
-    try { recordNotification(String(message ?? ''), type as any, source); } catch { /* never let history break a message */ }
+// Popups on screen, by identity (core/notif-model.ts toastKey): the same event twice is one
+// popup with a count, not two stacked copies. A batch toasts per item; a poll repeats itself.
+const _liveToasts = new Map<string, { el: HTMLElement; bump: (duration: number) => void }>();
 
-    // And told to any task waiting for one. Here for the same reason the record is here:
-    // every error in BMM comes through this function, so this is one call instead of a
-    // hundred — and it covers the failures nobody thought to instrument, which are exactly
-    // the ones worth reacting to.
+export function toast(message, type = 'info', duration = 3000, icon = '', source = 'BMM', opts: RecordOptions = {}) {
+    // Recorded here and ONLY here, so the notification centre and the popup can never disagree
+    // about what the app said (ui/notification-center.ts). A repeat folds into its entry.
+    try { recordNotification(String(message ?? ''), type as any, source, opts); } catch { /* never let history break a message */ }
+
+    // And told to any task waiting for one: every error in BMM comes through here.
     if (type === 'error') {
         try { fireErrorEvent(String(message ?? ''), source); } catch { /* same rule */ }
     }
 
-    // Muted: the message is still RECORDED above, so the notification centre keeps every
-    // word — what is switched off is the popup, not the information. Errors are never muted:
-    // an error nobody is shown and nobody looks for is an app that failed silently.
-    // Two switches, one rule: an ERROR is never silenced. An error nobody is shown and nobody
-    // looks for is an app that failed quietly, and "I muted notifications" is not consent to
-    // that. Everything is still RECORDED above either way — what a mute turns off is the
-    // popup, never the information.
-    if (type !== 'error' && (toastsMuted() || sourceMuted(source))) return () => {};
+    // What to do with it: the group's setting, do not disturb / quiet hours, the old global
+    // switch. An ERROR always pops up in the app: "I muted notifications" is not consent to
+    // failing silently. Everything is RECORDED above either way.
+    const group = NotifRules.groupOf(source);
+    let d: NotifRules.Delivery = { toast: true, os: false };
+    try {
+        d = NotifRules.deliveryFor(type as NotifRules.NotifType, group, readNotifPrefs(),
+            { now: new Date(), focused: appFocused(), globalMuted: toastsMuted() });
+    } catch { /* the rules failing must not eat a message */ }
+    if (d.os) void sendSystemNotification(`Better Mod Manager · ${groupLabel(group)}`, String(message ?? ''));
+    if (!d.toast) return () => {};
 
     const container = document.getElementById('toast-container');
+    if (!container) return () => {};
+
+    // Already on screen: count it and keep it up longer instead of stacking a copy.
+    const id = NotifRules.toastKey(String(message ?? ''), String(type), String(source), opts.key);
+    const live = _liveToasts.get(id);
+    if (live && live.el.isConnected) { live.bump(duration); return () => live.el.remove(); }
+
     const el = document.createElement('div');
     el.className = `toast ${type}`;
+    el.setAttribute('role', type === 'error' ? 'alert' : 'status');
 
     if (icon) {
         // Custom SVG icon (replaces the default colored dot)
@@ -224,20 +221,32 @@ export function toast(message, type = 'info', duration = 3000, icon = '', source
     }
     const textSpan = document.createElement('span');
     textSpan.textContent = message;
-
     el.appendChild(textSpan);
+    const countSpan = document.createElement('span');
+    countSpan.className = 'toast-count';
+    let count = 1;
     container.appendChild(el);
 
     const remove = () => {
+        _liveToasts.delete(id);
         el.classList.add('removing');
         el.addEventListener('animationend', () => el.remove(), { once: true });
     };
 
-    // `duration: 0` = stays until the caller dismisses it. A "working…" toast on a
-    // fixed timer either vanishes while the work is still running or, worse, lingers
-    // next to the finished result — which is how the integrity check ended up showing
-    // "checking…" beside its own completed report.
-    const timer = duration > 0 ? setTimeout(remove, duration) : null;
+    // `duration: 0` = stays until the caller dismisses it. A "working..." toast on a fixed
+    // timer either vanishes while the work is still running or lingers next to the result.
+    let timer = duration > 0 ? setTimeout(remove, duration) : null;
+    _liveToasts.set(id, {
+        el,
+        bump: (again: number) => {
+            count += 1;
+            countSpan.textContent = `×${count}`;
+            if (!countSpan.isConnected) el.appendChild(countSpan);
+            if (timer) { clearTimeout(timer); timer = null; }
+            const ms = Math.max(again, duration);
+            if (ms > 0) timer = setTimeout(remove, ms);
+        },
+    });
     return () => {
         if (timer) clearTimeout(timer);
         remove();
@@ -874,6 +883,12 @@ async function main() {
     // Load external link registry first so every module can call getLinks() safely
     await loadLinks();
     patchHtmlLinks();
+    // BetterCommunity v2 or v1 for this session (app.cfg > links.json > v1, then a health check
+    // in Rust). Not awaited: until it answers the session is v1, the default. Once it does, the
+    // v2 legal texts are checked (re-acceptance when v2 publishes another version).
+    void import('../core/bc-v2.js').then((m) => m.activateBcV2()).then((s) => {
+        if (s.version === 'v2') setTimeout(() => { void import('../core/bc-v2-legal.js').then((l) => l.checkBcV2Legal()).catch(() => {}); }, 20_000);
+    }).catch(() => {});
 
     // Initialize Offline Detection
     initOfflineDetection();
@@ -1119,7 +1134,9 @@ async function main() {
     initWebviewErrorTrap();
     // Second source for the same centre. Does nothing without a stored key, so it
     // costs an idle check for everyone who has not linked an account.
-    void import('../core/bcweb-notifications.js').then(m => m.startBcwebNotifications()).catch(() => {});
+    // In v2 mode it reads with the device-flow token instead, so it waits for the session's mode.
+    void import('../core/bc-v2.js').then((b) => b.activateBcV2())
+        .then(() => import('../core/bcweb-notifications.js')).then(m => m.startBcwebNotifications()).catch(() => {});
     // BetterCommunity's launch announcements: asked for now, shown by the launch deck later.
     // Never awaited — a slow or absent answer costs the start-up nothing (launch-announcements.ts).
     void import('./launch-announcements.js').then((m) => m.prefetchLaunchFeed()).catch(() => {});
@@ -1646,37 +1663,68 @@ window.applyTaskySettings = function () {
 // The global mute above is all-or-nothing, which is the right default and was the only
 // control. "Tell me about my repo, not about the site" had no answer.
 (function initNotifPrefs() {
-    const readOff = (): string[] => {
-        try { const v = JSON.parse(localStorage.getItem('bmm.muteSources') || '[]'); return Array.isArray(v) ? v : []; }
-        catch { return []; }
-    };
-    const writeOff = (list: string[]) => {
-        try { localStorage.setItem('bmm.muteSources', JSON.stringify([...new Set(list)])); } catch { /* private mode */ }
-    };
-
     const host = document.getElementById('notif-source-list');
     if (host) {
-        const off = readOff();
-        for (const src of NOTIF_SOURCES) {
-            const label = document.createElement('label');
-            label.style.cssText = 'display:inline-flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;'
-                + 'padding:4px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bmm-s04)';
-            const box = document.createElement('input');
-            box.type = 'checkbox';
-            // CHECKED means "show me", which is the way round the sentence above the list
-            // reads. A list of things to switch OFF, ticked, is a control that says the
-            // opposite of what it does.
-            box.checked = !off.includes(src);
-            box.addEventListener('change', () => {
-                const now = readOff().filter((x) => x !== src);
-                if (!box.checked) now.push(src);
-                writeOff(now);
-            });
-            const text = document.createElement('span');
-            text.textContent = src;
-            label.append(box, text);
-            host.appendChild(label);
-        }
+        host.classList.add('notif-prefs');
+        host.removeAttribute('style');
+        const render = () => {
+            const prefs = readNotifPrefs();
+            const modeLabel = (m: NotifRules.DeliveryMode) => t('settings.notifMode.' + m);
+            const rows = NOTIF_SOURCES.map((g) => {
+                const mode = NotifRules.modeFor(prefs, g);
+                return `<label class="notif-pref-row">
+                    <span class="notif-pref-name">${escHtml(groupLabel(g))}<span class="notif-pref-hint">${escHtml(t('settings.notifGroupHint.' + g))}</span></span>
+                    <select class="input notif-pref-mode" data-group="${g}" aria-label="${escAttr(groupLabel(g))}">
+                        ${NotifRules.DELIVERY_MODES.map((m) => `<option value="${m}"${m === mode ? ' selected' : ''}>${escHtml(modeLabel(m))}</option>`).join('')}
+                    </select>
+                </label>`;
+            }).join('');
+            host.innerHTML = `<div class="notif-pref-grid">${rows}</div>
+                <div class="notif-quiet">
+                    <label class="notif-quiet-row"><input type="checkbox" id="notif-dnd"${prefs.dnd ? ' checked' : ''}>
+                        <span>${escHtml(t('settings.notifDnd'))}</span></label>
+                    <label class="notif-quiet-row"><input type="checkbox" id="notif-quiet-on"${prefs.quiet.enabled ? ' checked' : ''}>
+                        <span>${escHtml(t('settings.notifQuiet'))}</span></label>
+                    <span class="notif-quiet-times">
+                        <label>${escHtml(t('settings.notifQuietFrom'))} <input type="time" class="input" id="notif-quiet-from" value="${escAttr(prefs.quiet.from)}"${prefs.quiet.enabled ? '' : ' disabled'}></label>
+                        <label>${escHtml(t('settings.notifQuietTo'))} <input type="time" class="input" id="notif-quiet-to" value="${escAttr(prefs.quiet.to)}"${prefs.quiet.enabled ? '' : ' disabled'}></label>
+                    </span>
+                    <p class="notif-quiet-note">${escHtml(t('settings.notifQuietNote'))}</p>
+                    <button type="button" class="btn btn-sm btn-secondary" id="notif-test">${escHtml(t('settings.notifTest'))}</button>
+                </div>`;
+        };
+        render();
+        // This runs at module evaluation, before the language file may be loaded: drawn again
+        // when the language changes and each time Settings opens, so the labels are never keys.
+        document.addEventListener('langChanged', render);
+        document.addEventListener('click', (ev) => {
+            if ((ev.target as HTMLElement)?.closest?.('.nav-item[data-view="settings"]')) setTimeout(render, 0);
+        }, true);
+        host.addEventListener('change', (ev) => {
+            const el = ev.target as HTMLInputElement;
+            const p = readNotifPrefs();
+            if (el.classList.contains('notif-pref-mode')) {
+                const g = el.dataset.group as NotifRules.NotifGroup;
+                const m = el.value as NotifRules.DeliveryMode;
+                if (m === 'app') delete p.modes[g]; else p.modes[g] = m;
+                // A system notification needs the OS's permission; asking at the moment the user
+                // chose it is the only time the question makes sense.
+                if (m === 'system') { try { void (window as any).__TAURI__?.notification?.requestPermission?.(); } catch { /* desktop grants it */ } }
+            } else if (el.id === 'notif-dnd') p.dnd = el.checked;
+            else if (el.id === 'notif-quiet-on') p.quiet.enabled = el.checked;
+            else if (el.id === 'notif-quiet-from' && el.value) p.quiet.from = el.value;
+            else if (el.id === 'notif-quiet-to' && el.value) p.quiet.to = el.value;
+            else return;
+            writeNotifPrefs(p);
+            if (el.id === 'notif-quiet-on') render();
+        });
+        host.addEventListener('click', (ev) => {
+            if ((ev.target as HTMLElement).closest('#notif-test')) {
+                // Through the same path as everything else, so it tests the real thing.
+                toast(t('settings.notifTestMsg'), 'info', 4000, '', 'BMM');
+                void sendSystemNotification('Better Mod Manager', t('settings.notifTestMsg'));
+            }
+        });
     }
 
     const bc = document.getElementById('toggle-notif-bcweb') as HTMLInputElement | null;
@@ -1777,7 +1825,8 @@ async function fetchContributors() {
         // Route through the Rust backend (reqwest) — the webview blocks a direct cross-origin
         // fetch of bettercommunity.ch/api/assets/* on CORS. `quiet` keeps a 404 (endpoint not
         // deployed) out of the console; we just fall back to the bundled copy below.
-        const remoteUrl = getLinks().contributors;
+        // A v1 asset URL moves to the v2 root when this session already runs on v2 (ADR 0019).
+        const remoteUrl = (await import('../core/bc-client.js')).bcRehome(getLinks().contributors);
         if (/^https?:\/\//i.test(remoteUrl)) {
             // `anonymous`: the credits list is public and identical for everyone — it is
             // fetched without X-Creator-ID so a launch is not an identified request.

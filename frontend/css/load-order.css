@@ -263,16 +263,17 @@
     border-color: color-mix(in srgb, var(--bmm-accent) 60%, transparent);
     background: color-mix(in srgb, var(--bmm-accent) 10%, var(--bmm-s03));
 }
-/* A row whose position differs from the deployed order: a mark on the edge, not a colour
+/* A row whose position differs from the deployed order: a small dot at its start, not a colour
    change of the whole row, so the conflict chips stay readable. */
 .lo-row.is-moved::before {
     content: '';
     position: absolute;
-    left: -1px;
-    top: 6px;
-    bottom: 6px;
-    width: 3px;
-    border-radius: 3px;
+    left: 2px;
+    top: 50%;
+    width: 4px;
+    height: 4px;
+    transform: translateY(-50%);
+    border-radius: 50%;
     background: var(--bmm-warning);
 }
 .lo-row.is-dragging { opacity: 0.45; }
@@ -612,16 +613,6 @@
     border-color: var(--bmm-border-accent);
     background: var(--bmm-accent-dim);
 }
-.olm-pick.is-open::before {
-    content: '';
-    position: absolute;
-    left: -1px;
-    top: 8px;
-    bottom: 8px;
-    width: 3px;
-    border-radius: 3px;
-    background: var(--bmm-accent);
-}
 .olm-pick-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .olm-pick-name { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .olm-pick-n {
@@ -710,7 +701,6 @@
     resize: vertical;
     padding: 10px 14px;
     border: 1px solid var(--bmm-border);
-    border-left: 3px solid var(--bmm-border-accent);
     border-radius: var(--bmm-radius-input);
     background: var(--bmm-s02);
     font-size: 13px;

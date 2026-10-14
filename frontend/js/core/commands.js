@@ -757,6 +757,14 @@ function registerCore() {
         run: () => { void import('../features/profiles/load-order.js').then((m) => m.openLoadOrder(null)); },
         defaultChord: null,
     });
+    // The conflicts view: who wins each shared file, and how to change it (features/mods/conflicts-view.ts).
+    registerCommand({
+        id: 'mods.conflicts', category: 'mods',
+        title: { en: 'Resolve conflicts (which mod wins each file)…', fr: 'Résoudre les conflits (quel mod gagne chaque fichier)…' },
+        keywords: 'conflict conflicts overwrite winner file pin exclude resolve conflit conflits écrase gagnant fichier épingler exclure résoudre',
+        run: () => { void import('../features/mods/conflicts-view.js').then((m) => m.openConflictsView(null)); },
+        defaultChord: null,
+    });
     for (const k of ORDER_KEYS) {
         registerCommand({
             id: k.id, category: 'profiles', title: k.title, keywords: `activation order ordre ${k.keywords}`,
@@ -873,6 +881,13 @@ function registerCore() {
     registerCommand({ id: 'tools.orphans', category: 'tools', title: { en: 'Find missing and orphaned mods', fr: 'Trouver les mods manquants et orphelins' }, keywords: 'orphan orphans missing broken dangling leftover unregistered folder orphelin manquant cassé restes dossier', run: openTools('orphans'), defaultChord: null });
     registerCommand({ id: 'tools.hash', category: 'tools', title: { en: 'Hash checker (BLAKE3 / SHA-256)', fr: 'Vérificateur d’empreinte (BLAKE3 / SHA-256)' }, keywords: 'hash checksum sha256 sha-256 blake3 verify compare file empreinte somme contrôle vérifier fichier', run: openTools('hash'), defaultChord: null });
     registerCommand({ id: 'tools.validate', category: 'tools', title: { en: 'Validate a manifest or catalogue', fr: 'Valider un manifeste ou un catalogue' }, keywords: 'validate validator manifest modpack modlist catalog catalogue json check valider validateur manifeste vérifier', run: openTools('validate'), defaultChord: null });
+    registerCommand({ id: 'tools.deployed', category: 'tools', title: { en: 'Check deployed files of active mods', fr: 'Vérifier les fichiers déployés des mods actifs' }, keywords: 'deployed files missing broken symlink link stale active game folder déployés fichiers manquants lien cassé actifs jeu', run: openTools('deployed'), defaultChord: null });
+    registerCommand({ id: 'tools.names', category: 'tools', title: { en: 'Mod names and versions report', fr: 'Rapport des noms et versions de mods' }, keywords: 'name names version versions normalise normalize rename format nom noms version normaliser renommer', run: openTools('names'), defaultChord: null });
+    registerCommand({ id: 'tools.dupprofiles', category: 'tools', title: { en: 'Find duplicate profiles', fr: 'Trouver les profils en double' }, keywords: 'duplicate profiles same identical similar folder profils doublon identique semblable dossier', run: openTools('dupprofiles'), defaultChord: null });
+    registerCommand({ id: 'tools.largefiles', category: 'tools', title: { en: 'Find large files in a profile', fr: 'Trouver les gros fichiers d’un profil' }, keywords: 'large big files size biggest heavy space gros fichiers taille lourds espace', run: openTools('largefiles'), defaultChord: null });
+    registerCommand({ id: 'tools.cache', category: 'tools', title: { en: 'Clean BMM caches', fr: 'Nettoyer les caches de BMM' }, keywords: 'cache caches clean clear temp temporary space free nettoyer vider temporaire espace libérer', run: openTools('cache'), defaultChord: null });
+    registerCommand({ id: 'tools.logs', category: 'tools', title: { en: 'View and filter BMM logs', fr: 'Voir et filtrer les journaux de BMM' }, keywords: 'log logs journal journaux errors warnings session crash erreurs avertissements', run: openTools('logs'), defaultChord: null });
+    registerCommand({ id: 'tools.jsondiff', category: 'tools', title: { en: 'Compare two catalogue or repo.json files', fr: 'Comparer deux fichiers catalogue ou repo.json' }, keywords: 'diff compare catalog catalogue repo json changes added removed comparer modifications ajouté retiré', run: openTools('jsondiff'), defaultChord: null });
     // The same hub as a DevTools section. debug-sections is already loaded (ui/app.ts imports
     // debug-menu at boot), so this import costs nothing; the section's body loads on first view.
     void import('../features/debug/debug-sections.js').then((m) => m.registerDebugSection({

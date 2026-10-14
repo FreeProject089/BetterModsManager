@@ -45,6 +45,8 @@ CLI, an MCP server and a local API for scripting.
 
 <p align="center"><img src=".github/screenshots/library-light.png" alt="Mod Library, light theme" width="70%" /><br/><sub>The same Library in the built-in light theme. Screenshots use demo data.</sub></p>
 
+More pictures, area by area: [VISUALS.md](VISUALS.md).
+
 ## Features
 
 - **Library**: every mod you own, with tags, search, filters, SHA-256 integrity checks and conflict detection before anything is written.

@@ -24,7 +24,10 @@ import { announceCrashLabels } from '../ai/laya-crash-events.js';
 import { CAUSE_FAMILY, CRASH_CAUSES, CRASH_FAMILIES, REPORT_KINDS, APP_AREAS } from '../ai/laya-assist-model.js';
 import { causeWord, familyWord } from '../ai/laya-words.js';
 import { escHtml, escAttr } from '../../core/utils.js';
-import { toast } from '../../ui/app.js';
+import { toast as appToast } from '../../ui/app.js';
+// Everything the scheduler says is grouped under it in the notification centre, and Settings
+// decides how that group is delivered (in the app, as a system notification, or not at all).
+const toast = (message: string, type = 'info', duration = 3000, icon = '', source = 'Tasks') => appToast(message, type, duration, icon, source);
 import { calendarDue, nextCalendarDue } from './sched-time.js';
 import { substituteVars, VAR_NAME_RE, BLOCK_NAME_RE, parseList, readNum, readVar, renderVar, type RunCtx } from './sched-vars.js';
 import { parseHeaderLines, readJsonPath, statusIsFailure } from './http-action.js';
@@ -4140,7 +4143,9 @@ async function evalConditionRaw(cond: Condition, ctx: RunCtx, task?: Task): Prom
             const want = String(p.id || '').trim();
             if (!want) return false;
             const active = await invoke('get_active_theme').catch(() => null);
-            return String(active || '') === want;
+            // A task written with an old built-in id (bmm-nord…) still matches its theme.
+            const { canonicalThemeId } = await import('../themes/theme-model.js');
+            return canonicalThemeId(active) === canonicalThemeId(want);
         }
         // Resources (A3): read from the governor's status, never from a cached copy.
         case 'gameRunning':

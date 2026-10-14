@@ -140,25 +140,30 @@ Read once at startup, after the Tauri bridge is up. Changing it needs a restart.
 
 ### `BCApiVersion` and `BCv2Base`
 
-The switch for **BetterCommunity v2**, for test builds while v2 runs beside v1. Not in the
-shipped file: without the line, BMM is on v1 and nothing changes.
+The switch for **BetterCommunity v2**. Not in the shipped file. Since BMM 1.0.3 the same switch
+can also come from the links file BetterCommunity publishes (`bc_api`, `bc_v2_base` in
+links.json), so installed copies follow v2 the day it goes live. This file wins: a
+`BCApiVersion` line here decides, whatever links.json says, and `BCApiVersion=v1` keeps this
+install on v1. Without the line here and without `bc_api` in links.json, BMM is on v1 and
+nothing changes.
 
 ```ini
 BCApiVersion=v2
 BCv2Base=https://v2.example.org
 ```
 
-`BCApiVersion=v2` (or `2`, any case) moves only what has a v2 adapter: feedback and bug reports
-go to the v2 feedback centre (`/v2/projects/bmm/feedback`), consent receipts are offered to the
-v2 consent ledger (`POST /v2/consents`, under the same permission as the telemetry copy), and the
-v1 paths v2 serves itself (`catalog.json`, `repos.json`, hosted repos, feedback) are read from v2.
-Every other BetterCommunity call stays on the v1 address. Any other value is v1.
+`BCApiVersion=v2` (or `2`, any case) asks for v2. BMM then checks `GET <base>/v2/health` once
+at start; if v2 does not answer `ok` or `degraded`, the session stays on v1 and the log says
+why. On v2, the calls with a v2 adapter move (feedback, consent receipts and legal texts, the
+device-flow sign-in, notifications, the Community page, Laya's suggest, app telemetry, signed
+catalogue feeds) and the v1 paths v2 serves itself are read from v2. Avatars, launch
+announcements, author search and the Discord link stay on the v1 address. Any other value is v1.
 
-`BCv2Base` is where v2 lives; empty or missing means the same address as v1 (after the cut-over
-one domain serves both). It must be `https://`, or plain `http://` to this machine only
-(`localhost`, `127.0.0.1`, `*.localhost`); anything else is ignored and v2 uses the v1 address.
-Line-parsed like `BCTestMode`. Read once at startup. The full map of calls and what each does
-in v2 is `Update/Documentation/BC-v2-readiness.md`.
+`BCv2Base` is where v2 lives; empty or missing means links.json's `bc_v2_base`, else the test
+base in test mode, else production. It must be `https://`, or plain `http://` to this machine
+only (`localhost`, `127.0.0.1`, `*.localhost`); anything else is refused and the session stays
+on v1. Line-parsed like `BCTestMode`. Read once at startup. The full map of calls and what each
+does in v2 is `Update/Documentation/BC-v2-readiness.md`.
 
 ### `DocsReplays`
 

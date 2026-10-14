@@ -58,7 +58,7 @@ Run `release.bat --help` for the list. The useful ones:
 | `--skip-bmm-build` | build: reuse the built exe (`release.ps1 -SkipBmmBuild`) |
 | `--no-bundles` | build: no NSIS/MSI extras |
 | `--lenient-artifacts` | verify: `check-release-versions --artifacts` failing is a warning |
-| `--no-screenshots`, `--no-tasky`, `--tasky app|br|off` | media options |
+| `--no-screenshots`, `--no-tasky`, `--tasky app|br|off`, `--gifs` | media options (`--gifs`: also record the usage clips) |
 | `--bench-skip-run`, `--bench-only rust,js,hyperfine,mem` | benchmark options |
 | `--gource-seconds N`, `--no-credits` | Gource options |
 | `--no-wait`, `--force` | do not wait for an idle machine; run anyway |
@@ -106,6 +106,16 @@ Only from the report (no new run): `node tools/release/bench/run.mjs --version 1
   The tool serves `frontend/` itself on a random local port; with no Tauri runtime the app uses its
   built-in mock, fed with **demo data only** (`fixtures.mjs`: example.org addresses, a « Demo »
   user). Add a scene in `scenes.mjs`. Theme previews (THEMES.md): `node tools/release/screenshots/themes.mjs --frontend <checkout>/frontend --out <checkout>/.github/themes`, one Library picture per built-in theme of that checkout, same composition.
+- Usage clips (GIF + MP4): `tools/release/screenshots/gifs.mjs`, scenes in `gif-scenes.mjs`
+  (follow a repo, resolve a conflict, activity centre, theme editor, create a plugin, BMM Tools,
+  notifications, settings). Same preview, demo data and composition as the screenshots, with a
+  drawn pointer. The DevTools screencast records every repaint; ffmpeg (`C:\ffmpeg\bin`, or
+  `FFMPEG`) holds each frame for its real duration and makes an MP4 (native size, 30 fps) and a
+  palette-optimised GIF (1000 px, 14 fps, made smaller until it is under 8 MB). A scene can answer
+  mock commands itself (`mock`) when the fixtures cannot show the flow, and play faster
+  (`speed`). Alone: `node tools/release/screenshots/gifs.mjs [--previews] [--width 1000] [--fps 14] [--max-mb 8] [scene …]`;
+  with the media step: `--gifs`. Output: `Release/<version>/media/gifs/` (`<name>.gif`, `.mp4`,
+  `gifs.json`, `previews/`) for review; copy the validated ones to `.github/gifs/` by hand.
 - Editable sources:
   - **layered SVG** (Inkscape layers; Illustrator and Affinity read the group ids as layer names;
     Photoshop imports an SVG flattened): cards `background / logo / title / version / subtitle /
@@ -148,7 +158,7 @@ tools/release/
                        png (decoder), psd (layered writer)
   bench/               collect, compare, metrics (explanations EN/FR), charts, report, run
   media/               cards, cards-text, cards.<version>.json, gource
-  screenshots/         shoot, scenes, fixtures (demo data), hero, themes (THEMES.md previews)
+  screenshots/         shoot, scenes, fixtures (demo data), hero, themes (THEMES.md previews), gifs + gif-scenes (usage clips)
   docs/                pdf.mjs (BMM Docs PDFs through Chrome), lang_config.py (one-language site config)
   test/                node --test
   .cache/              (ignored) docs venv, docs site, Gource work files

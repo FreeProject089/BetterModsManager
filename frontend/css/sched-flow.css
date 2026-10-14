@@ -76,14 +76,6 @@
     user-select: none;
     transition: border-color .12s ease, box-shadow .12s ease;
 }
-.sflow-node::before {
-    content: '';
-    position: absolute;
-    left: -1px; top: 10px; bottom: 10px;
-    width: 3px;
-    border-radius: 0 3px 3px 0;
-    background: var(--kind);
-}
 .sflow-node:hover { border-color: var(--bmm-border-hover); }
 .sflow-node.is-sel {
     border-color: var(--bmm-accent);

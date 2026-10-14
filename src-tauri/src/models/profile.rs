@@ -19,6 +19,13 @@ pub struct Profile {
     pub icon_image: Option<String>,
     pub created_at: String,
     pub origin_repo_profile_id: Option<String>,
+    /// Per-file winners chosen in the conflicts view: relative path (`/`-separated, see
+    /// `mod_order::rel_key`) -> the mod whose copy is kept, whatever the activation order says.
+    /// "Exclude this file from the other mods" is stored as this. A pin whose mod is not active
+    /// (or no longer ships the file) is ignored and the order decides again; it is not deleted,
+    /// so re-enabling the mod brings the choice back.
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
+    pub file_winners: std::collections::HashMap<String, String>,
 }
 
 impl Profile {
@@ -43,6 +50,7 @@ impl Profile {
             icon_image: None,
             created_at: chrono::Local::now().to_rfc3339(),
             origin_repo_profile_id: None,
+            file_winners: std::collections::HashMap::new(),
         }
     }
 }

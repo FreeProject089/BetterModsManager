@@ -76,8 +76,8 @@ const CONFIG_TTL_MS = 10 * 60 * 1000;
 export function feedbackEndpoint(): string {
     const raw = (getLinks() as unknown as Record<string, unknown>).feedback_endpoint;
     if (raw === '' || raw === null) return '';
-    // BetterCommunity v2 (app.cfg BCApiVersion=v2): the native feedback centre route. Only then;
-    // without the line this function answers exactly as it always has.
+    // BetterCommunity v2 session (app.cfg or links.json, health checked): the native feedback
+    // centre route. Only then; in v1 mode this function answers exactly as it always has.
     if (bcUsesV2()) return bcFeedbackEndpoint();
     // Test mode points every BetterCommunity call at the test server, and the link status the
     // dialog shows comes from there. Posting the report to the production URL in links.json
@@ -239,8 +239,18 @@ export async function submitFeedback(payload: FeedbackPayload, opts: { queueOnOf
         if (v2Mode()) {
             // v2 contract: snake_case, flat meta, `content_type` attachments, a problem document on
             // refusal. Re-expressed as the v1 answer it stands for, so the switch below serves both.
-            const v2 = await fetch(ep, { method: 'POST', signal: tm.signal, headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...v2Headers() }, body: JSON.stringify(feedbackToV2(body)) });
-            const a = feedbackAnswerFromV2(v2.status, await v2.json().catch(() => ({})));
+            // Signed in to v2 (device flow): sent by Rust with the account's token, so the report
+            // arrives as `account` (ADR 0018). Otherwise the webview sends it with the publishable
+            // app key (CORS is open for the app origin on this route), as an `app` report.
+            let a: { status: number; body: Record<string, unknown> };
+            const asAccount = await (await import('../../core/bc-v2.js')).bcV2SignedIn();
+            if (asAccount) {
+                const r2 = await invoke('bc_v2_feedback_send', { project: 'bmm', body: feedbackToV2(body) }, { quiet: true }) as { status: number; body: unknown };
+                a = feedbackAnswerFromV2(Number(r2?.status) || 0, r2?.body ?? {});
+            } else {
+                const v2 = await fetch(ep, { method: 'POST', signal: tm.signal, headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...v2Headers() }, body: JSON.stringify(feedbackToV2(body)) });
+                a = feedbackAnswerFromV2(v2.status, await v2.json().catch(() => ({})));
+            }
             r = new Response(JSON.stringify(a.body), { status: a.status, headers: { 'Content-Type': 'application/json' } });
         } else {
             r = await fetch(ep, { method: 'POST', signal: tm.signal, headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...(await creatorHeader()) }, body: JSON.stringify(body) });

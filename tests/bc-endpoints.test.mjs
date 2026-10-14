@@ -48,8 +48,15 @@ describe('v2 mode', () => {
         assert.equal(v1ApiUrl(r, '/repos.json'), 'https://v2.bettercommunity.ch/api/repos.json');
         assert.equal(v1ApiUrl(r, '/repos/my-repo/repo.json'), 'https://v2.bettercommunity.ch/api/repos/my-repo/repo.json');
         assert.equal(v1ApiUrl(r, '/feedback/bmm/config'), 'https://v2.bettercommunity.ch/api/feedback/bmm/config');
-        // no v2 route yet: stays on v1 rather than calling a server that would 404
-        for (const route of ['/link/status?creatorId=x', '/blog', '/avatar/1?size=64', '/ai/bmm/suggest', '/catalogs.json', '/assets/links.json', '/bmm/launch']) {
+        // v2 serves these v1 paths too (ADR 0019 assets and update feed, 0020 suggest, 0023 blog and poller)
+        for (const route of ['/assets/links.json', '/assets/contributors.json', '/assets/bmm-laya-offline', '/updates/bmm', '/updates/bmm/latest', '/updates/bmm/releases?per_page=20',
+            '/blog', '/blog/my-post', '/blog/ent_0123456789abcdefghjkmnpqrs/history', '/blog/ent_0123456789abcdefghjkmnpqrs/comments', '/v1/notifications?since=2026-10-14T00:00:00.000Z', '/ai/bmm/suggest']) {
+            assert.equal(servedByV2Compat(route), true, route);
+            assert.equal(v1ApiUrl(r, route), `https://v2.bettercommunity.ch/api${route}`);
+        }
+        // no v2 route (ADR 0023 §2): stays on v1 rather than calling a server that would 404
+        for (const route of ['/link/status?creatorId=x', '/link/request', '/link/discord', '/avatar/1?size=64', '/users/search?q=x', '/catalogs.json', '/bmm/launch', '/bmm/launch?version=1.0.3&lang=fr',
+            '/blog/ent_0123456789abcdefghjkmnpqrs/history/rev1', '/blog/7/comments/3/history']) {
             assert.equal(servedByV2Compat(route), false, route);
             assert.equal(v1ApiUrl(r, route), `https://bettercommunity.ch/api${route}`);
         }

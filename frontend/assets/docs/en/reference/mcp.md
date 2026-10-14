@@ -139,7 +139,7 @@ values.
 | Tool | Parameters | Needs | What it does |
 |---|---|---|---|
 | `bmm_list_themes` | — |  | List installed UI themes and which one is active |
-| `bmm_apply_theme` | `theme_id`\* | app | Set the active BMM theme by id (e.g. bmm-discord, bmm-void, or an installed custom theme) |
+| `bmm_apply_theme` | `theme_id`\* | app | Set the active BMM theme by id (e.g. bmm-indigo, bmm-void, or an installed custom theme) |
 | `bmm_get_theme` | `theme_id`\* |  | Read an INSTALLED custom theme's full definition (vars, element overrides) |
 
 ### Scheduling & benchmarks

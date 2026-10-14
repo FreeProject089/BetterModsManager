@@ -10,7 +10,8 @@ import { t, getLang } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { renderMarkdown } from '../../ui/update-notes.js';
-import { bcRoot, bcApi } from '../../core/links-config.js';
+import { bcApi } from '../../core/links-config.js';
+import { bcUrl, bcContentRoot } from '../../core/bc-client.js';
 import { openBetterCommunity } from '../../ui/bettercommunity-modal.js';
 import { ALL_TAGS, PROJ_LOGO, blogTags, effectiveTag, tagOf } from './blog-tags.js';
 import { learnMore } from '../../core/learn-more.js';
@@ -22,6 +23,9 @@ import { uiIcon } from '../../ui/icons.js';
 // Root-relative media URLs (/api/media/…, /media/…) would resolve against the webview
 // origin (tauri.localhost) and 404. Rewrite them to absolute BCWEB URLs so images,
 // video, audio and covers actually load. Absolute (https://, data:, //) are left alone.
+// BetterCommunity v2 mode: the posts come from the v2 root (ADR 0023), and so do their media.
+// In v1 mode bcContentRoot() is exactly bcRoot().
+const bcRoot = bcContentRoot;
 function absUrl(u?: string): string { return u && u.startsWith('/') && !u.startsWith('//') ? `${bcRoot()}${u}` : (u || ''); }
 function absMedia(html: string): string { return html.replace(/(\s(?:src|poster)=["'])\/(?!\/)/g, `$1${bcRoot()}/`); }
 
@@ -121,7 +125,8 @@ function authorsRow(p: Post): string {
 }
 
 // The API base comes from links-config, not from a second `+ '/api'` here. The two copies
-// were the bug: the notification poller had its own and forgot the suffix.
+// were the bug: the notification poller had its own and forgot the suffix. Avatars stay on the
+// v1 root even in BetterCommunity v2 mode (v2 has none yet, ADR 0023 §2).
 const apiBase = bcApi;
 
 // CORS-safe GET. The webview lives at the tauri.localhost origin, so a direct
@@ -135,7 +140,9 @@ async function bcGet(path: string): Promise<any | null> {
     // quiet: the blog feed is optional and may 404 when the endpoint isn't
     // deployed at the production host — the caller degrades gracefully, so
     // there's no need to spill an RPC warning into the console every time.
-    const raw = await invoke('bc_api_get', { url: `${apiBase()}${path}` }, { quiet: true }) as string;
+    // bcUrl: the v1 path, on the v2 root in v2 mode for the routes v2 serves (blog list, a post,
+    // its history and comments); on the v1 root otherwise, byte for byte as before.
+    const raw = await invoke('bc_api_get', { url: bcUrl(path) }, { quiet: true }) as string;
     return JSON.parse(raw);
   } catch {
     return null;

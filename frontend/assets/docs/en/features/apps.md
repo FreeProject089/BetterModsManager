@@ -126,16 +126,52 @@ for the question "what did I change just before this broke", which is otherwise 
 
 > Add raw JSON URLs of community catalogs.
 
-A catalog is just a JSON file someone hosts. Open **Sources**, paste a catalog URL, and its
-apps merge into the list; remove any that fail to load. The official catalog can also
-**auto-import** community catalogs, so you often don't need to add anything by hand. Chains of
-imported catalogs are followed up to a total of **30 sources**, so a big community web of
-catalogs stays bounded.
+A catalog is just a JSON file someone hosts. The official catalog can also **auto-import**
+community catalogs, so you often don't need to add anything by hand. Chains of imported catalogs
+are followed up to a total of **30 sources**, so a big community web of catalogs stays bounded.
 
 Every catalogue BMM reads, whatever its age or kind, goes through one versioned format, which
 also reads the signed feeds of BetterCommunity v2. The format is described in
 [Catalogue format](doc-page:reference/catalog-format), and a single address that brings in several
 catalogues at once is a [catalogue index](doc-page:reference/catalog-index).
+
+### The list of sources
+
+The same list is in the App catalogue (**Sources**) and in *Settings → Catalogue index*. Each
+row shows the name, the address, the kind, where it comes from, the signature state, the last
+refresh, the item count, the status and an on/off switch.
+
+| Origin | What it means |
+|---|---|
+| **Official** | Comes with BMM, from its [links file](doc-page:reference/links-and-updates). Shown read-only: it cannot be removed here. |
+| **Partner** | A catalogue the official catalogue names. It goes away when the official catalogue stops naming it. |
+| **Yours** | One you added, by hand, from an index or by a link. You can switch it off, edit it, move it or remove it. |
+
+**Order matters**: when two catalogues list the same item, the first one wins (official, then
+partners, then yours from the top). Move yours with **Move up** and **Move down**.
+
+| Status | |
+|---|---|
+| **OK** | It answered, with its item count. |
+| **Last good copy** | It did not answer this time; BMM shows what it read last. |
+| **Did not answer** | It failed, and the row says why: timeout, HTTP code, refused signature, not a catalogue. **Retry**, **Switch off**, **Remove** (yours) and **Details** are on the row. |
+| **Off** | Switched off: never fetched, never counted. |
+| **Not checked yet** | Nothing read yet. |
+
+The signature column says **Signed, verified**, **Bad signature**, **Signed, unknown key** or
+**Not signed**.
+
+**Add a source** and **Edit** open a dialog with **Test**, which reads the address the way BMM
+will: item count, format, signature. If the address is an **index**, the test says how many
+catalogues it lists and **Add the N catalogues** adds the ones that fit at once. A `.bmmbundle`
+needs no address: use *Follow a .bmmbundle* below the list; it is saved for the next start.
+**Remove** asks first, and leaves a line in the history to bring the source back. **Import**
+and **Export** read and write your sources as a JSON file; on import, sources you already
+follow are skipped. **Check all** fetches every source that is on.
+
+An empty or non-web address (the official catalogue lists an empty partner address as a
+placeholder) is skipped, never counted as a failure. With the official catalogue switched off and
+no source on, the page says there is no source and offers to add one.
 
 ## A catalogue that carries its apps
 

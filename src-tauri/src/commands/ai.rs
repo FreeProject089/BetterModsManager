@@ -30,6 +30,15 @@ pub(crate) fn data_dir(state: &AppState) -> PathBuf {
 /// app.cfg names (read here, not taken from the page). Never loopback, never plain http, so a
 /// page cannot aim the account's credential at a server of its choosing.
 fn bc_auth(app: &tauri::AppHandle, dir: &std::path::Path, base: Option<String>, headers: Option<HashMap<String, String>>) -> Option<BcAuth> {
+    // BetterCommunity v2 (ADR 0020): the same v1 path `/api/ai/bmm/suggest` on the v2 root the
+    // session checked, with the account's device-flow token (`ai:classify`). The page's base and
+    // headers are not read: the creator proof is not an identity on v2, and the v1 API key never
+    // goes to v2. Not signed in: None, which the provider reports as `not_signed_in`.
+    if let Some(root) = crate::commands::bc_v2::effective_v2_root() {
+        let _ = (base, headers);
+        let tok = crate::commands::bc_v2_auth::access_token_now(dir)?;
+        return Some(BcAuth { base: root, headers: vec![("Authorization".into(), format!("Bearer {tok}"))] });
+    }
     let base = base.unwrap_or_else(|| "https://bettercommunity.ch".to_string());
     let cfg = crate::commands::settings::get_bc_config(app.clone());
     let test_base = cfg.test_mode.then_some(cfg.base_url);

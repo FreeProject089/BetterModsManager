@@ -8,7 +8,7 @@
 
 import { invoke } from './api.js';
 import { t } from './i18n.js';
-import { getLinks } from './links-config.js';
+import { getLinks, bcApiVersionCfg } from './links-config.js';
 import { escHtml, escAttr } from './utils.js';
 import type { TelemetryLinkPlan } from './telemetry-link.js';
 import { initLiveIssues, refreshLiveIssues, mountLiveIssuesToggle, liveErrorsSetting, liveErrorsStored, setLiveErrors } from './live-issues.js';
@@ -808,12 +808,22 @@ function trackSessionEnd(): void {
     beaconSessionEnd(props);
 }
 
+/** v2 telemetry is active: a v2 session and links.json gives the app id and publishable key. */
+function v2TelemetrySession(): boolean {
+    const l = getLinks() as unknown as Record<string, unknown>;
+    return bcApiVersionCfg() === 'v2' && /^app_[0-9a-hjkmnp-tv-z]{26}$/.test(String(l.bc_v2_app_id || '')) && /^bc_pk_[A-Za-z0-9_]{20,194}$/.test(String(l.bc_v2_app_key || ''));
+}
+
 // Direct, fire-and-forget delivery of one batch on app close (bypasses the
 // Rust queue so the clean-exit signal actually arrives).
 function beaconSessionEnd(props: Record<string, any>): void {
     try {
         if (_consent !== true) return;
         const links = getLinks();
+        // BetterCommunity v2 telemetry (bc_v2_telemetry.rs) takes the events in this session: the
+        // queued session_end goes there at the next flush; a beacon to the v1 server would count
+        // the session in a second place. A beacon cannot carry the v2 app key anyway.
+        if (v2TelemetrySession()) return;
         const endpoint = (links.analytics_endpoint || '').trim();
         if (!endpoint || !navigator.sendBeacon) return;
         const ev = {

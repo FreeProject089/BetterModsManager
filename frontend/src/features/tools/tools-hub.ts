@@ -4,21 +4,32 @@
 // "Tools" section) and, when the person pins it, from the navbar (Customize the navbar →
 // Modal → Tools). Loaded on demand from all three: nothing here is in the boot path.
 //
-// Every tool READS. None deletes or moves anything: each finding carries an "open folder" and
-// the person decides. New backend work lives in src-tauri/src/commands/tools.rs; the hash
-// checker, the conflict summary and the validators reuse commands that already existed
-// (hash_file, file_meta, get_all_mod_conflicts, get_conflict_file_tree, bmm_validate).
+// Layout: a searchable rail (icon, name, one line on what it does, grouped) and a pane with
+// the tool's form, then ONE results area that is always in one of four states: not run yet,
+// running (progress and Cancel for the tools that walk folders), failed (the message and
+// Retry), or done (a summary line, the export bar, the findings).
 //
-// The thinking (hash comparison, conflict pairs, CSV rows) is in tools-model.ts, tested in node.
+// Every tool READS, except the cache cleaner, which measures first and deletes only the fixed
+// cache folders the person ticked, after a confirmation that names their size. Each finding
+// carries an "open folder" and the person decides. Backend work lives in
+// src-tauri/src/commands/tools.rs; the hash checker, the conflict summary and the validators
+// reuse commands that already existed (hash_file, file_meta, get_all_mod_conflicts,
+// get_conflict_file_tree, bmm_validate). The long scans also appear in the activity centre
+// (core/activity-sources.ts COMMANDS, channel `tools`).
+//
+// The thinking (hash comparison, conflict pairs, CSV rows, log filter) is in tools-model.ts,
+// tested in node.
 
 import { invoke, listen, pickFile, saveFile } from '../../core/api.js';
 import { t, getLang } from '../../core/i18n.js';
 import { escHtml, escAttr, formatBytes } from '../../core/utils.js';
 import { openModal, type ModalHandle } from '../../ui/modal-shell.js';
+import { showConfirm } from '../../ui/confirm.js';
 import { uiIcon } from '../../ui/icons.js';
 import {
-    TOOLS, LINKED_COMMANDS, isToolId, compareHash, hashAlgoHint, normalizeHash, toCsv, conflictPairs,
-    rowsFor, findingCount, progressPct, type ToolId,
+    TOOLS, TOOL_GROUPS, LINKED_COMMANDS, isToolId, isLongTool, filterTools, compareHash, hashAlgoHint,
+    normalizeHash, toCsv, conflictPairs, rowsFor, findingCount, progressPct, filterLog, cacheSelection,
+    type ToolId,
 } from './tools-model.js';
 
 const CSS_ID = 'tools-hub-css';
@@ -32,7 +43,7 @@ function ensureCss(): void {
 }
 
 /** The catalogue validator: `catalog_validate` (commands/catalog_convert.rs), args
- *  `{ text, path, kind?, sourceUrl? }`, answer `ValidateReport` — read by catalogReport(). */
+ *  `{ text, path, kind?, sourceUrl? }`, answer `ValidateReport`, read by catalogReport(). */
 const CATALOG_VALIDATE = 'catalog_validate';
 
 const esc = (x: unknown) => escHtml(String(x ?? ''));
@@ -45,9 +56,15 @@ const ICON_HUB = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" st
 
 let _h: ModalHandle | null = null;
 let _active: ToolId = 'duplicates';
-let _busy = false;
+/** The tool running right now (one at a time), or null. */
+let _running: ToolId | null = null;
+let _search = '';
 const _results: Partial<Record<ToolId, any>> = {};
-const _inputs: { hashPath?: string; validatePath?: string } = {};
+const _inputs: {
+    hashPath?: string; validatePath?: string; diffA?: string; diffB?: string;
+    logId?: string; logText?: string; logLevel?: string; logQ?: string; logList?: any[];
+    cacheIds?: string[];
+} = {};
 let _unlisten: (() => void) | null = null;
 let _profiles: { id: string; name: string }[] = [];
 /** The palette's command list, handed in by core/commands.ts (importing it from here would
@@ -57,6 +74,9 @@ const allCommands = () => { try { return _commands() || []; } catch { return [];
 
 const toolName = (id: ToolId) => t(`tools.${id}.name`);
 const toolDesc = (id: ToolId) => t(`tools.${id}.desc`);
+/** The one line under the name in the rail. */
+const toolShort = (id: ToolId) => t(`tools.${id}.short`);
+const toolMeta = (id: ToolId) => TOOLS.find((x) => x.id === id)!;
 const parentDir = (p: string) => String(p || '').replace(/[\\/]+$/, '').replace(/[\\/][^\\/]*$/, '');
 
 async function openFolder(path: string): Promise<void> {
@@ -88,21 +108,29 @@ export async function openToolsHub(tool?: string, commands?: () => any[]): Promi
         size: 'xl',
         tall: true,
         className: 'tools-modal',
-        body: `<div class="tools-hub"><nav class="tools-rail" aria-label="${escAttr(t('tools.title'))}"></nav><section class="tools-pane" aria-live="polite"></section></div>`,
+        body: `<div class="tools-hub">
+            <nav class="tools-rail" aria-label="${escAttr(t('tools.title'))}">
+                <label class="tools-search">${uiIcon('search', 14)}
+                    <input type="search" class="input-field" id="tools-search" placeholder="${escAttr(t('tools.searchPh'))}" aria-label="${escAttr(t('tools.searchPh'))}" autocomplete="off"></label>
+                <div class="tools-rail-list"></div>
+            </nav>
+            <section class="tools-pane" aria-live="polite"></section></div>`,
         onClose: () => {
-            if (_busy) void invoke('tools_cancel').catch(() => {});
-            _unlisten?.(); _unlisten = null; _h = null; _busy = false;
+            if (_running) void invoke('tools_cancel').catch(() => {});
+            _unlisten?.(); _unlisten = null; _h = null; _running = null;
         },
     });
     try {
         _unlisten = await listen('tools-progress', (p: any) => {
-            if (!_h || p?.tool == null) return;
-            const map: Record<string, ToolId> = { duplicates: 'duplicates', disk: 'disk' };
-            if (map[p.tool] !== _active) return;
+            if (!_h || p?.tool == null || !_running) return;
+            const map: Record<string, ToolId> = { duplicates: 'duplicates', disk: 'disk', largefiles: 'largefiles', deployed: 'deployed' };
+            if (map[p.tool] !== _active || _running !== _active) return;
             setProgress(p.phase, p.done, p.total);
         });
     } catch { /* no progress events outside Tauri: the spinner text stays */ }
     _h.body.addEventListener('click', onClick);
+    _h.body.addEventListener('input', onInput);
+    _h.body.addEventListener('change', onChange);
     renderRail();
     renderPane();
 }
@@ -135,30 +163,46 @@ export function mountToolsDebug(host: HTMLElement): void {
 
 // ── Rail ─────────────────────────────────────────────────────────────────────────────────
 
+function groupName(g: string): string {
+    switch (g) {
+        case 'library': return t('tools.group.library');
+        case 'profiles': return t('tools.group.profiles');
+        case 'space': return t('tools.group.space');
+        case 'app': return t('tools.group.app');
+        default: return t('tools.group.author');
+    }
+}
+
 function renderRail(): void {
-    const rail = _h?.q('.tools-rail');
+    const rail = _h?.q('.tools-rail-list');
     if (!rail) return;
+    const shown = filterTools(TOOLS, _search, (x) => `${toolName(x.id)} ${toolShort(x.id)} ${toolDesc(x.id)}`);
     const btn = (x: typeof TOOLS[number]) => {
-        const n = findingCount(x.id, _results[x.id]);
-        const done = _results[x.id] != null;
+        const r = _results[x.id];
+        const done = r != null && !r.__error;
+        const n = findingCount(x.id, r);
+        const state = _running === x.id
+            ? `<span class="tools-badge is-run" aria-label="${escAttr(t('tools.state.running'))}">${uiIcon('loader', 12)}</span>`
+            : r?.__error ? `<span class="tools-badge is-bad">!</span>`
+            : done ? `<span class="tools-badge${n ? ' is-warn' : ' is-ok'}">${n ? n : uiIcon('check', 12)}</span>` : '';
         return `<button type="button" class="tools-rail-item${x.id === _active ? ' is-active' : ''}" data-tool="${x.id}" aria-current="${x.id === _active ? 'true' : 'false'}">
             <span class="tools-rail-ic" aria-hidden="true">${uiIcon(x.icon as any, 16)}</span>
-            <span class="tools-rail-txt"><span class="tools-rail-name">${esc(toolName(x.id))}</span></span>
-            ${done ? `<span class="tools-badge${n ? ' is-warn' : ' is-ok'}">${n ? n : uiIcon('check', 12)}</span>` : ''}
+            <span class="tools-rail-txt" title="${escAttr(`${toolName(x.id)}: ${toolShort(x.id)}`)}"><span class="tools-rail-name">${esc(toolName(x.id))}</span><span class="tools-rail-desc">${esc(toolShort(x.id))}</span></span>
+            ${state}
         </button>`;
     };
     const lang = getLang() === 'fr' ? 'fr' : 'en';
     const cmds = allCommands();
     const linked = LINKED_COMMANDS.map((id) => cmds.find((c) => c.id === id)).filter(Boolean) as any[];
-    rail.innerHTML = `
-        <div class="tools-rail-group">${esc(t('tools.group.user'))}</div>
-        ${TOOLS.filter((x) => x.audience === 'user').map(btn).join('')}
-        <div class="tools-rail-group">${esc(t('tools.group.author'))}</div>
-        ${TOOLS.filter((x) => x.audience === 'author').map(btn).join('')}
-        ${linked.length ? `<div class="tools-rail-group">${esc(t('tools.group.more'))}</div>
+    const groups = TOOL_GROUPS.map((g) => {
+        const list = shown.filter((x) => x.group === g);
+        return list.length ? `<div class="tools-rail-group">${esc(groupName(g))}</div>${list.map(btn).join('')}` : '';
+    }).join('');
+    rail.innerHTML = (groups || `<p class="tools-rail-none">${esc(t('tools.searchNone'))}</p>`)
+        + (linked.length && !_search.trim() ? `<div class="tools-rail-group">${esc(t('tools.group.more'))}</div>
         ${linked.map((c) => `<button type="button" class="tools-rail-item is-link" data-cmd="${escAttr(c.id)}">
             <span class="tools-rail-ic" aria-hidden="true">${uiIcon('external', 14)}</span>
-            <span class="tools-rail-txt"><span class="tools-rail-name">${esc(c.title?.[lang] || c.id)}</span></span></button>`).join('')}` : ''}`;
+            <span class="tools-rail-txt"><span class="tools-rail-name">${esc(c.title?.[lang] || c.id)}</span></span></button>`).join('')}` : '');
 }
 
 // ── Pane ─────────────────────────────────────────────────────────────────────────────────
@@ -168,8 +212,16 @@ function profileOptions(selected?: string, withAll = false): string {
     return all + _profiles.map((p) => `<option value="${escAttr(p.id)}"${p.id === selected ? ' selected' : ''}>${esc(p.name)}</option>`).join('');
 }
 
+function pickRow(act: string, label: string, path: string | undefined, id: string, clearAct = ''): string {
+    return `<div class="tools-field tools-grow"><span>${esc(label)}</span>
+        <div class="tools-pick"><button type="button" class="btn btn-secondary btn-sm" data-act="${act}">${uiIcon('file', 14)} ${esc(t('tools.pickFile'))}</button>
+        <code class="tools-path" id="${id}">${esc(path || t('tools.noFile'))}</code>
+        ${clearAct && path ? `<button type="button" class="btn btn-ghost btn-sm" data-act="${clearAct}">${esc(t('tools.clear'))}</button>` : ''}</div></div>`;
+}
+
 function formHtml(id: ToolId): string {
-    const run = `<button type="button" class="btn btn-primary btn-sm" data-act="run">${uiIcon('play', 14)} ${esc(t('tools.run'))}</button>`;
+    const runLabel = id === 'cache' ? t('tools.cache.measure') : id === 'logs' ? t('tools.logs.load') : t('tools.run');
+    const run = `<button type="button" class="btn btn-primary btn-sm" data-act="run">${uiIcon(id === 'logs' ? 'file-text' : 'play', 14)} ${esc(runLabel)}</button>`;
     switch (id) {
         case 'duplicates':
             return `<label class="tools-field"><span>${esc(t('tools.duplicates.minSize'))}</span>
@@ -177,6 +229,19 @@ function formHtml(id: ToolId): string {
         case 'conflicts':
             return `<label class="tools-field"><span>${esc(t('tools.profile'))}</span>
                 <select class="input-field" id="tools-cf-profile">${profileOptions(undefined, true)}</select></label>${run}`;
+        case 'deployed':
+            return `<label class="tools-field"><span>${esc(t('tools.profile'))}</span>
+                <select class="input-field" id="tools-dep-profile">${profileOptions(undefined, true)}</select></label>${run}`;
+        case 'largefiles':
+            return `<label class="tools-field"><span>${esc(t('tools.profile'))}</span>
+                    <select class="input-field" id="tools-lf-profile">${profileOptions(undefined, true)}</select></label>
+                <label class="tools-field"><span>${esc(t('tools.largefiles.minMb'))}</span>
+                    <input type="number" class="input-field tools-num" id="tools-lf-min" min="1" max="1048576" value="50"></label>
+                <label class="tools-field"><span>${esc(t('tools.largefiles.limit'))}</span>
+                    <input type="number" class="input-field tools-num" id="tools-lf-limit" min="1" max="500" value="50"></label>${run}`;
+        case 'dupprofiles':
+            return `<label class="tools-field"><span>${esc(t('tools.dupprofiles.threshold'))}</span>
+                <select class="input-field" id="tools-dp-th">${[1, 0.9, 0.8, 0.6].map((v) => `<option value="${v}"${v === 0.8 ? ' selected' : ''}>${Math.round(v * 100)} %</option>`).join('')}</select></label>${run}`;
         case 'diff': {
             if (_profiles.length < 2) return `<p class="tools-note">${esc(t('tools.diff.needTwo'))}</p>`;
             return `<label class="tools-field"><span>${esc(t('tools.diff.a'))}</span>
@@ -184,23 +249,34 @@ function formHtml(id: ToolId): string {
                 <label class="tools-field"><span>${esc(t('tools.diff.b'))}</span>
                 <select class="input-field" id="tools-diff-b">${profileOptions(_profiles[1]?.id)}</select></label>${run}`;
         }
+        case 'logs': {
+            const list = _inputs.logList || [{ id: 'current', kind: 'current' }];
+            const label = (x: any) => x.id === 'current' ? t('tools.logs.current')
+                : `${x.kind === 'crash' ? t('tools.logs.crash') : t('tools.logs.session')} · ${new Date((x.modified || 0) * 1000).toLocaleString()}${x.archived ? ` · ${t('tools.logs.archived')}` : ''}`;
+            return `<label class="tools-field tools-grow"><span>${esc(t('tools.logs.which'))}</span>
+                    <select class="input-field" id="tools-log-id">${list.map((x: any) => `<option value="${escAttr(x.id)}"${x.id === (_inputs.logId || 'current') ? ' selected' : ''}>${esc(label(x))}</option>`).join('')}</select></label>
+                <label class="tools-field"><span>${esc(t('tools.logs.level'))}</span>
+                    <select class="input-field" id="tools-log-level">${['all', 'warn', 'error'].map((v) => `<option value="${v}"${(_inputs.logLevel || 'all') === v ? ' selected' : ''}>${esc(v === 'all' ? t('tools.logs.lvAll') : v === 'warn' ? t('tools.logs.lvWarn') : t('tools.logs.lvError'))}</option>`).join('')}</select></label>
+                <label class="tools-field tools-grow"><span>${esc(t('tools.logs.filter'))}</span>
+                    <input type="search" class="input-field" id="tools-log-q" value="${escAttr(_inputs.logQ || '')}" placeholder="${escAttr(t('tools.logs.filterPh'))}" autocomplete="off"></label>${run}`;
+        }
+        case 'cache':
+            return `<p class="tools-note tools-full">${esc(t('tools.cache.how'))}</p>${run}`;
         case 'hash':
-            return `<div class="tools-field tools-grow"><span>${esc(t('tools.hash.file'))}</span>
-                    <div class="tools-pick"><button type="button" class="btn btn-secondary btn-sm" data-act="pick-hash">${uiIcon('file', 14)} ${esc(t('tools.pickFile'))}</button>
-                    <code class="tools-path" id="tools-hash-path">${esc(_inputs.hashPath || t('tools.noFile'))}</code></div></div>
-                <label class="tools-field"><span>${esc(t('tools.hash.algo'))}</span>
+            return pickRow('pick-hash', t('tools.hash.file'), _inputs.hashPath, 'tools-hash-path')
+                + `<label class="tools-field"><span>${esc(t('tools.hash.algo'))}</span>
                     <select class="input-field" id="tools-hash-algo"><option value="blake3">BLAKE3</option><option value="sha256">SHA-256</option></select></label>
                 <label class="tools-field tools-grow"><span>${esc(t('tools.hash.expected'))}</span>
                     <input type="text" class="input-field tools-mono" id="tools-hash-expected" spellcheck="false" autocomplete="off" placeholder="${escAttr(t('tools.hash.expectedPh'))}"></label>${run}`;
         case 'validate':
             return `<label class="tools-field"><span>${esc(t('tools.validate.kind'))}</span>
                     <select class="input-field" id="tools-val-kind"><option value="auto">${esc(t('tools.validate.kindAuto'))}</option><option value="catalog">${esc(t('tools.validate.kindCatalog'))}</option></select></label>
-                <div class="tools-field tools-grow"><span>${esc(t('tools.validate.file'))}</span>
-                    <div class="tools-pick"><button type="button" class="btn btn-secondary btn-sm" data-act="pick-validate">${uiIcon('file', 14)} ${esc(t('tools.pickFile'))}</button>
-                    <code class="tools-path" id="tools-val-path">${esc(_inputs.validatePath || t('tools.noFile'))}</code>
-                    ${_inputs.validatePath ? `<button type="button" class="btn btn-ghost btn-sm" data-act="clear-validate">${esc(t('tools.clear'))}</button>` : ''}</div></div>
+                ${pickRow('pick-validate', t('tools.validate.file'), _inputs.validatePath, 'tools-val-path', 'clear-validate')}
                 <label class="tools-field tools-full"><span>${esc(t('tools.validate.text'))}</span>
                     <textarea class="input-field tools-mono" id="tools-val-text" rows="4" spellcheck="false" placeholder="${escAttr(t('tools.validate.textPh'))}"></textarea></label>${run}`;
+        case 'jsondiff':
+            return pickRow('pick-diff-a', t('tools.jsondiff.a'), _inputs.diffA, 'tools-jd-a')
+                + pickRow('pick-diff-b', t('tools.jsondiff.b'), _inputs.diffB, 'tools-jd-b') + run;
         default:
             return run;
     }
@@ -210,35 +286,59 @@ function renderPane(): void {
     const pane = _h?.q('.tools-pane');
     if (!pane) return;
     const id = _active;
+    const meta = toolMeta(id);
     pane.innerHTML = `
         <header class="tools-pane-head">
-            <h3 class="tools-pane-title">${esc(toolName(id))}</h3>
-            <p class="tools-pane-desc">${esc(toolDesc(id))}</p>
-            <p class="tools-pane-safe">${uiIcon('shield-check', 12)} ${esc(t('tools.readOnly'))}</p>
+            <span class="tools-pane-ic" aria-hidden="true">${uiIcon(meta.icon as any, 18)}</span>
+            <div class="tools-pane-titles">
+                <h3 class="tools-pane-title">${esc(toolName(id))}</h3>
+                <p class="tools-pane-desc">${esc(toolDesc(id))}</p>
+            </div>
+            <p class="tools-pane-safe${meta.writes ? ' is-writes' : ''}">${uiIcon(meta.writes ? 'alert' : 'shield-check', 12)} ${esc(meta.writes ? t('tools.writesAfterConfirm') : t('tools.readOnly'))}</p>
         </header>
         <div class="tools-form">${formHtml(id)}</div>
-        <div class="tools-progress" hidden>
-            <div class="tools-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100"><span></span></div>
-            <span class="tools-progress-txt"></span>
-            <button type="button" class="btn btn-ghost btn-sm" data-act="cancel">${uiIcon('stop', 14)} ${esc(t('tools.cancel'))}</button>
-        </div>
-        <div class="tools-actions"${_results[id] != null ? '' : ' hidden'}>
-            <button type="button" class="btn btn-ghost btn-sm" data-act="copy">${uiIcon('copy', 14)} ${esc(t('tools.copyJson'))}</button>
-            <button type="button" class="btn btn-ghost btn-sm" data-act="json">${uiIcon('download', 14)} JSON</button>
-            <button type="button" class="btn btn-ghost btn-sm" data-act="csv">${uiIcon('download', 14)} CSV</button>
-        </div>
-        <div class="tools-results">${_results[id] != null ? resultHtml(id, _results[id]) : `<p class="tools-empty">${esc(t('tools.notRun'))}</p>`}</div>`;
-    if (_busy) showBusy(true);
+        <div class="tools-out">${outHtml(id)}</div>`;
+    if (_running === id) showRunning(true);
 }
 
-function showBusy(on: boolean, text?: string): void {
+/** The results area: not run · running · failed · done. */
+function outHtml(id: ToolId): string {
+    const r = _results[id];
+    const progress = `<div class="tools-progress" hidden>
+            <div class="tools-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100"><span></span></div>
+            <span class="tools-progress-txt"></span>
+            <button type="button" class="btn btn-ghost btn-sm" data-act="cancel"${isLongTool(id) ? '' : ' hidden'}>${uiIcon('stop', 14)} ${esc(t('tools.cancel'))}</button>
+        </div>`;
+    if (r == null) {
+        return progress + `<div class="tools-state is-idle">${uiIcon(toolMeta(id).icon as any, 24)}
+            <p class="tools-state-title">${esc(t('tools.notRun'))}</p>
+            <p class="tools-state-sub">${esc(t('tools.notRunSub'))}</p></div>`;
+    }
+    if (r.__error) {
+        return progress + `<div class="tools-state is-error" role="alert">${uiIcon('error', 24)}
+            <p class="tools-state-title">${esc(t('tools.err.title'))}</p>
+            <p class="tools-state-sub tools-mono">${esc(r.__error)}</p>
+            <button type="button" class="btn btn-secondary btn-sm" data-act="run">${uiIcon('refresh', 14)} ${esc(t('tools.retry'))}</button></div>`;
+    }
+    const exportable = id !== 'cache' || (r.items || []).length;
+    return progress + `<div class="tools-result-bar">
+            <span class="tools-result-when">${esc(t('tools.ranAt', { time: new Date(r.__at || Date.now()).toLocaleTimeString() }))}</span>
+            ${exportable ? `<span class="tools-actions">
+                <button type="button" class="btn btn-ghost btn-sm" data-act="copy">${uiIcon('copy', 14)} ${esc(t('tools.copyJson'))}</button>
+                <button type="button" class="btn btn-ghost btn-sm" data-act="json">${uiIcon('download', 14)} ${esc(t('tools.saveJson'))}</button>
+                <button type="button" class="btn btn-ghost btn-sm" data-act="csv">${uiIcon('download', 14)} ${esc(t('tools.saveCsv'))}</button>
+            </span>` : ''}
+        </div>
+        <div class="tools-results">${resultHtml(id, r)}</div>`;
+}
+
+function showRunning(on: boolean, text?: string): void {
     const pane = _h?.q('.tools-pane');
     if (!pane) return;
     const pr = pane.querySelector<HTMLElement>('.tools-progress');
     if (pr) pr.hidden = !on;
+    pane.querySelectorAll<HTMLElement>('.tools-state, .tools-result-bar, .tools-results').forEach((el) => { el.hidden = on; });
     pane.querySelectorAll<HTMLButtonElement>('[data-act="run"]').forEach((b) => { b.disabled = on; });
-    const cancel = pane.querySelector<HTMLElement>('[data-act="cancel"]');
-    if (cancel) cancel.hidden = !(on && (_active === 'duplicates' || _active === 'disk'));
     if (on) setProgress('start', 0, 0, text);
 }
 
@@ -266,9 +366,60 @@ function setProgress(phase: string, done: number, total: number, text?: string):
 function summary(text: string, tone: 'ok' | 'warn' | 'info' = 'info'): string {
     return `<p class="tools-summary is-${tone}">${esc(text)}</p>`;
 }
+const none = (key: string) => `<p class="tools-empty">${uiIcon('check', 14)} ${esc(t(key))}</p>`;
+const pct = (v: number) => `${Math.round((Number(v) || 0) * 100)} %`;
+
+function deployedKind(k: string): string {
+    switch (k) {
+        case 'mod_folder_missing': return t('tools.deployed.k.mod_folder_missing');
+        case 'missing_target': return t('tools.deployed.k.missing_target');
+        case 'broken_link': return t('tools.deployed.k.broken_link');
+        case 'missing_source': return t('tools.deployed.k.missing_source');
+        case 'unsafe_path': return t('tools.deployed.k.unsafe_path');
+        case 'no_file_list': return t('tools.deployed.k.no_file_list');
+        default: return t('tools.deployed.k.stale_link');
+    }
+}
+function deployedHint(k: string): string {
+    switch (k) {
+        case 'mod_folder_missing': return t('tools.deployed.h.mod_folder_missing');
+        case 'missing_target': return t('tools.deployed.h.missing_target');
+        case 'broken_link': return t('tools.deployed.h.broken_link');
+        case 'missing_source': return t('tools.deployed.h.missing_source');
+        case 'unsafe_path': return t('tools.deployed.h.unsafe_path');
+        case 'no_file_list': return t('tools.deployed.h.no_file_list');
+        default: return t('tools.deployed.h.stale_link');
+    }
+}
+function nameIssue(code: string): string {
+    switch (code) {
+        case 'trim': return t('tools.names.i.trim');
+        case 'spaces': return t('tools.names.i.spaces');
+        case 'separators': return t('tools.names.i.separators');
+        case 'version_in_name': return t('tools.names.i.version_in_name');
+        case 'version_empty': return t('tools.names.i.version_empty');
+        case 'version_prefix': return t('tools.names.i.version_prefix');
+        default: return t('tools.names.i.version_format');
+    }
+}
+function cacheName(id: string): string {
+    switch (id) {
+        case 'catalog_cache': return t('tools.cache.t.catalog_cache');
+        case 'mod_cache': return t('tools.cache.t.mod_cache');
+        case 'update_leftovers': return t('tools.cache.t.update_leftovers');
+        default: return t('tools.cache.t.crash_archive');
+    }
+}
+function cacheHint(id: string): string {
+    switch (id) {
+        case 'catalog_cache': return t('tools.cache.h.catalog_cache');
+        case 'mod_cache': return t('tools.cache.h.mod_cache');
+        case 'update_leftovers': return t('tools.cache.h.update_leftovers');
+        default: return t('tools.cache.h.crash_archive');
+    }
+}
 
 function resultHtml(id: ToolId, r: any): string {
-    if (r && r.__error) return `<p class="tools-error">${esc(r.__error)}</p>`;
     switch (id) {
         case 'duplicates': {
             const n = (r.mod_groups?.length || 0) + (r.file_groups?.length || 0);
@@ -280,7 +431,7 @@ function resultHtml(id: ToolId, r: any): string {
                 r.truncated ? `<p class="tools-note">${esc(t('tools.duplicates.truncated'))}</p>` : '',
                 r.cancelled ? `<p class="tools-note">${esc(t('tools.cancelled'))}</p>` : '',
             ].join('');
-            if (!n) return head + notes + `<p class="tools-empty">${esc(t('tools.duplicates.none'))}</p>`;
+            if (!n) return head + notes + none('tools.duplicates.none');
             const mods = (r.mod_groups || []).map((g: any) => `
                 <div class="tools-group">
                     <div class="tools-group-head">${uiIcon('package', 14)} <b>${esc(g.mods[0]?.name)}</b> <span class="tools-chip">${esc(t('tools.duplicates.copies', { n: String(g.mods.length) }))}</span></div>
@@ -303,7 +454,7 @@ function resultHtml(id: ToolId, r: any): string {
             const pairs = r as any[];
             const active = pairs.filter((p) => p.active).length;
             const head = summary(t('tools.conflicts.summary', { n: String(pairs.length), a: String(active) }), pairs.length ? 'warn' : 'ok');
-            if (!pairs.length) return head + `<p class="tools-empty">${esc(t('tools.conflicts.none'))}</p>`;
+            if (!pairs.length) return head + none('tools.conflicts.none');
             return head + pairs.slice(0, 300).map((p, i) => `
                 <div class="tools-group">
                     <div class="tools-row">
@@ -333,27 +484,97 @@ function resultHtml(id: ToolId, r: any): string {
             const app = (r.app_data || []).length ? `
                 <h4 class="tools-h">${esc(t('tools.disk.appData'))} ${folderBtn(r.app_data_path, true)}</h4>
                 <div class="tools-group">${r.app_data.slice(0, 60).map((x: any) => `<div class="tools-row"><code class="tools-row-main">${esc(x.name)}</code>${bar(x.bytes)}<span class="tools-num-cell">${esc(formatBytes(x.bytes))}</span></div>`).join('')}</div>` : '';
-            return head + (profiles || `<p class="tools-empty">${esc(t('tools.disk.none'))}</p>`) + app;
+            return head + (profiles || none('tools.disk.none')) + app;
         }
-        case 'diff': {
-            const n = findingCount('diff', r);
-            const head = summary(t('tools.diff.summary', { a: r.a_name, b: r.b_name, n: String(n), s: String(r.same || 0) }), n ? 'warn' : 'ok');
-            if (!n) return head + `<p class="tools-empty">${esc(t('tools.diff.none'))}</p>`;
-            const section = (key: string, rows: string[]) => rows.length ? `<h4 class="tools-h">${esc(t(`tools.diff.${key}`, { a: r.a_name, b: r.b_name }))} <span class="tools-chip">${rows.length}</span></h4><div class="tools-group">${rows.join('')}</div>` : '';
-            const one = (s: any) => `<div class="tools-row"><span class="tools-row-main">${esc(s.name)} <span class="tools-muted">${esc(s.version)}</span></span><span class="tools-chip">${esc(t(s.enabled ? 'tools.on' : 'tools.off'))}</span></div>`;
-            const two = (f: (x: any) => string) => (p: any) => `<div class="tools-row"><span class="tools-row-main">${esc(p.a.name)}</span><span class="tools-cmp"><span>${esc(f(p.a))}</span> → <span>${esc(f(p.b))}</span></span></div>`;
-            const onoff = (x: any) => t(x.enabled ? 'tools.on' : 'tools.off');
-            return head
-                + section('onlyA', (r.only_a || []).map(one))
-                + section('onlyB', (r.only_b || []).map(one))
-                + section('version', (r.version || []).map(two((x) => x.version || '—')))
-                + section('enabled', (r.enabled || []).map(two(onoff)))
-                + section('order', (r.order || []).map(two((x) => `#${x.order}`)));
+        case 'largefiles': {
+            const files = r.files || [];
+            const head = summary(t('tools.largefiles.summary', { n: String(files.length), s: String(r.files_scanned || 0), t: formatBytes(r.bytes_scanned || 0), m: formatBytes(r.min_bytes || 0) }), files.length ? 'warn' : 'ok')
+                + (r.cancelled ? `<p class="tools-note">${esc(t('tools.cancelled'))}</p>` : '');
+            if (!files.length) return head + none('tools.largefiles.none');
+            const max = Math.max(1, ...files.map((f: any) => f.bytes));
+            return head + `<div class="tools-group">${files.map((f: any) => `<div class="tools-row">
+                    <span class="tools-num-cell">${esc(formatBytes(f.bytes))}</span>
+                    <span class="tools-size-bar" aria-hidden="true"><span style="width:${Math.max(1, Math.round((f.bytes / max) * 100))}%"></span></span>
+                    <span class="tools-row-main">${esc(f.mod_name || '')}${f.mod_name ? ' ' : ''}<span class="tools-chip">${esc(f.area === 'backups' ? t('tools.disk.backups') : t('tools.disk.mods'))}</span> <span class="tools-muted">${esc(f.profile_name)}</span></span>
+                    <code class="tools-path">${esc(f.path)}</code>${folderBtn(f.path)}</div>`).join('')}</div>`;
+        }
+        case 'deployed': {
+            const items = r.items || [];
+            const real = items.filter((x: any) => x.kind !== 'no_file_list');
+            const head = summary(t('tools.deployed.summary', { n: String(real.length), p: String(r.profiles_checked || 0), m: String(r.mods_checked || 0), f: String(r.files_checked || 0) }), real.length ? 'warn' : 'ok')
+                + (r.truncated ? `<p class="tools-note">${esc(t('tools.moreInExport', { n: '…' }))}</p>` : '')
+                + (r.cancelled ? `<p class="tools-note">${esc(t('tools.cancelled'))}</p>` : '');
+            if (!items.length) return head + none('tools.deployed.none');
+            const kinds = ['mod_folder_missing', 'missing_target', 'broken_link', 'stale_link', 'missing_source', 'unsafe_path', 'no_file_list'];
+            return head + kinds.map((k) => {
+                const list = items.filter((x: any) => x.kind === k);
+                if (!list.length) return '';
+                return `<h4 class="tools-h">${esc(deployedKind(k))} <span class="tools-chip">${list.length}</span></h4>
+                    <p class="tools-note">${esc(deployedHint(k))}</p>
+                    <div class="tools-group">${list.slice(0, 300).map((x: any) => `<div class="tools-row">
+                        <span class="tools-row-main">${esc(x.mod_name || t('tools.deployed.noMod'))}</span>
+                        <span class="tools-chip">${esc(x.profile_name)}</span>
+                        <code class="tools-path">${esc(x.path)}</code>${k === 'unsafe_path' ? '' : folderBtn(x.path, k === 'mod_folder_missing' || k === 'no_file_list')}</div>`).join('')}
+                    ${list.length > 300 ? `<p class="tools-note">${esc(t('tools.moreInExport', { n: String(list.length - 300) }))}</p>` : ''}</div>`;
+            }).join('');
+        }
+        case 'names': {
+            const mods = r.mods || [];
+            const head = summary(t('tools.names.summary', { n: String(mods.length), m: String(r.mods_checked || 0) }), mods.length ? 'warn' : 'ok');
+            if (!mods.length) return head + none('tools.names.none');
+            return head + `<p class="tools-note">${esc(t('tools.names.note'))}</p><div class="tools-group">${mods.slice(0, 400).map((m: any) => `<div class="tools-row tools-row-top">
+                    <span class="tools-row-main"><b>${esc(m.name)}</b> <span class="tools-muted">${esc(m.version || '—')}</span>${m.profile_name ? ` <span class="tools-chip">${esc(m.profile_name)}</span>` : ''}
+                    <ul class="tools-list">${m.issues.map((i: any) => `<li>${esc(nameIssue(i.code))}${i.suggestion ? `: <code class="tools-mono">${esc(i.suggestion)}</code>` : ''}</li>`).join('')}</ul></span></div>`).join('')}</div>
+                ${mods.length > 400 ? `<p class="tools-note">${esc(t('tools.moreInExport', { n: String(mods.length - 400) }))}</p>` : ''}`;
+        }
+        case 'dupprofiles': {
+            const pairs = r.pairs || [];
+            const head = summary(t('tools.dupprofiles.summary', { n: String(pairs.length), p: String(r.profiles_checked || 0) }), pairs.length ? 'warn' : 'ok');
+            if (!pairs.length) return head + none('tools.dupprofiles.none');
+            return head + `<div class="tools-group">${pairs.map((p: any) => `<div class="tools-row">
+                    <span class="tools-row-main"><b>${esc(p.a_name)}</b> ↔ <b>${esc(p.b_name)}</b></span>
+                    <span class="tools-chip${p.identical ? ' is-warn' : ''}">${esc(p.identical ? t('tools.dupprofiles.identical') : t('tools.dupprofiles.similar', { p: pct(p.similarity) }))}</span>
+                    <span class="tools-muted">${esc(t('tools.dupprofiles.counts', { s: String(p.shared), a: String(p.only_a), b: String(p.only_b) }))}</span>
+                    ${p.same_game_path ? `<span class="tools-chip is-bad">${esc(t('tools.dupprofiles.sameGame'))}</span>` : ''}
+                    ${p.same_mods_path ? `<span class="tools-chip is-warn">${esc(t('tools.dupprofiles.sameMods'))}</span>` : ''}</div>`).join('')}</div>`;
+        }
+        case 'cache': {
+            const items = r.items || [];
+            const sel = new Set(_inputs.cacheIds || items.filter((c: any) => c.id !== 'crash_archive').map((c: any) => c.id));
+            const chosen = cacheSelection(r, [...sel] as string[]);
+            const cleaned = r.cleaned ? summary(t('tools.cache.cleaned', { b: formatBytes(r.cleaned.freed_bytes || 0) }), (r.cleaned.errors || []).length ? 'warn' : 'ok')
+                + ((r.cleaned.errors || []).length ? `<ul class="tools-list tools-mono">${r.cleaned.errors.slice(0, 20).map((e: string) => `<li>${esc(t(e.split(': ').pop() || '') !== (e.split(': ').pop() || '') ? `${e.split(': ')[0]}: ${t(e.split(': ').pop() || '')}` : e)}</li>`).join('')}</ul>` : '') : '';
+            return cleaned + summary(t('tools.cache.summary', { t: formatBytes(r.total_bytes || 0) }), 'info')
+                + `<div class="tools-group">${items.map((c: any) => `<label class="tools-row tools-check">
+                    <input type="checkbox" data-cache-id="${escAttr(c.id)}"${sel.has(c.id) && !c.busy && (c.bytes || c.entries) ? ' checked' : ''}${c.busy || (!c.bytes && !c.entries) ? ' disabled' : ''}>
+                    <span class="tools-row-main"><b>${esc(cacheName(c.id))}</b><br><span class="tools-hint">${esc(cacheHint(c.id))}</span>${c.busy ? `<br><span class="tools-chip is-warn">${esc(t('tools.cache.busy'))}</span>` : ''}</span>
+                    <span class="tools-num-cell">${esc(formatBytes(c.bytes || 0))}</span>
+                    ${folderBtn(c.path, true)}</label>`).join('')}</div>
+                <div class="tools-cache-go">
+                    <button type="button" class="btn btn-danger btn-sm" data-act="cache-clean"${chosen.ids.length ? '' : ' disabled'}>${uiIcon('delete', 14)} ${esc(t('tools.cache.clean', { b: formatBytes(chosen.bytes) }))}</button>
+                </div>`;
+        }
+        case 'logs': {
+            const head = summary(t('tools.logs.summary', { n: String(r.lines.length), t: String(r.total), e: String(r.errors), w: String(r.warnings) }), r.errors ? 'warn' : 'info')
+                + (r.clipped ? `<p class="tools-note">${esc(t('tools.logs.clipped', { n: String(r.lines.length) }))}</p>` : '');
+            if (!r.total) return head + none('tools.logs.empty');
+            if (!r.lines.length) return head + `<p class="tools-empty">${esc(t('tools.logs.noMatch'))}</p>`;
+            return head + `<pre class="tools-log" tabindex="0">${r.lines.map((l: any) => `<span class="tools-log-line is-${l.level}"><span class="tools-log-n">${l.n}</span>${esc(l.text)}</span>`).join('')}</pre>`;
+        }
+        case 'jsondiff': {
+            const n = findingCount('jsondiff', r);
+            const head = summary(t('tools.jsondiff.summary', { a: String(r.a_count), b: String(r.b_count), p: String(r.added?.length || 0), m: String(r.removed?.length || 0), c: String(r.changed?.length || 0), s: String(r.same || 0) }), n ? 'warn' : 'ok');
+            const notes = (!r.a_list || !r.b_list ? `<p class="tools-note">${esc(t('tools.jsondiff.noList'))}</p>` : '')
+                + ((r.meta_changed || []).length ? `<p class="tools-note">${esc(t('tools.jsondiff.meta', { f: r.meta_changed.join(', ') }))}</p>` : '');
+            if (!n) return head + notes + none('tools.jsondiff.none');
+            const sec = (title: string, list: any[], fields = false) => list.length ? `<h4 class="tools-h">${esc(title)} <span class="tools-chip">${list.length}</span></h4>
+                <div class="tools-group">${list.slice(0, 500).map((e: any) => `<div class="tools-row"><code class="tools-mono">${esc(e.key)}</code><span class="tools-row-main">${esc(e.name && e.name !== e.key ? e.name : '')}</span>${fields ? `<span class="tools-muted">${esc((e.fields || []).join(', '))}</span>` : ''}</div>`).join('')}</div>` : '';
+            return head + notes + sec(t('tools.jsondiff.added'), r.added || []) + sec(t('tools.jsondiff.removed'), r.removed || []) + sec(t('tools.jsondiff.changed'), r.changed || [], true);
         }
         case 'orphans': {
             const items = r.items || [];
             const head = summary(t('tools.orphans.summary', { n: String(items.length), p: String(r.profiles_checked || 0), m: String(r.mods_checked || 0) }), items.length ? 'warn' : 'ok');
-            if (!items.length) return head + `<p class="tools-empty">${esc(t('tools.orphans.none'))}</p>`;
+            if (!items.length) return head + none('tools.orphans.none');
             const kinds = ['dangling_active', 'missing_folder', 'missing_profile_dir', 'unowned', 'unregistered'];
             return head + kinds.map((k) => {
                 const list = items.filter((o: any) => o.kind === k);
@@ -364,6 +585,21 @@ function resultHtml(id: ToolId, r: any): string {
                         ${o.profile_name ? `<span class="tools-chip">${esc(o.profile_name)}</span>` : ''}
                         ${o.path ? `<code class="tools-path">${esc(o.path)}</code>${k === 'missing_folder' || k === 'missing_profile_dir' ? '' : folderBtn(o.path)}` : ''}</div>`).join('')}</div>`;
             }).join('');
+        }
+        case 'diff': {
+            const n = findingCount('diff', r);
+            const head = summary(t('tools.diff.summary', { a: r.a_name, b: r.b_name, n: String(n), s: String(r.same || 0) }), n ? 'warn' : 'ok');
+            if (!n) return head + none('tools.diff.none');
+            const section = (key: string, rows: string[]) => rows.length ? `<h4 class="tools-h">${esc(t(`tools.diff.${key}`, { a: r.a_name, b: r.b_name }))} <span class="tools-chip">${rows.length}</span></h4><div class="tools-group">${rows.join('')}</div>` : '';
+            const one = (s: any) => `<div class="tools-row"><span class="tools-row-main">${esc(s.name)} <span class="tools-muted">${esc(s.version)}</span></span><span class="tools-chip">${esc(t(s.enabled ? 'tools.on' : 'tools.off'))}</span></div>`;
+            const two = (f: (x: any) => string) => (p: any) => `<div class="tools-row"><span class="tools-row-main">${esc(p.a.name)}</span><span class="tools-cmp"><span>${esc(f(p.a))}</span> → <span>${esc(f(p.b))}</span></span></div>`;
+            const onoff = (x: any) => t(x.enabled ? 'tools.on' : 'tools.off');
+            return head
+                + section('onlyA', (r.only_a || []).map(one))
+                + section('onlyB', (r.only_b || []).map(one))
+                + section('version', (r.version || []).map(two((x) => x.version || '—')))
+                + section('enabled', (r.enabled || []).map(two(onoff)))
+                + section('order', (r.order || []).map(two((x) => `#${x.order}`)));
         }
         case 'hash': {
             const v = r.verdict as string;
@@ -390,12 +626,13 @@ function resultHtml(id: ToolId, r: any): string {
 // ── Actions ──────────────────────────────────────────────────────────────────────────────
 
 async function run(): Promise<void> {
-    if (_busy || !_h) return;
+    if (_running || !_h) return;
     const id = _active;
     const q = <T extends HTMLElement>(sel: string) => _h!.q<T>(sel);
     let result: any = null;
-    _busy = true;
-    showBusy(true);
+    _running = id;
+    showRunning(true);
+    renderRail();
     try {
         switch (id) {
             case 'duplicates': {
@@ -419,6 +656,32 @@ async function run(): Promise<void> {
             case 'disk':
                 result = await invoke('tools_disk_usage');
                 break;
+            case 'deployed':
+                result = await invoke('tools_check_deployed', { profileId: q<HTMLSelectElement>('#tools-dep-profile')?.value || null });
+                break;
+            case 'largefiles': {
+                const min = Math.max(1, Math.min(1048576, Number(q<HTMLInputElement>('#tools-lf-min')?.value || 50) || 50));
+                const limit = Math.max(1, Math.min(500, Number(q<HTMLInputElement>('#tools-lf-limit')?.value || 50) || 50));
+                result = await invoke('tools_large_files', { profileId: q<HTMLSelectElement>('#tools-lf-profile')?.value || null, minMb: min, limit });
+                break;
+            }
+            case 'names':
+                result = await invoke('tools_names_report');
+                break;
+            case 'dupprofiles':
+                result = await invoke('tools_duplicate_profiles', { threshold: Number(q<HTMLSelectElement>('#tools-dp-th')?.value || 0.8) });
+                break;
+            case 'cache':
+                result = await invoke('tools_cache_preview');
+                break;
+            case 'logs': {
+                const logId = q<HTMLSelectElement>('#tools-log-id')?.value || 'current';
+                _inputs.logId = logId;
+                try { _inputs.logList = await invoke('tools_log_list') as any[]; } catch { /* keep the old list */ }
+                _inputs.logText = await invoke('tools_log_read', { id: logId }) as string;
+                result = logView();
+                break;
+            }
             case 'diff': {
                 const a = q<HTMLSelectElement>('#tools-diff-a')?.value || '';
                 const b = q<HTMLSelectElement>('#tools-diff-b')?.value || '';
@@ -429,6 +692,11 @@ async function run(): Promise<void> {
             case 'orphans':
                 result = await invoke('tools_find_orphans');
                 break;
+            case 'jsondiff': {
+                if (!_inputs.diffA || !_inputs.diffB) { toast(t('tools.jsondiff.pickTwo'), 'warning'); return; }
+                result = await invoke('tools_json_diff', { pathA: _inputs.diffA, pathB: _inputs.diffB });
+                break;
+            }
             case 'hash': {
                 const path = _inputs.hashPath;
                 if (!path) { toast(t('tools.pickFirst'), 'warning'); return; }
@@ -459,33 +727,70 @@ async function run(): Promise<void> {
         }
     } catch (e) {
         const msg = String((e as any)?.message || e);
-        result = { __error: `${t('tools.err.failed')} ${t(msg) !== msg ? t(msg) : msg.slice(0, 300)}` };
+        result = { __error: t(msg) !== msg ? t(msg) : msg.slice(0, 300) };
     } finally {
-        _busy = false;
-        if (_h) showBusy(false);
+        _running = null;
     }
+    if (_h && result == null) { showRunning(false); renderRail(); return; }
     if (result == null || !_h) return;
+    if (typeof result === 'object' && !Array.isArray(result) && !result.__error) result.__at = Date.now();
+    else if (Array.isArray(result)) (result as any).__at = Date.now();
     _results[id] = result;
-    if (_active === id) { renderPane(); renderRail(); }
+    renderRail();
+    if (_active === id) renderPane();
 }
 
-/** `catalog_validate`'s ValidateReport — `{ ok, variantLabel, signature: { status }, items,
- *  issues: [{ severity, code, path, message }] }` — in the pane's `{ format, ok, count,
+/** The loaded log, through the current level and text filter. */
+function logView(): any {
+    const v: any = filterLog(_inputs.logText || '', { level: _inputs.logLevel || 'all', q: _inputs.logQ || '', limit: 3000 });
+    v.id = _inputs.logId || 'current';
+    v.__at = Date.now();
+    return v;
+}
+
+/** `catalog_validate`'s ValidateReport (`{ ok, variantLabel, signature: { status }, items,
+ *  issues: [{ severity, code, path, message }] }`) in the pane's `{ format, ok, count,
  *  problems }` shape (the one bmm_validate answers in). Info-level notes are not problems. */
 function catalogReport(r: any): any {
     const issues: any[] = Array.isArray(r?.issues) ? r.issues : [];
     const problems = issues
         .filter((i) => i?.severity === 'error' || i?.severity === 'warning')
-        .map((i) => `${i.severity === 'error' ? '✗' : '!'} ${i.path ? `${i.path} — ` : ''}${i.message}`);
+        .map((i) => `${i.severity === 'error' ? '✗' : '!'} ${i.path ? `${i.path}: ` : ''}${i.message}`);
     const sig = r?.signature?.status && r.signature.status !== 'unsigned' ? ` · ${r.signature.status}` : '';
     return { format: `${r?.variantLabel || 'catalog'}${sig}`, ok: !!r?.ok, count: Number(r?.items || 0), problems };
+}
+
+async function cacheClean(): Promise<void> {
+    const r = _results.cache;
+    if (!r || r.__error || _running) return;
+    const chosen = cacheSelection(r, _inputs.cacheIds || (r.items || []).filter((c: any) => c.id !== 'crash_archive').map((c: any) => c.id));
+    if (!chosen.ids.length) return;
+    const names = chosen.ids.map(cacheName).join(', ');
+    const ok = await showConfirm(t('tools.cache.confirmTitle'), t('tools.cache.confirmMsg', { names, b: formatBytes(chosen.bytes) }), true);
+    if (!ok) return;
+    _running = 'cache';
+    showRunning(true, t('tools.cache.cleaning'));
+    let cleaned: any = null;
+    try {
+        cleaned = await invoke('tools_cache_clean', { ids: chosen.ids, confirmed: true });
+    } catch (e) {
+        cleaned = { freed_bytes: 0, errors: [String((e as any)?.message || e)] };
+    }
+    // Measure again, so the sizes shown are the ones on disk now.
+    let fresh: any = null;
+    try { fresh = await invoke('tools_cache_preview'); } catch { fresh = { ...r }; }
+    _running = null;
+    _results.cache = { ...fresh, cleaned, __at: Date.now() };
+    toast(t('tools.cache.cleaned', { b: formatBytes(cleaned?.freed_bytes || 0) }), (cleaned?.errors || []).length ? 'warning' : 'success', 6000);
+    renderRail();
+    if (_active === 'cache') renderPane();
 }
 
 async function exportResult(kind: 'json' | 'csv' | 'copy'): Promise<void> {
     const id = _active;
     const r = _results[id];
     if (r == null || r.__error) return;
-    const json = JSON.stringify(r, null, 2);
+    const json = JSON.stringify(r, (k, v) => (k === '__at' ? undefined : v), 2);
     if (kind === 'copy') {
         try { await navigator.clipboard.writeText(json); toast(t('tools.copied'), 'success'); } catch { toast(t('tools.err.clipboard'), 'error'); }
         return;
@@ -501,7 +806,8 @@ async function onClick(e: Event): Promise<void> {
     const el = (e.target as HTMLElement).closest<HTMLElement>('[data-tool], [data-cmd], [data-act], [data-open]');
     if (!el || !_h) return;
     if (el.dataset.tool && isToolId(el.dataset.tool)) {
-        if (_busy) { toast(t('tools.busy'), 'info'); return; }
+        // Switching while a scan runs is fine: the scan keeps going and its tool shows a
+        // spinner in the rail; its result lands there when it ends.
         _active = el.dataset.tool;
         renderRail(); renderPane();
         return;
@@ -513,7 +819,10 @@ async function onClick(e: Event): Promise<void> {
     }
     if (el.dataset.open != null) { void openFolder(el.dataset.open); return; }
     switch (el.dataset.act) {
-        case 'run': void run(); break;
+        case 'run':
+            if (_running && _running !== _active) { toast(t('tools.busy'), 'info'); return; }
+            void run();
+            break;
         case 'cancel': void invoke('tools_cancel').catch(() => {}); setProgress('cancelling', 0, 0); break;
         case 'copy': case 'json': case 'csv': void exportResult(el.dataset.act as any); break;
         case 'pick-hash': {
@@ -526,14 +835,62 @@ async function onClick(e: Event): Promise<void> {
             if (p) { _inputs.validatePath = p; renderPane(); }
             break;
         }
+        case 'pick-diff-a': case 'pick-diff-b': {
+            const p = await pickFile([{ name: 'JSON', extensions: ['json', 'bmmcat'] }, { name: '*', extensions: ['*'] }]);
+            if (!p) break;
+            if (el.dataset.act === 'pick-diff-a') _inputs.diffA = p; else _inputs.diffB = p;
+            const c = _h.q(el.dataset.act === 'pick-diff-a' ? '#tools-jd-a' : '#tools-jd-b');
+            if (c) c.textContent = p;
+            break;
+        }
         case 'clear-validate': _inputs.validatePath = undefined; renderPane(); break;
         case 'copy-hash': {
             const h = _results.hash?.hash;
             if (h) { try { await navigator.clipboard.writeText(h); toast(t('tools.copied'), 'success'); } catch { toast(t('tools.err.clipboard'), 'error'); } }
             break;
         }
+        case 'cache-clean': await cacheClean(); break;
         case 'cf-files': await toggleConflictFiles(Number(el.dataset.i)); break;
     }
+}
+
+let _logDeb: ReturnType<typeof setTimeout> | null = null;
+function onInput(e: Event): void {
+    const el = e.target as HTMLInputElement;
+    if (el.id === 'tools-search') {
+        _search = el.value;
+        renderRail();
+        return;
+    }
+    if (el.id === 'tools-log-q') {
+        _inputs.logQ = el.value;
+        if (_logDeb) clearTimeout(_logDeb);
+        _logDeb = setTimeout(refilterLog, 150);
+    }
+}
+
+function onChange(e: Event): void {
+    const el = e.target as HTMLInputElement;
+    if (el.id === 'tools-log-level') { _inputs.logLevel = el.value; refilterLog(); return; }
+    if (el.dataset.cacheId != null && _h) {
+        _inputs.cacheIds = [..._h.body.querySelectorAll<HTMLInputElement>('[data-cache-id]')].filter((x) => x.checked).map((x) => x.dataset.cacheId || '');
+        const r = _results.cache;
+        const btn = _h.q<HTMLButtonElement>('[data-act="cache-clean"]');
+        if (r && btn) {
+            const chosen = cacheSelection(r, _inputs.cacheIds);
+            btn.disabled = !chosen.ids.length;
+            btn.innerHTML = `${uiIcon('delete', 14)} ${esc(t('tools.cache.clean', { b: formatBytes(chosen.bytes) }))}`;
+        }
+    }
+}
+
+/** The log's filters changed: re-filter what is loaded, without reading it again. */
+function refilterLog(): void {
+    if (_inputs.logText == null || _active !== 'logs' || !_h) return;
+    _results.logs = logView();
+    const out = _h.q('.tools-results');
+    if (out) out.innerHTML = resultHtml('logs', _results.logs);
+    renderRail();
 }
 
 async function toggleConflictFiles(i: number): Promise<void> {

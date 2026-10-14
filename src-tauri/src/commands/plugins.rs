@@ -2492,6 +2492,125 @@ fn safe_bundled_path(
     Some(plugin_dir.join(subdir).join(name))
 }
 
+/// `rel`, a path a manifest lists, as an existing file or folder INSIDE `root`, or None.
+///
+/// The manifest is the plugin author's text, and duplicating a plugin reads what it names. So:
+/// relative only (no drive, no leading slash, no `..`, via `safe_relative_path`), and no
+/// symlink or junction anywhere on the way down — each component is checked with
+/// `symlink_metadata`, which does not follow it. A link inside a plugin folder pointing at
+/// `C:\Users\…` would otherwise make "Duplicate" copy whatever it points at into a plugin
+/// that gets exported and shared. The canonical path is checked against the canonical root
+/// as well, for anything the component walk would miss.
+fn confined_bundled_source(root: &std::path::Path, rel: &str) -> Option<PathBuf> {
+    let safe_rel = crate::fs_utils::safe_relative_path(rel.trim())?;
+    let root_canon = std::fs::canonicalize(root).ok()?;
+    let mut cur = root.to_path_buf();
+    for comp in safe_rel.components() {
+        match comp {
+            std::path::Component::Normal(c) => cur.push(c),
+            _ => return None,
+        }
+        let meta = std::fs::symlink_metadata(&cur).ok()?;
+        if meta.file_type().is_symlink() {
+            return None;
+        }
+    }
+    let canon = std::fs::canonicalize(&cur).ok()?;
+    if !canon.starts_with(&root_canon) || canon == root_canon {
+        return None;
+    }
+    Some(cur)
+}
+
+/// Copy a bundled folder without following links: a symlink or junction inside it is skipped,
+/// not copied and not entered. Each file goes through the resource governor (an Install copy).
+fn copy_tree_no_links(src: &std::path::Path, dst: &std::path::Path) -> Result<u64, String> {
+    std::fs::create_dir_all(dst).map_err(|e| e.to_string())?;
+    let mut n = 0u64;
+    for entry in std::fs::read_dir(src).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let ft = std::fs::symlink_metadata(entry.path()).map_err(|e| e.to_string())?.file_type();
+        if ft.is_symlink() {
+            continue;
+        }
+        let target = dst.join(entry.file_name());
+        if ft.is_dir() {
+            n += copy_tree_no_links(&entry.path(), &target)?;
+        } else if ft.is_file() {
+            crate::fs_utils::copy_file_install(crate::governor::config::OpKind::Install, &entry.path(), &target, None)
+                .map_err(|e| e.to_string())?;
+            n += 1;
+        }
+    }
+    Ok(n)
+}
+
+/// What duplicating a plugin brings along: the files its manifest lists (scripts, bundled
+/// folders, automations, catalogue bundles) and its icon, copied from the source plugin's
+/// folder into the new one under the same relative paths.
+///
+/// An entry that cannot be copied — absolute, `..`, a link, missing, or outside the source
+/// folder — is dropped from the new manifest instead of being carried over: a duplicate that
+/// lists a file it does not have is the bug this exists to fix. Returns the files copied.
+fn copy_bundled_from_source(
+    src_dir: &std::path::Path,
+    dst_dir: &std::path::Path,
+    manifest: &mut PluginManifest,
+) -> Result<u64, String> {
+    std::fs::create_dir_all(dst_dir).map_err(|e| e.to_string())?;
+    let same = match (std::fs::canonicalize(src_dir), std::fs::canonicalize(dst_dir)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => false,
+    };
+    if same {
+        return Ok(0);
+    }
+    let mut copied = 0u64;
+    let mut carry = |list: &mut Vec<String>| -> Result<(), String> {
+        let mut kept: Vec<String> = Vec::with_capacity(list.len());
+        for rel in std::mem::take(list) {
+            let (Some(src), Some(safe_rel)) = (
+                confined_bundled_source(src_dir, &rel),
+                crate::fs_utils::safe_relative_path(rel.trim()),
+            ) else {
+                log_line(format!("[PLUGINS] Duplicate: not copied (outside the plugin, a link, or missing): {}", rel));
+                continue;
+            };
+            let dst = dst_dir.join(&safe_rel);
+            let meta = std::fs::symlink_metadata(&src).map_err(|e| e.to_string())?;
+            if meta.is_dir() {
+                copied += copy_tree_no_links(&src, &dst)?;
+            } else {
+                crate::fs_utils::copy_file_install(crate::governor::config::OpKind::Install, &src, &dst, None)
+                    .map_err(|e| e.to_string())?;
+                copied += 1;
+            }
+            if !kept.contains(&rel) {
+                kept.push(rel);
+            }
+        }
+        *list = kept;
+        Ok(())
+    };
+    carry(&mut manifest.scripts)?;
+    carry(&mut manifest.folders)?;
+    carry(&mut manifest.automations)?;
+    carry(&mut manifest.bundles)?;
+    // The icon is not in the manifest; it is icon.png or icon.svg at the plugin's root.
+    if !dst_dir.join("icon.png").exists() && !dst_dir.join("icon.svg").exists() {
+        for name in ["icon.png", "icon.svg"] {
+            let Some(src) = confined_bundled_source(src_dir, name) else { continue };
+            if std::fs::symlink_metadata(&src).map(|m| m.is_file()).unwrap_or(false) {
+                crate::fs_utils::copy_file_install(crate::governor::config::OpKind::Install, &src, &dst_dir.join(name), None)
+                    .map_err(|e| e.to_string())?;
+                copied += 1;
+                break;
+            }
+        }
+    }
+    Ok(copied)
+}
+
 #[tauri::command]
 pub fn create_local_plugin(
     state: State<'_, AppState>,
@@ -2504,6 +2623,7 @@ pub fn create_local_plugin(
     automation_src_paths: Option<Vec<String>>,
     bundle_src_paths: Option<Vec<String>>,
     removed_bundled: Option<RemovedBundled>,
+    duplicate_of: Option<String>,
 ) -> Result<InstalledPlugin, String> {
     let mut manifest = manifest;
     if manifest.id.is_empty() || manifest.name.is_empty() {
@@ -2517,6 +2637,30 @@ pub fn create_local_plugin(
         .ok_or_else(|| "Cannot resolve app data dir".to_string())?;
     let plugin_dir = app_dir.join("plugins").join(&manifest.id);
     std::fs::create_dir_all(&plugin_dir).map_err(|e| e.to_string())?;
+
+    // ── Duplicate: the manifest the form sends lists the SOURCE plugin's bundled files
+    //    (scripts/, bundle/, automations/, bundles/). Copy them, and its icon, from the
+    //    source plugin's folder into this one first, so the new plugin has what it lists.
+    //    Newly picked files below then add to or replace them like any other save.
+    if let Some(src_id) = duplicate_of
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty() && *s != manifest.id)
+    {
+        let src_dir = {
+            let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+            data.installed_plugins
+                .iter()
+                .find(|p| p.manifest.id == src_id)
+                .map(|p| PathBuf::from(&p.install_dir))
+        };
+        let src_dir = src_dir.ok_or_else(|| format!("Plugin '{}' not found", src_id))?;
+        let n = copy_bundled_from_source(&src_dir, &plugin_dir, &mut manifest)?;
+        log_line(format!(
+            "[PLUGINS] Duplicate of '{}': {} file(s) copied into '{}'",
+            src_id, n, manifest.id
+        ));
+    }
 
     // ── Staged removals: physically delete bundled scripts/folders the user removed
     //    in the editor. The frontend already excluded them from manifest.scripts/folders;
@@ -3060,5 +3204,122 @@ mod plugin_folder_tests {
         let ok = super::extract_plugin_zip(&plugin_zip("good.plugin"), &plugins, None).unwrap();
         assert_eq!(ok.id, "good.plugin");
         assert!(plugins.join("good.plugin").join("run.bat").exists());
+    }
+}
+
+#[cfg(test)]
+mod duplicate_copy_tests {
+    use super::{confined_bundled_source, copy_bundled_from_source};
+    use crate::models::plugin::PluginManifest;
+    use std::path::Path;
+
+    fn manifest(v: serde_json::Value) -> PluginManifest {
+        serde_json::from_value(v).unwrap()
+    }
+
+    fn write(p: &Path, s: &str) {
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, s).unwrap();
+    }
+
+    /// The bug: Duplicate carried the source's bundled paths into the new manifest and the
+    /// new folder had none of the files. Every listed kind, nested folders and the icon now
+    /// land in the copy under the same relative paths.
+    #[test]
+    fn duplicate_copies_every_bundled_file_and_the_icon() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("plugins").join("orig");
+        let dst = tmp.path().join("plugins").join("orig-copy");
+        write(&src.join("scripts").join("run.bat"), "@echo run");
+        write(&src.join("bundle").join("cfg").join("sub").join("a.ini"), "a=1");
+        write(&src.join("automations").join("nightly.bmmpa"), r#"{"tasks":[]}"#);
+        write(&src.join("bundles").join("cat.bmmbundle"), "zip");
+        write(&src.join("icon.png"), "png");
+        let mut m = manifest(serde_json::json!({
+            "id": "orig-copy", "name": "Copy",
+            "scripts": ["scripts/run.bat"], "folders": ["bundle/cfg"],
+            "automations": ["automations/nightly.bmmpa"], "bundles": ["bundles/cat.bmmbundle"],
+        }));
+        let n = copy_bundled_from_source(&src, &dst, &mut m).unwrap();
+        assert_eq!(n, 5);
+        assert_eq!(std::fs::read_to_string(dst.join("scripts/run.bat")).unwrap(), "@echo run");
+        assert_eq!(std::fs::read_to_string(dst.join("bundle/cfg/sub/a.ini")).unwrap(), "a=1");
+        assert!(dst.join("automations/nightly.bmmpa").is_file());
+        assert!(dst.join("bundles/cat.bmmbundle").is_file());
+        assert!(dst.join("icon.png").is_file());
+        assert_eq!(m.scripts, vec!["scripts/run.bat"]);
+        assert_eq!(m.folders, vec!["bundle/cfg"]);
+        // The source is untouched.
+        assert!(src.join("scripts/run.bat").is_file());
+    }
+
+    /// The manifest is the author's text. An absolute path, a `..` climb or a missing file
+    /// is not read, not copied, and not listed in the duplicate either.
+    #[test]
+    fn traversal_and_absolute_paths_are_refused_and_dropped() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("plugins").join("orig");
+        let dst = tmp.path().join("plugins").join("dup");
+        let secret = tmp.path().join("secret.txt");
+        write(&secret, "do not copy");
+        write(&src.join("scripts").join("ok.bat"), "ok");
+        let abs = secret.to_string_lossy().to_string();
+        let mut m = manifest(serde_json::json!({
+            "id": "dup", "name": "Dup",
+            "scripts": ["scripts/ok.bat", "../../secret.txt", "scripts/../../../secret.txt", abs, "/secret.txt", "scripts/missing.bat"],
+            "folders": [".."], "automations": [r"..\..\secret.txt"],
+        }));
+        let n = copy_bundled_from_source(&src, &dst, &mut m).unwrap();
+        assert_eq!(n, 1);
+        assert_eq!(m.scripts, vec!["scripts/ok.bat"]);
+        assert!(m.folders.is_empty());
+        assert!(m.automations.is_empty());
+        assert!(!dst.join("secret.txt").exists());
+        assert!(!tmp.path().join("plugins").join("secret.txt").exists());
+        assert!(confined_bundled_source(&src, "..").is_none());
+        assert!(confined_bundled_source(&src, "").is_none());
+    }
+
+    /// Duplicating onto itself (the id was changed back to the source's) copies nothing.
+    #[test]
+    fn same_folder_is_a_no_op() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("p");
+        write(&src.join("scripts").join("x.bat"), "x");
+        let mut m = manifest(serde_json::json!({ "id": "p", "name": "P", "scripts": ["scripts/x.bat"] }));
+        assert_eq!(copy_bundled_from_source(&src, &src, &mut m).unwrap(), 0);
+        assert_eq!(m.scripts, vec!["scripts/x.bat"]);
+    }
+
+    /// A link inside the source plugin is not followed: neither a linked file listed in the
+    /// manifest nor a link sitting inside a bundled folder. (Skipped where the OS will not
+    /// let an unprivileged test create a symlink.)
+    #[test]
+    fn symlinks_are_not_followed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("plugins").join("orig");
+        let dst = tmp.path().join("plugins").join("dup");
+        let outside = tmp.path().join("outside");
+        write(&outside.join("secret.txt"), "secret");
+        write(&src.join("bundle").join("cfg").join("keep.ini"), "k");
+        std::fs::create_dir_all(src.join("scripts")).unwrap();
+        #[cfg(windows)]
+        let made = std::os::windows::fs::symlink_file(outside.join("secret.txt"), src.join("scripts").join("link.bat")).is_ok()
+            && std::os::windows::fs::symlink_dir(&outside, src.join("bundle").join("cfg").join("out")).is_ok();
+        #[cfg(unix)]
+        let made = std::os::unix::fs::symlink(outside.join("secret.txt"), src.join("scripts").join("link.bat")).is_ok()
+            && std::os::unix::fs::symlink(&outside, src.join("bundle").join("cfg").join("out")).is_ok();
+        if !made {
+            eprintln!("symlinks not permitted here; skipping");
+            return;
+        }
+        let mut m = manifest(serde_json::json!({
+            "id": "dup", "name": "Dup", "scripts": ["scripts/link.bat"], "folders": ["bundle/cfg"],
+        }));
+        copy_bundled_from_source(&src, &dst, &mut m).unwrap();
+        assert!(m.scripts.is_empty(), "a linked script is dropped");
+        assert!(!dst.join("scripts/link.bat").exists());
+        assert!(dst.join("bundle/cfg/keep.ini").is_file());
+        assert!(!dst.join("bundle/cfg/out").exists(), "a link inside a folder is skipped");
     }
 }

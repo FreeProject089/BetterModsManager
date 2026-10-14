@@ -67,7 +67,7 @@ Le **Serveur MCP de Better Mods Manager (BMM)** est une console d'administration
 ### 🎨 Thèmes
 *   `bmm_list_themes` : Liste les thèmes d'interface installés et lequel est actif.
 *   `bmm_get_theme` : Lit la définition complète d'un thème personnalisé installé — variables, surcharges d'éléments (nécessite `theme_id`).
-*   `bmm_apply_theme` : Définit le thème actif par id, ex. `bmm-discord`, `bmm-void`, ou un thème personnalisé installé (nécessite `theme_id` ; s'applique quand BMM recharge les thèmes).
+*   `bmm_apply_theme` : Définit le thème actif par id, ex. `bmm-indigo`, `bmm-void`, ou un thème personnalisé installé (nécessite `theme_id` ; s'applique quand BMM recharge les thèmes).
 
 ### ⏰ Planification & Automatisation
 *   `bmm_list_schedules` : Liste les tâches de Planification & automatisation enregistrées (fonctionne hors ligne).

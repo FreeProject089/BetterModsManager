@@ -1204,7 +1204,7 @@ impl ServerHandler for BmmMcpServer {
             // ── Themes & appearance ────────────────────────────────────
             Tool::new(
                 "bmm_apply_theme",
-                "Set the active BMM theme by id (e.g. bmm-discord, bmm-void, or an installed custom theme). Applies when BMM reloads themes.",
+                "Set the active BMM theme by id (e.g. bmm-indigo, bmm-void, or an installed custom theme). Applies when BMM reloads themes.",
                 std::sync::Arc::new(serde_json::from_value(json!({
                     "type": "object",
                     "properties": { "theme_id": { "type": "string", "description": "The theme's id, as returned by bmm_list_themes." } },

@@ -130,7 +130,7 @@ const HARMLESS = {
     'data-go': 'ssh-browse listing, bound to its own modal', 'data-kofi-go': 'kofi modal, own element',
     'data-pi-close': 'plugin-inspect overlay, own element', 'data-flappy': 'mini-game, own element',
     'data-raw': 'plugins dropdown, own element', 'data-quality': 'tutorial picker, own element',
-    'data-var': 'theme editor, own panel', 'data-bte-tab': 'theme editor, own panel',
+    'data-row': 'theme editor token rows, read inside its own panel',
     'data-repo-profile-id': 'custom event detail, not a DOM read', 'data-repo-tab': 'custom event detail, not a DOM read',
     'data-path': 'tooltip key source (data-tasky-from)',
     'data-cancel': 'activity centre panel, own element (listener bound to the panel, not the document)',

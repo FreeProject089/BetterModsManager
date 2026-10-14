@@ -1,8 +1,8 @@
 {
-  "id": "bmm-vscode",
-  "name": "Editor",
+  "id": "bmm-charcoal",
+  "name": "Charcoal",
   "author": "BMM Team",
-  "description": "A code-editor dark look — charcoal surfaces, 1 px borders, a blue focus accent and small square corners.",
+  "description": "A dense working look: flat charcoal surfaces, 1 px borders, a blue focus accent and small square corners.",
   "vars": {
     "--bmm-bg-base": "#1f1f1f",
     "--bmm-bg-elevated": "#252526",

@@ -46,6 +46,8 @@ API locale pour l'automatisation.
 
 <p align="center"><img src=".github/screenshots/library-light.png" alt="Bibliothèque, thème clair" width="70%" /><br/><sub>La même Bibliothèque avec le thème clair intégré. Captures réalisées avec des données de démonstration, interface en anglais.</sub></p>
 
+Plus d'images, domaine par domaine : [VISUALS_FR.md](VISUALS_FR.md).
+
 ## Fonctionnalités
 
 - **Bibliothèque** : tous vos mods, avec étiquettes, recherche, filtres, contrôle d'intégrité SHA-256 et détection des conflits avant toute écriture.

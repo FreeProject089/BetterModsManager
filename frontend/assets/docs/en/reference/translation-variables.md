@@ -25,24 +25,24 @@ when a translation and the code disagree. It cannot go out of date.
 | `{v}` | a version or a value |
 | `{total}` | the total the count is out of |
 | `{count}` | a number of items |
-| `{err}` | an error message |
 | `{s}` | seconds, or a short word the code picks |
+| `{err}` | an error message |
 | `{id}` | an identifier |
-| `{size}` | a size, already formatted (KB, MB…) |
 | `{e}` | an error message |
+| `{size}` | a size, already formatted (KB, MB…) |
 | `{label}` | a short title |
 | `{path}` | a file or folder path |
 | `{profile}` | a profile name |
 | `{version}` | a version number |
 | `{mod}` | a mod name |
 | `{error}` | an error message |
-| `{file}` | a file name |
 | `{host}` | a server name |
+| `{url}` | a web address |
+| `{file}` | a file name |
+| `{time}` | a time |
 | `{x}` | a list or a detail the code inserts |
 | `{date}` | a date |
 | `{type}` | a kind of thing (an importer, a format…) |
-| `{url}` | a web address |
-| `{time}` | a time |
 
 ## Braces that are text
 
@@ -73,7 +73,7 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 
 ## Every key with variables
 
-973 keys, grouped by their first segment. The text is the English one, shortened.
+1073 keys, grouped by their first segment. The text is the English one, shortened.
 
 ### activity
 
@@ -208,13 +208,25 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `apps.detail.versionPair` | `{installed}` `{latest}` | v{installed} installed, v{latest} in the catalog |
 | `apps.shownOf` | `{n}` `{total}` | {n} of {total} |
 | `apps.someSourcesFailed` | `{n}` | {n} source(s) did not answer. Their apps are missing below. |
+| `apps.sourceDisabled` | `{name}` | {name} is switched off. It stays in Sources. |
+| `apps.sourceFailedOne` | `{n}` | {n} source did not answer. Its apps are missing below. |
 | `apps.sources.bundleAdded` | `{n}` | Following: {n} app(s) |
 | `apps.sources.fromIndex` | `{n}` | Added {n} app catalog(s) from that index. |
 | `apps.sources.indexAll` | `{n}` | That index lists {n} app catalog(s) and you already follow them all. |
 | `apps.sources.indexNone` | `{n}` | That index lists no app catalogs, only {n} entr(y/ies) of other kinds. |
 | `apps.sources.indexNone2` | `{what}` | No app catalogs in that index, only {what}. Add those from their own screens. |
+| `apps.sourcesFailedMany` | `{n}` | {n} sources did not answer. Their apps are missing below. |
 | `apps.state.updatedToast` | `{name}` | {name} updated |
 | `apps.updatesMany` | `{n}` | {n} updates |
+
+### bcv2
+
+| Key | Variables | Text |
+|---|---|---|
+| `bcv2.account.signedInAs` | `{name}` | Signed in as {name} |
+| `bcv2.legal.revision` | `{r}` | revision {r} |
+| `bcv2.legal.shipped` | `{v}` | you accepted version {v} |
+| `bcv2.legal.version` | `{v}` | Version {v} |
 
 ### bench
 
@@ -254,6 +266,30 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `catpub.dropped` | `{n}` | {n} entr(y/ies) left out |
 | `catpub.plusLinked` | `{l}` | plus {l} linked |
 | `catpub.split` | `{f}` `{l}` | {f} packed, {l} linked |
+
+### catsrc
+
+| Key | Variables | Text |
+|---|---|---|
+| `catsrc.age.d` | `{n}` | {n} d ago |
+| `catsrc.age.h` | `{n}` | {n} h ago |
+| `catsrc.age.m` | `{n}` | {n} min ago |
+| `catsrc.editor.addIndex` | `{n}` | Add the {n} catalogues |
+| `catsrc.export.done` | `{n}` | {n} source(s) exported. |
+| `catsrc.health.okN` | `{n}` | OK · {n} items |
+| `catsrc.import.done` | `{n}` `{s}` | {n} source(s) added, {s} skipped. |
+| `catsrc.import.msg` | `{n}` | {n} source(s) will be followed. Those you already follow are skipped. |
+| `catsrc.indexAdded` | `{n}` | Added {n} catalogue(s) from that index. |
+| `catsrc.lastOk` | `{a}` | Refreshed {a} |
+| `catsrc.remove.msg` | `{name}` `{url}` | {name} ({url}) will no longer be fetched. A line stays in the history to bring it back. |
+| `catsrc.retryFail` | `{e}` | Still no answer: {e} |
+| `catsrc.summary` | `{f}` `{n}` `{off}` `{y}` | {n} sources, {y} of yours ({off} off). {f} did not answer. |
+| `catsrc.test.index` | `{n}` | This is an index: it lists {n} catalogues. |
+| `catsrc.test.indexImport` | `{n}` | {n} of them fit this list and can be added at once. |
+| `catsrc.test.items` | `{n}` | {n} items |
+| `catsrc.test.okNamed` | `{name}` | It answers: {name} |
+| `catsrc.test.warnings` | `{n}` | {n} warnings |
+| `catsrc.via` | `{i}` | via {i} |
 
 ### cm
 
@@ -332,6 +368,31 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `csp.errNotDirective` | `{name}` | "{name}" is not a directive name. |
 | `csp.executeWarning` | `{n}` | {n} that permit code execution |
 | `csp.shippedPolicy` | `{n}` | Shipped policy: {n} directives |
+
+### cv
+
+| Key | Variables | Text |
+|---|---|---|
+| `cv.allWin` | `{m}` | {m} wins every file |
+| `cv.applied` | `{d}` `{n}` | Done: {n} file(s) re-copied, {d} mod(s) disabled. |
+| `cv.disableM` | `{m}` | Disable {m} |
+| `cv.files` | `{n}` | {n} shared files |
+| `cv.keepCopy` | `{m}` | Keep {m}'s copy |
+| `cv.listCut` | `{n}` `{total}` | Showing {n} of {total}. |
+| `cv.makeWin` | `{m}` | Make {m} win |
+| `cv.moveDown` | `{m}` | Move {m} down |
+| `cv.moveUp` | `{m}` | Move {m} up |
+| `cv.onlyMod` | `{m}` | Only {m} |
+| `cv.pairsTitle` | `{n}` | Conflicts by pair ({n}) |
+| `cv.selectAll` | `{n}` | All {n} files |
+| `cv.selected` | `{n}` | {n} selected |
+| `cv.selectFile` | `{f}` | Select {f} |
+| `cv.showMore` | `{n}` | Show {n} more |
+| `cv.split` | `{a}` `{b}` `{na}` `{nb}` | {a}: {na}, {b}: {nb} |
+| `cv.statusClean` | `{n}` `{p}` | {n} shared files between {p} pairs of mods. |
+| `cv.statusDirty` | `{n}` | Applying changes {n} file(s) on disk. |
+| `cv.statusDisable` | `{n}` | {n} mod(s) will be disabled. |
+| `cv.winnerFor` | `{f}` | Which copy of {f} to keep |
 
 ### debug
 
@@ -639,6 +700,17 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 |---|---|---|
 | `mods.sha.missingDesc` | `{name}` | The mod "{name}" does not have a valid SHA hash. For security reasons, it is recommended to calculate the has… |
 
+### notif
+
+| Key | Variables | Text |
+|---|---|---|
+| `notif.dndQuietHours` | `{to}` | Quiet hours until {to}. Change them in Settings. |
+| `notif.jobDone` | `{job}` | Finished: {job} |
+| `notif.jobFailed` | `{err}` `{job}` | Failed: {job}. {err} |
+| `notif.repeated` | `{n}` | Arrived {n} times |
+| `notif.snoozedUntil` | `{when}` | back {when} |
+| `notif.unreadN` | `{n}` | {n} unread |
+
 ### nudge
 
 | Key | Variables | Text |
@@ -800,6 +872,7 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `plugins.deepLinkModEnabled` | `{id}` | Mod '{id}' enabled |
 | `plugins.deepLinkNotFound` | `{id}` | Plugin '{id}' not installed |
 | `plugins.deepLinkProfileActivated` | `{id}` | Profile '{id}' activated |
+| `plugins.epCount` | `{n}` | {n} endpoint(s) |
 | `plugins.errChecksumMismatch` | `{actual}` `{expected}` | the downloaded file does not match the catalogue's checksum (expected {expected}, got {actual}). |
 | `plugins.exportSuccess` | `{name}` | Plugin '{name}' exported |
 | `plugins.fromIndex` | `{n}` | Added {n} plugin catalog(s) from that index. |
@@ -809,6 +882,17 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `plugins.installSuccess` | `{name}` | Plugin '{name}' installed! |
 | `plugins.modsNotFound` | `{mods}` | Mods not found: {mods} |
 | `plugins.noChecksumBody` | `{name}` | The catalogue entry for "{name}" has no SHA-256, so BMM cannot check that the file it downloads is the one th… |
+| `plugins.pc.chkHighPerms` | `{n}` | Asks for {n} high-risk permission(s). Explain why in the description. |
+| `plugins.pc.editingChip` | `{id}` | Editing {id} |
+| `plugins.pc.permsN` | `{n}` | {n} permission(s) |
+| `plugins.pc.pvAutomations` | `{n}` | {n} automation(s) |
+| `plugins.pc.pvBundles` | `{n}` | {n} catalogue(s) |
+| `plugins.pc.pvFolders` | `{n}` | {n} folder(s) |
+| `plugins.pc.pvMods` | `{n}` | {n} mod(s) |
+| `plugins.pc.pvScripts` | `{n}` | {n} script(s) |
+| `plugins.pc.replaceDesc` | `{id}` | A plugin with the id {id} is installed. Saving replaces it with this one. |
+| `plugins.pc.riskOverall` | `{r}` | Overall risk: {r} |
+| `plugins.pc.savedAt` | `{time}` | Saved and installed at {time}. |
 | `plugins.pcbAlready` | `{id}` | {id} is already in this catalogue |
 | `plugins.pcbFromFile` | `{f}` | from {f} |
 | `plugins.pcbNotPlugin` | `{f}` | {f} is not a plugin, left out |
@@ -830,6 +914,7 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `plugins.tree.sum` | `{b}` `{d}` `{f}` | {f} file(s) in {d} folder(s) · {b} |
 | `plugins.uninstallDesc` | `{name}` | Remove '{name}' and all its files? |
 | `plugins.uninstallSuccess` | `{name}` | Plugin '{name}' removed |
+| `plugins.updateAvail` | `{v}` | v{v} available |
 | `plugins.updateNeedsChecksum` | `{name}` | {name}: an update is available, but its catalogue entry has no checksum. Install it from the catalogue to con… |
 
 ### prof
@@ -900,6 +985,10 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `repo.follow.lastError` | `{err}` | Last check failed: {err} |
 | `repo.follow.updates` | `{n}` | {n} update(s) |
 | `repo.follow.upToDate` | `{name}` | {name}: your mods are up to date. |
+| `repo.followDlg.content` | `{mods}` `{profiles}` | {mods} mod(s) in {profiles} profile(s) |
+| `repo.followDlg.errHttp` | `{code}` | The server answered HTTP {code}: there is no repo at this address, or it refuses BMM. |
+| `repo.followDlg.fmtVersion` | `{v}` | repo.json format {v} |
+| `repo.followDlg.testing` | `{url}` | Reading {url}… |
 | `repo.format.label` | `{v}` | format {v} |
 | `repo.format.legacy` | `{v}` | legacy {v} |
 | `repo.format.legacyHint` | `{cur}` | Written by an older BMM. It still works; converting brings it to format {cur}. |
@@ -1256,6 +1345,12 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | Key | Variables | Text |
 |---|---|---|
 | `sshsrv.confirmDelete` | `{name}` | Delete the server "{name}"? |
+| `sshsrv.forgetConfirm` | `{host}` | Forget the trusted key of {host}? The next connection will show the server's key and ask again. |
+| `sshsrv.stepLoggedIn` | `{user}` | Signed in as {user}. |
+| `sshsrv.stepLogin` | `{user}` | Signing in as {user}… |
+| `sshsrv.stepReach` | `{where}` | Reaching {where}… |
+| `sshsrv.stepReached` | `{where}` | {where} answered. |
+| `sshsrv.stepWritable` | `{dir}` `{n}` | {dir} exists and is writable ({n} item(s) in it). |
 
 ### stm
 
@@ -1322,6 +1417,16 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `themes.catalogExportedBundle` | `{f}` `{n}` | {n} theme(s) packed into {f}. One file, nothing to host. |
 | `themes.catalogExportedFolder` | `{n}` | Wrote catalog.json and {n} theme file(s). Upload the folder as is. |
 | `themes.dropinFound` | `{n}` | {n} preset(s) found |
+| `themes.ed.contrastSum` | `{n}` `{ok}` | {ok} of {n} pass |
+| `themes.ed.copyName` | `{name}` | {name} (copy) |
+| `themes.ed.fixTip` | `{v}` | Use {v}, the closest colour that passes |
+| `themes.ed.fontPreset` | `{name}` | Font for {name} |
+| `themes.ed.formatExplained` | `{v}` | Saved in theme format {v}. Fields BMM does not know are kept as they are. |
+| `themes.ed.needs` | `{n}` | needs {n}:1 |
+| `themes.ed.pickColour` | `{name}` | Pick a colour for {name} |
+| `themes.ed.statusErrors` | `{n}` | {n} problem(s) to fix before saving |
+| `themes.ed.statusOk` | `{v}` | Valid theme file (format {v}) |
+| `themes.ed.statusWarnings` | `{n}` | Valid, {n} warning(s) |
 | `themes.fromIndex` | `{n}` | Added {n} theme catalog(s) from that index. |
 | `themes.importFailed` | `{list}` | Could not import: {list} |
 | `themes.indexAll` | `{n}` | That index lists {n} theme catalog(s) and you already follow them all. |
@@ -1340,8 +1445,13 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 
 | Key | Variables | Text |
 |---|---|---|
+| `tools.cache.clean` | `{b}` | Empty the ticked ({b}) |
+| `tools.cache.cleaned` | `{b}` | {b} freed. |
+| `tools.cache.confirmMsg` | `{b}` `{names}` | {names}: {b} will be deleted. BMM rebuilds them when it needs them. |
+| `tools.cache.summary` | `{t}` | {t} in caches and leftovers. |
 | `tools.conflicts.files` | `{n}` | {n} file(s) |
 | `tools.conflicts.summary` | `{a}` `{n}` | {n} conflicting pair(s), {a} active. |
+| `tools.deployed.summary` | `{f}` `{m}` `{n}` `{p}` | {n} finding(s) in {p} profile(s): {m} active mod(s), {f} file(s) checked. |
 | `tools.diff.onlyA` | `{a}` | Only in {a} |
 | `tools.diff.onlyB` | `{b}` | Only in {b} |
 | `tools.diff.summary` | `{a}` `{b}` `{n}` `{s}` | {a} and {b}: {n} difference(s), {s} mod(s) identical. |
@@ -1350,8 +1460,18 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `tools.duplicates.copies` | `{n}` | {n} copies |
 | `tools.duplicates.summary` | `{f}` `{h}` `{m}` `{s}` `{w}` | {m} duplicate mod(s), {f} set(s) of identical files, {w} that could be saved. {s} files listed, {h} hashed. |
 | `tools.duplicates.wasted` | `{w}` | {w} duplicated |
+| `tools.dupprofiles.counts` | `{a}` `{b}` `{s}` | {s} shared, {a} only in the first, {b} only in the second |
+| `tools.dupprofiles.similar` | `{p}` | {p} alike |
+| `tools.dupprofiles.summary` | `{n}` `{p}` | {n} pair(s) among {p} profile(s). |
+| `tools.jsondiff.meta` | `{f}` | Also changed outside the entries: {f} |
+| `tools.jsondiff.summary` | `{a}` `{b}` `{c}` `{m}` `{p}` `{s}` | {a} entries, then {b}: {p} added, {m} removed, {c} changed, {s} the same. |
+| `tools.largefiles.summary` | `{m}` `{n}` `{s}` `{t}` | {n} file(s) of {m} or more, out of {s} file(s) ({t}) listed. |
+| `tools.logs.clipped` | `{n}` | Only the last {n} matching lines are shown. The export holds them too. |
+| `tools.logs.summary` | `{e}` `{n}` `{t}` `{w}` | {n} line(s) shown of {t}: {e} error(s), {w} warning(s). |
 | `tools.moreInExport` | `{n}` | {n} more in the export. |
+| `tools.names.summary` | `{m}` `{n}` | {n} mod(s) of {m} could be tidied. |
 | `tools.orphans.summary` | `{m}` `{n}` `{p}` | {n} finding(s) in {p} profile(s) and {m} mod(s). |
+| `tools.ranAt` | `{time}` | Result of {time} |
 | `tools.validate.bad` | `{f}` `{n}` | Format {f}: {n} problem(s). |
 | `tools.validate.ok` | `{f}` `{n}` | Format {f}: no problem found ({n} entries). |
 

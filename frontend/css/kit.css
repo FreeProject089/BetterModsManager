@@ -92,7 +92,6 @@
     padding: var(--space-3) var(--space-4);
     border-radius: var(--bmm-radius-card, 12px);
     border: 1px solid var(--bmm-border);
-    border-inline-start: 3px solid var(--bmm-text-muted);
     background: var(--bmm-bg-elevated);
     font-size: 12.5px;
     line-height: 1.6;
@@ -118,15 +117,15 @@
     color: var(--bmm-text-primary);
     margin-bottom: 2px;
 }
-.kit-callout-info    { border-inline-start-color: var(--bmm-info); }
+.kit-callout-info    { border-color: color-mix(in srgb, var(--bmm-info) 30%, var(--bmm-border)); background: color-mix(in srgb, var(--bmm-info) 5%, var(--bmm-bg-elevated)); }
 .kit-callout-info    .kit-callout-icon { background: var(--bmm-info-dim); color: var(--bmm-info); }
-.kit-callout-success { border-inline-start-color: var(--bmm-success); }
+.kit-callout-success { border-color: color-mix(in srgb, var(--bmm-success) 30%, var(--bmm-border)); background: color-mix(in srgb, var(--bmm-success) 5%, var(--bmm-bg-elevated)); }
 .kit-callout-success .kit-callout-icon { background: var(--bmm-success-dim); color: var(--bmm-success); }
-.kit-callout-warning { border-inline-start-color: var(--bmm-warning); }
+.kit-callout-warning { border-color: color-mix(in srgb, var(--bmm-warning) 30%, var(--bmm-border)); background: color-mix(in srgb, var(--bmm-warning) 5%, var(--bmm-bg-elevated)); }
 .kit-callout-warning .kit-callout-icon { background: var(--bmm-warning-dim); color: var(--bmm-warning); }
-.kit-callout-danger  { border-inline-start-color: var(--bmm-danger); }
+.kit-callout-danger  { border-color: color-mix(in srgb, var(--bmm-danger) 30%, var(--bmm-border)); background: color-mix(in srgb, var(--bmm-danger) 5%, var(--bmm-bg-elevated)); }
 .kit-callout-danger  .kit-callout-icon { background: var(--bmm-danger-dim); color: var(--bmm-danger); }
-.kit-callout-accent  { border-inline-start-color: var(--bmm-accent); }
+.kit-callout-accent  { border-color: color-mix(in srgb, var(--bmm-accent) 30%, var(--bmm-border)); background: color-mix(in srgb, var(--bmm-accent) 5%, var(--bmm-bg-elevated)); }
 .kit-callout-accent  .kit-callout-icon { background: var(--bmm-accent-dim); color: var(--bmm-accent); }
 
 /* ── Getting-started checklist (gs-checklist.ts) ───────────────────────────────

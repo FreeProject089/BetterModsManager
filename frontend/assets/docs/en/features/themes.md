@@ -5,59 +5,125 @@
 > Building your own? The full token-by-token reference is
 > **[Make your own theme](doc-page:features/making-themes)**.
 
-Not a light/dark switch. BMM ships **fourteen** built-in themes — dark ones including *VS Code* (Dark Modern) and
-*macOS* (Sonoma), and five light ones, *BMM Logo* among them (the logo's own colours, the logo in place of Tasky) — and an editor
-that can rebuild the app's entire look — then export it as a file someone else imports in one
-click.
+Not a light/dark switch. BMM ships **fourteen** built-in themes — nine dark ones (*Arctic*,
+*Charcoal*, *Cobalt*, *Indigo*, *Neon*…) and five light ones, *BMM Logo* among them (the logo's
+own colours, the logo in place of Tasky) — and an editor that can rebuild the app's entire
+look — then export it as a file someone else imports in one click.
+
+!!! note "Renamed in 1.0.3"
+
+    Six built-in themes that were named after other products have neutral names now: Indigo,
+    Neon, Clay, Arctic, Charcoal and Cobalt. Only the name and the id changed; a theme you
+    picked under the old name stays applied. The table of old and new ids is in
+    [Make your own theme](doc-page:features/making-themes#renamed-in-103).
 
 <div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/themes.bmmreplay" data-page="features/themes" data-title="Restyling BMM with the theme editor"></div>
 
 
-## The editor has three levels
+## The editor
 
-Pick the one that matches how far you want to go. You can stop at the first.
+The editor is one panel in three parts: the **sections** on the left, a **preview** on the
+right with the **contrast checks** under it, and a footer that says whether the file is valid,
+whether there are unsaved changes, and holds **File**, **Save as new** and **Save theme**.
 
-=== "Simple"
+Six sections, from the quickest change to the deepest:
 
-    > Pick a preset, then tweak anything. Hover labels for help, click **?** for MDN docs.
+=== "Basics"
 
-    Colours, fonts, spacing — as fields. The **?** next to a property opens the MDN page for
-    it, which makes this a decent way to learn CSS rather than just a way to use it.
+    The four things most themes change, and three ways to start.
 
-    Each section has **Reset this section**, so you can experiment in one area and undo just
-    that, without losing the rest.
+    - **Mode** — *Dark* or *Light*. Switching rebuilds the backgrounds and the text for the
+      other mode; your accent and everything else stay, and **Undo** brings the previous mode
+      back. Want both? Switch, then **Save as new**.
+    - **A palette from one colour** — pick an accent, and the backgrounds, surfaces and text
+      are derived from it, in the current mode.
+    - **Start from** — one tile per built-in theme. It takes that theme's colours; your name,
+      pictures, elements and CSS stay.
+    - **The four families** — *Background*, *Surfaces*, *Text*, *Accent and status*: the
+      handful of tokens that decide the look, each with a line saying what it paints.
 
-=== "+ Elements"
+    The **Auto contrast on light themes** switch lives here too.
 
-    > Add your own buttons, banners, badges or widgets anywhere in BMM. Pick a spot, choose a
-    > type…
+=== "All tokens"
 
-    This is the one people don't expect: you're not restyling BMM's elements, you're **adding
-    your own**. A button that runs a [deeplink](doc-page:reference/api), a banner with your
-    server's rules, a badge on a profile card.
+    Every `--bmm-*` token, grouped (background, surfaces, borders, text, accent and status,
+    typography, shape, effects, notifications and tooltips, wallpaper and pictures, diagrams
+    and charts). **Search tokens by name or use** finds one by its name *or* by what it does
+    — "sidebar", "corners", "notification". **Changed only** hides everything the theme leaves
+    at its default, which is the fastest way to read what a theme actually does.
+
+    A token the file sets but BMM does not know (a newer BMM, a typo) is listed too, so it
+    can be edited or removed.
+
+=== "Pictures"
+
+    > Replace BMM's built-in images. Files are embedded into your theme.
+
+    The **Tasky mascot** (the floating one *and* the spinning boot loader, replaced together),
+    the **Sidebar logo** and the **App wallpaper** (an image or a video), with the wallpaper's
+    fit, position, blur and opacity just below.
+
+=== "Elements"
+
+    Two things. **Element styles** restyles one kind of element — colours, hover, gradient,
+    picture, any CSS: **Pick on screen**, or choose it from *Modals & shared elements*
+    (buttons, fields, dialogs, notifications, the sidebar…). **Your elements** adds your own
+    HTML anywhere in BMM; see [below](#elements-putting-your-own-things-into-bmm).
 
 === "CSS"
 
-    Raw CSS, for when the fields don't reach. Everything the other two tabs do lands here in
-    the end.
+    Raw CSS, for when the fields don't reach — for the whole app, or scoped to one screen. Use
+    `var(--bmm-…)` tokens so it follows the theme.
+
+=== "Library"
+
+    Your themes and the built-ins: **Edit**, **Apply**, export, delete (a built-in is hidden
+    instead, and comes back from the Theme Catalog), plus **Import a theme file** and the
+    catalogue.
+
+### The preview is a sandbox
+
+The preview on the right is made of real BMM components — a mod list, buttons, a dialog,
+notifications — painted with the **draft only**. Editing does not repaint the app, or the
+editor itself, so a half-finished theme cannot make the panel you are using unreadable.
+
+When you do want the whole app to follow along, tick **Apply to BMM as I edit**. Off, only
+the preview changes until you save; on, every change lands on the app at once.
+
+### Contrast checks
+
+Under the preview, BMM checks the pairs that matter — main text on the background and on
+cards, secondary and faint text, sidebar items, text on main buttons, notifications, Tasky's
+tooltips, errors and successes on cards — against the WCAG ratios. Each row shows the ratio
+and a grade (*Too low*, *Large text only*, or a pass). A row that fails has a **Fix** button:
+it uses the closest colour that passes. **Fix all** does every failing row at once.
+
+### Undo, redo, and getting out
+
+- **Undo** (<kbd>Ctrl</kbd>+<kbd>Z</kbd>) and **Redo** (<kbd>Ctrl</kbd>+<kbd>Y</kbd>) cover
+  every change, a mode switch included.
+- **Reset** asks what you mean: *Undo all unsaved changes*, or *Start from the default look*.
+- Closing with unsaved changes asks first.
 
 !!! tip "Point at what you want to change"
 
-    Don't hunt for the right variable. Click the **eyedropper**, then click **any element in
-    BMM** — the editor jumps straight to it. It's the fastest answer to "how do I recolour
-    *that* button". Building a light theme? Set the theme's **mode** to *light* and BMM applies
-    automatic contrast patches so text stays readable. (More controls in
-    [Tips & controls](doc-page:reference/tips).)
+    Don't hunt for the right variable. Click the **eyedropper** in the editor's header, then
+    right-click (or middle-click) **any element in BMM** — the editor jumps to the token that
+    paints it. In *All tokens*, clicking a token's name shows you everything on screen it
+    paints. (More controls in [Tips & controls](doc-page:reference/tips).)
 
-## Assets
+### Floating, docked, or in its own window
 
-> Replace BMM's built-in images. Files are embedded into your theme.
+The panel floats over the app, docks to the side, or — with the **Open in its own window**
+button in its header — pops out into a window of its own, which you can put on a second
+screen while BMM stays full size. **Back into BMM's window** returns it.
 
-The logo, the wallpaper (with blur and opacity controls), and **Tasky** — the floating
-mascot *and* the spinning boot loader, replaced together.
+### The file
 
-**Embedded** is the important word: an asset lives inside the theme file. Share the theme and
-the images travel with it — no broken links, no "works on my machine".
+The status at the bottom left reads the theme the way BMM will: *Valid theme file*, *Valid,
+N warning(s)*, or *N problem(s) to fix before saving*. Click it for the list (*What the theme
+file says*). The **File** menu imports a theme file, exports a `.bmmtheme`, copies the theme
+as JSON, or copies a share link.
 
 ## Sharing
 
@@ -72,8 +138,8 @@ to them.
 
 ## The wallpaper, and why it has three controls
 
-A theme can set a full-app background — an image or a video — from **Assets** in the editor.
-It comes with two settings you will want, both in the **Background** group:
+A theme can set a full-app background — an image or a video — from **Pictures** in the editor,
+where its other settings sit just below it:
 
 | Setting | Token | What it is for |
 |---|---|---|
@@ -87,17 +153,18 @@ Blur removes the detail, opacity removes the contrast. A photo at full strength 
 mod list hard to scan; the same photo at `8px` and `0.35` reads as a colour, and the text
 stays legible.
 
-Clearing the wallpaper from Assets also clears the token, so removing it does not leave a
+Clearing the wallpaper from Pictures also clears the token, so removing it does not leave a
 half-set background behind.
 
-## + Elements: putting your own things into BMM
+## Elements: putting your own things into BMM
 
-The **+ Elements** tab adds your own HTML — a button, a banner, a badge, a widget — anywhere in
-the app. It is a three-step form, and the first step is the one that matters.
+**Your elements**, in the **Elements** section, adds your own HTML — a button, a banner, a
+badge, a widget — anywhere in the app. It is a three-step form, and the first step is the one
+that matters.
 
-**1. Where should it go?** Either press *Click a spot in BMM* and pick the element with the
-eyedropper, or type a CSS selector yourself. The picker is the honest way to do it: you get the
-selector that actually matches what you clicked, instead of guessing at class names.
+**1. Where should it go?** Either press the eyedropper and right-click the element in BMM, or
+type a CSS selector yourself. The picker is the honest way to do it: you get the selector that
+actually matches what you clicked, instead of guessing at class names.
 
 Then two choices decide exactly where it lands:
 
@@ -113,7 +180,8 @@ Modpacks, Mapper, Server Repo, Plugins & API, App Catalog, Help & other, Setting
 BetterCommunity, `.MM` Lists. A banner that only makes sense on the Library should not follow
 you into Settings.
 
-**2 and 3** are the content: start from a template or write the HTML, and style it.
+**2 and 3** are the content: start from a template (Button, Banner, Badge, Note, Link) or
+write the HTML, and style it.
 
 Your elements are listed above the form, each showing its selector, its placement and its
 scope, so a theme with a dozen of them stays readable. They travel with the theme — someone who

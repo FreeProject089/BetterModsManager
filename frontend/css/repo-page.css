@@ -303,6 +303,9 @@
     min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 #view-repo .rp-joined-x { margin-left: auto; flex: none; color: var(--bmm-text-secondary); }
+/* « Follow » sits at the right with the ×, which then no longer pushes itself away. */
+#view-repo .rp-joined-follow { margin-left: auto; flex: none; }
+#view-repo .rp-joined-follow + .rp-joined-x { margin-left: 0; }
 #view-repo .rp-joined-name { font-size: 16px; font-weight: 700; color: var(--bmm-text-primary); overflow-wrap: anywhere; }
 #view-repo .rp-joined-author { font-size: 12px; color: var(--bmm-text-secondary); margin: 2px 0 8px; }
 #view-repo .rp-joined-desc { font-size: 12.5px; line-height: 1.55; color: var(--bmm-text-secondary); }

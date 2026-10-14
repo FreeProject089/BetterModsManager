@@ -67,7 +67,7 @@ The **Better Mods Manager (BMM) MCP Server** is a professional administrative co
 ### 🎨 Themes
 *   `bmm_list_themes`: List installed UI themes and which one is active.
 *   `bmm_get_theme`: Read an installed custom theme's full definition — vars, element overrides (requires `theme_id`).
-*   `bmm_apply_theme`: Set the active theme by id, e.g. `bmm-discord`, `bmm-void`, or an installed custom theme (requires `theme_id`; applies when BMM reloads themes).
+*   `bmm_apply_theme`: Set the active theme by id, e.g. `bmm-indigo`, `bmm-void`, or an installed custom theme (requires `theme_id`; applies when BMM reloads themes).
 
 ### ⏰ Scheduling & Automation
 *   `bmm_list_schedules`: List the saved Scheduling & automation tasks (works offline).

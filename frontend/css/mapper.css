@@ -24,11 +24,10 @@
     border-radius: var(--bmm-radius-card, 14px);
     /* The kit-callout shape (kit.css), stated locally because this banner predates the
        kit and its markup is already shipped. The angled accent gradient it used to wear
-       is gone: every advisory box in BMM is now a flat surface with a tone-coloured
-       inset bar — the SHAPE says "read this", the colour says what kind. */
+       is gone: every advisory box in BMM is now a softly tinted surface — the SHAPE says
+       "read this", the tint says what kind. */
     border: 1px solid var(--bmm-border);
-    border-inline-start: 3px solid var(--bmm-accent);
-    background: var(--bmm-bg-elevated);
+    border-color: color-mix(in srgb, var(--bmm-accent) 30%, var(--bmm-border)); background: color-mix(in srgb, var(--bmm-accent) 5%, var(--bmm-bg-elevated));
 }
 .mapper-help-banner[hidden] { display: none; }
 
@@ -227,7 +226,6 @@
 .tree-item.selected {
     background: rgba(59, 130, 246, 0.25) !important;
     color: var(--text-main);
-    border-left: 4px solid var(--accent) !important;
     padding-left: 4px;
     box-shadow: 0 0 15px rgba(59, 130, 246, 0.2);
 }
@@ -387,13 +385,11 @@
 
 /* Tree Item Color Coding (Main Page) */
 .tree-item.root-item {
-    border-left: 3px solid #f59e0b !important;
-    background: rgba(245, 158, 11, 0.03);
+    background: color-mix(in srgb, var(--bmm-warning) 9%, transparent);
 }
 
 .tree-item.mapped-item {
-    border-left: 3px solid #10b981 !important;
-    background: rgba(16, 185, 129, 0.03);
+    background: color-mix(in srgb, var(--bmm-success) 9%, transparent);
 }
 
 .modal-large .modal-body {
@@ -413,18 +409,15 @@
     background: rgba(16, 185, 129, 0.25) !important;
     box-shadow: 0 0 0 2px var(--success) inset !important;
     color: var(--success) !important;
-    border-left: 4px solid var(--success) !important;
 }
 
 .tree-item.mapping-target-folder {
     background: rgba(59, 130, 246, 0.15) !important;
     box-shadow: 0 0 0 2px var(--accent) inset !important;
-    border-left: 4px solid var(--accent) !important;
 }
 
 .tree-item.parent-highlight {
     background: var(--bmm-s03) !important;
-    border-left: 2px dashed var(--bmm-s20) !important;
     color: var(--text-main);
 }
 

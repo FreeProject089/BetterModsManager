@@ -221,7 +221,7 @@ bmm-mcp-server themes
 bmm-mcp-server theme-info <THEME_ID>
 
 # Set the active theme (applies when BMM reloads themes)
-bmm-mcp-server theme-apply bmm-discord
+bmm-mcp-server theme-apply bmm-indigo
 ```
 
 ---

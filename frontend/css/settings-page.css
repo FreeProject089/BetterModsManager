@@ -3,7 +3,7 @@
    The markup of the index is built by ui/settings-nav.ts; the cards are the
    ones in index.html, untouched. Colours are tokens only, so every theme,
    light ones included, reads it: the accent is used as a FILL (the active
-   entry's tint and rail), never as the colour of text.
+   entry's tint), never as the colour of text, and never as a bar on an edge.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* Room for the index beside the cards. */
@@ -11,7 +11,8 @@
 
 .stg-layout {
     display: grid;
-    grid-template-columns: 240px minmax(0, 1fr);
+    /* 260: the search field keeps its whole placeholder beside the « hide » button. */
+    grid-template-columns: 260px minmax(0, 1fr);
     gap: 28px;
     align-items: start;
 }
@@ -99,8 +100,7 @@
 .stg-nav-link.is-active {
     color: var(--text-primary);
     font-weight: 600;
-    background: color-mix(in srgb, var(--accent) 13%, transparent);
-    box-shadow: inset 2px 0 0 var(--accent);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
 /* ── Search results ────────────────────────────────────────────────────── */
@@ -148,6 +148,39 @@
     text-transform: none;
     color: var(--text-primary);
 }
+
+/* One header for every card: the icon on a quiet tile, the title, the actions at the end, and
+   the card's one-line description right under the title (aligned with it), then the content.
+   No rule under the title: the spacing separates the header from the body. The icon keeps
+   its own colour; the tile is a neutral step of the surface ladder, so light themes read it. */
+#view-settings .settings-sections > .glass-card {
+    padding: 18px 20px 20px;
+    box-shadow: none;
+}
+#view-settings .settings-sections > .glass-card > .card-title {
+    min-height: 30px;
+    margin-bottom: 14px;
+    padding-bottom: 0;
+    border-bottom: 0;
+}
+#view-settings .settings-sections > .glass-card > .card-title > svg:first-child,
+#view-settings .settings-sections > .glass-card > .card-title > img:first-child {
+    flex: none;
+    box-sizing: content-box;
+    border-radius: 9px;
+    background: var(--bmm-s05);
+}
+#view-settings .settings-sections > .glass-card > .card-title > svg:first-child { width: 16px; height: 16px; padding: 7px; }
+#view-settings .settings-sections > .glass-card > .card-title > img:first-child { width: 22px !important; height: 22px !important; padding: 4px; }
+#view-settings .settings-sections > .glass-card > .card-title:has(+ p) { margin-bottom: 4px; }
+/* !important: most of these paragraphs still carry an inline size and margin from index.html. */
+#view-settings .settings-sections > .glass-card > .card-title + p {
+    margin: 0 0 16px !important;
+    font-size: 12.5px !important;
+    line-height: 1.5;
+    color: var(--text-secondary) !important;
+}
+#view-settings .settings-sections > .glass-card > .card-title:has(> svg:first-child, > img:first-child) + p { padding-left: 40px; }
 
 /* A folded card is a single tidy line, without the rule under a title that has nothing below. */
 #view-settings .settings-sections > .glass-card.bmm-collapsed:not(.stg-search-open) {
@@ -199,7 +232,6 @@
     .stg-nav-group + .stg-nav-group { margin-top: 0; padding-left: 8px; border-left: 1px solid var(--border); }
     .stg-nav-head { padding: 0 4px 0 0; }
     .stg-nav-link { width: auto; flex-shrink: 0; padding: 4px 9px; }
-    .stg-nav-link.is-active { box-shadow: inset 0 -2px 0 var(--accent); }
 }
 
 /* The shortcut, shown while the field is empty and unfocused. */
@@ -297,4 +329,48 @@
 /* Wide windows: a little more room while editing, so the titles beside four controls still read. */
 @media (min-width: 1241px) {
     .stg-layout:has(> .stg-index.is-editing) { grid-template-columns: 290px minmax(0, 1fr); }
+}
+
+/* ── Hiding the index (settings-nav.ts setIndexHidden) ─────────────────────────────────────
+   The search row carries the « hide » button; a compact « Index » button above the cards
+   brings the column back. Editing the layout happens in the index, so it shows while editing
+   even when put away. Narrow windows ignore all of it: the index is the strip on top there. */
+.stg-index-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.stg-index-top > .stg-search { flex: 1 1 auto; min-width: 0; }
+.stg-index-toggle {
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background .12s ease, color .12s ease, border-color .12s ease;
+}
+.stg-index-toggle:hover { background: var(--bmm-s05); color: var(--text-primary); border-color: var(--bmm-border-hover, var(--border)); }
+.stg-index-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.stg-index-show { display: none; }
+.stg-index-show:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+@media (min-width: 1241px) {
+    .stg-layout.is-index-hidden { grid-template-columns: minmax(0, 1fr); }
+    .stg-layout.is-index-hidden > .stg-index:not(.is-editing) { display: none; }
+    .stg-layout.is-index-hidden:has(> .stg-index.is-editing) { grid-template-columns: 290px minmax(0, 1fr); }
+    .stg-layout.is-index-hidden:not(:has(> .stg-index.is-editing)) .stg-index-show {
+        display: inline-flex;
+        position: sticky;
+        top: 8px;
+        z-index: 5;
+        margin-bottom: 10px;
+        border: 1px solid var(--border);
+        background: var(--bmm-bg-elevated);
+    }
+}
+@media (max-width: 1240px) {
+    .stg-index-top { flex: 1 1 260px; }
+    .stg-index-toggle { display: none; }
 }

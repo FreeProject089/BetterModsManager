@@ -156,6 +156,36 @@ Deux détails de sûreté dans ce nettoyage :
 
 ---
 
+## La vue Conflits
+
+**Résoudre les conflits** (dans la palette de commandes, depuis le badge de conflit en direct de
+la bibliothèque, les détails d'un mod, ou la liste des conflits) ouvre la vue **Conflits** sur le
+profil actif, ou sur un mod. Pour chaque fichier que deux mods **actifs** partagent, elle dit quelle
+copie est sur le disque selon l'ordre d'activation actuel, avec un résumé par paire de mods :
+combien de fichiers partagés, et qui en obtient combien. Les chevauchements avec des mods désactivés
+ou d'autres profils restent sous **Mods inactifs et autres profils**, à un clic : rien à choisir
+là tant qu'ils ne sont pas actifs.
+
+Il y a trois façons de changer qui gagne :
+
+- **Réordonner.** Monter un mod (appliqué plus tôt, perd plus souvent) ou le descendre (appliqué
+  plus tard, gagne plus souvent), ou appuyer sur **Faire gagner X** : le plus petit déplacement
+  qui met X après l'autre mod.
+- **Garder la copie de X.** Un choix par fichier, gardé par profil : ce fichier vient de X quel
+  que soit l'ordre. Un fichier gardé est marqué *gardé*. Coche plusieurs fichiers pour choisir pour
+  tous d'un coup ; **Suivre l'ordre d'activation** retire le choix.
+- **Désactiver** un mod.
+
+La règle est celle du déploiement : **une copie gardée gagne tant que son mod est actif ; sinon,
+le dernier mod de l'ordre gagne**. Activer ou désactiver un mod plus tard remet ensuite les
+fichiers gardés en place.
+
+**Rien ne change avant Appliquer.** Le pied de la vue dit combien de fichiers Appliquer
+recopierait (et combien de mods il désactiverait) ; **Voir les changements** les liste un par
+un, de quel mod vers quel mod, ou retour au fichier d'origine du jeu. **Annuler** oublie le plan.
+Appliquer est une tâche du [centre d'activité](doc-page:features/activity) et ne recopie que ces
+fichiers.
+
 ## Ce que ça veut dire en pratique
 
 | Tu veux | Fais ça |

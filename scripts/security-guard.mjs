@@ -156,8 +156,9 @@ console.log('\x1b[32m\u2713 security-guard: no handlers built at runtime\x1b[0m'
 // and two animation previews were shipping inside the packaged app, reachable by anyone who
 // looked. They live in dev-pages/ now; this keeps them from drifting back.
 // The app's own windows are the exception: index.html, and the benchmark's always-on-top mini
-// monitor (commands/benchmark.rs open_mini_monitor, its capability capabilities/mini-monitor.json).
-const APP_PAGES = new Set(['index.html', 'mini-monitor.html']);
+// monitor (commands/benchmark.rs open_mini_monitor, its capability capabilities/mini-monitor.json),
+// and a panel's pop-out window (commands/popout.rs, capabilities/popout.json).
+const APP_PAGES = new Set(['index.html', 'mini-monitor.html', 'popout.html']);
 const strayPages = readdirSync(join(ROOT, 'frontend'))
     .filter((f) => f.endsWith('.html') && !APP_PAGES.has(f));
 if (strayPages.length) {

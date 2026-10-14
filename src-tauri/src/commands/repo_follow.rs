@@ -211,18 +211,32 @@ pub struct FollowedRepo {
     pub name: String,
     pub follow: RepoFollow,
     pub due: bool,
+    /// A download password is saved for it (sealed, see [`secret`]). Never the password.
+    pub has_password: bool,
 }
 
 fn listed(r: &crate::state::ConnectedServerRepo) -> Option<FollowedRepo> {
     let f = r.follow.clone()?;
-    Some(FollowedRepo { url: r.url.clone(), name: r.name.clone(), due: is_due(&f, chrono::Utc::now()), follow: f })
+    Some(FollowedRepo { url: r.url.clone(), name: r.name.clone(), due: is_due(&f, chrono::Utc::now()), follow: f, has_password: false })
+}
+
+/// The key two spellings of one repo share: `192.168.1.20:8000` and
+/// `http://192.168.1.20:8000/repo.json` are the same repo, so they are one follow.
+pub fn repo_key(url: &str) -> String {
+    match crate::commands::repo_addr::normalize_repo_input(url) {
+        Ok(a) => normalize_repo_url(&a.base_url),
+        Err(_) => normalize_repo_url(url),
+    }
 }
 
 /// Every followed repo.
 #[tauri::command]
 pub fn repo_follow_list(state: State<'_, AppState>) -> Result<Vec<FollowedRepo>, String> {
+    let dir = secret::dir(&state);
     let data = state.data.lock().map_err(|_| "Lock failed".to_string())?;
-    Ok(data.settings.connected_server_repos.iter().filter_map(listed).collect())
+    Ok(data.settings.connected_server_repos.iter().filter_map(listed)
+        .map(|mut r| { r.has_password = secret::has(&dir, &repo_key(&r.url)); r })
+        .collect())
 }
 
 /// The followed repos due for a check now (the scheduler task asks this first).
@@ -236,15 +250,18 @@ pub fn repo_follow_due(state: State<'_, AppState>) -> Result<Vec<String>, String
 /// follow had nothing to hang on).
 #[tauri::command]
 pub fn repo_follow_set(state: State<'_, AppState>, url: String, name: Option<String>, patch: FollowPatch) -> Result<FollowedRepo, String> {
-    let key = normalize_repo_url(&url);
+    let key = repo_key(&url);
     if key.is_empty() { return Err("repo.follow.errNoUrl".into()); }
+    // A new entry is stored as its normalised address (`192.168.1.20:8000` →
+    // `http://192.168.1.20:8000`), so the list shows what BMM actually fetches.
+    let stored = crate::commands::repo_addr::normalize_repo_input(&url).map(|a| a.base_url).unwrap_or_else(|_| url.trim().to_string());
     let out = {
         let mut data = state.data.lock().map_err(|_| "Lock failed".to_string())?;
         let list = &mut data.settings.connected_server_repos;
-        let at = match list.iter().position(|r| normalize_repo_url(&r.url) == key) {
+        let at = match list.iter().position(|r| repo_key(&r.url) == key) {
             Some(i) => i,
             None => {
-                list.push(crate::state::ConnectedServerRepo { url: url.trim().to_string(), ..Default::default() });
+                list.push(crate::state::ConnectedServerRepo { url: stored, ..Default::default() });
                 list.len() - 1
             }
         };
@@ -263,17 +280,123 @@ pub fn repo_follow_set(state: State<'_, AppState>, url: String, name: Option<Str
 /// Stop following (the repo stays connected for its auto-sync setting).
 #[tauri::command]
 pub fn repo_follow_remove(state: State<'_, AppState>, url: String) -> Result<bool, String> {
-    let key = normalize_repo_url(&url);
+    let key = repo_key(&url);
     let changed = {
         let mut data = state.data.lock().map_err(|_| "Lock failed".to_string())?;
         let mut changed = false;
-        for r in data.settings.connected_server_repos.iter_mut().filter(|r| normalize_repo_url(&r.url) == key) {
+        for r in data.settings.connected_server_repos.iter_mut().filter(|r| repo_key(&r.url) == key) {
             changed |= r.follow.take().is_some();
         }
         changed
     };
+    // A password saved for checking it has no reason to outlive the follow.
+    secret::store(&secret::dir(&state), &key, "");
     if changed { state.save().map_err(|e| e.to_string())?; }
     Ok(changed)
+}
+
+/// Save (or, with an empty / absent password, forget) the download password a followed repo
+/// is checked with. Sealed: DPAPI on Windows, the OS keyring elsewhere, this run only when
+/// neither works. Returns where it went: `dpapi`, `keyring`, `memory` or `` (forgotten).
+#[tauri::command]
+pub fn repo_follow_set_secret(state: State<'_, AppState>, url: String, password: Option<String>) -> Result<String, String> {
+    let key = repo_key(&url);
+    if key.is_empty() { return Err("repo.follow.errNoUrl".into()); }
+    let pw = password.unwrap_or_default();
+    if pw.chars().any(|c| c.is_control()) || pw.len() > 1024 { return Err("repo.follow.errPassword".into()); }
+    Ok(secret::store(&secret::dir(&state), &key, &pw).to_string())
+}
+
+// ── Saved download passwords ────────────────────────────────────────────────────────────────
+
+/// The password a followed repo is checked with, so the scheduled check of a protected repo
+/// does not fail on a 401 every time (it used to send none). Never in data.json, never in
+/// clear: the same stores as the AI keys and the BetterCommunity sign-in, with their own
+/// entropy / service name so no store opens another's.
+pub(crate) mod secret {
+    use std::collections::HashMap;
+    use std::path::{Path, PathBuf};
+    use std::sync::{Mutex, OnceLock};
+
+    #[cfg(target_os = "windows")]
+    const FILE: &str = "repo-follow-secrets.json";
+    #[cfg(target_os = "windows")]
+    const ENTROPY: &[u8] = b"BetterModsManager/repo-follow/v1";
+    #[cfg(not(target_os = "windows"))]
+    const SERVICE: &str = "BetterModsManager.repo-follow";
+
+    fn memory() -> &'static Mutex<HashMap<String, String>> {
+        static M: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
+        M.get_or_init(|| Mutex::new(HashMap::new()))
+    }
+
+    pub fn dir(state: &crate::state::AppState) -> PathBuf {
+        state.data_path.parent().map(Path::to_path_buf).unwrap_or_else(|| PathBuf::from("."))
+    }
+
+    #[cfg(target_os = "windows")]
+    fn sealed(dir: &Path) -> HashMap<String, String> {
+        std::fs::read_to_string(dir.join(FILE)).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
+    }
+
+    pub fn has(dir: &Path, key: &str) -> bool {
+        load(dir, key).is_some()
+    }
+
+    pub fn load(dir: &Path, key: &str) -> Option<String> {
+        if let Some(v) = memory().lock().ok().and_then(|m| m.get(key).cloned()) {
+            return Some(v);
+        }
+        #[cfg(target_os = "windows")]
+        {
+            let blob = crate::commands::ai_core::hex_decode(sealed(dir).get(key)?)?;
+            let plain = crate::commands::ai_core::dpapi_with(&blob, false, ENTROPY).ok()?;
+            String::from_utf8(plain).ok().filter(|s| !s.is_empty())
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = dir;
+            keyring::Entry::new(SERVICE, key).ok()?.get_password().ok().filter(|s| !s.is_empty())
+        }
+    }
+
+    /// Store `value` for `key`, or forget it when `value` is empty. Returns where it went.
+    pub fn store(dir: &Path, key: &str, value: &str) -> &'static str {
+        if let Ok(mut m) = memory().lock() { m.remove(key); }
+        #[cfg(target_os = "windows")]
+        {
+            let mut map = sealed(dir);
+            let had = map.contains_key(key);
+            if value.is_empty() {
+                if !had { return ""; }
+                map.remove(key);
+            } else if let Ok(blob) = crate::commands::ai_core::dpapi_with(value.as_bytes(), true, ENTROPY) {
+                map.insert(key.to_string(), crate::commands::ai_core::hex_encode(&blob));
+            } else {
+                if let Ok(mut m) = memory().lock() { m.insert(key.to_string(), value.to_string()); }
+                return "memory";
+            }
+            let _ = std::fs::create_dir_all(dir);
+            let ok = std::fs::write(dir.join(FILE), serde_json::to_string_pretty(&map).unwrap_or_default()).is_ok();
+            if value.is_empty() { return ""; }
+            if ok { return "dpapi"; }
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = dir;
+            if let Ok(e) = keyring::Entry::new(SERVICE, key) {
+                if value.is_empty() {
+                    let _ = e.delete_credential();
+                    return "";
+                }
+                if e.set_password(value).is_ok() { return "keyring"; }
+            } else if value.is_empty() {
+                return "";
+            }
+        }
+        if let Ok(mut m) = memory().lock() { m.insert(key.to_string(), value.to_string()); }
+        "memory"
+    }
 }
 
 /// `POST /api/repo/follow`: follow a repo or change how (the page's switch, interval and
@@ -370,11 +493,10 @@ pub fn apply_plan(mods: &[ModEntry], profiles: &[crate::models::profile::Profile
     steps
 }
 
+/// The repo.json URL for what was stored or typed: `192.168.1.20:8000`, `[::1]:8000`,
+/// `nas.local/mods/` (commands/repo_addr.rs).
 fn manifest_url(url: &str) -> String {
-    let mut u = url.trim().to_string();
-    if !u.starts_with("http://") && !u.starts_with("https://") { u = format!("http://{u}"); }
-    if !u.ends_with("repo.json") { u = format!("{}/repo.json", u.trim_end_matches('/')); }
-    u
+    crate::commands::repo_addr::manifest_url(url)
 }
 
 enum Probe { NotModified, Body { etag: Option<String>, last_modified: Option<String>, digest: String, body: String } }
@@ -388,7 +510,8 @@ async fn probe(url: &str, creator_id: Option<&str>, password: Option<&str>, f: &
     crate::commands::repo_keyauth::add_proof(&mut h, &target);
     if let Some(v) = f.etag.as_deref().and_then(|e| HeaderValue::from_str(e).ok()) { h.insert(reqwest::header::IF_NONE_MATCH, v); }
     if let Some(v) = f.last_modified.as_deref().and_then(|e| HeaderValue::from_str(e).ok()) { h.insert(reqwest::header::IF_MODIFIED_SINCE, v); }
-    let client = reqwest::Client::builder().default_headers(h).timeout(std::time::Duration::from_secs(30)).build().map_err(|e| e.to_string())?;
+    // Direct for a LAN / loopback host: a system proxy cannot reach 192.168.x (repo_addr).
+    let client = crate::commands::repo_addr::client_builder(&target).default_headers(h).timeout(std::time::Duration::from_secs(30)).build().map_err(|e| e.to_string())?;
     let res = client.get(&target).send().await.map_err(|e| e.to_string())?;
     let st = res.status();
     if st == reqwest::StatusCode::NOT_MODIFIED { return Ok(Probe::NotModified); }
@@ -406,10 +529,12 @@ async fn probe(url: &str, creator_id: Option<&str>, password: Option<&str>, f: &
 /// Check one followed repo now. `force` ignores the stored validators (a full read).
 #[tauri::command]
 pub async fn repo_follow_check(state: State<'_, AppState>, handle: tauri::AppHandle, url: String, password: Option<String>, force: Option<bool>) -> Result<FollowCheck, String> {
-    let key = normalize_repo_url(&url);
+    let key = repo_key(&url);
+    // No password passed (the runner never has one): the one saved for this repo, if any.
+    let password = password.filter(|p| !p.is_empty()).or_else(|| secret::load(&secret::dir(&state), &key));
     let (mut follow, name) = {
         let data = state.data.lock().map_err(|_| "Lock failed".to_string())?;
-        let r = data.settings.connected_server_repos.iter().find(|r| normalize_repo_url(&r.url) == key);
+        let r = data.settings.connected_server_repos.iter().find(|r| repo_key(&r.url) == key);
         (r.and_then(|r| r.follow.clone()).unwrap_or_default(), r.map(|r| r.name.clone()).unwrap_or_default())
     };
     if force.unwrap_or(false) { follow.etag = None; follow.last_modified = None; follow.digest = None; }
@@ -455,7 +580,7 @@ pub async fn repo_follow_check(state: State<'_, AppState>, handle: tauri::AppHan
     follow.last_check = Some(chrono::Utc::now().to_rfc3339());
     {
         let mut data = state.data.lock().map_err(|_| "Lock failed".to_string())?;
-        if let Some(r) = data.settings.connected_server_repos.iter_mut().find(|r| normalize_repo_url(&r.url) == key) {
+        if let Some(r) = data.settings.connected_server_repos.iter_mut().find(|r| repo_key(&r.url) == key) {
             // Only the check's own fields: the user may have changed the settings meanwhile.
             if let Some(f) = r.follow.as_mut() {
                 f.etag = follow.etag; f.last_modified = follow.last_modified; f.digest = follow.digest;
@@ -466,6 +591,70 @@ pub async fn repo_follow_check(state: State<'_, AppState>, handle: tauri::AppHan
     }
     let _ = state.save();
     Ok(out)
+}
+
+/// What the « Follow a repo » dialog's Test shows before anything is saved.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FollowProbe {
+    pub addr: crate::commands::repo_addr::RepoAddr,
+    pub name: String,
+    pub version: String,
+    pub author: Option<String>,
+    pub game: String,
+    /// `format_version` as the manifest declares it; `None` = older than the field, or no
+    /// manifest at all (`discovered`).
+    pub format: Option<String>,
+    /// No repo.json: the list was read from the server's folder index.
+    pub discovered: bool,
+    /// `unsigned`, `valid` (the signature checks against its author id) or `invalid`.
+    pub signature: &'static str,
+    pub profiles: usize,
+    pub mods: usize,
+    /// The same repo is already followed.
+    pub already_followed: bool,
+    /// A password is saved for it already.
+    pub has_password: bool,
+}
+
+/// Test an address for the « Follow a repo » dialog: normalise it, fetch its repo.json (the
+/// same reader the sync uses: a folder of mods without a manifest, an older format), and say
+/// what it is. Changes nothing. `password` empty = the saved one, if any.
+#[tauri::command]
+pub async fn repo_follow_probe(state: State<'_, AppState>, handle: tauri::AppHandle, url: String, password: Option<String>) -> Result<FollowProbe, String> {
+    let addr = crate::commands::repo_addr::normalize_repo_input(&url).map_err(str::to_string)?;
+    let key = normalize_repo_url(&addr.base_url);
+    let saved = secret::load(&secret::dir(&state), &key);
+    let has_password = saved.is_some();
+    let password = password.filter(|p| !p.is_empty()).or(saved);
+    let already_followed = {
+        let data = state.data.lock().map_err(|_| "Lock failed".to_string())?;
+        data.settings.connected_server_repos.iter().any(|r| r.follow.is_some() && repo_key(&r.url) == key)
+    };
+    let creator_id = crate::commands::security::get_creator_id(handle).ok();
+    let repo = crate::commands::repo::fetch_repo_info(addr.manifest_url.clone(), creator_id, password).await?;
+    let discovered = repo.profiles.first().map(|p| p.id == "discovered").unwrap_or(false) && repo.signature.is_none();
+    let signature = if repo.signature.is_none() || repo.author_id.is_none() {
+        "unsigned"
+    } else if crate::commands::security::verify_repo_signature(repo.clone()) {
+        "valid"
+    } else {
+        "invalid"
+    };
+    Ok(FollowProbe {
+        name: repo.name.clone(),
+        version: repo.version.clone(),
+        author: repo.author.clone(),
+        game: repo.game_name.clone(),
+        format: repo.format_version.clone(),
+        discovered,
+        signature,
+        profiles: repo.profiles.len(),
+        mods: repo.profiles.iter().map(|p| p.mods.len()).sum(),
+        already_followed,
+        has_password,
+        addr,
+    })
 }
 
 // ── The feed the built-in server serves ─────────────────────────────────────────────────────
@@ -629,6 +818,16 @@ mod tests {
         assert!(f.starts_with("<?xml") && f.trim_end().ends_with("</feed>"));
         assert!(f.contains("a&lt;b") && f.contains("1.0 &amp; co") && !f.contains("a<b"));
         assert!(f.contains("<id>http://h:8080/repo.json#"));
+    }
+
+    /// Two spellings of one repo are one follow: the dialog normalises, the API may not.
+    #[test]
+    fn two_spellings_of_one_address_share_a_key() {
+        let k = repo_key("192.168.1.20:8000");
+        assert_eq!(k, repo_key("http://192.168.1.20:8000/repo.json"));
+        assert_eq!(k, repo_key("HTTP://192.168.1.20:8000/"));
+        assert_ne!(k, repo_key("https://192.168.1.20:8000"));
+        assert_eq!(repo_key("[::1]:8000"), repo_key("http://[::1]:8000/repo.json"));
     }
 
     #[test]

@@ -2409,6 +2409,7 @@ pub async fn start_api_server(
                 icon_image: None,
                 created_at: chrono::Local::now().to_rfc3339(),
                 origin_repo_profile_id: None,
+                file_winners: std::collections::HashMap::new(),
             };
             let profile_id = profile.id.clone();
             {

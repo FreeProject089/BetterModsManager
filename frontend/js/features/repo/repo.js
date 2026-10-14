@@ -20,7 +20,7 @@ import { initRepoTools } from './repo-tools.js';
 import { learnMore } from '../../core/learn-more.js';
 import { initRepoSync, setRepoPassword } from './repo-sync.js';
 import { initModUpdates } from './mod-updates.js';
-import { initRepoFollow } from './repo-follow.js';
+import { initRepoFollow, followDialog } from './repo-follow.js';
 import { initRepoAdmin } from './repo-admin.js';
 import { initManifestOnly } from './manifest-only.js';
 import { initRemoteRefresh } from './remote-refresh.js';
@@ -1311,6 +1311,7 @@ export function initRepo() {
                                 ` : ''}
                                 ${entry.description ? `<div style="font-size:11px; color:var(--text-muted); line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">${escHtml(entry.description)}</div>` : ''}
                                 <div style="margin-top:8px; display:flex; gap:8px;">
+                                    <button type="button" class="repo-follow-btn btn-history-follow" data-url="${escAttr(entry.url)}" data-name="${escAttr(entry.name || '')}">${uiIcon('bell', 12)}<span>${escHtml(t('repo.followDlg.followThis'))}</span></button>
                                     <button class="btn-history-connect" data-url="${escAttr(entry.url)}" style="font-size:11px; padding:4px 12px; background:rgba(59,130,246,0.15); color:var(--accent); border:1px solid rgba(59,130,246,0.3); border-radius:4px; cursor:pointer;">${t('repo.historyConnect')}</button>
                                     <button class="btn-history-delete" data-idx="${idx}" style="font-size:11px; padding:4px 8px; background:rgba(239,68,68,0.1); color:var(--bmm-danger); border:1px solid rgba(239,68,68,0.2); border-radius:4px; cursor:pointer;">${t('repo.historyDelete')}</button>
                                 </div>
@@ -1326,6 +1327,9 @@ export function initRepo() {
                             elements.btnFetchInfo.click();
                         modal.classList.remove('open');
                     };
+                });
+                historyList.querySelectorAll('.btn-history-follow').forEach(btn => {
+                    btn.onclick = () => followDialog(btn.dataset.url || '', btn.dataset.name || '');
                 });
                 historyList.querySelectorAll('.btn-history-delete').forEach(btn => {
                     btn.onclick = () => {
@@ -1675,6 +1679,7 @@ export function initRepo() {
                         <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end; margin-left:16px;">
                             <div style="display:flex; align-items:center; gap:8px;">
                                 ${repoStarBtn(repo.url)}
+                                <button type="button" class="repo-follow-btn" data-follow-url="${escAttr(repo.url)}" data-follow-name="${escAttr(repo.name || '')}" data-tooltip="${escAttr(t('repo.followDlg.followThisTip'))}">${uiIcon('bell', 12)}<span>${escHtml(t('repo.followDlg.followThis'))}</span></button>
                                 <!-- Taken out of YOUR list, not out of the catalogue: BMM has
                                      no way to edit somebody else's file, and pretending
                                      otherwise would put the entry back on the next fetch. -->
@@ -1742,6 +1747,12 @@ export function initRepo() {
                 }
                 catch { /* preference only */ }
                 renderRepoList();
+            });
+            listEl.querySelectorAll('.repo-follow-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    followDialog(btn.dataset.followUrl || '', btn.dataset.followName || '');
+                });
             });
             listEl.querySelectorAll('.repo-hide-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {

@@ -17,6 +17,29 @@ card.
 **Search settings** (:kbd[Ctrl+F] while Settings is open) hides every card that does not match
 what you type and says how many sections still do. Clear the box to see everything again.
 
+**Hide the index** (the button beside the search) gives the cards the full width; the **Index**
+button above the cards brings it back. BMM remembers the choice, and :kbd[Ctrl+F] brings the
+index back to search. On a narrow window the index stays the strip above the cards.
+
+Every card has the same header: its icon on a quiet tile, the title, the card's actions, and the
+description right under the title.
+
+## Panels in their own window
+
+The **theme editor**, the **translation sandbox** and the **task debugger** can leave BMM's
+window: press **Open in its own window** in their header, or drag the header past the edge of
+BMM's window and let go. The panel becomes a window of its own that you can put anywhere, on
+another screen too, beside what it works on instead of over it.
+
+Everything keeps working from there and stays in step with BMM: the panel still runs in BMM, the
+window shows it and sends your clicks and typing back. It follows the theme, light or dark.
+
+- Each panel's window remembers its size and place.
+- **Back into BMM's window** puts the panel back where it was; its close button closes the panel.
+  Closing the window any other way (:kbd[Alt+F4], the taskbar) also puts the panel back.
+- In that window, lists of choices open as the system's own list, and dragging things inside the
+  panel (reordering, resizing) is done in BMM's window.
+
 ## The four that matter most
 
 ### Themes & Appearance
@@ -269,20 +292,37 @@ with nothing extra to do.
 
 ### Notifications
 
-Two switches, and they do different things.
+Everything BMM tells you lands in **one notification centre** (the bell), with one unread count,
+also shown on the taskbar icon. Messages are grouped by where they come from:
 
-**Popup notifications** turns off the bubbles at the bottom of the screen. What it does *not*
-turn off is the message: every notification is recorded in the **notification centre** before
-it is displayed, so switching the popups off changes where you read them, not whether they
-exist. That is the whole reason the setting is safe to use — nothing is lost, it just stops
-interrupting.
+| Group | What it holds |
+|---|---|
+| **Updates** | New BMM versions, update checks |
+| **Followed repos** | Repos you follow: new mods, downloads |
+| **Scheduler** | Your automations and their results |
+| **Background jobs** | Long jobs (15 seconds or more) that finish while BMM is in the background |
+| **BetterCommunity** | Messages from your BetterCommunity account |
+| **BMM** | Everything else BMM tells you |
 
-**Errors are never silenced.** An error nobody is shown and nobody thinks to look for is an
-app that failed quietly, which is worse than a bubble you did not want.
+**How each kind of notification reaches you** sets each group to **In the app**, **In the app
+and as a system notification** (the system one only when BMM is in the background), or **Off
+(kept in the list)**. The old per-source switches carry over. **Send a test notification**
+shows what a popup looks like.
 
-**OS notifications** is separate: those are the system's own toasts, sent by
-[automations](doc-page:features/scheduler) and long jobs so you hear about them when BMM is not the window
-you are looking at.
+**Do not disturb**, from the bell or here, pauses popups until you switch it off. **Quiet hours
+every day** (From … to …) does the same on a schedule. While quiet, nothing pops up and no system
+notification is sent. **Errors still show in the app, and everything stays in the notification
+centre**: an error nobody is shown and nobody thinks to look for is an app that failed quietly.
+
+In the centre, each message can be **opened** (when it leads somewhere, for example an available
+update or a followed repo), **snoozed** (1 hour, 4 hours, tomorrow 9:00) or dismissed. A snoozed
+message comes back unread when its time comes, or at once with **Show it again now**. The same
+event twice is one popup and one entry with a count, not a stack of copies; an update found again
+by a later check refreshes its entry. The list keeps the last 200 messages and nothing older than
+30 days.
+
+Keyboard in the centre: :kbd[Up] and :kbd[Down] move between messages, :kbd[Enter] opens,
+:kbd[Delete] dismisses, :kbd[S] snoozes for an hour, :kbd[Escape] closes and returns to the bell.
 
 ### Sound & keyboard shortcuts
 

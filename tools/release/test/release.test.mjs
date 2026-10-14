@@ -123,6 +123,8 @@ describe('checksums', () => {
   test('filter skips logs and the list itself', () => {
     assert.equal(sumsFilter('SHA256SUMS.txt'), false);
     assert.equal(sumsFilter('logs/x.log'), false);
+    assert.equal(sumsFilter('media/gifs/.chrome-profile/Default/LOCK'), false);
+    assert.equal(sumsFilter('media/gifs/.frames/0001.png'), false);
     assert.equal(sumsFilter('bench/BENCHMARK.md'), true);
     assert.match(sumsTable([{ path: 'a', sha256: h('a') }]), /\| `a` \| `a{64}` \|/);
   });
@@ -271,5 +273,24 @@ describe('gource log', () => {
     assert.deepEqual(mergeLogs([a, b]).map((l) => l.split('|')[0]), ['100', '200', '300']);
     assert.equal(secondsPerDay(0, 86400 * 100, 75), 0.75);
     assert.ok(!mergeLogs([a, b]).join('\n').includes('@'));
+  });
+});
+
+describe('usage clips (gifs)', () => {
+  test('each frame is held until the next one, the last one until the end plus the hold', async () => {
+    const { writeConcat } = await import('../screenshots/gifs.mjs');
+    const dir = mkdtempSync(join(tmpdir(), 'bmm-gifs-'));
+    const list = readFileSync(writeConcat(dir, [{ file: 'a.jpg', ts: 10 }, { file: 'b.jpg', ts: 10.5 }], 12, 0.6), 'utf8').trim().split('\n');
+    assert.deepEqual(list, ['ffconcat version 1.0', "file 'a.jpg'", 'duration 0.5000', "file 'b.jpg'", 'duration 2.1000', "file 'b.jpg'"]);
+  });
+  test('every scene has a unique file name, a title, a description and a run', async () => {
+    const { gifScenes } = await import('../screenshots/gif-scenes.mjs');
+    const names = gifScenes.map((s) => s.name);
+    assert.equal(new Set(names).size, names.length);
+    for (const s of gifScenes) {
+      assert.match(s.name, /^[a-z0-9-]+$/);
+      assert.ok(s.title && s.desc, s.name);
+      assert.ok(s.skip || typeof s.run === 'function', s.name);
+    }
   });
 });

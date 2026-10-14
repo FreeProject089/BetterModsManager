@@ -94,9 +94,11 @@ de mises à jour, lie le mod à un dépôt qui publie des versions.
 
 ## Suivre un dépôt
 
-Au lieu d'appuyer toi-même sur *Vérifier les mises à jour des mods*, tu peux **suivre** un dépôt :
-saisis son adresse côté synchro, puis **Suivre ce dépôt**. Il rejoint la liste **Dépôts suivis**,
-où chaque dépôt a :
+Au lieu d'appuyer toi-même sur *Vérifier les mises à jour des mods*, tu peux **suivre** un dépôt.
+**Suivre un dépôt** est dans la carte **Dépôts suivis** et ouvre une fenêtre ; un bouton **Suivre**
+apparaît aussi là où un dépôt est déjà connu (le dépôt que tu viens de récupérer, chaque résultat
+de recherche, chaque entrée de l'historique) et ouvre la même fenêtre, déjà remplie. Rien n'est
+enregistré avant que tu appuies sur **Suivre**. Chaque dépôt suivi a ensuite :
 
 | Réglage | Choix |
 |---|---|
@@ -119,6 +121,58 @@ Le serveur de dépôt intégré à BMM sert aussi `feed.xml`, un **flux Atom** d
 dépôt, à côté de `repo.json`. N'importe quel lecteur de flux peut suivre un dépôt de cette façon,
 avec ou sans BMM, tout comme une [tâche planifiée](doc-page:features/scheduler) avec un déclencheur `on feed`.
 :::
+
+### La fenêtre Suivre un dépôt
+
+| Champ | Ce qu'il fait |
+|---|---|
+| **Adresse** | Une adresse web, ou la façon dont tu atteins la machine. BMM en fait l'adresse du `repo.json` et l'affiche sous le champ (*BMM lira …*). |
+| **Mot de passe de téléchargement** *(facultatif)* | Seulement si le dépôt en a un. Enregistré scellé sur ce PC, jamais dans le fichier de réglages de BMM (voir plus bas). |
+| **Signer avec cette clé** | Quelle clé d'identité répond à un dépôt [protégé par une clé publique](#proteger-un-depot-mot-de-passe-ou-cle-publique). *Comme maintenant (automatique)* garde le choix habituel de BMM. |
+| **Vérifier**, **Quand il y a une mise à jour** | L'intervalle et le mode du tableau ci-dessus. |
+
+L'adresse peut être saisie sous toutes ces formes, et elles mènent toutes au même dépôt :
+
+```text
+192.168.1.20:8000
+http://192.168.1.20:8000/repo.json
+[::1]:8000
+nas.local:8080/mods/
+mon-serveur
+```
+
+Une adresse IPv6 se met entre crochets quand elle porte un port. `HTTP://` en majuscules, une clé
+de partage (`?k=…`) et un `#…` final sont gérés. `192.168.1.20:8000` et
+`http://192.168.1.20:8000/repo.json` sont **un seul** dépôt suivi, pas deux : suivre une adresse
+déjà suivie met à jour son intervalle au lieu d'ajouter une copie.
+
+**Le `http://` simple est accepté.** Sur ce PC ou sur le réseau local, la fenêtre dit que c'est
+normal. Sur internet, elle prévient qu'un mot de passe de téléchargement voyagerait en clair :
+utilise `https://` dans ce cas.
+
+**Les adresses locales évitent le proxy système.** Les requêtes vers ce PC et vers les adresses du
+réseau local (`192.168.*`, `10.*`, `172.16-31.*`, `*.local`, IPv6 lien-local et unique-local) ne
+passent plus par un proxy système, qui ne peut de toute façon pas les atteindre. Les adresses
+internet l'utilisent toujours. Les blocages d'adresses privées de BMM pour les tâches planifiées,
+les points d'accès IA et les pages personnalisées ne changent pas : ils concernent les adresses
+que tu n'as **pas** tapées.
+
+**Tester la connexion** lit le dépôt une fois et affiche son nom, sa version, le format du
+`repo.json`, la signature (*Signé, signature valide*, *La signature NE correspond PAS*, ou *Non
+signé*), le jeu, l'auteur et le nombre de mods proposés dans combien de profils. Une signature qui
+ne correspond pas veut dire que le manifeste a été modifié après sa signature : ne le suis que si
+tu sais pourquoi. Les erreurs sont dites simplement : rien n'a répondu à cette adresse, le serveur
+n'a pas répondu à temps, le code HTTP qu'il a renvoyé, ou qu'un mot de passe est nécessaire.
+
+#### Le mot de passe enregistré
+
+Un mot de passe de téléchargement donné ici est **enregistré scellé sur ce PC** : protégé par
+Windows pour ton compte utilisateur (le trousseau du système sur macOS et Linux), seulement pour
+les vérifications de ce dépôt, et jamais dans le fichier de réglages de BMM. Les vérifications
+planifiées l'utilisent, donc un dépôt suivi avec mot de passe n'échoue plus à chaque vérification.
+Laisse le champ vide pour garder celui qui est enregistré ; **Oublier le mot de passe enregistré**
+le retire, et **Ne plus suivre** aussi. Si le PC ne peut pas le sceller, la fenêtre le dit et le
+mot de passe ne dure que le temps de la session.
 
 ## Héberger ton propre dépôt
 
@@ -434,6 +488,24 @@ est la façon de le retirer.
 la personne à qui tu donnes le dépôt reçoit des adresses qui répondent 401, sans moyen de
 savoir pourquoi avant d'essayer.
 
+### La fenêtre Serveurs SSH
+
+**Serveurs SSH** liste tes serveurs enregistrés avec leur état : *Incomplet*, *Pas encore testé*,
+*Clé du serveur approuvée*, *Test réussi* ou *Dernier test échoué*. Choisis-en un pour le
+modifier, ou **Ajouter un serveur**. Chaque champ du formulaire dit ce qui ne va pas pendant que tu
+tapes : l'hôte (un nom ou une IP, sans espace, sans `http://`), le port (de 1 à 65535),
+l'utilisateur, le fichier de clé, le dossier de base, et le nom utilisé dans les adresses
+`ssh://nom/` (lettres, chiffres, point, tiret et tiret bas). Coller `moi@nas.local:2222` dans
+l'hôte remplit l'utilisateur et le port.
+
+**Tester la connexion** avance étape par étape et dit laquelle a échoué : joindre le serveur,
+vérifier sa clé, se connecter, puis regarder le dossier de base (il existe, il est accessible en
+écriture, et sinon, à qui il appartient).
+
+Clavier : :kbd[Haut] et :kbd[Bas] parcourent les serveurs, :kbd[Entrée] va au formulaire,
+:kbd[Entrée] ou :kbd[Ctrl+S] enregistre, :kbd[Échap] ferme. Supprimer un serveur et abandonner des
+changements se confirment dans les fenêtres de BMM.
+
 ### Ce que tu renseignes
 
 | Champ | Remarques |
@@ -541,9 +613,30 @@ conservés. La clé elle-même ne l'est jamais, ni la phrase secrète, ni le mot
 copiée dans la configuration de BMM serait une clé dans chaque sauvegarde, chaque export et
 chaque rapport de plantage qui joint les réglages.
 
-L'empreinte du serveur est enregistrée à la première connexion et doit correspondre à toutes
-les suivantes. Une empreinte **qui change** est refusée, pas signalée : le cas contre lequel
-elle protège est précisément celui où l'on clique sur l'avertissement sans le lire.
+La phrase secrète ou le mot de passe se tape dans le formulaire, sert à **Tester** et à
+**Parcourir**, et n'est jamais enregistré.
+
+### La clé du serveur
+
+**Première connexion.** Un serveur que BMM n'a jamais vu affiche l'empreinte de sa clé
+(`SHA256:…`) et demande *Première connexion à ce serveur. Est-ce bien sa clé ?* **avant que quoi
+que ce soit lui soit envoyé** : ni mot de passe, ni signature de clé. Compare-la avec celle du
+serveur, sur le serveur :
+
+```bash
+ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
+```
+
+Si les deux disent le même `SHA256:…`, appuie sur **Approuver ce serveur** ; l'empreinte est
+enregistrée et doit correspondre à chaque connexion suivante. Si elles diffèrent, appuie sur **Ne
+pas se connecter**.
+
+**Une clé qui change est refusée.** Si le serveur présente plus tard une autre clé, BMM refuse de
+se connecter et affiche côte à côte les empreintes *Approuvée* et *Maintenant*. C'est refusé, pas
+signalé : le cas contre lequel ça protège est précisément celui où l'on clique sur
+l'avertissement sans le lire. Si tu as reconstruit ou réinstallé le serveur, utilise **Oublier
+l'empreinte**, puis teste à nouveau : la connexion suivante montre la nouvelle clé et redemande.
+Sinon, ne te connecte pas : quelqu'un est peut-être entre toi et le serveur.
 
 ### Ordre du transfert
 

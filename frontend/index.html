@@ -44,6 +44,7 @@
     <link rel="stylesheet" href="css/page-head.css" />
     <link rel="stylesheet" href="css/mod-flows.css" />
     <link rel="stylesheet" href="css/plugins.css" />
+    <link rel="stylesheet" href="css/plugin-create.css" />
     <!-- Settings: the index + search column and the cards' one rhythm (ui/settings-nav.ts). -->
     <link rel="stylesheet" href="css/settings-page.css" />
     <!-- Laya's dialogs and cards. Linked here, not only on demand (ai-shared.ts ensureAiCss sees
@@ -265,15 +266,13 @@
             #app-loader[data-intro="off"] #ld-prog-track,
             #app-loader[data-intro="off"] .ld-fx { display: none; }
 
-            /* Still (reduced motion: the OS, Settings → Graphics « Reduce animations », a window
-               that starts hidden, or no GSAP): the picture without the show. Decorations and the
-               progress line, which only exist to move, are not drawn. */
+            /* Still (Settings → Graphics « Reduce animations », a window that starts hidden, or
+               no GSAP): the picture without the show. Decorations and the progress line, which
+               only exist to move, are not drawn. The Windows « Animation effects » setting is
+               not followed by the intro (see boot-loader.js), so there is no media query here. */
             #app-loader.ld-still .ld-fx,
             #app-loader.ld-still #ld-prog-track { display: none; }
-            @media (prefers-reduced-motion: reduce) {
-                #app-loader .ld-fx, #app-loader #ld-prog-track { display: none; }
-                #app-loader { transition-duration: 0.15s; }
-            }
+            #app-loader.ld-still { transition-duration: 0.15s; }
         </style>
 
         <script src="boot-loader.js"></script>
@@ -2257,6 +2256,8 @@
                                         <div class="rp-joined-top">
                                             <span id="repo-sync-author-badge" class="rp-sig-chip"></span>
                                             <span id="repo-sync-game-badge" class="rp-joined-game"></span>
+                                            <!-- Follow the repo just fetched: opens « Follow a repo » with its address and name. -->
+                                            <button type="button" id="btn-repo-follow-joined" class="btn btn-secondary btn-sm rp-joined-follow" data-i18n-tooltip="repo.followDlg.followThisTip"><svg class="ic ic-bell" data-icon="bell" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg><span data-i18n="repo.followDlg.followThis">Follow</span></button>
                                             <button type="button" id="btn-clear-fetched-repo" class="btn btn-ghost btn-sm btn-icon rp-joined-x" data-i18n-tooltip="common.clear">
                                                 <svg class="ic ic-close" data-icon="close" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                                             </button>
@@ -2473,7 +2474,7 @@
                                 <div class="repo-card-body">
                                     <div class="rp-follow-h">
                                         <span class="rp-follow-t" data-i18n="repo.follow.title">Followed repos</span>
-                                        <button type="button" class="btn btn-secondary btn-sm" id="btn-repo-follow-add"><span data-i18n="repo.follow.add">Follow this repo</span></button>
+                                        <button type="button" class="btn btn-primary btn-sm" id="btn-repo-follow-add"><svg class="ic ic-add" data-icon="add" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg><span data-i18n="repo.follow.addRepo">Follow a repo</span></button>
                                         <button type="button" class="btn btn-secondary btn-sm" id="btn-repo-follow-check-all"><span data-i18n="repo.follow.checkAll">Check now</span></button>
                                     </div>
                                     <p class="rp-lede" data-i18n="repo.follow.lede">BMM checks these repos on a schedule and tells you when a mod you installed from them has an update. Nothing is installed unless you choose it per repo, and never while a game is running.</p>
@@ -2728,7 +2729,7 @@
                                 </a>
 
                                 <a href="https://bettercommunity.ch/" target="_blank"
-                                    rel="noopener noreferrer" class="credit-link-card" style="border-left:3px solid #F5C518;" data-link-key="bettercommunity">
+                                    rel="noopener noreferrer" class="credit-link-card" data-link-key="bettercommunity">
                                     <div class="credit-icon-box" style="overflow:hidden;border:1px solid rgba(245,197,24,0.4);">
                                         <img src="assets/BC_white.webp" alt="BetterCommunity" style="width:100%;height:100%;object-fit:cover;display:block;">
                                     </div>
@@ -2812,7 +2813,7 @@
                                 </a>
 
                                 <a href="https://ko-fi.com/I2I31ZIPPG" target="_blank" rel="noopener noreferrer"
-                                    class="credit-link-card" style="border-left: 3px solid #ff6b4a;" data-link-key="kofi">
+                                    class="credit-link-card" data-link-key="kofi">
                                     <div class="credit-icon-box"
                                         style="background: rgba(255,107,74,0.15); color: #ff6b4a;">
                                         <svg width="24" height="24" viewBox="0 0 241 194" fill="none"
@@ -3009,10 +3010,10 @@
                                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20z" fill="currentColor" stroke="none"/></svg>
                                             <input type="range" min="35" max="100" value="100" id="i18n-ovl-opacity-range">
                                         </label>
-                                        <button type="button" class="i18x-tool i18x-tool--icon" id="i18n-dock-toggle" data-i18n-tooltip="i18n.dockMode">
+                                        <button type="button" class="i18x-tool i18x-tool--icon" id="i18n-dock-toggle" data-popout-hide data-i18n-tooltip="i18n.dockMode">
                                             <svg class="ic ic-panel-right" data-icon="panel-right" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/></svg>
                                         </button>
-                                        <button type="button" class="i18x-tool i18x-tool--icon" id="i18n-overlay-toggle" data-i18n-tooltip="i18n.overlayMode">
+                                        <button type="button" class="i18x-tool i18x-tool--icon" id="i18n-overlay-toggle" data-popout-hide data-i18n-tooltip="i18n.overlayMode">
                                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><rect x="12" y="11" width="8" height="7" rx="1" fill="currentColor" stroke="none"/></svg>
                                         </button>
                                     </div>
@@ -3230,7 +3231,7 @@
                                  an index, a deep link, or a hand-typed address in another panel.
                                  Removable here, which is the only place all five types meet. -->
                             <details class="cat-index-fold" id="cat-index-following-fold">
-                                <summary data-i18n="settings.catIndex.following">Catalogs you follow</summary>
+                                <summary data-i18n="settings.catIndex.following">Catalogue sources: official and yours</summary>
                                 <div id="cat-index-following" class="cat-index-following"></div>
                             </details>
 
@@ -4092,7 +4093,7 @@
                         </div>
 
                         <!-- ── Identity & API card ── -->
-                        <div class="glass-card" id="settings-identity-card" style="margin-bottom:24px; border-left:3px solid rgba(139,92,246,0.5);">
+                        <div class="glass-card" id="settings-identity-card" style="margin-bottom:24px;">
                             <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2" aria-hidden="true">
                                     <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
@@ -4279,7 +4280,7 @@
                              CORS allow-list are decisions about what the app lets in, and
                              they were unfindable appended to a card about ids and tokens.
                              #csp-editor-host is filled by initSecurityInfoCard(). -->
-                        <div class="glass-card" id="settings-security-card" style="border-left:3px solid rgba(239,68,68,0.5);">
+                        <div class="glass-card" id="settings-security-card">
                             <h3 class="card-title" style="display:flex;align-items:center;gap:10px">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2" aria-hidden="true">
                                     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>

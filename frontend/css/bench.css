@@ -118,7 +118,7 @@
 .pf-res-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 12px; }
 .pf-res-charts svg { display: block; width: 100%; height: auto; }
 .pf-ops { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 10px; }
-.pf-op { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--bmm-border); background: var(--bmm-s02); min-width: 0; border-left: 3px solid var(--c, var(--bmm-accent)); }
+.pf-op { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--bmm-border); background: var(--bmm-s02); min-width: 0; background: color-mix(in srgb, var(--c, var(--bmm-accent)) 5%, var(--bmm-s02)); }
 .pf-op-h { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; min-width: 0; }
 .pf-op-name { font-size: 13px; font-weight: 700; color: var(--bmm-text-primary); min-width: 0; }
 .pf-op-v { font-family: var(--bmm-font-mono); font-variant-numeric: tabular-nums; font-weight: 800; font-size: 15px; color: var(--bmm-text-primary); white-space: nowrap; }

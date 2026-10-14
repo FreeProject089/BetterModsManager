@@ -8,6 +8,7 @@ import { invoke } from '../../core/api.js';
 import { isBehaviourAttr } from '../../core/inline-actions.js';
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
+import { canonicalThemeId, isLightTheme as modelIsLight, isSafeCssValue, migrateTheme, rootVars, sanitizeVars } from './theme-model.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface BmmTheme {
@@ -50,7 +51,7 @@ interface PageTheme {
     css?: string;
 }
 
-interface ElementOverride {
+export interface ElementOverride {
     selector: string;
     props: Record<string, string>;
 }
@@ -60,7 +61,7 @@ export interface HtmlSwap {
     html: string;       // sanitised markup that replaces matching elements' innerHTML
 }
 
-interface CustomElement {
+export interface CustomElement {
     id: string;
     target: string;         // CSS selector of the host element
     position: 'prepend' | 'append' | 'before' | 'after';
@@ -95,62 +96,24 @@ function getOrCreate(id: string): HTMLStyleElement {
     return el;
 }
 
-/** For any --bmm-<name> hex the theme sets, auto-emit --bmm-<name>-r/g/b
- *  channel tokens so rgba(var(--bmm-<name>-r),…) tints follow the theme.   */
-function deriveChannels(vars: Record<string, string>): Record<string, string> {
-    const out: Record<string, string> = {};
-    // Alpha per name = the canonical value from tokens.css, so a derived -dim is exactly
-    // what the default theme would have used at this colour. `info` was MISSING from this
-    // list, and -dim was never derived at all: a theme that recoloured --bmm-success left
-    // success-dim on the factory green — every badge/callout tint half-updated, and the
-    // author had no way to know short of hand-writing four extra tokens per colour.
-    const names: Array<[string, number]> = [
-        ['accent', 0.18], ['cyan', 0.18], ['success', 0.15],
-        ['warning', 0.15], ['danger', 0.15], ['purple', 0.18], ['info', 0.15],
-    ];
-    for (const [n, dimAlpha] of names) {
-        const hex = vars[`--bmm-${n}`];
-        if (hex && /^#[0-9a-fA-F]{6}$/.test(hex.trim())) {
-            const { r, g, b } = rgb(hex.trim());
-            if (vars[`--bmm-${n}-r`] === undefined) out[`--bmm-${n}-r`] = String(r);
-            if (vars[`--bmm-${n}-g`] === undefined) out[`--bmm-${n}-g`] = String(g);
-            if (vars[`--bmm-${n}-b`] === undefined) out[`--bmm-${n}-b`] = String(b);
-            if (vars[`--bmm-${n}-dim`] === undefined) out[`--bmm-${n}-dim`] = `rgba(${r}, ${g}, ${b}, ${dimAlpha})`;
-        }
-    }
-    return out;
-}
-
-// A light theme that only overrides backgrounds (e.g. a hand-tweaked single
-// token, or a community theme authored before text tokens existed) otherwise
-// falls through to BMM's DARK-mode text-token defaults from tokens.css — near-
-// white text on the new light background. The DOM contrast enforcer patches
-// this everywhere it runs, but it deliberately never touches the theme editor's
-// own chrome (`#bmm-theme-editor` is excluded), so THAT surface showed the bug
-// unmitigated: some text (using tokens the theme DID set) turned dark
-// correctly, the rest (relying on unset text tokens) stayed stuck light-on-
-// light. Filling the gap here — at the CSS-variable level — fixes it
-// everywhere at once, editor included, instead of chasing DOM edge cases.
-const LIGHT_TEXT_FALLBACK: Record<string, string> = {
-    '--bmm-text-primary': '#16181d',
-    '--bmm-text-secondary': '#4b5563',
-    '--bmm-text-muted': '#6b7280',
-};
+// The :root declarations (the theme's safe vars, the light-theme text fallback and the derived
+// -r/-g/-b/-dim channels) are built by theme-model.ts's rootVars, which the editor's preview
+// uses too, so the preview and the app cannot disagree about what a theme sets.
+//
+// The fallback exists because a light theme that only overrides backgrounds otherwise falls
+// through to the DARK text defaults of tokens.css: near-white text on a light background,
+// and the DOM contrast enforcer deliberately never touches the editor's own chrome. Filling
+// the gap at the variable level fixes it everywhere at once.
 function buildVarsCSS(theme: BmmTheme): string {
-    const vars = { ...(theme.vars || {}) };
-    if (isLightTheme(theme)) {
-        for (const [k, v] of Object.entries(LIGHT_TEXT_FALLBACK)) {
-            if (vars[k] === undefined) vars[k] = v;
-        }
-    }
-    const merged = { ...vars, ...deriveChannels(vars) };
+    // Values come from a file someone shared: rootVars drops any that would close the block.
+    const merged = rootVars(theme);
     const global = Object.keys(merged).length ? Object.entries(merged)
         .map(([k, v]) => `  ${k}: ${v};`).join('\n') : '';
 
     const perPage = theme.pages ? Object.entries(theme.pages)
         .filter(([, p]) => p.vars)
         .map(([page, p]) => {
-            const pvars = Object.entries(p.vars!).map(([k, v]) => `  ${k}: ${v};`).join('\n');
+            const pvars = Object.entries(sanitizeVars(p.vars)).map(([k, v]) => `  ${k}: ${v};`).join('\n');
             return `#view-${page}, body[data-page="${page}"] {\n${pvars}\n}`;
         }).join('\n') : '';
 
@@ -168,7 +131,10 @@ function buildCSSBlock(theme: BmmTheme): string {
 
     if (theme.element_overrides) {
         for (const o of theme.element_overrides) {
-            const props = Object.entries(o.props).map(([k, v]) => `  ${k}: ${v} !important;`).join('\n');
+            // Same rule as the vars: a value that would end the declaration block is skipped.
+            const props = Object.entries(o.props || {})
+                .filter(([k, v]) => /^-?[A-Za-z][A-Za-z0-9-]*$/.test(k) && isSafeCssValue(v))
+                .map(([k, v]) => `  ${k}: ${v} !important;`).join('\n');
             css += `\n${o.selector} {\n${props}\n}`;
         }
     }
@@ -275,18 +241,7 @@ body { color: var(--bmm-text-primary) !important; }
  *  contrast patches + enforcer as the built-in light themes, and their texts
  *  never stay stuck white-on-white. */
 export function isLightTheme(theme: BmmTheme | null | undefined): boolean {
-    if (!theme) return false;
-    if (theme.mode === 'light') return true;
-    if (theme.mode === 'dark') return false;
-    const bg = theme.vars?.['--bmm-bg-base'] || '';
-    const m = bg.match(/#([0-9a-fA-F]{6})/);
-    if (m) {
-        const r = parseInt(m[1].slice(0, 2), 16), g = parseInt(m[1].slice(2, 4), 16), b = parseInt(m[1].slice(4, 6), 16);
-        return _lum(r, g, b) > 0.5;
-    }
-    const rgb = _parseRgb(bg);
-    if (rgb) return _lum(rgb[0], rgb[1], rgb[2]) > 0.5;
-    return false;
+    return modelIsLight(theme);
 }
 
 // ── Light-mode contrast enforcer ──────────────────────────────────────────────
@@ -979,7 +934,11 @@ let _installedThemes: Record<string, BmmTheme> = {};
 export async function loadInstalledThemes(): Promise<BmmTheme[]> {
     try {
         const raw: string = await invoke('list_installed_themes');
-        const list: BmmTheme[] = JSON.parse(raw || '[]');
+        // Migrated in memory, never rewritten on disk here: a theme from an older format reads
+        // as the current one, and the file only changes when its owner saves it.
+        const list: BmmTheme[] = (JSON.parse(raw || '[]') as unknown[])
+            .map((t) => migrateTheme(t).theme as unknown as BmmTheme)
+            .filter((t) => t && typeof t.id === 'string' && t.id);
         _installedThemes = {};
         for (const t of list) _installedThemes[t.id] = t;
         return list;
@@ -1003,7 +962,14 @@ export async function restoreThemeAtBoot(): Promise<void> {
     // Load the built-in presets from the bundled folder FIRST so every later
     // BUILTIN_THEMES lookup (here + the theme editor) resolves correctly.
     await loadBuiltinThemes();
-    const activeId = localStorage.getItem(ACTIVE_KEY);
+    // A built-in renamed since this choice was made (theme-model BUILTIN_ID_ALIASES) keeps
+    // being the choice: read under its new id, and stored under it from now on.
+    const storedId = localStorage.getItem(ACTIVE_KEY);
+    const activeId = storedId ? canonicalThemeId(storedId) : storedId;
+    if (storedId && activeId && activeId !== storedId) {
+        try { localStorage.setItem(ACTIVE_KEY, activeId); } catch { /* storage refused: read again next boot */ }
+        invoke('set_active_theme', { themeId: activeId }).catch(() => {});
+    }
 
     // Apply the active theme fast (no flash): a built-in from the loaded set, or a
     // cached custom theme from localStorage.
@@ -1033,8 +999,10 @@ export async function restoreThemeAtBoot(): Promise<void> {
     } catch {}
 }
 
-export async function installTheme(theme: BmmTheme): Promise<void> {
-    await invoke('install_theme', { themeJson: JSON.stringify(theme) });
+export async function installTheme(theme0: BmmTheme): Promise<void> {
+    // Written in the current format (format_version stamped, unknown keys kept as they are).
+    const theme = migrateTheme(theme0).theme as unknown as BmmTheme;
+    await invoke('install_theme', { themeJson: JSON.stringify(theme, null, 2) });
     _installedThemes[theme.id] = theme;
     localStorage.setItem(`bmm_theme_cache_${theme.id}`, JSON.stringify(theme));
 }
@@ -1046,8 +1014,12 @@ export async function deleteTheme(id: string): Promise<void> {
     if (_activeTheme?.id === id) resetTheme();
 }
 
-export async function activateTheme(id: string): Promise<void> {
-    const theme = _installedThemes[id];
+export async function activateTheme(id0: string): Promise<void> {
+    // Built-ins too, and by an old id as well as the current one: `bmm://theme/apply?id=…`,
+    // the MCP bridge and scheduler tasks all name built-ins, and this used to look only at
+    // the installed folder, so applying a built-in by link answered « theme not found ».
+    const id = canonicalThemeId(id0);
+    const theme = _installedThemes[id] || BUILTIN_THEMES.find(b => b.id === id);
     if (!theme) { toast(t('themes.notFound') || 'Theme not found', 'error'); return; }
     applyTheme(theme);
     await invoke('set_active_theme', { themeId: id }).catch(() => {});
@@ -1067,12 +1039,6 @@ export async function exportTheme(id: string): Promise<void> {
 }
 
 // ── Built-in themes ────────────────────────────────────────────────────────────
-// Helper to generate accent-rgb components from a hex colour string
-function rgb(hex: string): { r: string; g: string; b: string } {
-    const m = hex.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
-    return m ? { r: String(parseInt(m[1], 16)), g: String(parseInt(m[2], 16)), b: String(parseInt(m[3], 16)) } : { r: '59', g: '130', b: '246' };
-}
-
 /** Built-in theme presets. NOT hardcoded — loaded by loadBuiltinThemes() from two places:
  *  the bundled `builtin-themes/` resource folder, and `<app data>/theme-presets/`, where a
  *  user can drop their own without editing the app. Both are merged here, so the quick

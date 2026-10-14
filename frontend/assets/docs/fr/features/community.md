@@ -138,6 +138,52 @@ Pour la revoir après l'avoir masquée, ouvre-la depuis l'écran Communauté ou 
 commandes (`Ctrl+K`) — ouverte exprès, elle perd la case à cocher : il n'y a rien à masquer
 dans quelque chose que tu viens de demander.
 
+## BetterCommunity v2
+
+BMM 1.0.3 est prêt pour BetterCommunity v2 et le livre **désactivé** : tant que l'interrupteur
+n'est pas mis, BMM parle à BetterCommunity v1 exactement comme la 1.0.2.
+
+**L'interrupteur** est lu une fois au démarrage, dans cet ordre : ton
+[`app.cfg`](doc-page:reference/app-cfg) (`BCApiVersion`, `BCv2Base`), puis le
+[fichier de liens](doc-page:reference/links-and-updates) publié par BetterCommunity (`bc_api`,
+`bc_v2_base`), puis la v1. Le jour où la v2 ouvre, son équipe bascule `bc_api` et les copies
+installées suivent sans nouvelle version. Un `BCApiVersion=v1` explicite dans `app.cfg` garde
+une installation sur la v1 quoi que dise le fichier de liens.
+
+**Le contrôle de santé.** La v2 n'est utilisée qu'après avoir répondu à `GET <base>/v2/health`
+avec `ok` ou `degraded` pendant cette session. Si elle ne répond pas, BMM reste sur la v1 pour la
+session et écrit la raison dans son journal. Tant que le contrôle n'a pas répondu, BMM est sur la
+v1.
+
+### Le compte lié
+
+Quand la session tourne sur la v2, les *Paramètres* affichent une carte **Compte BetterCommunity
+lié**. **Se connecter avec BetterCommunity** affiche un code court ; ouvre la page, vérifie
+qu'elle affiche le même code, et approuve-le sur le site. **Aucun mot de passe n'est saisi dans
+BMM.** La connexion est gardée comme BMM garde ses autres secrets : protégée par Windows pour ton
+compte utilisateur (le trousseau du système sur macOS et Linux). Si aucun des deux ne marche,
+elle dure jusqu'à la fermeture de BMM, et la carte le dit. BMM ne l'affiche jamais, et ne l'envoie
+qu'à l'adresse BetterCommunity v2 qui l'a émise. **Se déconnecter** la révoque sur le site et
+l'oublie sur ce PC. En mode v1, la carte est masquée et la liaison de compte existante marche
+comme avant.
+
+### Ce qui passe en v2, et ce qui reste en v1
+
+En v2 : les retours, rapports de bug et de plantage (en tant que ton compte quand tu es connecté,
+sinon avec la clé d'application publique de BMM) ; les reçus de consentement et les réponses aux
+Conditions et à la Politique de confidentialité (même règle d'autorisation qu'avant) ; une version
+plus récente des Conditions ou de la Politique publiée par la v2 est montrée avec **Accepter**,
+**Refuser** ou **Plus tard** ; les notifications BetterCommunity (lues avec ta connexion, pas de
+clé API à coller) ; le journal Communauté de cet écran ; les suggestions BetterCommunity de Laya ;
+le flux de secours de la vérification des mises à jour et la liste des crédits (chaque mise à jour
+est toujours vérifiée contre le manifeste signé de la version) ; le téléchargement du modèle
+hors ligne de Laya (même empreinte SHA-256) ; et la télémétrie anonyme, si tu l'as activée, avec
+seulement les catégories que tu as acceptées. Le replay de session reste sur le serveur de
+télémétrie actuel.
+
+**Toujours en v1** : les avatars, les annonces de lancement, la recherche d'auteur par identifiant
+de créateur et le lien Discord. BetterCommunity v2 ne les sert pas encore.
+
 ## Comment ça s'articule avec le reste de BMM
 
 Le blog est la partie visible de BetterCommunity. La même plateforme :

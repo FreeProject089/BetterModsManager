@@ -43,6 +43,22 @@ fn clear_queue(app: &AppHandle) {
     let _ = std::fs::remove_file(queue_path(app));
 }
 
+/// Replace the queue with what is left after a partial send (BetterCommunity v2 mode).
+fn write_queue(app: &AppHandle, events: &[Value]) {
+    if events.is_empty() {
+        clear_queue(app);
+        return;
+    }
+    let mut out = String::new();
+    for ev in events {
+        if let Ok(line) = serde_json::to_string(ev) {
+            out.push_str(&line);
+            out.push('\n');
+        }
+    }
+    let _ = std::fs::write(queue_path(app), out);
+}
+
 fn consent_granted(state: &State<AppState>) -> bool {
     state.data.lock().map(|d| d.settings.analytics_consent == Some(true)).unwrap_or(false)
 }
@@ -497,12 +513,40 @@ pub async fn analytics_flush(
     api_key: Option<String>,
 ) -> Result<usize, String> {
     if !consent_granted(&state) { return Ok(0); }
+    let mut batch = read_queue(&app_handle);
+    if batch.is_empty() { return Ok(0); }
+
+    // BetterCommunity v2 (ADR 0024), only when this session runs on v2 AND links.json gives the
+    // app's id and publishable key: the events go to `/v2/apps/{app}/telemetry/batch` with the
+    // ledger's consent header (bc_v2_telemetry.rs). Session replay has no v2 home and continues
+    // below to the v1 telemetry server. Without the switch nothing here runs.
+    let mut v2_sent = 0usize;
+    if let Some(root) = crate::commands::bc_v2::effective_v2_root() {
+        let rt = crate::commands::bc_v2::runtime();
+        if crate::commands::bc_v2::app_id_ok(&rt.app_id) && crate::commands::bc_v2::app_key_ok(&rt.app_key) {
+            let receipts = crate::commands::consent_ledger::ledger_for(&state).receipts();
+            if let Some(header) = crate::commands::bc_v2_telemetry::consent_header(&receipts) {
+                let cid = crate::commands::security::get_creator_id(app_handle.clone()).unwrap_or_default();
+                let install = crate::commands::bc_v2_telemetry::pseudonym(&cid);
+                let (n, keep, packets) = crate::commands::bc_v2_telemetry::flush(&root, &rt.app_id, &rt.app_key, &header, batch, &install).await;
+                write_queue(&app_handle, &keep);
+                if n > 0 {
+                    let mut log = read_sent(&app_handle);
+                    log.push(json!({ "id": packets.first().cloned().unwrap_or_default(), "packets": packets, "ts": now_iso(), "count": n, "deletion_requested": false, "events": {}, "dest": "bc_v2" }));
+                    if log.len() > 500 { let d = log.len() - 500; log.drain(0..d); }
+                    write_sent(&app_handle, &log);
+                }
+                v2_sent = n;
+                batch = keep;
+                if batch.is_empty() { return Ok(v2_sent); }
+            }
+        }
+    }
+
     let endpoint = match endpoint.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
         Some(e) if endpoint_allowed(e) => e.to_string(),
-        _ => return Ok(0), // not configured (or plaintext to a remote host) → keep buffering locally
+        _ => return Ok(v2_sent), // not configured (or plaintext to a remote host) → keep buffering locally
     };
-    let batch = read_queue(&app_handle);
-    if batch.is_empty() { return Ok(0); }
 
     // Each flush is a "packet" with a random id. The id lets the user later request
     // erasure of that exact batch (the dashboard deletes everything tagged with it).
@@ -526,7 +570,7 @@ pub async fn analytics_flush(
         .timeout(std::time::Duration::from_secs(15));
     let resp = match req.send().await {
         Ok(r) => r,
-        Err(_) => return Ok(0), // Silently fail on network error to prevent console spam
+        Err(_) => return Ok(v2_sent), // Silently fail on network error to prevent console spam
     };
     if resp.status().is_success() {
         let n = batch.len();
@@ -548,14 +592,14 @@ pub async fn analytics_flush(
         log.push(json!({ "id": packet_id, "ts": now_iso(), "count": n, "deletion_requested": false, "events": summary }));
         if log.len() > 500 { let d = log.len() - 500; log.drain(0..d); }
         write_sent(&app_handle, &log);
-        Ok(n)
+        Ok(n + v2_sent)
     } else {
         if resp.status() == reqwest::StatusCode::PAYLOAD_TOO_LARGE {
             // Unrecoverable, drop the queue so it doesn't loop forever causing lag
             let _ = std::fs::remove_file(queue_path(&app_handle));
-            return Ok(0);
+            return Ok(v2_sent);
         }
-        Ok(0) // Silently fail on other HTTP errors to prevent console spam
+        Ok(v2_sent) // Silently fail on other HTTP errors to prevent console spam
     }
 }
 
@@ -629,6 +673,27 @@ pub async fn analytics_request_deletion(
     endpoint: Option<String>,
     api_key: Option<String>,
 ) -> Result<(), String> {
+    // A packet sent to BetterCommunity v2 (ADR 0024): v2 erases by install, not by packet, so
+    // the request erases every event of this install there (`/telemetry/forget`).
+    let v2_packet = read_sent(&app_handle).iter().any(|p| p.get("id").and_then(|v| v.as_str()) == Some(packet_id.as_str()) && p.get("dest").and_then(|v| v.as_str()) == Some("bc_v2"));
+    if v2_packet {
+        let rt = crate::commands::bc_v2::runtime();
+        let root = crate::commands::bc_v2::effective_v2_root().ok_or_else(|| "BetterCommunity v2 is not reachable in this session".to_string())?;
+        let cid = crate::commands::security::get_creator_id(app_handle.clone()).unwrap_or_default();
+        crate::commands::bc_v2_telemetry::forget(&root, &rt.app_id, &rt.app_key, &crate::commands::bc_v2_telemetry::pseudonym(&cid)).await?;
+        let mut log = read_sent(&app_handle);
+        for p in log.iter_mut() {
+            if p.get("dest").and_then(|v| v.as_str()) == Some("bc_v2") {
+                if let Some(o) = p.as_object_mut() {
+                    o.insert("deletion_requested".into(), Value::Bool(true));
+                    o.insert("deletion_requested_at".into(), Value::String(now_iso()));
+                }
+            }
+        }
+        write_sent(&app_handle, &log);
+        log_line("[ANALYTICS] BetterCommunity v2: this install's events erased (forget)".to_string());
+        return Ok(());
+    }
     let base = endpoint.unwrap_or_default();
     // Derive the delete URL from the configured /batch/ endpoint.
     let url = base.trim().trim_end_matches('/').trim_end_matches("/batch").to_string() + "/delete-request";

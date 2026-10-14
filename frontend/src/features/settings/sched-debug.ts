@@ -18,6 +18,7 @@
 import { escHtml } from '../../core/utils.js';
 import { t } from '../../core/i18n.js';
 import { raiseAboveAll } from '../../ui/layer.js';
+import { popoutButtonHtml, wirePopout } from '../../ui/popout.js';
 import type { RunCtx } from './sched-vars.js';
 import { stopsAt } from './sched-debug-map.js';
 
@@ -430,6 +431,7 @@ function openPanel(taskName: string): void {
             <span class="dbg-task">${escHtml(taskName)}</span>
             <span class="dbg-mode" id="dbg-mode">${escHtml(t('sched.dbg.modeStep'))}</span>
             <span class="dbg-count" id="dbg-count" title="${escHtml(t('sched.dbg.countTip'))}">0</span>
+            ${popoutButtonHtml('dbg-x dbg-pop', 'sched-debug')}
             <button type="button" class="dbg-x" id="dbg-close" title="${escHtml(t('sched.dbg.close'))}">&times;</button>
         </div>
         <div class="dbg-fail" id="dbg-fail" hidden>
@@ -579,6 +581,15 @@ function openPanel(taskName: string): void {
         emit({ taskId: s.taskId, phase: 'closed', path: null, label: '', rows: [] });
     });
     dragBy(el, el.querySelector('#dbg-head') as HTMLElement);
+    // The debugger in a window of its own (ui/popout.ts), so it can sit beside the task editor
+    // instead of over the step it is stopped on. Step, Continue and the keys work from there.
+    wirePopout({
+        id: 'sched-debug',
+        title: () => `${t('sched.dbg.title')} · ${taskName}`,
+        panel: () => el,
+        isOpen: () => el.isConnected,
+        close: () => (el.querySelector('#dbg-close') as HTMLElement | null)?.click(),
+    }, el, el.querySelector('#dbg-head') as HTMLElement);
 }
 
 /**

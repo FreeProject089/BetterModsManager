@@ -85,6 +85,32 @@ pub struct SshProgress {
     pub direction: &'static str,
 }
 
+/// `SHA256:…`, the form `ssh-keygen -lf` prints, so the user can compare it with the server.
+fn fingerprint_of(k: &PublicKeyOrCertificate) -> String {
+    match k {
+        PublicKeyOrCertificate::PublicKey { key, .. } => key.fingerprint(Default::default()).to_string(),
+        PublicKeyOrCertificate::Certificate(c) => c.public_key().fingerprint(Default::default()).to_string(),
+    }
+}
+
+/// Reads the server's key and refuses it, always: the handshake stops there, before any
+/// authentication. What [`ssh_probe_host_key`] uses to SHOW a new server's fingerprint
+/// before a password or a key is offered to it.
+struct KeyProbe {
+    seen: Arc<std::sync::Mutex<Option<String>>>,
+}
+
+impl Handler for KeyProbe {
+    type Error = russh::Error;
+
+    async fn check_server_key(&mut self, server_public_key: &PublicKeyOrCertificate) -> Result<bool, Self::Error> {
+        if let Ok(mut g) = self.seen.lock() {
+            *g = Some(fingerprint_of(server_public_key));
+        }
+        Ok(false)
+    }
+}
+
 struct KnownHostClient {
     /// The fingerprint we already trust, if this host has been seen before.
     expected: Option<String>,
@@ -99,14 +125,7 @@ impl Handler for KnownHostClient {
         &mut self,
         server_public_key: &PublicKeyOrCertificate,
     ) -> Result<bool, Self::Error> {
-        let fp = match server_public_key {
-            PublicKeyOrCertificate::PublicKey { key, .. } => {
-                key.fingerprint(Default::default()).to_string()
-            }
-            PublicKeyOrCertificate::Certificate(c) => {
-                c.public_key().fingerprint(Default::default()).to_string()
-            }
-        };
+        let fp = fingerprint_of(server_public_key);
         if let Ok(mut g) = self.seen.lock() {
             *g = Some(fp.clone());
         }
@@ -914,6 +933,80 @@ pub fn ssh_forget_host(state: State<'_, AppState>, host: String, port: Option<u1
     state.save().map_err(|e| e.to_string())
 }
 
+/// A server's key as the SSH servers dialog shows it before trusting it.
+#[derive(Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct HostKeyProbe {
+    /// What the server presented, `SHA256:…`. Empty when only the stored one was asked for.
+    pub fingerprint: String,
+    /// What BMM trusts for this host:port, if anything.
+    pub known: Option<String>,
+    /// `new` (never trusted), `trusted` (matches), `changed` (does not match: refused
+    /// everywhere until the user forgets the old one), `unknown` (offline: not connected).
+    pub status: &'static str,
+}
+
+/// `new` / `trusted` / `changed` for a presented fingerprint against the stored one.
+pub fn host_key_status(seen: &str, known: Option<&str>) -> &'static str {
+    match known {
+        None => "new",
+        Some(k) if k == seen => "trusted",
+        Some(_) => "changed",
+    }
+}
+
+/// Read a server's host key WITHOUT logging in, and compare it with the one BMM trusts.
+///
+/// The handshake is refused as soon as the key arrives, so nothing (no password, no key
+/// signature) is offered to a server the user has not accepted yet. The dialog shows the
+/// fingerprint plainly and asks; [`ssh_trust_host`] records the answer. `offline` returns the
+/// stored fingerprint only, without connecting (the list's status line).
+#[tauri::command]
+pub async fn ssh_probe_host_key(state: State<'_, AppState>, host: String, port: Option<u16>, offline: Option<bool>) -> Result<HostKeyProbe, String> {
+    let host = host.trim().to_string();
+    if host.is_empty() {
+        return Err("sshsrv.errHost".into());
+    }
+    let port = port.filter(|p| *p > 0).unwrap_or(22);
+    let known = known_host(&state, &host, port);
+    if offline.unwrap_or(false) {
+        return Ok(HostKeyProbe { fingerprint: String::new(), status: if known.is_some() { "trusted" } else { "unknown" }, known });
+    }
+    let seen = Arc::new(std::sync::Mutex::new(None));
+    let probe = KeyProbe { seen: seen.clone() };
+    let config = Arc::new(client::Config::default());
+    let res = tokio::time::timeout(std::time::Duration::from_secs(15), client::connect(config, (host.as_str(), port), probe)).await;
+    let fp = seen.lock().ok().and_then(|g| g.clone()).unwrap_or_default();
+    if fp.is_empty() {
+        return Err(match res {
+            Err(_) => format!("repo.ssh.errConnect|{}|timeout", host),
+            Ok(Err(e)) => format!("repo.ssh.errConnect|{}|{}", host, e),
+            Ok(Ok(_)) => format!("repo.ssh.errConnect|{}|no host key", host),
+        });
+    }
+    Ok(HostKeyProbe { status: host_key_status(&fp, known.as_deref()), fingerprint: fp, known })
+}
+
+/// Trust this fingerprint for host:port: the user read it and said yes. Replaces nothing that
+/// differs — a changed key must be forgotten first (`ssh_forget_host`), on purpose.
+#[tauri::command]
+pub fn ssh_trust_host(state: State<'_, AppState>, host: String, port: Option<u16>, fingerprint: String) -> Result<(), String> {
+    let host = host.trim().to_string();
+    let fp = fingerprint.trim().to_string();
+    if host.is_empty() || fp.is_empty() || fp.len() > 200 || fp.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return Err("sshsrv.errFingerprint".into());
+    }
+    let port = port.filter(|p| *p > 0).unwrap_or(22);
+    if let Some(k) = known_host(&state, &host, port) {
+        if k != fp {
+            return Err(format!("repo.ssh.errHostKeyChanged|{}", fp));
+        }
+        return Ok(());
+    }
+    remember_host(&state, &host, port, &fp);
+    Ok(())
+}
+
 // ── syncing FROM a repo that lives on an SSH server ──────────────────────────
 //
 // Publishing and fetching (above) move the whole export folder, because the publisher owns
@@ -1073,6 +1166,14 @@ pub async fn ssh_fetch_repo_info(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The dialog asks before trusting a NEW key, and a CHANGED one is never "trusted".
+    #[test]
+    fn host_key_status_new_trusted_changed() {
+        assert_eq!(host_key_status("SHA256:abc", None), "new");
+        assert_eq!(host_key_status("SHA256:abc", Some("SHA256:abc")), "trusted");
+        assert_eq!(host_key_status("SHA256:abc", Some("SHA256:xyz")), "changed");
+    }
 
     // ── safe_join ────────────────────────────────────────────────────────────
 

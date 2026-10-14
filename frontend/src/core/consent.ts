@@ -100,7 +100,7 @@ export async function hasProof(doc: ConsentDoc): Promise<boolean> {
  *  or `force` (the user pressed « Send to the server »). */
 export async function syncConsents(force = false): Promise<any> {
     const links = getLinks();
-    // BetterCommunity v2 consent ledger, only when app.cfg selects v2 (BCApiVersion=v2). Same
+    // BetterCommunity v2 consent ledger, only when this session runs on v2 (bc-v2.ts). Same
     // permission as the telemetry copy, enforced again in Rust (bc_v2.rs): telemetry consent on,
     // or `force` from « Send to the server ». Its result never replaces the telemetry one.
     if (bcUsesV2()) {
@@ -177,6 +177,9 @@ export async function openMyConsents(): Promise<void> {
             ${r.note ? `<div class="consent-row-meta">${escHtml(r.note)}</div>` : ''}
         </li>`;
     }).join('');
+    // Answers given to BetterCommunity v2's own texts (re-acceptance prompt), as the server
+    // recorded them: none outside v2 mode.
+    const v2Rows = bcUsesV2() ? await (await import('./bc-v2-legal.js')).bcV2LegalRows().catch(() => '') : '';
     const sent = Number(sync.sent_seq || 0);
     const total = receipts.length ? Number(receipts[0].seq || receipts.length) : 0;
     const body = `
@@ -185,7 +188,8 @@ export async function openMyConsents(): Promise<void> {
             <span class="consent-install">${escHtml(label('consent.installId', 'Anonymous install id'))}: <code>${escHtml(String(data?.install_id || ''))}</code></span>
             <span class="consent-sync">${escHtml(label('consent.serverCopy', 'On the server'))}: ${sent} / ${total}${sync.last_error ? `: ${escHtml(String(sync.last_error))}` : ''}</span>
         </div>
-        ${rows ? `<ol class="consent-list">${rows}</ol>` : `<p class="modal-message">${escHtml(label('consent.empty', 'No answer recorded yet.'))}</p>`}`;
+        ${rows ? `<ol class="consent-list">${rows}</ol>` : `<p class="modal-message">${escHtml(label('consent.empty', 'No answer recorded yet.'))}</p>`}
+        ${v2Rows}`;
     ensureCss();
     const m = openModal({
         title: label('consent.title', 'My consents'),

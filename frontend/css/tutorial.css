@@ -102,7 +102,6 @@
     padding: 13px 15px;
     border-radius: 12px;
     border-width: 1px;
-    border-left-width: 3px;
     display: flex; align-items: center; gap: 12px;
 }
 .tut-action-label {
@@ -930,7 +929,6 @@ body.tut-docked:not(.tut-dock-side) .tut-dock-resize-v { display: block; }
     background: var(--bmm-s05);
     color: var(--bmm-text-primary);
     font-weight: 650;
-    box-shadow: inset 2px 0 0 var(--tut-panel-color, var(--bmm-accent));
 }
 .tgw-step-dot {
     flex: none;

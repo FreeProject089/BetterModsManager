@@ -129,21 +129,52 @@ fn push_history(state: &mut AppsState, action: &str, app_id: &str, title: &str) 
 //   Tier 2 — Community (community_imports + user-added sources)
 //     → official = false, partner = false (stripped regardless of JSON content)
 
-async fn fetch_raw_catalog(app: &tauri::AppHandle, url: &str) -> Option<AppCatalog> {
-    let bust = format!("{}?t={}", url,
-        SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs());
+/// Is this a source the HTTP fetcher should try at all?
+///
+/// A blank entry is not a source. The official catalogue shipped `"partner_catalogs": [""]`
+/// (a placeholder nobody filled in), and the fetcher dutifully requested `?t=…` (no host at
+/// all), counted the failure, and the App catalogue said « 1 source did not answer » to
+/// somebody who had never added a source. `bundle:` sources are files the frontend opens
+/// itself; anything that is not http(s) cannot be fetched here. None of these is a FAILED
+/// source: they are skipped and named in the log.
+pub fn fetchable_source(url: &str) -> Option<String> {
+    let u = url.trim();
+    if u.is_empty() { return None; }
+    let low = u.to_ascii_lowercase();
+    if !(low.starts_with("https://") || low.starts_with("http://")) { return None; }
+    // `https://` alone, or a host made of nothing.
+    let rest = &u[u.find("://").map(|i| i + 3).unwrap_or(0)..];
+    if rest.trim_matches('/').is_empty() { return None; }
+    Some(u.to_string())
+}
+
+/// The cache-busting address: `&t=` when the URL already has a query. `?t=` on a
+/// BetterCommunity feed (`catalog.json?project=bmm&kind=APP`) turned `kind` into `APP?t=…`.
+pub fn bust_url(url: &str, secs: u64) -> String {
+    let (base, frag) = match url.split_once('#') { Some((b, f)) => (b, Some(f)), None => (url, None) };
+    let sep = if base.contains('?') { '&' } else { '?' };
+    match frag {
+        Some(f) => format!("{}{}t={}#{}", base, sep, secs, f),
+        None => format!("{}{}t={}", base, sep, secs),
+    }
+}
+
+async fn fetch_raw_catalog(app: &tauri::AppHandle, url: &str) -> Result<AppCatalog, String> {
+    let bust = bust_url(url, SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs());
     // catalog_get adds the site identity header for first-party URLs so private community
     // app catalogs gate by the caller's linked account; third-party sources get none.
     let resp = crate::commands::net::catalog_get(app, &bust)
-        .timeout(std::time::Duration::from_secs(15)).send().await.ok()?;
-    if !resp.status().is_success() { return None; }
+        .timeout(std::time::Duration::from_secs(15)).send().await
+        .map_err(|e| if e.is_timeout() { "timeout".to_string() } else if e.is_connect() { format!("connect: {}", e) } else { format!("network: {}", e) })?;
+    let status = resp.status();
+    if !status.is_success() { return Err(format!("HTTP {}", status.as_u16())); }
     // Through the universal format (see catalog_convert::legacy_for); a refused document
     // (invalid signature) is a failed source, like an unreachable one.
-    let text = resp.text().await.ok()?;
+    let text = resp.text().await.map_err(|e| format!("read: {}", e))?;
     match crate::commands::catalog_convert::legacy_for(app, &text, "app", Some(url)) {
-        Ok(Some(v)) => serde_json::from_value::<AppCatalog>(v).ok(),
-        Ok(None) => serde_json::from_str::<AppCatalog>(&text).ok(),
-        Err(_) => None,
+        Ok(Some(v)) => serde_json::from_value::<AppCatalog>(v).map_err(|e| format!("not an app catalogue: {}", e)),
+        Ok(None) => serde_json::from_str::<AppCatalog>(&text).map_err(|e| format!("not an app catalogue: {}", e)),
+        Err(e) => Err(format!("refused: {}", e)),
     }
 }
 
@@ -180,6 +211,30 @@ fn apply_trust(apps: &mut Vec<AppEntry>, is_official: bool, is_partner: bool, so
     }
 }
 
+/// One source: fetched, timed, its outcome recorded with the reason. Returns the catalogue.
+async fn fetch_one_source(
+    app: &tauri::AppHandle, url: &str, tier: &str,
+    loaded: &mut Vec<String>, failed: &mut Vec<String>, status: &mut Vec<AppSourceStatus>,
+) -> Option<AppCatalog> {
+    log_line(format!("[APPS] Fetching {} catalog: {}", tier, url));
+    let t0 = std::time::Instant::now();
+    let r = fetch_raw_catalog(app, url).await;
+    let ms = t0.elapsed().as_millis() as u64;
+    match r {
+        Ok(cat) => {
+            loaded.push(url.to_string());
+            status.push(AppSourceStatus { url: url.to_string(), tier: tier.to_string(), ok: true, error: None, items: cat.apps.len(), name: cat.name.clone(), ms });
+            Some(cat)
+        }
+        Err(e) => {
+            log_line(format!("[APPS] Failed to fetch {} catalog: {} ({})", tier, url, e));
+            failed.push(url.to_string());
+            status.push(AppSourceStatus { url: url.to_string(), tier: tier.to_string(), ok: false, error: Some(e), items: 0, name: None, ms });
+            None
+        }
+    }
+}
+
 #[tauri::command]
 pub async fn fetch_app_catalogs(
     app: tauri::AppHandle,
@@ -189,79 +244,56 @@ pub async fn fetch_app_catalogs(
     let mut all_apps: Vec<AppEntry> = Vec::new();
     let mut sources_loaded: Vec<String> = Vec::new();
     let mut sources_failed: Vec<String> = Vec::new();
+    let mut status: Vec<AppSourceStatus> = Vec::new();
     let mut visited: std::collections::HashSet<String> = std::collections::HashSet::new();
-
-    // ── Tier 0: Official catalog ──────────────────────────────────────────────
-    visited.insert(catalog_url.clone());
-    log_line(format!("[APPS] Fetching official catalog: {}", catalog_url));
 
     let mut partner_urls: Vec<String> = Vec::new();
     let mut community_urls: Vec<String> = extra_community_urls;
 
-    match fetch_raw_catalog(&app, &catalog_url).await {
-        Some(mut cat) => {
-            apply_trust(&mut cat.apps, true, false, &catalog_url);
-            sources_loaded.push(catalog_url.clone());
-
-            // Official catalog is the ONLY source of partner trust
-            if let Some(partners) = cat.partner_catalogs {
-                partner_urls = partners;
+    // ── Tier 0: Official catalog ──────────────────────────────────────────────
+    // An empty `apps_catalog` in links.json switches the official catalogue off: not a failure.
+    match fetchable_source(&catalog_url) {
+        Some(official) => {
+            visited.insert(official.clone());
+            if let Some(mut cat) = fetch_one_source(&app, &official, "official", &mut sources_loaded, &mut sources_failed, &mut status).await {
+                apply_trust(&mut cat.apps, true, false, &official);
+                // Official catalog is the ONLY source of partner trust
+                if let Some(partners) = cat.partner_catalogs { partner_urls = partners; }
+                // Community imports from official are Tier 2
+                if let Some(imports) = cat.community_imports { community_urls.extend(imports); }
+                all_apps.extend(cat.apps);
             }
-            // Community imports from official are Tier 2
-            if let Some(imports) = cat.community_imports {
-                community_urls.extend(imports);
-            }
-
-            all_apps.extend(cat.apps);
         }
-        None => {
-            log_line(format!("[APPS] Failed to fetch official catalog: {}", catalog_url));
-            sources_failed.push(catalog_url.clone());
-        }
+        None => log_line("[APPS] No official app catalogue configured (apps_catalog is empty)".to_string()),
     }
 
     // ── Tier 1: Partner catalogs (defined by official catalog only) ───────────
-    for url in &partner_urls {
+    for raw in &partner_urls {
+        let Some(url) = fetchable_source(raw) else {
+            if !raw.trim().is_empty() { log_line(format!("[APPS] Skipped partner entry that is not an http(s) address: {}", raw)); }
+            continue;
+        };
         if !visited.insert(url.clone()) { continue; }
-        log_line(format!("[APPS] Fetching partner catalog: {}", url));
-        match fetch_raw_catalog(&app, url).await {
-            Some(mut cat) => {
-                apply_trust(&mut cat.apps, false, true, url);
-                sources_loaded.push(url.clone());
-                // Partner catalogs may have community_imports too (Tier 2)
-                if let Some(imports) = cat.community_imports {
-                    community_urls.extend(imports);
-                }
-                all_apps.extend(cat.apps);
-            }
-            None => {
-                log_line(format!("[APPS] Failed to fetch partner catalog: {}", url));
-                sources_failed.push(url.clone());
-            }
+        if let Some(mut cat) = fetch_one_source(&app, &url, "partner", &mut sources_loaded, &mut sources_failed, &mut status).await {
+            apply_trust(&mut cat.apps, false, true, &url);
+            // Partner catalogs may have community_imports too (Tier 2)
+            if let Some(imports) = cat.community_imports { community_urls.extend(imports); }
+            all_apps.extend(cat.apps);
         }
     }
 
     // ── Tier 2: Community / user-added sources (no badge) ────────────────────
     let mut i = 0;
     while i < community_urls.len() && sources_loaded.len() < 30 {
-        let url = community_urls[i].clone();
+        let raw = community_urls[i].clone();
         i += 1;
+        let Some(url) = fetchable_source(&raw) else { continue };
         if !visited.insert(url.clone()) { continue; }
-        log_line(format!("[APPS] Fetching community catalog: {}", url));
-        match fetch_raw_catalog(&app, &url).await {
-            Some(mut cat) => {
-                apply_trust(&mut cat.apps, false, false, &url);
-                sources_loaded.push(url.clone());
-                // Community catalogs can chain (still Tier 2, no badge escalation)
-                if let Some(imports) = cat.community_imports {
-                    community_urls.extend(imports);
-                }
-                all_apps.extend(cat.apps);
-            }
-            None => {
-                log_line(format!("[APPS] Failed to fetch community catalog: {}", url));
-                sources_failed.push(url.clone());
-            }
+        if let Some(mut cat) = fetch_one_source(&app, &url, "community", &mut sources_loaded, &mut sources_failed, &mut status).await {
+            apply_trust(&mut cat.apps, false, false, &url);
+            // Community catalogs can chain (still Tier 2, no badge escalation)
+            if let Some(imports) = cat.community_imports { community_urls.extend(imports); }
+            all_apps.extend(cat.apps);
         }
     }
 
@@ -272,7 +304,7 @@ pub async fn fetch_app_catalogs(
     log_line(format!("[APPS] Merged: {} apps | {} sources OK | {} failed",
         all_apps.len(), sources_loaded.len(), sources_failed.len()));
 
-    Ok(MergedCatalog { apps: all_apps, sources_loaded, sources_failed })
+    Ok(MergedCatalog { apps: all_apps, sources_loaded, sources_failed, sources: status })
 }
 
 // ── Installation ──────────────────────────────────────────────────────────────
@@ -1233,6 +1265,8 @@ pub fn toggle_app_favorite(app_handle: AppHandle, app_id: String) -> Result<Vec<
 
 #[tauri::command]
 pub fn add_community_source(app_handle: AppHandle, url: String) -> Result<Vec<String>, String> {
+    let url = url.trim().to_string();
+    if url.is_empty() { return Err("apps.sources.invalidUrl".into()); }
     let mut state = load_state(&app_handle);
     if !state.community_sources.contains(&url) {
         state.community_sources.push(url);
@@ -1245,6 +1279,26 @@ pub fn add_community_source(app_handle: AppHandle, url: String) -> Result<Vec<St
 pub fn remove_community_source(app_handle: AppHandle, url: String) -> Result<Vec<String>, String> {
     let mut state = load_state(&app_handle);
     state.community_sources.retain(|s| s != &url);
+    save_state(&app_handle, &state)?;
+    Ok(state.community_sources)
+}
+
+/// The followed list in a new order, or with entries dropped (Sources → reorder, import).
+/// Blank entries and case-insensitive duplicates are removed; the first spelling is kept.
+pub fn clean_source_list(urls: Vec<String>) -> Vec<String> {
+    let mut seen = std::collections::HashSet::new();
+    urls.into_iter()
+        .map(|u| u.trim().to_string())
+        .filter(|u| !u.is_empty() && seen.insert(u.to_lowercase()))
+        .take(200)
+        .collect()
+}
+
+/// Replace the followed app sources (reorder, import). Same cleaning as `clean_source_list`.
+#[tauri::command]
+pub fn set_community_sources(app_handle: AppHandle, urls: Vec<String>) -> Result<Vec<String>, String> {
+    let mut state = load_state(&app_handle);
+    state.community_sources = clean_source_list(urls);
     save_state(&app_handle, &state)?;
     Ok(state.community_sources)
 }
@@ -1383,4 +1437,34 @@ pub fn catalog_probe_file(path: String) -> Result<UrlProbe, String> {
     }
     // A file already on this machine did not travel, so there is nothing to warn about.
     Ok(UrlProbe { size, sha256: hex::encode(hasher.finalize()), insecure: false })
+}
+
+#[cfg(test)]
+mod source_tests {
+    use super::*;
+
+    #[test]
+    fn apps_blank_and_non_http_sources_are_not_fetched() {
+        // The official catalogue's `"partner_catalogs": [""]` placeholder.
+        assert_eq!(fetchable_source(""), None);
+        assert_eq!(fetchable_source("   "), None);
+        assert_eq!(fetchable_source("https://"), None);
+        assert_eq!(fetchable_source("bundle:C:/x/a.bmmbundle"), None);
+        assert_eq!(fetchable_source("ftp://x/y.json"), None);
+        assert_eq!(fetchable_source(" https://a.b/c.json ").as_deref(), Some("https://a.b/c.json"));
+        assert_eq!(fetchable_source("HTTP://a.b/c.json").as_deref(), Some("HTTP://a.b/c.json"));
+    }
+
+    #[test]
+    fn apps_cache_buster_keeps_an_existing_query() {
+        assert_eq!(bust_url("https://a/c.json", 5), "https://a/c.json?t=5");
+        assert_eq!(bust_url("https://a/catalog.json?project=bmm&kind=APP", 5), "https://a/catalog.json?project=bmm&kind=APP&t=5");
+        assert_eq!(bust_url("https://a/c.json#x", 5), "https://a/c.json?t=5#x");
+    }
+
+    #[test]
+    fn apps_source_list_is_trimmed_and_deduplicated() {
+        let v = clean_source_list(vec![" https://a/x.json ".into(), "".into(), "HTTPS://A/X.JSON".into(), "https://b/y.json".into()]);
+        assert_eq!(v, vec!["https://a/x.json".to_string(), "https://b/y.json".to_string()]);
+    }
 }

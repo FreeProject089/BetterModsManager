@@ -55,13 +55,13 @@ A typo compiles perfectly and fails at runtime as a rejected promise.
 `check-invoke-names.mjs` already gates one direction — every `invoke()` name must reach a
 registered command. This is the rest of the shape:
 
-- **637** commands registered, **534** called from the frontend, **123** modules calling at
+- **669** commands registered, **600** called from the frontend, **137** modules calling at
   least one. `features/settings/scheduler.ts` alone touches 125.
 - Per Rust module, how much of it the UI actually uses.
-- **62 commands with no frontend caller.** Reported as exactly that and *never* as "unused":
+- **69 commands with no frontend caller.** Reported as exactly that and *never* as "unused":
   the MCP server, the CLI and `bmm://` deeplinks all reach commands the UI never touches.
   This tool cannot tell an MCP-only command from a forgotten one and does not pretend to.
-- **Dynamic invokes** — `invoke(name)` rather than `invoke('name')`. There are 38, and the
+- **Dynamic invokes** — `invoke(name)` rather than `invoke('name')`. There are 83, and the
   count is the honest measure of how much of the surface is being checked at all.
 
 ---

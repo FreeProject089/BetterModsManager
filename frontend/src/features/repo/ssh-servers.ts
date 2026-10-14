@@ -19,14 +19,27 @@
 // Never the passphrase, never the password: they are read from a field at the moment of use.
 // That is also why a scheduled publish needs a key with no passphrase — there is nobody at
 // 04:00 to type one, and a prompt nobody answers is a task that silently never runs.
-import { invoke, pickFile } from '../../core/api.js';
+//
+// THE TEST, STEP BY STEP (1.0.3). It used to ask for the secret in a window.prompt (which the
+// webview does not show), connect, and trust whatever key answered. Now it:
+//   1. checks the form, field by field, and says which field is wrong;
+//   2. reads the server's host key WITHOUT logging in (ssh_probe_host_key). A server seen for
+//      the first time shows its fingerprint plainly and asks; nothing (no password, no key
+//      signature) is offered to it before « Trust this server ». A CHANGED key is refused,
+//      with the old and new fingerprints side by side;
+//   3. logs in with the passphrase / password typed in the form, and checks the base folder:
+//      exists, writable, and if not, who owns it.
+// Every step says its result in a line of its own, in words.
+import { invoke, pickFile, askConfirm } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
-import { topLayerZ } from '../../ui/layer.js';
+import { openModal } from '../../ui/modal-shell.js';
 import {
-    loadTargets, saveTarget, deleteTarget, sshTargetNames, explainSsh, DEFAULT_TARGET,
+    loadTargets, saveTarget, deleteTarget, explainSsh, DEFAULT_TARGET,
     type SshTarget,
 } from './repo-ssh.js';
+import { validateSshDraft, parseHostInput, modeString, type SshErrors, type SshField } from './ssh-validate.js';
+import { ensureRepoDialogCss } from './repo-dialogs-css.js';
 import { uiIcon } from '../../ui/icons.js';
 
 /** Everyone who drew a profile list wants to know when one is added or removed. */
@@ -48,8 +61,18 @@ interface TestResult {
     writable: boolean;
     writeError?: string | null;
     entries: number;
+    dirUid?: number | null;
+    dirMode?: number | null;
     user?: string;
 }
+interface HostKeyProbe { fingerprint: string; known: string | null; status: 'new' | 'trusted' | 'changed' | 'unknown' }
+type Step = { tone: '' | 'ok' | 'bad' | 'warn' | 'run'; text: string; html?: string };
+
+/** The last test of each profile, this session: the list's status line. Never a secret. */
+const lastTest = new Map<string, { ok: boolean; at: number }>();
+/** Host keys BMM trusts, by `host:port`, as last read (offline) for the list. */
+const knownKeys = new Map<string, string | null>();
+const hostKey = (d: SshTarget): string => `${d.host.toLowerCase()}:${d.port || 22}`;
 
 /**
  * Open the manager.
@@ -58,208 +81,425 @@ interface TestResult {
  * the one that was selected rather than on whichever the object enumerated first.
  */
 export function openSshServers(focus?: string): void {
-    const existing = document.getElementById('__ssh-servers');
-    if (existing) { existing.remove(); }
+    document.getElementById('__ssh-servers')?.remove();
+    ensureRepoDialogCss();
 
-    const ov = document.createElement('div');
-    ov.id = '__ssh-servers';
-    ov.className = 'modal-overlay open';
-    ov.style.zIndex = String(topLayerZ());
-
-    let current = focus && loadTargets()[focus] ? focus : (sshTargetNames()[0] || '');
-    let draft: SshTarget = current ? { ...loadTargets()[current] } : blank();
+    const names = (): string[] => Object.keys(loadTargets()).sort((a, b) => a.localeCompare(b));
+    let current = focus && loadTargets()[focus] ? focus : (names()[0] || '');
+    let draft: SshTarget = current ? { ...blank(), ...loadTargets()[current] } : blank();
     let dirty = false;
+    let errors: SshErrors = {};
+    let pendingTrust: ((answer: string) => void) | null = null;
 
-    ov.innerHTML = `
-      <div class="modal glass modal--lg">
-        <div class="modal-header">
-          <h2 class="modal-title">${escHtml(t('sshsrv.title'))}</h2>
-          <button class="modal-close" id="sshsrv-close" aria-label="${escAttr(t('common.close'))}">${uiIcon('close', 20)}</button>
-        </div>
-        <div class="modal-body" style="display:grid; grid-template-columns:180px 1fr; gap:16px; align-items:start">
-          <div>
-            <div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:6px;">${escHtml(t('sshsrv.list'))}</div>
-            <div id="sshsrv-list" style="display:flex;flex-direction:column;gap:4px;max-height:320px;overflow-y:auto;"></div>
-            <button class="btn btn-secondary btn-sm" id="sshsrv-add" type="button" style="width:100%;margin-top:8px;justify-content:center;">${escHtml(t('sshsrv.add'))}</button>
-          </div>
-          <div id="sshsrv-form"></div>
-        </div>
-      </div>`;
-    (document.getElementById('app-window-outer') || document.body).appendChild(ov);
+    const m = openModal({
+        id: '__ssh-servers',
+        title: t('sshsrv.title'),
+        subtitle: t('sshsrv.subtitle'),
+        icon: uiIcon('server', 20),
+        size: 'lg',
+        tall: true,
+        className: 'ssv-modal',
+        body: `<div class="ssv">
+            <nav class="ssv-side" aria-label="${escAttr(t('sshsrv.list'))}">
+              <div class="ssv-side-h">${escHtml(t('sshsrv.list'))}</div>
+              <div class="ssv-list" role="listbox" tabindex="0" aria-label="${escAttr(t('sshsrv.list'))}"></div>
+              <button type="button" class="btn btn-secondary btn-sm ssv-add">${uiIcon('add', 14)}<span>${escHtml(t('sshsrv.add'))}</span></button>
+            </nav>
+            <section class="ssv-form"></section>
+          </div>`,
+        footer: `<div class="modal-footer-start"><button type="button" class="btn btn-ghost ssv-del">${uiIcon('delete', 14)}<span>${escHtml(t('common.delete'))}</span></button></div>
+          <button type="button" class="btn btn-secondary ssv-test">${uiIcon('activity', 14)}<span>${escHtml(t('repo.ssh.test'))}</span></button>
+          <button type="button" class="btn btn-primary ssv-save">${uiIcon('save', 14)}<span>${escHtml(t('common.save'))}</span></button>`,
+        onClose: () => { pendingTrust?.('closed'); },
+    });
+    const list = m.q<HTMLElement>('.ssv-list')!;
+    const form = m.q<HTMLElement>('.ssv-form')!;
+    const delBtn = m.q<HTMLButtonElement>('.ssv-del')!;
+    const testBtn = m.q<HTMLButtonElement>('.ssv-test')!;
+    const saveBtn = m.q<HTMLButtonElement>('.ssv-save')!;
 
-    const list = ov.querySelector('#sshsrv-list') as HTMLElement;
-    const form = ov.querySelector('#sshsrv-form') as HTMLElement;
+    // ── the list ────────────────────────────────────────────────────────────────────────────
 
-    const close = (): void => { ov.remove(); };
-    ov.querySelector('#sshsrv-close')?.addEventListener('click', close);
-    ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
+    function statusOf(n: string): { cls: string; text: string; icon: Parameters<typeof uiIcon>[0] } {
+        const tgt = { ...blank(), ...loadTargets()[n] };
+        if (Object.keys(validateSshDraft(tgt)).length > 0) return { cls: 'warn', text: t('sshsrv.stIncomplete'), icon: 'warning' };
+        const lt = lastTest.get(n);
+        if (lt) return lt.ok ? { cls: 'ok', text: t('sshsrv.stTestOk'), icon: 'success' } : { cls: 'bad', text: t('sshsrv.stTestFailed'), icon: 'error' };
+        if (knownKeys.get(hostKey(tgt))) return { cls: 'ok', text: t('sshsrv.stTrusted'), icon: 'shield-check' };
+        return { cls: '', text: t('sshsrv.stNotTested'), icon: 'shield' };
+    }
 
     function renderList(): void {
-        const names = sshTargetNames();
-        list.innerHTML = names.length
-            ? names.map((n) => `<button type="button" class="btn ${n === current ? 'btn-accent' : 'btn-ghost'} btn-sm" data-pick="${escAttr(n)}"
-                 style="justify-content:flex-start;text-align:left;">${escHtml(n)}</button>`).join('')
-            : `<p style="font-size:11px;color:var(--text-muted);margin:0;">${escHtml(t('sshsrv.empty'))}</p>`;
-        list.querySelectorAll<HTMLElement>('[data-pick]').forEach((b) => {
-            b.addEventListener('click', () => {
-                const n = b.getAttribute('data-pick') || '';
-                if (dirty && !confirm(t('sshsrv.discard'))) return;
-                current = n;
-                draft = { ...loadTargets()[n] };
-                dirty = false;
-                renderList(); renderForm();
-            });
-        });
+        const all = names();
+        const targets = loadTargets();
+        list.innerHTML = all.length
+            ? all.map((n, i) => {
+                const tg = targets[n] || blank();
+                const st = statusOf(n);
+                const where = tg.host ? `${tg.user ? `${tg.user}@` : ''}${tg.host}${tg.port && tg.port !== 22 ? `:${tg.port}` : ''}` : t('sshsrv.noHost');
+                return `<div class="ssv-item${n === current ? ' is-on' : ''}" role="option" id="ssv-opt-${i}" data-pick="${escAttr(n)}" aria-selected="${n === current}">
+                    <span class="ssv-item-name">${escHtml(n)}${n === DEFAULT_TARGET ? ` <span class="ssv-tag">${escHtml(t('sshsrv.defaultTag'))}</span>` : ''}</span>
+                    <span class="ssv-item-where">${escHtml(where)}</span>
+                    <span class="ssv-st${st.cls ? ` ssv-st--${st.cls}` : ''}">${uiIcon(st.icon, 12)}<span>${escHtml(st.text)}</span></span>
+                </div>`;
+            }).join('')
+            : `<p class="ssv-empty">${uiIcon('server', 16)}<span>${escHtml(t('sshsrv.empty'))}</span></p>`;
+        const at = all.indexOf(current);
+        if (at >= 0) list.setAttribute('aria-activedescendant', `ssv-opt-${at}`); else list.removeAttribute('aria-activedescendant');
+        delBtn.hidden = !current;
     }
+
+    async function pick(n: string): Promise<void> {
+        if (n === current) return;
+        if (dirty && !(await askConfirm(t('sshsrv.discard'), { title: t('sshsrv.title') }))) return;
+        current = n;
+        draft = { ...blank(), ...loadTargets()[n] };
+        dirty = false;
+        errors = {};
+        renderList(); renderForm();
+    }
+
+    list.addEventListener('click', (e) => {
+        const it = (e.target as HTMLElement).closest<HTMLElement>('[data-pick]');
+        if (it) void pick(it.dataset.pick || '');
+    });
+    // Up/Down move through the servers, Home/End jump, Enter goes to the form.
+    list.addEventListener('keydown', (e) => {
+        const all = names();
+        if (!all.length) return;
+        const i = Math.max(0, all.indexOf(current));
+        let j = -1;
+        if (e.key === 'ArrowDown') j = Math.min(all.length - 1, i + 1);
+        else if (e.key === 'ArrowUp') j = Math.max(0, i - 1);
+        else if (e.key === 'Home') j = 0;
+        else if (e.key === 'End') j = all.length - 1;
+        else if (e.key === 'Enter') { e.preventDefault(); form.querySelector<HTMLElement>('input')?.focus(); return; }
+        if (j < 0) return;
+        e.preventDefault();
+        void pick(all[j]).then(() => list.focus());
+    });
+
+    // ── the form ────────────────────────────────────────────────────────────────────────────
+
+    const errHtml = (f: string): string => {
+        const k = errors[f as SshField];
+        return k ? `${uiIcon('error', 12)}<span>${escHtml(t(k))}</span>` : '';
+    };
+    const field = (label: string, f: SshField | 'secret', input: string, hint = ''): string => `
+        <label class="ssv-field" data-field="${f}">
+          <span class="ssv-label">${escHtml(label)}</span>
+          ${input}
+          <span class="ssv-err" id="ssv-err-${f}">${errHtml(f)}</span>
+          ${hint ? `<span class="ssv-hint">${escHtml(hint)}</span>` : ''}
+        </label>`;
+    const inv = (f: SshField): string => (errors[f] ? ` aria-invalid="true" aria-describedby="ssv-err-${f}"` : '');
 
     function renderForm(): void {
         const isKey = (draft.auth || 'key') === 'key';
         form.innerHTML = `
-          <label style="display:block;margin-bottom:10px;">
-            <span style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);">${escHtml(t('sshsrv.name'))}</span>
-            <input class="form-input" id="sshsrv-f-name" value="${escAttr(current)}" placeholder="${escAttr(DEFAULT_TARGET)}" spellcheck="false">
-            <span style="font-size:10px;color:var(--text-muted);">${escHtml(t('sshsrv.nameHint'))}</span>
-          </label>
-          <div style="display:grid;grid-template-columns:1fr 90px;gap:8px;margin-bottom:10px;">
-            <label style="display:block;">
-              <span style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);">${escHtml(t('repo.ssh.host'))}</span>
-              <input class="form-input" id="sshsrv-f-host" value="${escAttr(draft.host)}" spellcheck="false">
-            </label>
-            <label style="display:block;">
-              <span style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);">${escHtml(t('repo.ssh.port'))}</span>
-              <input class="form-input" id="sshsrv-f-port" type="number" min="1" max="65535" value="${escAttr(String(draft.port ?? 22))}">
-            </label>
+          ${field(t('sshsrv.name'), 'name', `<input class="form-input" data-in="name" value="${escAttr(current)}" placeholder="${escAttr(DEFAULT_TARGET)}" spellcheck="false"${inv('name')}>`, t('sshsrv.nameHint'))}
+          <div class="ssv-grid">
+            ${field(t('repo.ssh.host'), 'host', `<input class="form-input ssv-mono" data-in="host" value="${escAttr(draft.host)}" placeholder="${escAttr(t('sshsrv.hostPh'))}" spellcheck="false" autocapitalize="off"${inv('host')}>`)}
+            ${field(t('repo.ssh.port'), 'port', `<input class="form-input ssv-mono" data-in="port" type="number" min="1" max="65535" value="${escAttr(String(draft.port ?? 22))}"${inv('port')}>`)}
           </div>
-          <label style="display:block;margin-bottom:10px;">
-            <span style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);">${escHtml(t('repo.ssh.user'))}</span>
-            <input class="form-input" id="sshsrv-f-user" value="${escAttr(draft.user)}" spellcheck="false">
-          </label>
-          <label style="display:block;margin-bottom:10px;">
-            <span style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);">${escHtml(t('sshsrv.base'))}</span>
-            <span style="display:flex;gap:6px;">
-              <input class="form-input" id="sshsrv-f-dir" value="${escAttr(draft.remoteDir)}" placeholder="/var/www/repo" spellcheck="false" style="flex:1;min-width:0;">
-              <!-- Browsing needs a connection, so it needs whatever this server authenticates
-                   with. The passphrase box below it is the same one Test uses, and it is read
-                   at the moment of use and kept nowhere. -->
-              <button class="btn btn-secondary btn-sm" id="sshsrv-f-dirbrowse" type="button">${escHtml(t('repo.ssh.browseRemote'))}</button>
-            </span>
-            <span style="font-size:10px;color:var(--text-muted);">${escHtml(t('sshsrv.baseHint'))}</span>
-          </label>
-          <div style="display:flex;gap:6px;margin-bottom:10px;">
-            <button type="button" class="btn ${isKey ? 'btn-accent' : 'btn-ghost'} btn-sm" id="sshsrv-f-key">${escHtml(t('repo.ssh.authKey'))}</button>
-            <button type="button" class="btn ${isKey ? 'btn-ghost' : 'btn-accent'} btn-sm" id="sshsrv-f-pw">${escHtml(t('repo.ssh.authPassword'))}</button>
+          ${field(t('repo.ssh.user'), 'user', `<input class="form-input ssv-mono" data-in="user" value="${escAttr(draft.user)}" spellcheck="false" autocapitalize="off"${inv('user')}>`)}
+          <div class="ssv-field">
+            <span class="ssv-label" id="ssv-auth-l">${escHtml(t('sshsrv.auth'))}</span>
+            <div class="bms-seg" role="radiogroup" aria-labelledby="ssv-auth-l">
+              <button type="button" role="radio" aria-checked="${isKey}" data-auth="key" class="bms-seg-btn${isKey ? ' active' : ''}">${uiIcon('key', 14)}<span>${escHtml(t('repo.ssh.authKey'))}</span></button>
+              <button type="button" role="radio" aria-checked="${!isKey}" data-auth="password" class="bms-seg-btn${isKey ? '' : ' active'}">${uiIcon('lock', 14)}<span>${escHtml(t('repo.ssh.authPassword'))}</span></button>
+            </div>
           </div>
-          ${isKey ? `
-          <label style="display:block;margin-bottom:10px;">
-            <span style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);">${escHtml(t('repo.ssh.key'))}</span>
-            <span style="display:flex;gap:6px;">
-              <input class="form-input" id="sshsrv-f-keypath" value="${escAttr(draft.keyPath)}" spellcheck="false" style="flex:1;min-width:0;">
-              <button class="btn btn-secondary btn-sm" id="sshsrv-f-browse" type="button">${escHtml(t('repo.ssh.browse'))}</button>
-            </span>
-          </label>` : `<p style="font-size:11px;color:var(--text-muted);margin:0 0 10px;">${escHtml(t('sshsrv.pwNote'))}</p>`}
-          <label style="display:block;margin-bottom:10px;">
-            <span style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);">${escHtml(t('sshsrv.secret'))}</span>
-            <input class="form-input" id="sshsrv-f-secret" type="password" autocomplete="new-password" placeholder="${escAttr(t('sshsrv.secretPh'))}">
-            <span style="font-size:10px;color:var(--text-muted);">${escHtml(t('sshsrv.secretHint'))}</span>
-          </label>
-          <div id="sshsrv-test" style="font-size:11px;margin-bottom:10px;"></div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="btn btn-primary btn-sm" id="sshsrv-save" type="button">${escHtml(t('common.save'))}</button>
-            <button class="btn btn-secondary btn-sm" id="sshsrv-testbtn" type="button">${escHtml(t('repo.ssh.test'))}</button>
-            ${current ? `<button class="btn btn-ghost btn-sm" id="sshsrv-del" type="button" style="margin-left:auto;">${escHtml(t('common.delete'))}</button>` : ''}
-          </div>`;
-
-        const val = (id: string): string => ((form.querySelector(`#${id}`) as HTMLInputElement | null)?.value || '').trim();
-        const read = (): void => {
-            draft = {
-                host: val('sshsrv-f-host'),
-                port: Number(val('sshsrv-f-port')) || 22,
-                user: val('sshsrv-f-user'),
-                remoteDir: val('sshsrv-f-dir'),
-                keyPath: isKey ? val('sshsrv-f-keypath') : '',
-                auth: isKey ? 'key' : 'password',
-            };
-        };
-        form.querySelectorAll('input').forEach((i) => i.addEventListener('input', () => { dirty = true; }));
-
-        form.querySelector('#sshsrv-f-key')?.addEventListener('click', () => { read(); draft.auth = 'key'; dirty = true; renderForm(); });
-        form.querySelector('#sshsrv-f-pw')?.addEventListener('click', () => { read(); draft.auth = 'password'; dirty = true; renderForm(); });
-        form.querySelector('#sshsrv-f-browse')?.addEventListener('click', async () => {
-            const p = await pickFile().catch(() => null);
-            if (p) { const i = form.querySelector('#sshsrv-f-keypath') as HTMLInputElement; i.value = String(p); dirty = true; }
-        });
-
-        // The base folder, walked rather than typed.
-        //
-        // Reads the form as it stands rather than the saved target: somebody filling this in
-        // for a new server has not saved anything yet, and refusing to browse until they do
-        // would mean saving a folder they cannot see in order to go and look at it.
-        form.querySelector('#sshsrv-f-dirbrowse')?.addEventListener('click', async () => {
-            read();
-            const out = form.querySelector('#sshsrv-test') as HTMLElement;
-            if (!draft.host || !draft.user) { out.textContent = t('sshsrv.needHostUser'); return; }
-            const secret = (form.querySelector('#sshsrv-f-secret') as HTMLInputElement | null)?.value || '';
-            const { browseRemoteFolder } = await import('./ssh-browse.js');
-            const picked = await browseRemoteFolder(draft, secret, draft.remoteDir || '/');
-            if (picked === null) return;
-            const i = form.querySelector('#sshsrv-f-dir') as HTMLInputElement;
-            i.value = picked;
-            dirty = true;
-        });
-
-        form.querySelector('#sshsrv-save')?.addEventListener('click', () => {
-            read();
-            const name = val('sshsrv-f-name') || DEFAULT_TARGET;
-            const out = form.querySelector('#sshsrv-test') as HTMLElement;
-            if (!draft.host || !draft.user || !draft.remoteDir) { out.textContent = t('sshsrv.needFields'); return; }
-            // A rename is a save under the new name plus a delete of the old one. Doing it in
-            // that order means a failure leaves the original intact rather than neither.
-            saveTarget(draft, name);
-            if (current && current !== name) deleteTarget(current);
-            current = name;
-            dirty = false;
-            // Said where the reader is looking, next to the button they pressed, rather
-            // than in a corner of the window behind this dialog.
-            out.innerHTML = `<span style="color:var(--success);">${escHtml(t('sshsrv.saved'))}</span>`;
-            renderList(); renderForm(); announce();
-        });
-
-        form.querySelector('#sshsrv-del')?.addEventListener('click', () => {
-            if (!confirm(t('sshsrv.confirmDelete').replace('{name}', current))) return;
-            deleteTarget(current);
-            const names = sshTargetNames();
-            current = names[0] || '';
-            draft = current ? { ...loadTargets()[current] } : blank();
-            dirty = false;
-            renderList(); renderForm(); announce();
-        });
-
-        form.querySelector('#sshsrv-testbtn')?.addEventListener('click', async () => {
-            read();
-            const out = form.querySelector('#sshsrv-test') as HTMLElement;
-            if (!draft.host || !draft.user) { out.textContent = t('sshsrv.needFields'); return; }
-            // The secret is asked for HERE and kept nowhere: a test that silently reused a
-            // stored password would be testing something the real publish cannot do.
-            const secret = window.prompt(draft.auth === 'password' ? t('repo.ssh.password') : t('repo.ssh.passphrase')) || '';
-            out.textContent = t('repo.ssh.testing');
-            try {
-                const r = (await invoke('ssh_test_connection', { target: draft, secret })) as TestResult;
-                out.innerHTML = `<span style="color:var(--success);">${escHtml(t('repo.ssh.testOk', { fp: r.fingerprint || '?' }))}</span> `
-                    + escHtml(`${r.user || draft.user}@${draft.host} · ${r.entries} · ${r.writable ? t('sshsrv.writable') : t('sshsrv.notWritable')}`);
-            } catch (e) {
-                out.innerHTML = `<span style="color:var(--danger);">${escHtml(explainSsh(String(e)))}</span>`;
-            }
-        });
+          ${isKey ? field(t('repo.ssh.key'), 'keyPath', `<span class="ssv-inline"><input class="form-input ssv-mono" data-in="keyPath" value="${escAttr(draft.keyPath)}" spellcheck="false"${inv('keyPath')}><button class="btn btn-secondary btn-sm" data-act="browse-key" type="button">${escHtml(t('repo.ssh.browse'))}</button></span>`)
+            : `<p class="ssv-note">${uiIcon('info', 12)}<span>${escHtml(t('sshsrv.pwNote'))}</span></p>`}
+          ${field(t('sshsrv.base'), 'remoteDir', `<span class="ssv-inline"><input class="form-input ssv-mono" data-in="remoteDir" value="${escAttr(draft.remoteDir)}" placeholder="/var/www/repo" spellcheck="false"${inv('remoteDir')}><button class="btn btn-secondary btn-sm" data-act="browse-dir" type="button">${escHtml(t('repo.ssh.browseRemote'))}</button></span>`, t('sshsrv.baseHint'))}
+          ${field(isKey ? t('sshsrv.secretKey') : t('sshsrv.secretPw'), 'secret', `<input class="form-input" data-in="secret" type="password" autocomplete="new-password" placeholder="${escAttr(isKey ? t('sshsrv.secretPh') : t('sshsrv.secretPwPh'))}">`, t('sshsrv.secretHint'))}
+          <div class="ssv-known" data-r="known"></div>
+          <div class="ssv-steps" data-r="steps" aria-live="polite"></div>`;
+        void renderKnown();
     }
 
-    ov.querySelector('#sshsrv-add')?.addEventListener('click', () => {
-        if (dirty && !confirm(t('sshsrv.discard'))) return;
+    const val = (k: string): string => (form.querySelector<HTMLInputElement>(`[data-in="${k}"]`)?.value || '').trim();
+    const secretNow = (): string => form.querySelector<HTMLInputElement>('[data-in="secret"]')?.value || '';
+    function read(): void {
+        const isKey = (draft.auth || 'key') === 'key';
+        draft = {
+            host: val('host'),
+            port: Number(val('port')) || 22,
+            user: val('user'),
+            remoteDir: val('remoteDir'),
+            keyPath: isKey ? val('keyPath') : '',
+            auth: isKey ? 'key' : 'password',
+        };
+    }
+
+    /** The trusted fingerprint line for the host in the form, from the stored list only. */
+    async function renderKnown(): Promise<void> {
+        const box = form.querySelector<HTMLElement>('[data-r="known"]');
+        if (!box) return;
+        if (!draft.host) { box.innerHTML = ''; return; }
+        try {
+            const p = await invoke('ssh_probe_host_key', { host: draft.host, port: draft.port || 22, offline: true }) as HostKeyProbe | null;
+            knownKeys.set(hostKey(draft), p?.known || null);
+            box.innerHTML = p?.known
+                ? `<span class="ssv-st ssv-st--ok">${uiIcon('shield-check', 12)}<span>${escHtml(t('sshsrv.keyTrusted'))}</span></span><code class="ssv-fp">${escHtml(p.known)}</code><button type="button" class="btn btn-ghost btn-sm" data-act="forget">${escHtml(t('repo.ssh.forget'))}</button>`
+                : `<span class="ssv-st">${uiIcon('shield', 12)}<span>${escHtml(t('sshsrv.keyUnknown'))}</span></span>`;
+        } catch { box.innerHTML = ''; }
+    }
+
+    function showErrors(): void {
+        const secret = secretNow();
+        renderForm();
+        const s = form.querySelector<HTMLInputElement>('[data-in="secret"]');
+        if (s) s.value = secret;
+        const first = (['name', 'host', 'port', 'user', 'keyPath', 'remoteDir'] as SshField[]).find((f) => errors[f]);
+        if (first) form.querySelector<HTMLElement>(`[data-in="${first}"]`)?.focus();
+    }
+
+    function steps(items: Step[]): void {
+        const box = form.querySelector<HTMLElement>('[data-r="steps"]');
+        if (!box) return;
+        const icon = (s: Step): string => s.tone === 'ok' ? uiIcon('success', 14) : s.tone === 'bad' ? uiIcon('error', 14) : s.tone === 'warn' ? uiIcon('warning', 14) : s.tone === 'run' ? uiIcon('loader', 14, { cls: 'spin' }) : uiIcon('info', 14);
+        box.innerHTML = items.length ? `<ol class="ssv-steplist">${items.map((s) => `<li class="ssv-step${s.tone ? ` ssv-step--${s.tone}` : ''}">${icon(s)}<div>${s.html ?? escHtml(s.text)}</div></li>`).join('')}</ol>` : '';
+    }
+
+    form.addEventListener('input', (e) => {
+        dirty = true;
+        const el = e.target as HTMLElement;
+        const k = el.dataset.in as SshField | undefined;
+        // A corrected field stops saying it is wrong as soon as it is touched.
+        if (k && errors[k]) {
+            delete errors[k];
+            const box = form.querySelector(`#ssv-err-${k}`);
+            if (box) box.innerHTML = '';
+            el.removeAttribute('aria-invalid');
+        }
+    });
+    // `me@nas.local:2222` pasted into the host field: split into user / host / port.
+    form.addEventListener('focusout', (e) => {
+        const el = e.target as HTMLInputElement;
+        if (el.dataset.in !== 'host' && el.dataset.in !== 'port') return;
+        if (el.dataset.in === 'host' && /[@]|^(ssh|sftp):|^[^:]+:\d+$|^\[/i.test(el.value.trim())) {
+            const p = parseHostInput(el.value);
+            el.value = p.host;
+            const u = form.querySelector<HTMLInputElement>('[data-in="user"]');
+            const pt = form.querySelector<HTMLInputElement>('[data-in="port"]');
+            if (p.user && u && !u.value.trim()) u.value = p.user;
+            if (p.port && pt) pt.value = String(p.port);
+        }
+        read();
+        void renderKnown();
+    });
+    form.addEventListener('click', async (e) => {
+        const b = (e.target as HTMLElement).closest<HTMLElement>('[data-auth],[data-act]');
+        if (!b) return;
+        if (b.dataset.auth) {
+            const secret = secretNow();
+            read();
+            draft.auth = b.dataset.auth === 'password' ? 'password' : 'key';
+            dirty = true;
+            renderForm();
+            const s = form.querySelector<HTMLInputElement>('[data-in="secret"]');
+            if (s) s.value = secret;
+            form.querySelector<HTMLElement>(`[data-auth="${draft.auth}"]`)?.focus();
+            return;
+        }
+        const act = b.dataset.act;
+        if (act === 'browse-key') {
+            const p = await pickFile().catch(() => null);
+            if (p) { const i = form.querySelector<HTMLInputElement>('[data-in="keyPath"]'); if (i) i.value = String(p); dirty = true; }
+        } else if (act === 'browse-dir') {
+            // Reads the form as it stands rather than the saved target: somebody filling this
+            // in for a new server has not saved anything yet.
+            read();
+            if (!draft.host || !draft.user) { steps([{ tone: 'bad', text: t('sshsrv.needHostUser') }]); return; }
+            const { browseRemoteFolder } = await import('./ssh-browse.js');
+            const picked = await browseRemoteFolder(draft, secretNow(), draft.remoteDir || '/');
+            if (picked === null) return;
+            const i = form.querySelector<HTMLInputElement>('[data-in="remoteDir"]');
+            if (i) i.value = picked;
+            dirty = true;
+        } else if (act === 'forget') {
+            read();
+            if (!(await askConfirm(t('sshsrv.forgetConfirm', { host: draft.host }), { title: t('repo.ssh.forget'), type: 'warning' }))) return;
+            await invoke('ssh_forget_host', { host: draft.host, port: draft.port || 22 }).catch(() => undefined);
+            knownKeys.delete(hostKey(draft));
+            lastTest.delete(current);
+            await renderKnown();
+            renderList();
+        } else if (act === 'trust' || act === 'distrust' || act === 'forget-changed') {
+            pendingTrust?.(act);
+        }
+    });
+
+    // ── test ────────────────────────────────────────────────────────────────────────────────
+
+    // A question (trust this key? forget the changed one?) leaves Test usable: pressing it
+    // again, or editing the host and pressing it, drops the question and starts over.
+    const answer = (): Promise<string> => {
+        testBtn.disabled = false;
+        return new Promise<string>((res) => { pendingTrust = res; });
+    };
+    let runSeq = 0;
+
+    async function runTest(): Promise<void> {
+        pendingTrust?.('superseded');
+        pendingTrust = null;
+        const run = ++runSeq;
+        read();
+        errors = validateSshDraft(draft);
+        // The base folder is not needed to TEST a login; step 3 reports on it.
+        delete errors.remoteDir;
+        if (Object.keys(errors).length) { showErrors(); return; }
+        const isKey = (draft.auth || 'key') === 'key';
+        const secret = secretNow();
+        if (!isKey && !secret) {
+            steps([{ tone: 'bad', text: t('sshsrv.needPassword') }]);
+            form.querySelector<HTMLElement>('[data-in="secret"]')?.focus();
+            return;
+        }
+        testBtn.disabled = true;
+        const done: Step[] = [];
+        const where = `${draft.host}:${draft.port || 22}`;
+        try {
+            // 1. Reach it, and read its host key without logging in.
+            steps([{ tone: 'run', text: t('sshsrv.stepReach', { where }) }]);
+            let p: HostKeyProbe;
+            try {
+                p = await invoke('ssh_probe_host_key', { host: draft.host, port: draft.port || 22 }) as HostKeyProbe;
+            } catch (e) {
+                lastTest.set(current, { ok: false, at: Date.now() });
+                steps([{ tone: 'bad', text: explainSsh(String(e)) }]);
+                renderList();
+                return;
+            }
+            done.push({ tone: 'ok', text: t('sshsrv.stepReached', { where }) });
+            if (p.status === 'changed') {
+                steps([...done, {
+                    tone: 'bad', text: '', html: `<strong>${escHtml(t('sshsrv.keyChanged'))}</strong>
+                    <dl class="ssv-fps"><dt>${escHtml(t('sshsrv.fpTrusted'))}</dt><dd><code>${escHtml(p.known || '')}</code></dd><dt>${escHtml(t('sshsrv.fpNow'))}</dt><dd><code>${escHtml(p.fingerprint)}</code></dd></dl>
+                    <p class="ssv-hint">${escHtml(t('sshsrv.keyChangedHint'))}</p>
+                    <button type="button" class="btn btn-ghost btn-sm" data-act="forget-changed">${escHtml(t('repo.ssh.forget'))}</button>`,
+                }]);
+                if ((await answer()) !== 'forget-changed') return;
+                testBtn.disabled = true;
+                if (!(await askConfirm(t('sshsrv.forgetConfirm', { host: draft.host }), { title: t('repo.ssh.forget'), type: 'warning' }))) { steps(done); return; }
+                await invoke('ssh_forget_host', { host: draft.host, port: draft.port || 22 });
+                p = { ...p, known: null, status: 'new' };
+            }
+            if (p.status === 'new') {
+                steps([...done, {
+                    tone: 'warn', text: '', html: `<strong>${escHtml(t('sshsrv.keyNew'))}</strong>
+                    <code class="ssv-fp ssv-fp--big">${escHtml(p.fingerprint)}</code>
+                    <p class="ssv-hint">${escHtml(t('sshsrv.keyNewHint'))}</p>
+                    <span class="ssv-inline"><button type="button" class="btn btn-primary btn-sm" data-act="trust">${escHtml(t('sshsrv.trust'))}</button><button type="button" class="btn btn-ghost btn-sm" data-act="distrust">${escHtml(t('sshsrv.distrust'))}</button></span>`,
+                }]);
+                form.querySelector<HTMLElement>('[data-act="trust"]')?.focus();
+                const a = await answer();
+                if (a === 'closed' || a === 'superseded') return;
+                testBtn.disabled = true;
+                if (a !== 'trust') { steps([...done, { tone: 'bad', text: t('sshsrv.keyDeclined') }]); return; }
+                await invoke('ssh_trust_host', { host: draft.host, port: draft.port || 22, fingerprint: p.fingerprint });
+                void renderKnown();
+            }
+            done.push({ tone: 'ok', text: '', html: `${escHtml(t('sshsrv.stepKeyOk'))} <code class="ssv-fp">${escHtml(p.fingerprint)}</code>` });
+
+            // 2. Log in, and 3. look at the base folder.
+            steps([...done, { tone: 'run', text: t('sshsrv.stepLogin', { user: draft.user }) }]);
+            let r: TestResult;
+            try {
+                r = await invoke('ssh_test_connection', { target: draft, secret: secret || null }) as TestResult;
+            } catch (e) {
+                lastTest.set(current, { ok: false, at: Date.now() });
+                steps([...done, { tone: 'bad', text: explainSsh(String(e)) }]);
+                renderList();
+                return;
+            }
+            done.push({ tone: 'ok', text: t('sshsrv.stepLoggedIn', { user: r.user || draft.user }) });
+            if (!draft.remoteDir) {
+                done.push({ tone: 'warn', text: t('sshsrv.stepNoDir') });
+            } else if (!r.remoteDirExists) {
+                done.push({ tone: 'warn', text: t('repo.ssh.testNoDir', { dir: draft.remoteDir }) });
+            } else if (r.writable) {
+                done.push({ tone: 'ok', text: t('sshsrv.stepWritable', { dir: draft.remoteDir, n: String(r.entries) }) });
+            } else {
+                const why = r.dirUid != null
+                    ? t('repo.ssh.testWhyOwner', { dir: draft.remoteDir, owner: String(r.dirUid), mode: modeString(r.dirMode), user: r.user || draft.user })
+                    : (r.writeError || '');
+                done.push({ tone: 'bad', text: `${t('repo.ssh.testNotWritable', { dir: draft.remoteDir })} ${why}`.trim() });
+            }
+            lastTest.set(current, { ok: !done.some((s) => s.tone === 'bad'), at: Date.now() });
+            steps(done);
+            renderList();
+        } finally {
+            if (run === runSeq) {
+                pendingTrust = null;
+                testBtn.disabled = false;
+            }
+        }
+    }
+    testBtn.addEventListener('click', () => { void runTest(); });
+
+    // ── save / delete / add ─────────────────────────────────────────────────────────────────
+
+    function save(): void {
+        read();
+        const name = val('name') || DEFAULT_TARGET;
+        errors = validateSshDraft(draft, name, names().filter((n) => n !== current));
+        if (Object.keys(errors).length) { showErrors(); return; }
+        // A rename is a save under the new name plus a delete of the old one. Doing it in
+        // that order means a failure leaves the original intact rather than neither.
+        saveTarget(draft, name);
+        if (current && current !== name) {
+            deleteTarget(current);
+            const lt = lastTest.get(current);
+            if (lt) { lastTest.set(name, lt); lastTest.delete(current); }
+        }
+        current = name;
+        dirty = false;
+        renderList(); renderForm(); announce();
+        // Said where the reader is looking, next to the form, rather than in a corner.
+        steps([{ tone: 'ok', text: t('sshsrv.saved') }]);
+    }
+    saveBtn.addEventListener('click', save);
+    // Ctrl+S saves; Enter in a text field saves too (the form has no submit button of its own).
+    m.dialog.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save(); return; }
+        const el = e.target as HTMLElement;
+        if (e.key === 'Enter' && !e.isComposing && el.tagName === 'INPUT' && form.contains(el)) { e.preventDefault(); save(); }
+    });
+
+    delBtn.addEventListener('click', async () => {
+        if (!current) return;
+        if (!(await askConfirm(t('sshsrv.confirmDelete', { name: current }), { title: t('sshsrv.title'), type: 'warning' }))) return;
+        deleteTarget(current);
+        lastTest.delete(current);
+        current = names()[0] || '';
+        draft = current ? { ...blank(), ...loadTargets()[current] } : blank();
+        dirty = false;
+        errors = {};
+        renderList(); renderForm(); announce();
+    });
+
+    m.q<HTMLElement>('.ssv-add')!.addEventListener('click', async () => {
+        if (dirty && !(await askConfirm(t('sshsrv.discard'), { title: t('sshsrv.title') }))) return;
         current = '';
         draft = blank();
         dirty = false;
+        errors = {};
         renderList(); renderForm();
+        form.querySelector<HTMLElement>('[data-in="name"]')?.focus();
     });
+
+    // The trusted keys of every saved server, for the list's status (offline: no network).
+    void Promise.all(names().map(async (n) => {
+        const tg = { ...blank(), ...loadTargets()[n] };
+        if (!tg.host) return;
+        const p = await invoke('ssh_probe_host_key', { host: tg.host, port: tg.port || 22, offline: true }).catch(() => null) as HostKeyProbe | null;
+        knownKeys.set(hostKey(tg), p?.known || null);
+    })).then(renderList);
 
     renderList();
     renderForm();
+    (current ? list : form.querySelector<HTMLElement>('[data-in="name"]'))?.focus();
 }

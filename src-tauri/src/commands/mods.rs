@@ -1152,7 +1152,20 @@ fn checked_scope(scope: Option<String>) -> Result<Option<String>, String> {
 #[tauri::command]
 pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: String, bypass_sha: Option<bool>, cancel_scope: Option<String>) -> Result<Option<String>, String> {
     let scope = checked_scope(cancel_scope)?;
-    crate::fs_utils::in_cancel_scope(scope.as_deref(), enable_mod_in(window, state, mod_id, bypass_sha)).await
+    let out = crate::fs_utils::in_cancel_scope(scope.as_deref(), enable_mod_in(window, state.clone(), mod_id, bypass_sha)).await;
+    after_toggle_pins(&state).await;
+    out
+}
+
+/// Enabling copies the ORDER's winner over every file the mod ships, and disabling restores the
+/// order's next provider: a per-file pin chosen in the conflicts view is put back afterwards.
+/// A failure is logged, not returned: the toggle itself succeeded.
+async fn after_toggle_pins(state: &State<'_, AppState>) {
+    match crate::commands::mod_order::reassert_pins(state).await {
+        Ok(0) => {}
+        Ok(n) => log_line(format!("[ORDER] {} pinned file(s) put back after a toggle", n)),
+        Err(e) => log_line(format!("[ORDER] putting pinned files back failed: {}", e)),
+    }
 }
 
 /// `enable_mod` inside whatever cancel scope is current (a batch calling it keeps its own).
@@ -1465,7 +1478,9 @@ pub(crate) async fn enable_mod_in(window: Window, state: State<'_, AppState>, mo
 #[tauri::command]
 pub async fn disable_mod(window: Window, state: State<'_, AppState>, mod_id: String, cancel_scope: Option<String>) -> Result<(), String> {
     let scope = checked_scope(cancel_scope)?;
-    crate::fs_utils::in_cancel_scope(scope.as_deref(), disable_mod_in(window, state, mod_id)).await
+    let out = crate::fs_utils::in_cancel_scope(scope.as_deref(), disable_mod_in(window, state.clone(), mod_id)).await;
+    after_toggle_pins(&state).await;
+    out
 }
 
 /// `disable_mod` inside whatever cancel scope is current.
@@ -2853,6 +2868,7 @@ pub async fn toggle_all_mods(
             }
         }
     }
+    after_toggle_pins(&state).await;
     Ok(())
 }
 
