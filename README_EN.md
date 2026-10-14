@@ -111,6 +111,7 @@ kept on your PC and listed under Settings → Privacy → **My consents**.
 - **Discord**: <https://discord.gg/CTaaEF9R75>
 - **Releases**: <https://github.com/FreeProject089/BetterModsManager/releases>
 - **Bug reports**: [GitHub Issues](https://github.com/FreeProject089/BetterModsManager/issues), or **Settings → Feedback & bug reports** in BMM
+- **Contributing**: [Repository map](REPO_MAP.md) · [Contributing](CONTRIBUTING.md) · [Security policy](SECURITY.md)
 
 ## Build from source
 

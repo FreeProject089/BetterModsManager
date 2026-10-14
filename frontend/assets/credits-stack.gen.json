@@ -35,12 +35,12 @@
      "installer"
     ],
     "commits": {
-     "bmm": 1678,
-     "bcw": 1738,
-     "docs": 308,
-     "installer": 106
+     "bmm": 1679,
+     "bcw": 1740,
+     "docs": 310,
+     "installer": 107
     },
-    "total": 3830,
+    "total": 3836,
     "since": "2026"
    }
   ]
@@ -1705,7 +1705,7 @@
     },
     {
      "name": "pypdf",
-     "version": "6.16.2",
+     "version": "6.20.1",
      "license": "BSD-3-Clause",
      "url": "https://pypi.org/project/pypdf/",
      "key": "pypdf",

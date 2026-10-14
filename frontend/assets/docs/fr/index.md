@@ -1,18 +1,62 @@
+---
+title: BetterModsManager
+hide:
+  - navigation
+  - path
+---
+
+<div class="bmm-hero" markdown>
+
+![](assets/docs/media/bmm-logo-tile.svg)
+
+<div class="bmm-hero__body" markdown>
+
 # BetterModsManager
 
 BMM installe, organise et partage tes mods — sur plusieurs jeux, sans jamais toucher aux
 fichiers d'origine plus qu'il ne le faut.
+{ .bmm-hero__tagline }
+
+<div class="bmm-hero__actions" markdown>
+
+[:material-download: Télécharger](https://github.com/FreeProject089/BetterModsManager/releases/latest)
+[:material-rocket-launch-outline: Commencer](doc-page:getting-started/install)
+
+</div>
+
+Libre et open source · GPL-3.0 · English & français
+{ .bmm-hero__meta }
+
+</div>
+</div>
+
+<div class="bmm-hero-shot" markdown>
 
 ![BMM 1.0.2 : la Bibliothèque, avec des mods étiquetés et un interrupteur par mod](assets/docs/media/screenshots/library.png)
 
-**Nouveau en 1.0.2 :** le [Centre d'activité](doc-page:features/activity) montre tout ce que BMM est
+</div>
+
+<div class="bmm-new" markdown>
+
+<span class="bmm-badge-new">Nouveau en 1.0.2</span> Le [Centre d'activité](doc-page:features/activity) montre tout ce que BMM est
 en train de faire, les [Outils BMM](doc-page:features/tools) vérifient ta bibliothèque sans rien
 modifier, et la page [Serveur Repo](doc-page:features/repo) te guide étape par étape pour te
 synchroniser à un dépôt ou en héberger un.
 
-![Le Centre d'activité, ouvert au-dessus de la Bibliothèque](assets/docs/media/screenshots/activity.png)
+<div class="bmm-gallery" markdown>
 
-![Serveur Repo, onglet Héberger, avec la carte du serveur en marche](assets/docs/media/screenshots/repo-host.png)
+<figure markdown="span">
+  ![Le Centre d'activité, ouvert au-dessus de la Bibliothèque](assets/docs/media/screenshots/activity.png)
+  <figcaption>Le Centre d'activité, ouvert au-dessus de la Bibliothèque</figcaption>
+</figure>
+
+<figure markdown="span">
+  ![Serveur Repo, onglet Héberger, avec la carte du serveur en marche](assets/docs/media/screenshots/repo-host.png)
+  <figcaption>Serveur Repo, onglet Héberger, avec la carte du serveur en marche</figcaption>
+</figure>
+
+</div>
+</div>
 
 Si tu débutes, lis cette page. Elle est courte, et elle explique l'idée unique sur laquelle
 tout le reste est bâti. La sauter, c'est la raison pour laquelle on se perd au troisième
@@ -48,20 +92,57 @@ suppression ; BMM leur offre une annulation.
 
 ## À quoi sert chaque écran
 
-| Écran | Quand l'utiliser |
-|---|---|
-| **[Bibliothèque](doc-page:features/library)** | Voir, ajouter ou vérifier les mods que tu possèdes. |
-| **[Profils](doc-page:features/profiles)** | Une configuration par jeu — ou plusieurs par jeu (léger, chargé, test). |
-| **[Listes .MM](doc-page:features/modlist)** | Transmettre ta configuration exacte à quelqu'un, liens compris. |
-| **[Modpacks](doc-page:features/modpacks)** | Activer/désactiver tout un lot de mods d'un coup. |
-| **[Dépôt Serveur](doc-page:features/repo)** | Une source qui prévient BMM quand un mod a une mise à jour. |
-| **[Plugins & API](doc-page:features/plugins)** | Faire faire à BMM ce qu'il ne fait pas d'origine. |
-| **[App Catalog](doc-page:features/apps)** | Les outils *autour* du modding, installés en un clic. |
-| **[Mapper](doc-page:features/mapper)** | Les dossiers d'un mod ne correspondent pas à ce qu'attend le jeu. |
-| **[BetterCommunity](doc-page:features/community)** | Les actus et articles des blogs du projet. |
-| **[Paramètres](doc-page:features/settings)** | Thèmes, mises à jour, limites de disque, export des données. |
-| **[Centre d'activité](doc-page:features/activity)** | Tu veux voir, ou arrêter, tout ce que BMM fait en ce moment. |
-| **[Outils BMM](doc-page:features/tools)** | Tu veux trouver des doublons, des conflits, des orphelins, ou vérifier un fichier ou un manifeste. |
+<div class="grid cards bmm-features" markdown>
+
+-   :material-bookshelf:{ .bmm-ico } **[Bibliothèque](doc-page:features/library)**
+
+    Voir, ajouter ou vérifier les mods que tu possèdes.
+
+-   :material-account-switch-outline:{ .bmm-ico } **[Profils](doc-page:features/profiles)**
+
+    Une configuration par jeu — ou plusieurs par jeu (léger, chargé, test).
+
+-   :material-format-list-bulleted-square:{ .bmm-ico } **[Listes .MM](doc-page:features/modlist)**
+
+    Transmettre ta configuration exacte à quelqu'un, liens compris.
+
+-   :material-package-variant-closed:{ .bmm-ico } **[Modpacks](doc-page:features/modpacks)**
+
+    Activer/désactiver tout un lot de mods d'un coup.
+
+-   :material-server-network:{ .bmm-ico } **[Dépôt Serveur](doc-page:features/repo)**
+
+    Une source qui prévient BMM quand un mod a une mise à jour.
+
+-   :material-puzzle-outline:{ .bmm-ico } **[Plugins & API](doc-page:features/plugins)**
+
+    Faire faire à BMM ce qu'il ne fait pas d'origine.
+
+-   :material-apps:{ .bmm-ico } **[App Catalog](doc-page:features/apps)**
+
+    Les outils *autour* du modding, installés en un clic.
+
+-   :material-sitemap-outline:{ .bmm-ico } **[Mapper](doc-page:features/mapper)**
+
+    Les dossiers d'un mod ne correspondent pas à ce qu'attend le jeu.
+
+-   :material-account-group-outline:{ .bmm-ico } **[BetterCommunity](doc-page:features/community)**
+
+    Les actus et articles des blogs du projet.
+
+-   :material-cog-outline:{ .bmm-ico } **[Paramètres](doc-page:features/settings)**
+
+    Thèmes, mises à jour, limites de disque, export des données.
+
+-   :material-pulse:{ .bmm-ico } **[Centre d'activité](doc-page:features/activity)**
+
+    Tu veux voir, ou arrêter, tout ce que BMM fait en ce moment.
+
+-   :material-toolbox-outline:{ .bmm-ico } **[Outils BMM](doc-page:features/tools)**
+
+    Tu veux trouver des doublons, des conflits, des orphelins, ou vérifier un fichier ou un manifeste.
+
+</div>
 
 ## Les conflits, en un paragraphe
 

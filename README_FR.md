@@ -115,6 +115,7 @@ Confidentialité & télémétrie → **Mes consentements**.
 - **Discord** : <https://discord.gg/CTaaEF9R75>
 - **Versions** : <https://github.com/FreeProject089/BetterModsManager/releases>
 - **Signaler un bug** : [GitHub Issues](https://github.com/FreeProject089/BetterModsManager/issues), ou **Paramètres → Feedback & Rapports de bugs** dans BMM
+- **Contribuer** : [Carte du dépôt](REPO_MAP_FR.md) · [Contribuer](CONTRIBUTING_FR.md) · [Politique de sécurité](SECURITY_FR.md)
 
 ## Compiler depuis les sources
 

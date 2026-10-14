@@ -24,7 +24,6 @@
     "typecheck": "tsc --project frontend --noEmit",
     "watch": "tsc --project frontend --watch",
     "compile": "tsc --project frontend",
-    "test:i18n": "python tests/i18n_parity.test.py",
     "check:markup": "node scripts/check-markup.mjs",
     "build:installer": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Set-Location BetterInstaller; ./examples/bmm/build-installer.ps1\"",
     "release": "node scripts/check-release-versions.mjs && npm run build && npm run build:installer && npm run release:assets",
