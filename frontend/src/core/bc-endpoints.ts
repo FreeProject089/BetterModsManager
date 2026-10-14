@@ -65,14 +65,26 @@ export function resolveRoots(sw: BcSwitch): BcRoots {
 
 /**
  * v1 routes (relative to `/api`) that BetterCommunity v2 serves itself, same path, v1 shapes.
- * From the v2 contracts: compat.ts (catalog.json, repos.json, /repos/:slug/*) and feedback.ts
- * (/feedback/:project and its /config). Keep in step with them.
+ * From the v2 contracts: compat.ts (catalog.json, repos.json, /repos/:slug/*), feedback.ts
+ * (/feedback/:project and its /config), assets.ts (ADR 0019: /assets/:key, the update feed
+ * /updates/:project/...), compat-community.ts (ADR 0023: the blog list, a post, its history and
+ * comments, the notification poller) and ai.ts (ADR 0020: /ai/bmm/suggest). Keep in step with them.
+ * NOT here, so they stay on v1 even in v2 mode: avatars, launch announcements, user search by
+ * creator id, the account link and the Discord link (ADR 0023 §2), the catalogue index
+ * catalogs.json (its v2 form is the signed index), a post's revision or comment history.
  */
 export const V2_COMPAT_ROUTES: readonly RegExp[] = [
     /^\/catalog\.json(?:\?|$)/,
     /^\/repos\.json(?:\?|$)/,
     /^\/repos\/[a-z0-9][a-z0-9-]{1,62}\/./,
     /^\/feedback\/[a-z0-9][a-z0-9-]{1,62}(?:\/config)?(?:\?|$)/,
+    /^\/assets\/[a-z0-9][a-z0-9._-]{0,79}(?:\?|$)/,
+    /^\/updates\/[a-z0-9][a-z0-9-]{1,62}(?:\/(?:latest|releases|files\/[a-z0-9_]+))?(?:\?|$)/,
+    /^\/blog(?:\?|$)/,
+    /^\/blog\/[a-z0-9][a-z0-9-]{0,99}(?:\/(?:history|comments))?(?:\?|$)/,
+    /^\/blog\/ent_[0-9a-hjkmnp-tv-z]{26}\/(?:history|comments)(?:\?|$)/,
+    /^\/v1\/notifications(?:\?|$)/,
+    /^\/ai\/bmm\/suggest(?:\?|$)/,
 ];
 
 export function servedByV2Compat(route: string): boolean {
@@ -95,6 +107,40 @@ export function v1ApiUrl(roots: BcRoots, route: string): string {
 export function v2ApiUrl(roots: BcRoots, route: string): string {
     const r = withSlash(route).replace(/^\/v2(?=\/|$)/, '');
     return `${roots.v2Root}/v2${r}`;
+}
+
+// ── The remote switch (BMM 1.0.3): app.cfg > links.json > v1. Mirrors bc_v2.rs pick_switch ──
+
+export interface SwitchInputs {
+    /** app.cfg has a `BCApiVersion` line (an explicit v1 there pins the install to v1). */
+    cfgSet: boolean;
+    cfgVersion: unknown;
+    cfgBase: string;
+    /** links.json `bc_api` / `bc_v2_base` (the platform asset fetched at start). */
+    linksVersion: unknown;
+    linksBase: string;
+}
+
+/** What the switch ASKS for. The session uses v2 only once Rust's health check passed
+ *  (bc_v2_activate); until then, and when it fails, the session is v1. */
+export function pickSwitch(i: SwitchInputs): { version: BcApiVersion; base: string; source: 'app.cfg' | 'links.json' | 'default' } {
+    const base = String(i.cfgBase || '').trim() || String(i.linksBase || '').trim();
+    if (i.cfgSet) return { version: parseApiVersion(i.cfgVersion), base, source: 'app.cfg' };
+    if (String(i.linksVersion ?? '').trim()) return { version: parseApiVersion(i.linksVersion), base, source: 'links.json' };
+    return { version: 'v1', base, source: 'default' };
+}
+
+/**
+ * A full URL from links.json (contributors, the update fallback, a catalogue feed) moved to the
+ * v2 root when it is a v1 API URL on the v1 root AND v2 serves that route. Anything else, and
+ * everything in v1 mode, is returned unchanged.
+ */
+export function rehomeUrl(roots: BcRoots, url: string): string {
+    if (roots.version !== 'v2' || !url) return url;
+    const prefix = `${roots.v1Root}/api`;
+    if (!url.startsWith(`${prefix}/`) && !url.startsWith(`${prefix}?`)) return url;
+    const route = url.slice(prefix.length);
+    return servedByV2Compat(route) ? `${roots.v2Root}/api${route}` : url;
 }
 
 // ── Feedback centre: v1 payload ⇄ v2 contract (feedback.ts sendFeedback / getFeedbackConfig) ──

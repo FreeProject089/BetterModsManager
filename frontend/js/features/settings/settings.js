@@ -1337,6 +1337,8 @@ async function initSecurityInfoCard() {
           </div>
           <div style="margin-top:6px;font-family:var(--font-mono,monospace);word-break:break-all">${escHtml(bcRoot())}</div>`;
         card?.appendChild(cfg);
+        // BetterCommunity v2 session: the device-flow account card (hidden in v1 mode).
+        void import('./bc-v2-account.js').then((m) => m.mountBcV2AccountCard(card)).catch(() => { });
         refreshBcLinkStatus();
         // Keep checking so an unlink done on the website is detected while settings are open.
         const iv = setInterval(() => { if (document.getElementById('bc-link-status'))

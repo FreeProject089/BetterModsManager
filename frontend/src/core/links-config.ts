@@ -70,6 +70,18 @@ export interface BmmLinks {
     kofi_community:   string;
     ed_forum:         string;
     bettercommunity:  string;
+    // BetterCommunity v2 remote switch (BMM 1.0.3). All optional and absent from the bundled
+    // file: absent = v1, today's behaviour. app.cfg (BCApiVersion / BCv2Base) wins over these.
+    //   bc_api           "v2" selects v2 for this session (after a health check; v1 on failure)
+    //   bc_v2_base       where v2 lives while it runs beside v1 ('' = the same root)
+    //   bc_v2_client_id  BMM's public OAuth client (device flow), from `app:provision-bmm`
+    //   bc_v2_app_key    BMM's publishable key bc_pk_… (safe to ship), same run
+    //   bc_v2_app_id     BMM's app id app_… (telemetry route /v2/apps/{app}/telemetry/batch)
+    bc_api?:          string;
+    bc_v2_base?:      string;
+    bc_v2_client_id?: string;
+    bc_v2_app_key?:   string;
+    bc_v2_app_id?:    string;
     // NOT exhaustive: links.json also carries the Discord Rich Presence entries
     // (WebSiteRPC1/2, github_RPC1/2, BoutonRPC1/2). Those are read on the Rust side in
     // commands/discord.rs straight from the file, never through this interface, so adding
@@ -219,23 +231,30 @@ export function catalogSources(key: keyof BmmLinks): string[] {
 let _bcTestMode = false;
 let _bcTestBase = 'http://localhost:5176';
 let _bcLoaded = false;
+// The SESSION's mode, v1 until core/bc-v2.ts activateBcV2() got Rust's answer (switch, then a
+// passing health check). The raw app.cfg values are kept apart: they are inputs, not the mode.
 let _bcApiVersion: 'v1' | 'v2' = 'v1';
 let _bcV2Base = '';
+let _cfgApiVersion = '';
+let _cfgApiSet = false;
+let _cfgV2Base = '';
 
 export async function loadBcConfig(): Promise<void> {
     if (_bcLoaded) return;
     try {
         const { invoke } = await import('./api.js');
-        const cfg = await invoke('get_bc_config') as { testMode?: boolean; test_mode?: boolean; baseUrl?: string; base_url?: string; api_version?: string; v2_base?: string };
+        const cfg = await invoke('get_bc_config') as { testMode?: boolean; test_mode?: boolean; baseUrl?: string; base_url?: string; api_version?: string; v2_base?: string; api_version_set?: boolean };
         if (cfg) {
             _bcTestMode = !!(cfg.testMode ?? cfg.test_mode);
             const base = cfg.baseUrl ?? cfg.base_url;
             if (base && base.trim()) _bcTestBase = base.trim();
-            // BetterCommunity v2 switch (app.cfg BCApiVersion / BCv2Base) — read by core/bc-client.ts.
-            _bcApiVersion = String(cfg.api_version || '').trim().toLowerCase() === 'v2' ? 'v2' : 'v1';
-            _bcV2Base = String(cfg.v2_base || '').trim();
+            // BetterCommunity v2 switch inputs (app.cfg BCApiVersion / BCv2Base). The mode itself is
+            // decided by activateBcV2 (core/bc-v2.ts), after links.json and a health check.
+            _cfgApiVersion = String(cfg.api_version || '').trim();
+            _cfgApiSet = !!cfg.api_version_set;
+            _cfgV2Base = String(cfg.v2_base || '').trim();
         }
-        console.log(`[BMM] BC config: testMode=${_bcTestMode}, base=${_bcTestBase}, api=${_bcApiVersion}`);
+        console.log(`[BMM] BC config: testMode=${_bcTestMode}, base=${_bcTestBase}, api line=${_cfgApiSet ? _cfgApiVersion : '(none)'}`);
     } catch (_) { /* not in Tauri / cfg unreadable → production defaults */ }
     // Mark loaded only AFTER the attempt — never before (a premature call that
     // failed once must not lock the config to defaults forever).
@@ -244,10 +263,19 @@ export async function loadBcConfig(): Promise<void> {
 
 /** Whether the in-app BetterCommunity blog/community points at a test/staging base. */
 export function bcTestMode(): boolean { return _bcTestMode; }
-/** app.cfg `BCApiVersion` (v1 unless the file says v2) and `BCv2Base` ('' = same root). Raw
- *  values: core/bc-client.ts turns them into URLs. */
+/** The session's mode (v1 until activated) and its v2 root ('' = the v1 root). core/bc-client.ts
+ *  turns them into URLs. */
 export function bcApiVersionCfg(): 'v1' | 'v2' { return _bcApiVersion; }
 export function bcV2BaseCfg(): string { return _bcV2Base; }
+/** The raw app.cfg inputs of the switch, for activateBcV2. */
+export function bcSwitchCfg(): { set: boolean; version: string; base: string } {
+    return { set: _cfgApiSet, version: _cfgApiVersion, base: _cfgV2Base };
+}
+/** Set by activateBcV2 only, from Rust's answer: the mode is never chosen in the webview alone. */
+export function setBcSession(version: 'v1' | 'v2', v2Root: string): void {
+    _bcApiVersion = version === 'v2' && v2Root ? 'v2' : 'v1';
+    _bcV2Base = _bcApiVersion === 'v2' ? v2Root.replace(/\/+$/, '') : '';
+}
 /** The configured test base URL (with or without a port), trailing slash trimmed. */
 export function bcTestBase(): string { return _bcTestBase.replace(/\/+$/, ''); }
 /** The effective BetterCommunity root: the test base when test mode is on, else the

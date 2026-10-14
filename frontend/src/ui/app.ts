@@ -874,6 +874,12 @@ async function main() {
     // Load external link registry first so every module can call getLinks() safely
     await loadLinks();
     patchHtmlLinks();
+    // BetterCommunity v2 or v1 for this session (app.cfg > links.json > v1, then a health check
+    // in Rust). Not awaited: until it answers the session is v1, the default. Once it does, the
+    // v2 legal texts are checked (re-acceptance when v2 publishes another version).
+    void import('../core/bc-v2.js').then((m) => m.activateBcV2()).then((s) => {
+        if (s.version === 'v2') setTimeout(() => { void import('../core/bc-v2-legal.js').then((l) => l.checkBcV2Legal()).catch(() => {}); }, 20_000);
+    }).catch(() => {});
 
     // Initialize Offline Detection
     initOfflineDetection();
@@ -1119,7 +1125,9 @@ async function main() {
     initWebviewErrorTrap();
     // Second source for the same centre. Does nothing without a stored key, so it
     // costs an idle check for everyone who has not linked an account.
-    void import('../core/bcweb-notifications.js').then(m => m.startBcwebNotifications()).catch(() => {});
+    // In v2 mode it reads with the device-flow token instead, so it waits for the session's mode.
+    void import('../core/bc-v2.js').then((b) => b.activateBcV2())
+        .then(() => import('../core/bcweb-notifications.js')).then(m => m.startBcwebNotifications()).catch(() => {});
     // BetterCommunity's launch announcements: asked for now, shown by the launch deck later.
     // Never awaited — a slow or absent answer costs the start-up nothing (launch-announcements.ts).
     void import('./launch-announcements.js').then((m) => m.prefetchLaunchFeed()).catch(() => {});
@@ -1769,7 +1777,8 @@ async function fetchContributors() {
         // Route through the Rust backend (reqwest) — the webview blocks a direct cross-origin
         // fetch of bettercommunity.ch/api/assets/* on CORS. `quiet` keeps a 404 (endpoint not
         // deployed) out of the console; we just fall back to the bundled copy below.
-        const remoteUrl = getLinks().contributors;
+        // A v1 asset URL moves to the v2 root when this session already runs on v2 (ADR 0019).
+        const remoteUrl = (await import('../core/bc-client.js')).bcRehome(getLinks().contributors);
         if (/^https?:\/\//i.test(remoteUrl)) {
             // `anonymous`: the credits list is public and identical for everyone — it is
             // fetched without X-Creator-ID so a launch is not an identified request.

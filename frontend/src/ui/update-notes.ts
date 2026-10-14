@@ -880,7 +880,10 @@ async function resolveUpdateInfo(): Promise<any> {
             apiBaseUrl: getLinks().autoupdate_api,
             // Empty string disables it, which is what an older links.json yields — the
             // Rust side treats blank as absent rather than as a URL to try.
-            fallbackApiUrl: getLinks().autoupdate_api_fallback || '',
+            // In BetterCommunity v2 mode the v1 feed path moves to the v2 root (ADR 0019, same
+            // GitHub shape). Only the feed moves: the installer is still checked against the
+            // release's signed update-manifest.json / update.json, exactly as before.
+            fallbackApiUrl: (await import('../core/bc-client.js')).bcRehome(getLinks().autoupdate_api_fallback || ''),
         });
     } catch (e) { ghErr = e; }
 

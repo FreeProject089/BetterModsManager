@@ -137,6 +137,14 @@ export function reasonText(note: string): string {
  */
 export async function bcAuthArgs(settings: AiSettings | null | undefined): Promise<Record<string, unknown>> {
     if (!settings || settings.classifier !== 'bettercommunity') return {};
+    // BetterCommunity v2 session: Rust sends the suggest to the v2 root with the account's
+    // device-flow token (ai.rs bc_auth) and reads neither base nor headers from here. Only make
+    // sure the token is fresh; no creator proof is computed (v2 does not read it).
+    const bc = await import('../../core/bc-client.js');
+    if (bc.bcUsesV2()) {
+        await (await import('../../core/bc-v2.js')).bcV2EnsureToken();
+        return { bcBase: bc.bcV2Root() };
+    }
     const base = bcRoot();
     const headers: Record<string, string> = {};
     try {
