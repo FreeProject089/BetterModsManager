@@ -1,6 +1,6 @@
 [package]
 name = "better-mods-manager"
-version = "1.0.0"
+version = "1.0.3"
 edition = "2021"
 autobins = false
 # Declared here as well as in LICENSE.md and the docs: cargo, crates.io and any tool that
