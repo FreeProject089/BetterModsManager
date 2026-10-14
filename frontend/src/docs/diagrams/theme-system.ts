@@ -24,8 +24,8 @@ export const themeSystem: DiagramSpec = {
         { id: 'CATALOG', kind: 'ui', group: 'SOURCES', icon: 'icon-cloud', refs: ['frontend/src/features/themes/theme-catalog.ts › fetchCatalog', 'src-tauri/src/commands/themes.rs › fetch_theme_catalogs'] },
         { id: 'FILE', kind: 'data', group: 'SOURCES', icon: 'icon-archive', link: 'one-click-install', refs: ['src-tauri/src/commands/themes.rs › import_theme', 'src-tauri/src/commands/themes.rs › export_theme', 'frontend/src/features/themes/theme-editor.ts › shareTheme'] },
 
-        { id: 'EDITOR', kind: 'ui', group: 'EDIT', icon: 'icon-edit', refs: ['frontend/src/features/themes/theme-editor.ts › openEditor', 'frontend/src/features/themes/theme-editor.ts › saveThemeAs'] },
-        { id: 'GEN', kind: 'front', group: 'EDIT', icon: 'icon-star', refs: ['frontend/src/features/themes/theme-editor.ts › genPalette'] },
+        { id: 'EDITOR', kind: 'ui', group: 'EDIT', icon: 'icon-edit', refs: ['frontend/src/features/themes/theme-editor.ts › openEditor', 'frontend/src/features/themes/theme-editor.ts › save'] },
+        { id: 'GEN', kind: 'front', group: 'EDIT', icon: 'icon-star', refs: ['frontend/src/features/themes/theme-model.ts › generatePalette', 'frontend/src/features/themes/theme-model.ts › checkContrast'] },
         { id: 'PICK', kind: 'ui', group: 'EDIT', icon: 'icon-search', refs: ['frontend/src/features/themes/theme-editor.ts › togglePickToken', 'frontend/src/features/themes/theme-editor.ts › openElementOverrideEditor'] },
 
         { id: 'BOOT', kind: 'front', group: 'ENGINE', icon: 'icon-start', refs: ['frontend/src/features/themes/theme-engine.ts › restoreThemeAtBoot', 'frontend/src/features/themes/theme-engine.ts › activateTheme'] },

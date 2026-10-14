@@ -517,6 +517,19 @@ async function mockInvoke(command, args) {
             throw new Error(`no language file for ${lang}`);
         return await r.text();
     }
+    // The built-in themes are static files too. A dev server that lists folders (python's
+    // http.server does) names them; without that the preview simply has no presets.
+    if (command === 'list_builtin_themes' || command === 'list_builtin_themes_all') {
+        try {
+            const listing = await (await fetch('assets/builtin-themes/')).text();
+            const files = [...new Set([...listing.matchAll(/href="([^"?#]+\.bmmtheme\.json)"/g)].map((m) => m[1]))].sort();
+            const themes = await Promise.all(files.map(async (f) => (await fetch(`assets/builtin-themes/${f}`)).json()));
+            return JSON.stringify(themes);
+        }
+        catch {
+            return '[]';
+        }
+    }
     const fx = await mockFixtures();
     if (fx && Object.prototype.hasOwnProperty.call(fx, command))
         return fx[command];

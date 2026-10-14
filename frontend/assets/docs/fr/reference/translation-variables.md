@@ -39,9 +39,9 @@ la compilation quand une traduction et le code ne sont pas d’accord. Elle ne p
 | `{host}` | un nom de serveur |
 | `{url}` | une adresse web |
 | `{file}` | un nom de fichier |
+| `{time}` | une heure |
 | `{x}` | une liste ou un détail inséré par le code |
 | `{date}` | une date |
-| `{time}` | une heure |
 | `{type}` | un genre (un importateur, un format…) |
 
 ## Accolades qui sont du texte
@@ -73,7 +73,7 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 
 ## Toutes les clés avec variables
 
-1050 clés, regroupées par leur premier segment. Le texte est le texte français, raccourci.
+1073 clés, regroupées par leur premier segment. Le texte est le texte français, raccourci.
 
 ### activity
 
@@ -872,6 +872,7 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `plugins.deepLinkModEnabled` | `{id}` | Mod '{id}' activé |
 | `plugins.deepLinkNotFound` | `{id}` | Plugin '{id}' non installé |
 | `plugins.deepLinkProfileActivated` | `{id}` | Profil '{id}' activé |
+| `plugins.epCount` | `{n}` | {n} endpoint(s) |
 | `plugins.errChecksumMismatch` | `{actual}` `{expected}` | le fichier téléchargé ne correspond pas à la somme de contrôle du catalogue (attendu {expected}, obtenu {actu… |
 | `plugins.exportSuccess` | `{name}` | Plugin '{name}' exporté |
 | `plugins.fromIndex` | `{n}` | {n} catalogue(s) de plugins ajouté(s) depuis cet index. |
@@ -881,6 +882,17 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `plugins.installSuccess` | `{name}` | Plugin '{name}' installé ! |
 | `plugins.modsNotFound` | `{mods}` | Mods introuvables : {mods} |
 | `plugins.noChecksumBody` | `{name}` | L'entrée du catalogue pour « {name} » n'a pas de SHA-256 : BMM ne peut pas vérifier que le fichier téléchargé… |
+| `plugins.pc.chkHighPerms` | `{n}` | Demande {n} permission(s) à risque élevé. Expliquez pourquoi dans la description. |
+| `plugins.pc.editingChip` | `{id}` | Modification de {id} |
+| `plugins.pc.permsN` | `{n}` | {n} permission(s) |
+| `plugins.pc.pvAutomations` | `{n}` | {n} automatisation(s) |
+| `plugins.pc.pvBundles` | `{n}` | {n} catalogue(s) |
+| `plugins.pc.pvFolders` | `{n}` | {n} dossier(s) |
+| `plugins.pc.pvMods` | `{n}` | {n} mod(s) |
+| `plugins.pc.pvScripts` | `{n}` | {n} script(s) |
+| `plugins.pc.replaceDesc` | `{id}` | Un plugin d'id {id} est installé. L'enregistrer le remplace par celui-ci. |
+| `plugins.pc.riskOverall` | `{r}` | Risque global : {r} |
+| `plugins.pc.savedAt` | `{time}` | Enregistré et installé à {time}. |
 | `plugins.pcbAlready` | `{id}` | {id} est déjà dans ce catalogue |
 | `plugins.pcbFromFile` | `{f}` | depuis {f} |
 | `plugins.pcbNotPlugin` | `{f}` | {f} n’est pas un plugin, laissé de côté |
@@ -902,6 +914,7 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `plugins.tree.sum` | `{b}` `{d}` `{f}` | {f} fichier(s) dans {d} dossier(s) · {b} |
 | `plugins.uninstallDesc` | `{name}` | Supprimer '{name}' et tous ses fichiers ? |
 | `plugins.uninstallSuccess` | `{name}` | Plugin '{name}' supprimé |
+| `plugins.updateAvail` | `{v}` | v{v} disponible |
 | `plugins.updateNeedsChecksum` | `{name}` | {name} : une mise à jour est disponible, mais son entrée de catalogue n'a pas de somme de contrôle. Installez… |
 
 ### prof
@@ -1404,6 +1417,16 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `themes.catalogExportedBundle` | `{f}` `{n}` | {n} thème(s) emballé(s) dans {f}. Un seul fichier, rien à héberger. |
 | `themes.catalogExportedFolder` | `{n}` | catalog.json écrit avec {n} fichier(s) de thème. Téléverse le dossier tel quel. |
 | `themes.dropinFound` | `{n}` | {n} preset(s) found |
+| `themes.ed.contrastSum` | `{n}` `{ok}` | {ok} sur {n} réussis |
+| `themes.ed.copyName` | `{name}` | {name} (copie) |
+| `themes.ed.fixTip` | `{v}` | Utiliser {v}, la couleur la plus proche qui passe |
+| `themes.ed.fontPreset` | `{name}` | Police pour {name} |
+| `themes.ed.formatExplained` | `{v}` | Enregistré au format de thème {v}. Les champs que BMM ne connaît pas sont conservés tels quels. |
+| `themes.ed.needs` | `{n}` | il faut {n}:1 |
+| `themes.ed.pickColour` | `{name}` | Choisir une couleur pour {name} |
+| `themes.ed.statusErrors` | `{n}` | {n} problème(s) à corriger avant d'enregistrer |
+| `themes.ed.statusOk` | `{v}` | Fichier de thème valide (format {v}) |
+| `themes.ed.statusWarnings` | `{n}` | Valide, {n} avertissement(s) |
 | `themes.fromIndex` | `{n}` | {n} catalogue(s) de thèmes ajouté(s) depuis cet index. |
 | `themes.importFailed` | `{list}` | Import impossible : {list} |
 | `themes.indexAll` | `{n}` | Cet index liste {n} catalogue(s) de thèmes et vous les suivez déjà tous. |

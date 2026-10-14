@@ -4,7 +4,7 @@ import { copyIdButtons, wireCopyIds } from '../../core/copy-id.js';
 import { invoke, pickFile, saveFile, pickFolder, convertFileSrc, apiBase, apiRunning } from '../../core/api.js';
 import { toast, fetchProfileIconPaths, updateSelectProfileIcon, decorateProfileOptions, toastSaved, openExternal } from '../../ui/app.js';
 import { t, getLang } from '../../core/i18n.js';
-import { permDomains } from './plugin-perms.js';
+import { permDomains, scopeRisk, maxScopeRisk } from './plugin-perms.js';
 import { openFolderContent, folderFacts, humanSize } from './plugin-inspect.js';
 export { permDomains } from './plugin-perms.js';
 import { escHtml, escAttr } from '../../core/utils.js';
@@ -119,6 +119,10 @@ const API_SECTIONS = [
 ];
 let _apiSec = 'test';
 let _installedPlugins = [];
+// Plugins whose catalogue lists a newer version that was NOT installed for them (auto-update
+// off, no checksum, or the install failed): id → the catalogue's version. Filled by
+// checkPluginUpdates, read by the installed cards and the Updates filter.
+const _pluginUpdates = new Map();
 let _allLaunchpacks = [];
 let _allTasks = [];
 let _catalog = null;
@@ -149,32 +153,56 @@ const _epCodeCache = new Map();
 // lag; now it's built once per language and reused. See epListHtml()/dlListHtml().
 let _epListHtmlCache = null;
 let _dlListHtmlCache = null;
+/**
+ * Which part of BMM an endpoint belongs to, read from its path.
+ *
+ * The list used to be grouped by HTTP method, so "everything about repos" was split across
+ * GET, POST and DELETE and the one question people bring to a reference (what can I do with
+ * profiles?) had three answers in three places. The method is still on every row and in a
+ * filter above the list; the group is the subject.
+ */
+const EP_AREAS = [
+    { g: 'mods', key: 'plugins.epArea.mods', is: (s) => ['mods', 'mod', 'modlists'].includes(s) },
+    { g: 'profiles', key: 'plugins.epArea.profiles', is: (s) => s === 'profiles' },
+    { g: 'modpacks', key: 'plugins.epArea.modpacks', is: (s) => s === 'modpacks' },
+    { g: 'plugins', key: 'plugins.epArea.plugins', is: (s) => s === 'plugins' },
+    { g: 'repo', key: 'plugins.epArea.repo', is: (s) => s === 'repo' },
+    { g: 'apps', key: 'plugins.epArea.apps', is: (s) => ['apps', 'catalog', 'catalogs', 'launchpack'].includes(s) },
+    { g: 'auto', key: 'plugins.epArea.auto', is: (s) => ['schedule', 'schedules', 'hook'].includes(s) },
+    { g: 'data', key: 'plugins.epArea.data', is: (s) => ['data', 'keys', 'telemetry', 'recorder', 'replay'].includes(s) },
+    { g: 'system', key: 'plugins.epArea.system', is: () => true },
+];
+const EP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'];
+const EP_METHOD_CLS = { GET: 'plug-method-get', POST: 'plug-method-post', PUT: 'plug-method-put', DELETE: 'plug-method-delete', PATCH: 'plug-method-patch' };
+function epAreaOf(path) {
+    const seg = path.split('/')[2] || '';
+    return EP_AREAS.find((a) => a.is(seg)).g;
+}
 // Build (or reuse) the documented endpoint list. Always refreshes the cheap _epCodeCache
 // so on-demand code generation still works, but only rebuilds the heavy highlighted HTML
 // when the language changed.
 function epListHtml() {
     const defs = getEndpointDefs();
     const methodOrder = { GET: 0, POST: 1, PUT: 2, DELETE: 3, PATCH: 4 };
-    defs.sort((a, b) => (methodOrder[a.method] ?? 9) - (methodOrder[b.method] ?? 9));
+    defs.sort((a, b) => (methodOrder[a.method] ?? 9) - (methodOrder[b.method] ?? 9) || a.path.localeCompare(b.path));
     defs.forEach(ep => {
         const sid = (ep.method.toLowerCase() + '_' + ep.path).replace(/\//g, '_').replace(/^_/, '').replace(/:/g, '');
         _epCodeCache.set(sid, ep);
     });
     if (_epListHtmlCache && _epListHtmlCache.lang === getLang())
         return _epListHtmlCache.html;
-    const methodCls = { GET: 'plug-method-get', POST: 'plug-method-post', PUT: 'plug-method-put', DELETE: 'plug-method-delete', PATCH: 'plug-method-patch' };
-    const methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'];
-    const html = methods.map(mth => {
-        const group = defs.filter(d => d.method === mth);
-        if (group.length === 0)
+    const html = EP_AREAS.map((area) => {
+        const group = defs.filter((d) => epAreaOf(d.path) === area.g);
+        if (!group.length)
             return '';
-        const cls = methodCls[mth] || '';
+        const methods = EP_METHODS.map((m) => [m, group.filter((d) => d.method === m).length]).filter(([, n]) => n > 0);
         const rows = group.map(ep => buildEndpointRow(ep)).join('');
-        return `<div class="plug-ep-group" data-method="${mth}">
+        return `<div class="plug-ep-group" data-area="${area.g}">
             <div class="plug-ep-group-header" role="button" tabindex="0">
                 ${uiIcon('chevron-right', 12, { cls: 'plug-ep-group-chevron' })}
-                <span class="plug-method ${cls}" style="font-size:11px;">${mth}</span>
-                <span class="plug-ep-group-count">${group.length} endpoint${group.length > 1 ? 's' : ''}</span>
+                <span class="plug-ep-group-title">${escHtml(t(area.key))}</span>
+                <span class="plug-ep-group-count">${escHtml(t('plugins.epCount').replace('{n}', String(group.length)))}</span>
+                <span class="plug-ep-group-methods" aria-hidden="true">${methods.map(([m, n]) => `<span class="plug-method ${EP_METHOD_CLS[m] || ''}">${m}<b>${n}</b></span>`).join('')}</span>
             </div>
             <div class="plug-ep-group-body">${rows}</div>
         </div>`;
@@ -265,11 +293,12 @@ export async function initPlugins() {
  * reinstall from the catalog download URL. Verifies both id and version.
  */
 async function checkPluginUpdates() {
+    // Every plugin that came from the catalogue is looked at, auto-update or not: one with
+    // auto-update off still deserves to SAY a newer version exists (the card's badge), it just
+    // is not installed behind the person's back.
     const candidates = (_installedPlugins || []).filter(p => {
         const id = p?.manifest?.id;
-        return id
-            && localStorage.getItem('bmm_plugin_src_' + id) // came from the catalog
-            && localStorage.getItem('bmm_plugin_au_' + id) !== 'off'; // auto-update not disabled
+        return id && localStorage.getItem('bmm_plugin_src_' + id); // came from the catalog
     });
     if (!candidates.length)
         return;
@@ -290,6 +319,9 @@ async function checkPluginUpdates() {
             continue;
         if (entry.version === p.manifest.version)
             continue; // verify version differs
+        _pluginUpdates.set(id, String(entry.version));
+        if (localStorage.getItem('bmm_plugin_au_' + id) === 'off')
+            continue; // auto-update disabled
         const url = entry.download_url || localStorage.getItem('bmm_plugin_src_' + id);
         if (!url)
             continue;
@@ -305,6 +337,7 @@ async function checkPluginUpdates() {
             _installedPlugins = _installedPlugins.filter(x => x.manifest.id !== fresh.manifest.id);
             _installedPlugins.push(fresh);
             localStorage.setItem('bmm_plugin_src_' + fresh.manifest.id, url);
+            _pluginUpdates.delete(id);
             updated++;
             toast((t('plugins.autoUpdated') || 'Plugin "{name}" updated to v{v}')
                 .replace('{name}', fresh.manifest.name).replace('{v}', fresh.manifest.version), 'success');
@@ -313,7 +346,7 @@ async function checkPluginUpdates() {
             console.warn('[plugins] auto-update failed for', id, e);
         }
     }
-    if (updated && (_tab === 'installed' || _tab === 'manage'))
+    if ((updated || _pluginUpdates.size) && (_tab === 'installed' || _tab === 'manage'))
         renderTab(_tab);
 }
 async function loadInitialData() {
@@ -344,6 +377,10 @@ async function loadInitialData() {
                 }
             }
             _allModsAll = Array.from(map.values()).sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id));
+            // An empty answer while the active profile HAS mods is a failed read, not an
+            // empty library: the creator would otherwise offer nothing to pick from.
+            if (!_allModsAll.length && (_allMods || []).length)
+                _allModsAll = _allMods.slice();
         }
         catch {
             _allModsAll = _allMods.slice();
@@ -557,14 +594,17 @@ function renderInstalled(container) {
                 <div class="plug-empty-actions">
                     <button class="btn btn-accent" id="plug-goto-catalog">${IC.globe} ${t('plugins.browseCatalog')}</button>
                     <button class="btn btn-secondary" id="plug-import-btn">${IC.upload} ${t('plugins.importFile')}</button>
+                    <button class="btn btn-ghost" id="plug-empty-create">${uiIcon('add', 14)} ${escHtml(t('plugins.pc.newPlugin'))}</button>
                 </div>
             </div>`;
+        container.querySelector('#plug-empty-create')?.addEventListener('click', () => selectPluginTab('create'));
         container.querySelector('#plug-goto-catalog')?.addEventListener('click', () => selectPluginTab('catalog'));
         container.querySelector('#plug-import-btn')?.addEventListener('click', handleImportFile);
         return;
     }
     // A filter box once there is something to filter: names, ids, authors and tags. The
     // import action lives in the page head now, so the row is about finding, not adding.
+    // Below it, what KIND of plugin to show: the chips only appear for kinds that exist.
     container.innerHTML = `
         <div class="pg-toolbar">
             <label class="pg-search">
@@ -574,24 +614,49 @@ function renderInstalled(container) {
             </label>
             <span class="pg-results" id="plug-installed-count" aria-live="polite"></span>
             <span class="pg-toolbar-gap"></span>
+            <button type="button" class="btn btn-sm btn-ghost" id="plug-goto-create-btn">${uiIcon('add', 14)} ${escHtml(t('plugins.pc.newPlugin'))}</button>
             <button type="button" class="btn btn-sm btn-ghost" id="plug-goto-catalog-btn">${IC.globe} ${t('plugins.browseCatalog')}</button>
+        </div>
+        <div class="plug-filter-chips" role="group" aria-label="${escAttr(t('plugins.filterAria'))}">
+            ${PLUG_FILTERS.map((f) => `<button type="button" class="plug-filter-chip" data-pfilter="${f.id}" aria-pressed="${f.id === _plugFilter}">
+                ${escHtml(t(f.key))}<span class="pg-count" data-pfilter-n="${f.id}"></span></button>`).join('')}
         </div>
         <div class="plug-grid" id="plug-installed-grid"></div>`;
     const grid = container.querySelector('#plug-installed-grid');
     const hay = new Map();
+    const kinds = new Map();
+    const tally = {};
     for (const plugin of _installedPlugins) {
         const card = buildPluginCard(plugin, 'installed');
         const m = plugin.manifest || {};
         hay.set(card, [m.name, m.id, m.author, m.description, ...(m.tags || [])].join(' ').toLowerCase());
+        const k = new Set(PLUG_FILTERS.filter((f) => f.is(plugin)).map((f) => f.id));
+        kinds.set(card, k);
+        k.forEach((id) => { tally[id] = (tally[id] || 0) + 1; });
         grid.appendChild(card);
     }
+    container.querySelectorAll('[data-pfilter-n]').forEach((el) => {
+        const n = tally[el.dataset.pfilterN || ''] || 0;
+        el.textContent = String(n);
+        const chip = el.closest('.plug-filter-chip');
+        if (chip && chip.dataset.pfilter !== 'all')
+            chip.hidden = n === 0;
+    });
+    // A remembered filter whose kind has gone (its last plugin uninstalled) falls back to all.
+    if (_plugFilter !== 'all' && !tally[_plugFilter])
+        _plugFilter = 'all';
     const count = container.querySelector('#plug-installed-count');
     const search = container.querySelector('#plug-installed-search');
     const apply = () => {
         const q = search.value.trim().toLowerCase();
         let shown = 0;
-        hay.forEach((h, card) => { const ok = !q || h.includes(q); card.hidden = !ok; if (ok)
-            shown++; });
+        hay.forEach((h, card) => {
+            const ok = (!q || h.includes(q)) && (kinds.get(card)?.has(_plugFilter) ?? false);
+            card.hidden = !ok;
+            if (ok)
+                shown++;
+        });
+        container.querySelectorAll('.plug-filter-chip').forEach((c) => c.setAttribute('aria-pressed', String(c.dataset.pfilter === _plugFilter)));
         count.textContent = t('plugins.shownOf').replace('{n}', String(shown)).replace('{total}', String(hay.size));
         let none = grid.querySelector('.plug-empty--inline');
         if (!shown && !none) {
@@ -604,12 +669,52 @@ function renderInstalled(container) {
             if (!shown)
                 none.innerHTML = `<div class="plug-empty-icon">${IC.search}</div>
                 <p class="plug-empty-title">${escHtml(t('plugins.installedNoMatch'))}</p>
-                <p class="plug-empty-sub">“${escHtml(search.value.trim())}”</p>`;
+                ${q ? `<p class="plug-empty-sub">“${escHtml(search.value.trim())}”</p>` : ''}`;
         }
     };
     search.addEventListener('input', apply);
+    container.querySelector('.plug-filter-chips')?.addEventListener('click', (e) => {
+        const chip = e.target.closest('.plug-filter-chip');
+        if (!chip)
+            return;
+        _plugFilter = chip.dataset.pfilter || 'all';
+        apply();
+    });
     apply();
     container.querySelector('#plug-goto-catalog-btn')?.addEventListener('click', () => selectPluginTab('catalog'));
+    container.querySelector('#plug-goto-create-btn')?.addEventListener('click', () => selectPluginTab('create'));
+}
+/**
+ * The installed list's kind filters. One list feeds the chips, their counts and the test, so
+ * a chip can never count plugins its filter would not show.
+ */
+const PLUG_FILTERS = [
+    { id: 'all', key: 'plugins.filter.all', is: () => true },
+    { id: 'updates', key: 'plugins.filter.updates', is: (p) => _pluginUpdates.has(p?.manifest?.id) },
+    { id: 'modlist', key: 'plugins.filter.modlist', is: (p) => (p?.manifest?.modlist?.required_mods?.length || 0) > 0 },
+    { id: 'scripts', key: 'plugins.filter.scripts', is: (p) => !!p?.manifest?.has_scripts || (p?.manifest?.scripts?.length || 0) > 0 },
+    { id: 'auto', key: 'plugins.filter.auto', is: (p) => (p?.manifest?.automations?.length || 0) > 0 || (p?.manifest?.bundles?.length || 0) > 0 },
+    { id: 'perms', key: 'plugins.filter.perms', is: (p) => (p?.manifest?.permissions?.length || 0) > 0 },
+];
+let _plugFilter = 'all';
+/**
+ * What a card says about a plugin before anybody opens it: a newer version in its catalogue,
+ * and how much it asks for. The permission chip carries the highest risk among the scopes it
+ * requests, the same three steps the Create tab's chooser shows.
+ */
+function pluginStatusLine(manifest) {
+    const parts = [];
+    const next = _pluginUpdates.get(manifest.id);
+    if (next) {
+        parts.push(`<span class="plug-update-badge" data-tooltip="${escAttr(t('plugins.updateAvailTip'))}">${uiIcon('download', 12)} ${escHtml(t('plugins.updateAvail').replace('{v}', next))}</span>`);
+    }
+    const asked = Array.isArray(manifest.permissions) ? manifest.permissions : [];
+    const risk = maxScopeRisk(asked);
+    if (risk) {
+        const riskKey = risk === 'high' ? 'plugins.pc.riskHigh' : risk === 'medium' ? 'plugins.pc.riskMedium' : 'plugins.pc.riskLow';
+        parts.push(`<span class="pc-risk pc-risk--${risk}" data-tooltip="${escAttr(asked.join(', '))}">${uiIcon('shield', 12)} ${escHtml(t('plugins.pc.permsN').replace('{n}', String(asked.length)))} · ${escHtml(t(riskKey))}</span>`);
+    }
+    return `<div class="plug-card-status">${parts.join('')}</div>`;
 }
 function buildPluginCard(plugin, source) {
     const card = document.createElement('div');
@@ -662,6 +767,7 @@ function buildPluginCard(plugin, source) {
             <div class="plug-card-tags">
                 ${manifest.tags.map(tag => `<span class="plug-tag">${escHtml(tag)}</span>`).join('')}
             </div>` : ''}
+        ${source === 'installed' ? pluginStatusLine(manifest) : ''}
         <div class="plug-card-actions">
             ${source === 'installed' ? `
                 <!-- Two rows, because this was three different kinds of thing in one.
@@ -717,7 +823,7 @@ function buildPluginCard(plugin, source) {
                     <!-- The rest. Seven icons that each did something different and looked
                          the same; a menu names them. -->
                     <div class="plug-more" data-id="${escHtml(manifest.id)}">
-                        <button class="btn btn-xs btn-ghost plug-more-btn" data-tooltip="${escAttr(t('plugins.more'))}" aria-haspopup="true" aria-expanded="false">⋮</button>
+                        <button class="btn btn-xs btn-ghost plug-more-btn" data-tooltip="${escAttr(t('plugins.more'))}" aria-label="${escAttr(t('plugins.more'))}" aria-haspopup="true" aria-expanded="false">${uiIcon('more', 14)}</button>
                         <div class="plug-more-menu" hidden>
                             ${fromCatalog ? `
                             <button class="plug-more-item plug-btn-au ${auOn ? 'plug-au-on' : ''}" data-plug-act="${escAttr(manifest.id)}:au" data-id="${escHtml(manifest.id)}">
@@ -4394,6 +4500,48 @@ function setShipCount(id, n) {
     // none, and the list underneath already says so in words.
     el.textContent = n ? (t('plugins.shipCount') || '{n} shipped').replace('{n}', String(n)) : '';
 }
+const PC_TEMPLATES = [
+    { id: 'modlist', icon: 'list', name: 'plugins.pc.tplModlist', desc: 'plugins.pc.tplModlistD', apply: 'modlist', focus: ['mods'] },
+    { id: 'server', icon: 'server', name: 'plugins.pc.tplServer', desc: 'plugins.pc.tplServerD', apply: 'modlist', strict: true, focus: ['mods'] },
+    { id: 'scripts', icon: 'terminal', name: 'plugins.pc.tplScripts', desc: 'plugins.pc.tplScriptsD', apply: 'script', focus: ['scripts', 'folders'] },
+    { id: 'both', icon: 'layers', name: 'plugins.pc.tplBoth', desc: 'plugins.pc.tplBothD', apply: 'both', focus: ['mods', 'scripts'] },
+    { id: 'automation', icon: 'workflow', name: 'plugins.pc.tplAutomation', desc: 'plugins.pc.tplAutomationD', apply: 'automation', focus: ['automations'] },
+    { id: 'bundle', icon: 'package', name: 'plugins.pc.tplBundle', desc: 'plugins.pc.tplBundleD', apply: 'modlist', focus: ['bundles'] },
+    { id: 'blank', icon: 'file', name: 'plugins.pc.tplBlank', desc: 'plugins.pc.tplBlankD', apply: 'modlist', focus: [] },
+];
+/** The four apply modes as cards: the value the manifest stores, its glyph and its words. */
+const PC_APPLY_MODES = [
+    { v: 'modlist', icon: 'list', name: 'plugins.applyModeModlist', desc: 'plugins.pc.applyModlistD' },
+    { v: 'script', icon: 'terminal', name: 'plugins.applyModeScript', desc: 'plugins.pc.applyScriptD' },
+    { v: 'both', icon: 'layers', name: 'plugins.applyModeBoth', desc: 'plugins.pc.applyBothD' },
+    { v: 'automation', icon: 'workflow', name: 'plugins.applyModeAutomation', desc: 'plugins.pc.applyAutomationD' },
+];
+/** The six steps, in the order the form is laid out. The rail and the sections share it. */
+const PC_STEPS = [
+    { id: 'template', key: 'plugins.pc.stepTemplate' },
+    { id: 'identity', key: 'plugins.pc.stepIdentity' },
+    { id: 'contents', key: 'plugins.pc.stepContents' },
+    { id: 'apply', key: 'plugins.pc.stepApply' },
+    { id: 'perms', key: 'plugins.pc.stepPerms' },
+    { id: 'share', key: 'plugins.pc.stepShare' },
+];
+/** Glyphs offered as a plugin icon. Saved as icon.svg, the same path the old grid used. */
+const PC_ICON_CHOICES = [
+    'box', 'package', 'game', 'server', 'globe', 'terminal', 'code', 'workflow', 'calendar',
+    'clock', 'palette', 'image', 'map', 'database', 'cloud', 'shield', 'key', 'star', 'bell',
+    'users', 'folder', 'archive', 'layers', 'cpu', 'network', 'book', 'lightbulb', 'message',
+    'tag', 'store', 'monitor', 'hexagon', 'activity', 'scale', 'settings', 'hard-drive',
+];
+const PC_RISK_KEY = {
+    low: 'plugins.pc.riskLow', medium: 'plugins.pc.riskMedium', high: 'plugins.pc.riskHigh',
+};
+// Set by prefillCreateTab when the form is loaded with an existing plugin, so the tab knows
+// whether a matching id is "the one being edited" or "somebody else's plugin about to be
+// replaced". Cleared by every fresh render.
+let _pcEditingId = '';
+// The Create tab's own refresh, so prefillCreateTab (which sets fields from outside, with
+// no input events) can bring the preview, the checks and the cards back in step.
+let _pcAfterPrefill = null;
 function renderCreate(container) {
     // Reset edit-carry state — a fresh Create tab starts with no bundled files.
     _editScripts = [];
@@ -4404,176 +4552,252 @@ function renderCreate(container) {
     _removedAutomations = [];
     _editBundles = [];
     _removedBundles = [];
+    _pcEditingId = '';
+    const secHead = (n, title, lead) => `
+        <header class="pc-sec-h">
+            <span class="pc-sec-n" aria-hidden="true">${n}</span>
+            <div class="pc-sec-titles">
+                <h4 class="pc-sec-title">${escHtml(title)}</h4>
+                <p class="pc-sec-lead">${escHtml(lead)}</p>
+            </div>
+        </header>`;
     container.innerHTML = `
-        <div class="plug-create-layout">
-            <div class="plug-create-form-col">
-                <h3 class="plug-section-title">${IC.list} ${t('plugins.createTitle')}</h3>
-                <div class="plug-form-grid">
-                    <div class="plug-sec-h">${escHtml(t('plugins.secIdentity') || 'What it is')}</div>
-                    <div class="plug-form-row">
-                        <label class="plug-form-label">${t('plugins.createId')} *</label>
-                        <input type="text" id="pc-id" class="input" placeholder="my-server-modlist">
-                        <span class="plug-field-note" id="pc-id-note">${escHtml(t('plugins.createIdHint') || 'Letters, digits, - and . — this is how every other plugin, catalogue and deeplink refers to it, so it cannot be changed later without breaking them.')}</span>
-                    </div>
-                    <div class="plug-form-row">
-                        <label class="plug-form-label">${t('plugins.createName')} *</label>
-                        <input type="text" id="pc-name" class="input" placeholder="${escAttr(t('plugins.phServerMods'))}">
-                    </div>
-                    <div class="plug-form-row">
-                        <label class="plug-form-label">${t('plugins.createGame')}</label>
-                        <input type="text" id="pc-game" class="input" placeholder="DCS World, ArmA 3...">
-                    </div>
-                    <div class="plug-form-row">
-                        <label class="plug-form-label">${t('plugins.createVersion')}</label>
-                        <input type="text" id="pc-version" class="input" value="1.0.0">
-                    </div>
-                    <div class="plug-form-row">
-                        <label class="plug-form-label">${t('plugins.createDesc')}</label>
-                        <textarea id="pc-desc" class="input" rows="2" style="resize:vertical"></textarea>
-                    </div>
-                    <!-- Three fields the form could never fill: author, website and tags
-                         were hard-coded empty in buildManifest, and the plugin CARD renders
-                         tags — so it drew a row nothing could ever populate. -->
-                    <div class="plug-form-row">
-                        <label class="plug-form-label">${escHtml(t('plugins.createAuthor') || 'Author')}</label>
-                        <input type="text" id="pc-author" class="input" placeholder="${escAttr(t('plugins.createAuthorPh') || 'your name or your team')}">
-                    </div>
-                    <div class="plug-form-row">
-                        <label class="plug-form-label">${escHtml(t('plugins.createWebsite') || 'Website')}</label>
-                        <input type="text" id="pc-website" class="input" placeholder="https://">
-                    </div>
-                    <div class="plug-form-row">
-                        <label class="plug-form-label">${escHtml(t('plugins.createTags') || 'Tags')}</label>
-                        <input type="text" id="pc-tags" class="input" placeholder="${escAttr(t('plugins.createTagsPh') || 'dcs, multiplayer, weekly — separated by commas')}">
-                    </div>
-                    <div class="plug-form-row">
-                        <label class="plug-form-label">${t('plugins.customIconLabel')}</label>
-                        <div class="plug-icon-picker">
-                            <div class="plug-icon-preview" id="pc-icon-preview">
-                                <div class="plug-card-icon-default">${IC.puzzle}</div>
+        <div class="pc-shell">
+            <div class="pc-head">
+                <div class="pc-head-titles">
+                    <h3 class="plug-section-title">${uiIcon('edit', 16)} <span id="pc-head-title">${escHtml(t('plugins.createTitle'))}</span></h3>
+                    <p class="plug-section-lead">${escHtml(t('plugins.pc.lead'))}</p>
+                </div>
+                <span class="bms-chip" id="pc-mode-chip" hidden></span>
+                <button type="button" class="btn btn-sm btn-ghost" id="pc-reset">${uiIcon('reset', 14)} ${escHtml(t('plugins.pc.startOver'))}</button>
+            </div>
+
+            <nav class="pc-steps" aria-label="${escAttr(t('plugins.pc.stepsAria'))}">
+                ${PC_STEPS.map((s, i) => `
+                    <button type="button" class="pc-step" data-step="${s.id}">
+                        <span class="pc-step-n" aria-hidden="true">${i + 1}</span>
+                        <span class="pc-step-label">${escHtml(t(s.key))}</span>
+                        <span class="pc-step-state" data-step-state="${s.id}" aria-hidden="true"></span>
+                    </button>`).join('')}
+            </nav>
+
+            <div class="pc-layout">
+                <div class="pc-main">
+
+                    <section class="pc-sec" id="pc-sec-template" data-step="template">
+                        ${secHead(1, t('plugins.pc.stepTemplate'), t('plugins.pc.tplLead'))}
+                        <div class="pc-tpl-grid" role="radiogroup" aria-label="${escAttr(t('plugins.pc.stepTemplate'))}">
+                            ${PC_TEMPLATES.map((tp) => `
+                                <button type="button" class="pc-tpl" role="radio" aria-checked="false" data-tpl="${tp.id}">
+                                    <span class="pc-tpl-icon" aria-hidden="true">${uiIcon(tp.icon, 18)}</span>
+                                    <span class="pc-tpl-text">
+                                        <span class="pc-tpl-name">${escHtml(t(tp.name))}</span>
+                                        <span class="pc-tpl-desc">${escHtml(t(tp.desc))}</span>
+                                    </span>
+                                </button>`).join('')}
+                        </div>
+                        <p class="pc-other">
+                            <span>${escHtml(t('plugins.pc.otherLead'))}</span>
+                            <button type="button" class="btn btn-xs btn-ghost" id="pc-other-page">${uiIcon('panel-right', 12)} ${escHtml(t('plugins.pc.otherPage'))}</button>
+                            <button type="button" class="btn btn-xs btn-ghost" id="pc-other-script">${uiIcon('terminal', 12)} ${escHtml(t('plugins.pc.otherScript'))}</button>
+                        </p>
+                    </section>
+
+                    <section class="pc-sec" id="pc-sec-identity" data-step="identity">
+                        ${secHead(2, t('plugins.pc.stepIdentity'), t('plugins.pc.identityLead'))}
+                        <div class="pc-fields">
+                            <div class="plug-form-row">
+                                <label class="plug-form-label" for="pc-name">${escHtml(t('plugins.createName'))} <span class="pc-req" aria-hidden="true">*</span></label>
+                                <input type="text" id="pc-name" class="input" maxlength="80" placeholder="${escAttr(t('plugins.phServerMods'))}">
                             </div>
-                            <div class="plug-icon-actions">
-                                <div class="plug-icon-tabs">
-                                    <button class="plug-icon-tab-btn active" data-itab="file">${t('plugins.iconTabFile')}</button>
-                                    <button class="plug-icon-tab-btn" data-itab="builtin">${t('plugins.iconTabBuiltin')}</button>
-                                </div>
-                                <div id="pc-icon-tab-file">
-                                    <button class="btn btn-xs btn-ghost" id="pc-pick-icon">${IC.upload} ${t('plugins.pickIcon')}</button>
-                                    <button class="btn btn-xs btn-ghost" id="pc-clear-icon" style="display:none;">${IC.x} ${t('plugins.removeIcon')}</button>
-                                </div>
-                                <div id="pc-icon-tab-builtin" style="display:none;">
-                                    <div class="plug-icon-builtin-grid">
-                                        ${Object.entries(IC).map(([k, svg]) => `<button class="plug-icon-builtin-btn" data-ickey="${k}" data-tooltip="${k}">${svg}</button>`).join('')}
+                            <div class="plug-form-row">
+                                <label class="plug-form-label" for="pc-id">${escHtml(t('plugins.createId'))} <span class="pc-req" aria-hidden="true">*</span></label>
+                                <input type="text" id="pc-id" class="input pc-mono" maxlength="64" spellcheck="false" placeholder="my-server-modlist">
+                                <span class="plug-field-note" id="pc-id-note">${escHtml(t('plugins.createIdHint'))}</span>
+                            </div>
+                            <div class="plug-form-row">
+                                <label class="plug-form-label" for="pc-version">${escHtml(t('plugins.createVersion'))}</label>
+                                <input type="text" id="pc-version" class="input pc-mono" value="1.0.0" spellcheck="false">
+                                <span class="plug-field-note" id="pc-version-note">${escHtml(t('plugins.pc.versionHint'))}</span>
+                            </div>
+                            <div class="plug-form-row">
+                                <label class="plug-form-label" for="pc-game">${escHtml(t('plugins.createGame'))}</label>
+                                <input type="text" id="pc-game" class="input" placeholder="DCS World, ArmA 3...">
+                            </div>
+                            <!-- Three fields the form could never fill: author, website and tags
+                                 were hard-coded empty in buildManifest, and the plugin CARD renders
+                                 tags — so it drew a row nothing could ever populate. -->
+                            <div class="plug-form-row">
+                                <label class="plug-form-label" for="pc-author">${escHtml(t('plugins.createAuthor'))}</label>
+                                <input type="text" id="pc-author" class="input" placeholder="${escAttr(t('plugins.createAuthorPh'))}">
+                            </div>
+                            <div class="plug-form-row">
+                                <label class="plug-form-label" for="pc-website">${escHtml(t('plugins.createWebsite'))}</label>
+                                <input type="text" id="pc-website" class="input" placeholder="https://" spellcheck="false">
+                                <span class="plug-field-note" id="pc-website-note"></span>
+                            </div>
+                            <div class="plug-form-row pc-span2">
+                                <label class="plug-form-label" for="pc-tags">${escHtml(t('plugins.createTags'))}</label>
+                                <input type="text" id="pc-tags" class="input" placeholder="${escAttr(t('plugins.createTagsPh'))}">
+                                <div class="pc-tag-chips" id="pc-tag-chips" aria-hidden="true"></div>
+                            </div>
+                            <div class="plug-form-row pc-span2">
+                                <label class="plug-form-label" for="pc-desc">${escHtml(t('plugins.createDesc'))}</label>
+                                <textarea id="pc-desc" class="input" rows="3" maxlength="600" placeholder="${escAttr(t('plugins.pc.descPh'))}"></textarea>
+                                <span class="plug-field-note" id="pc-desc-note"></span>
+                            </div>
+                            <div class="plug-form-row pc-span2">
+                                <span class="plug-form-label">${escHtml(t('plugins.customIconLabel'))}</span>
+                                <div class="pc-icon-picker">
+                                    <div class="plug-icon-preview pc-icon-preview" id="pc-icon-preview">
+                                        <div class="plug-card-icon-default">${IC.puzzle}</div>
                                     </div>
-                                    <button class="btn btn-xs btn-ghost" id="pc-icon-library" style="margin-top:6px;">${t('plugins.iconLibrary') || 'Bibliothèque (5000+ icônes)…'}</button>
+                                    <div class="pc-icon-side">
+                                        <div class="pc-icon-actions">
+                                            <button type="button" class="btn btn-xs btn-secondary" id="pc-pick-icon">${IC.upload} ${escHtml(t('plugins.pickIcon'))}</button>
+                                            <button type="button" class="btn btn-xs btn-ghost" id="pc-icon-library">${uiIcon('grid', 12)} ${escHtml(t('plugins.iconLibrary'))}</button>
+                                            <button type="button" class="btn btn-xs btn-ghost" id="pc-clear-icon" hidden>${IC.x} ${escHtml(t('plugins.removeIcon'))}</button>
+                                        </div>
+                                        <div class="pc-icon-grid" role="listbox" aria-label="${escAttr(t('plugins.iconTabBuiltin'))}">
+                                            ${PC_ICON_CHOICES.map((k) => `<button type="button" class="pc-icon-choice plug-icon-builtin-btn" role="option" aria-selected="false" data-ickey="${k}" aria-label="${escAttr(k)}" title="${escAttr(k)}">${uiIcon(k, 18)}</button>`).join('')}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                    <div class="plug-sec-h">${escHtml(t('plugins.secShips') || 'What it ships')}</div>
-                    <!-- Three kinds, ONE shape.
-                         They had three different ones: scripts behind a toggle that revealed
-                         a row, folders as a bare button, automations as another. The toggle
-                         was the worst of it — it hid the import button, and has_scripts is
-                         derived from what is actually in the list anyway, so the switch
-                         decided nothing except whether you could see the thing that does. -->
-                    <div class="plug-ships">
-                        <div class="plug-ship" data-ship="scripts">
-                            <div class="plug-ship-head">
-                                <span class="plug-ship-name">${escHtml(t('plugins.pluginScripts') || 'Scripts')}</span>
-                                <span class="plug-ship-kinds">.bat .ps1 .vbs .py .js</span>
-                                <span class="plug-ship-count" id="pc-count-scripts"></span>
-                                <button class="btn btn-xs btn-ghost" id="pc-import-scripts">${IC.download} ${escHtml(t('common.add') || 'Add')}</button>
+                    </section>
+
+                    <section class="pc-sec" id="pc-sec-contents" data-step="contents">
+                        ${secHead(3, t('plugins.pc.stepContents'), t('plugins.pc.contentsLead'))}
+                        <div class="pc-block" data-focus="mods">
+                            <div class="pc-block-h">
+                                <span class="pc-block-name">${uiIcon('list', 14)} ${escHtml(t('plugins.createModList'))}</span>
+                                <span class="pc-block-count" id="pc-mod-count">0 ${escHtml(t('plugins.modsSelected'))}</span>
                             </div>
-                            <div id="pc-scripts-list" class="plug-scripts-list"></div>
-                            <p class="plug-ship-warn">${IC.lock}<span>${escHtml(t('plugins.unsafeScriptWarn') || 'Scripts run real programs on your PC. They only execute after you grant the unsafe-plugins permission and confirm.')}</span></p>
-                        </div>
-
-                        <div class="plug-ship" data-ship="folders">
-                            <div class="plug-ship-head">
-                                <span class="plug-ship-name">${escHtml(t('plugins.pluginFolders') || 'Bundled folders')}</span>
-                                <span class="plug-ship-kinds">${escHtml(t('plugins.optional') || '(optional)')}</span>
-                                <span class="plug-ship-count" id="pc-count-folders"></span>
-                                <button class="btn btn-xs btn-ghost" id="pc-import-folders">${uiIcon('add-folder', 12)} ${escHtml(t('common.add') || 'Add')}</button>
+                            <div class="pc-mods">
+                                <div class="pc-mods-pane">
+                                    <div class="pc-mods-tools">
+                                        <label class="pg-search pc-mods-search">
+                                            ${uiIcon('search', 14)}
+                                            <input type="search" id="pc-mod-search" class="pg-search-input" spellcheck="false"
+                                                placeholder="${escAttr(t('plugins.searchMods'))}" aria-label="${escAttr(t('plugins.searchMods'))}">
+                                        </label>
+                                        <select id="pc-profile-filter" class="select select-sm" aria-label="${escAttr(t('plugins.filterByProfile'))}">
+                                            <option value="">${escHtml(t('plugins.allMods'))}</option>
+                                            ${_allProfiles.map(p => `<option value="${escAttr(p.id)}">${escHtml(p.name)}</option>`).join('')}
+                                        </select>
+                                    </div>
+                                    <div class="plug-mod-available pc-mods-list" id="pc-available-mods">
+                                        ${_allModsAll.length ? _allModsAll.map(m => `
+                                            <div class="plug-mod-item" data-id="${escAttr(m.id)}" data-name="${escAttr(m.name || m.id)}" data-profiles="${escAttr((m.profileIds || []).join(','))}">
+                                                <span class="plug-mod-item-col">
+                                                    <span class="plug-mod-item-name">${escHtml(m.name || m.id)}</span>
+                                                    <button type="button" class="plug-mod-id" data-copy-id="${escAttr(m.id)}" data-tooltip="${escAttr(t('plugins.copyId'))}">${escHtml(m.id)}</button>
+                                                </span>
+                                                <span class="plug-mod-profile-badge" style="display:none;" data-tooltip="${escAttr(t('plugins.activeInProfile'))}">${IC.checkCircle}</span>
+                                                <label class="plug-mod-optional-lbl" data-tooltip="${escAttr(t('plugins.optional'))}">
+                                                    <input type="checkbox" class="plug-mod-optional-cb" tabindex="-1"> ${escHtml(t('plugins.pc.optShort'))}
+                                                </label>
+                                                <button type="button" class="btn btn-xs plug-mod-add-btn" aria-label="${escAttr(t('common.add'))}">${IC.plus}</button>
+                                            </div>`).join('') : `<div class="plug-mod-empty">${escHtml(t('plugins.noMods'))}</div>`}
+                                        <div class="plug-mod-empty" id="pc-mod-nomatch" hidden>${escHtml(t('plugins.pc.modsNoMatch'))}</div>
+                                    </div>
+                                </div>
+                                <div class="pc-mods-pane pc-mods-selected" id="pc-selected-list">
+                                    <div class="plug-selected-header">${escHtml(t('plugins.selectedMods'))}</div>
+                                    <div id="pc-selected-items" class="plug-selected-items pc-mods-list">
+                                        <div class="plug-mod-empty" id="pc-empty-hint">${escHtml(t('plugins.noModsSelected'))}</div>
+                                    </div>
+                                </div>
                             </div>
-                            <div id="pc-folders-list" class="plug-scripts-list"></div>
                         </div>
-
-                        <div class="plug-ship" data-ship="automations">
-                            <div class="plug-ship-head">
-                                <span class="plug-ship-name">${escHtml(t('plugins.pluginAutomations'))}</span>
-                                <span class="plug-ship-kinds">.bmmpa</span>
-                                <span class="plug-ship-count" id="pc-count-automations"></span>
-                                <button class="btn btn-xs btn-ghost" id="pc-import-automations">${IC.download} ${escHtml(t('common.add') || 'Add')}</button>
+                        <!-- Four kinds, ONE shape.
+                             They had different ones: scripts behind a toggle that revealed a
+                             row, folders as a bare button, automations as another. The toggle
+                             hid the import button, and has_scripts is derived from what is
+                             actually in the list anyway. -->
+                        <div class="pc-ships">
+                            <div class="plug-ship pc-block" data-ship="scripts" data-focus="scripts">
+                                <div class="plug-ship-head">
+                                    <span class="plug-ship-name">${uiIcon('terminal', 14)} ${escHtml(t('plugins.pluginScripts'))}</span>
+                                    <span class="plug-ship-kinds">.bat .ps1 .vbs .py .js</span>
+                                    <span class="plug-ship-count" id="pc-count-scripts"></span>
+                                    <button type="button" class="btn btn-xs btn-ghost" id="pc-import-scripts">${uiIcon('add', 12)} ${escHtml(t('common.add'))}</button>
+                                </div>
+                                <div id="pc-scripts-list" class="plug-scripts-list"></div>
+                                <p class="plug-ship-warn">${IC.lock}<span>${escHtml(t('plugins.unsafeScriptWarn'))}</span></p>
                             </div>
-                            <div id="pc-automations-list" class="plug-scripts-list"></div>
-                            <p class="plug-auto-note">${escHtml(t('plugins.automationsNote'))}</p>
-                        </div>
-
-                        <!-- A catalogue in one file. The plugin could already ship the
-                             automation and not the catalogue the automation came from, which
-                             is the half that keeps working next month. -->
-                        <div class="plug-ship" data-ship="bundles">
-                            <div class="plug-ship-head">
-                                <span class="plug-ship-name">${escHtml(t('plugins.pluginBundles'))}</span>
-                                <span class="plug-ship-kinds">.bmmbundle</span>
-                                <span class="plug-ship-count" id="pc-count-bundles"></span>
-                                <button class="btn btn-xs btn-ghost" id="pc-import-bundles">${IC.download} ${escHtml(t('common.add') || 'Add')}</button>
+                            <div class="plug-ship pc-block" data-ship="folders" data-focus="folders">
+                                <div class="plug-ship-head">
+                                    <span class="plug-ship-name">${uiIcon('folder', 14)} ${escHtml(t('plugins.pluginFolders'))}</span>
+                                    <span class="plug-ship-count" id="pc-count-folders"></span>
+                                    <button type="button" class="btn btn-xs btn-ghost" id="pc-import-folders">${uiIcon('add-folder', 12)} ${escHtml(t('common.add'))}</button>
+                                </div>
+                                <div id="pc-folders-list" class="plug-scripts-list"></div>
                             </div>
-                            <div id="pc-bundles-list" class="plug-scripts-list"></div>
-                            <p class="plug-auto-note">${escHtml(t('plugins.bundlesNote'))}</p>
+                            <div class="plug-ship pc-block" data-ship="automations" data-focus="automations">
+                                <div class="plug-ship-head">
+                                    <span class="plug-ship-name">${uiIcon('workflow', 14)} ${escHtml(t('plugins.pluginAutomations'))}</span>
+                                    <span class="plug-ship-kinds">.bmmpa</span>
+                                    <span class="plug-ship-count" id="pc-count-automations"></span>
+                                    <button type="button" class="btn btn-xs btn-ghost" id="pc-import-automations">${uiIcon('add', 12)} ${escHtml(t('common.add'))}</button>
+                                </div>
+                                <div id="pc-automations-list" class="plug-scripts-list"></div>
+                                <p class="plug-auto-note">${escHtml(t('plugins.automationsNote'))}</p>
+                            </div>
+                            <!-- A catalogue in one file. The plugin could already ship the
+                                 automation and not the catalogue the automation came from. -->
+                            <div class="plug-ship pc-block" data-ship="bundles" data-focus="bundles">
+                                <div class="plug-ship-head">
+                                    <span class="plug-ship-name">${uiIcon('package', 14)} ${escHtml(t('plugins.pluginBundles'))}</span>
+                                    <span class="plug-ship-kinds">.bmmbundle</span>
+                                    <span class="plug-ship-count" id="pc-count-bundles"></span>
+                                    <button type="button" class="btn btn-xs btn-ghost" id="pc-import-bundles">${uiIcon('add', 12)} ${escHtml(t('common.add'))}</button>
+                                </div>
+                                <div id="pc-bundles-list" class="plug-scripts-list"></div>
+                                <p class="plug-auto-note">${escHtml(t('plugins.bundlesNote'))}</p>
+                            </div>
                         </div>
-                    </div>
+                    </section>
 
-                    <!-- What happens on apply -->
-                    <div class="plug-sec-h">${escHtml(t('plugins.secDoes') || 'What it does')}</div>
-                    <!-- Strict mode was under "what it ships", which is where it is least
-                         useful: it does not change what is in the plugin at all, it changes
-                         what APPLYING one does — remove everything that is not in the list,
-                         or only add what is. Next to the apply mode, which is the other half
-                         of the same sentence. -->
-                    <div class="plug-form-row" style="flex-direction:row;align-items:center;gap:12px;">
-                        <label class="plug-form-label" style="margin:0;">${t('plugins.strictMode')}</label>
-                        <label class="plug-toggle">
-                            <input type="checkbox" id="pc-strict">
-                            <span class="plug-toggle-slider"></span>
-                        </label>
-                        <span class="plug-toggle-hint" id="pc-strict-hint">${t('plugins.strictOff')}</span>
-                    </div>
-                    <div class="plug-form-row">
-                        <label class="plug-form-label">${t('plugins.applyMode') || 'On apply'}</label>
-                        <select id="pc-apply-mode" class="select select-sm">
-                            <option value="modlist">${t('plugins.applyModeModlist') || 'Apply mod list (default)'}</option>
-                            <option value="script">${t('plugins.applyModeScript') || 'Run scripts only'}</option>
-                            <option value="both">${t('plugins.applyModeBoth') || 'Apply mod list + run scripts'}</option>
-                            <option value="automation">${escHtml(t('plugins.applyModeAutomation'))}</option>
-                        </select>
-                        <span class="plug-toggle-hint">${t('plugins.applyModeHint') || 'Choose what activating this plugin does.'}</span>
-                    </div>
+                    <section class="pc-sec" id="pc-sec-apply" data-step="apply">
+                        ${secHead(4, t('plugins.pc.stepApply'), t('plugins.applyModeHint'))}
+                        <!-- The manifest value lives in a hidden field so buildManifest and
+                             prefillCreateTab read and write it exactly as they did the select. -->
+                        <input type="hidden" id="pc-apply-mode" value="modlist">
+                        <div class="pc-apply-grid" role="radiogroup" aria-label="${escAttr(t('plugins.applyMode'))}">
+                            ${PC_APPLY_MODES.map((m) => `
+                                <button type="button" class="pc-apply" role="radio" aria-checked="${m.v === 'modlist'}" data-apply="${m.v}">
+                                    <span class="pc-apply-icon" aria-hidden="true">${uiIcon(m.icon, 16)}</span>
+                                    <span class="pc-apply-text">
+                                        <span class="pc-apply-name">${escHtml(t(m.name))}</span>
+                                        <span class="pc-apply-desc">${escHtml(t(m.desc))}</span>
+                                    </span>
+                                </button>`).join('')}
+                        </div>
+                        <!-- Strict mode changes what APPLYING does (remove what is not in the
+                             list, or only add), so it sits with the apply mode. -->
+                        <div class="pc-strict-row">
+                            <label class="plug-toggle">
+                                <input type="checkbox" id="pc-strict" aria-labelledby="pc-strict-label">
+                                <span class="plug-toggle-slider"></span>
+                            </label>
+                            <span class="pc-strict-text">
+                                <span class="pc-strict-label" id="pc-strict-label">${escHtml(t('plugins.strictMode'))}</span>
+                                <span class="plug-toggle-hint" id="pc-strict-hint">${escHtml(t('plugins.strictOff'))}</span>
+                            </span>
+                        </div>
+                    </section>
 
-                    <!-- What it ASKS for. The permissions array was hard-coded empty here,
-                         so no plugin built in this app could declare what it needs — even
-                         though the permission screen reads it to pre-tick the boxes at
-                         install. Ticking one REQUESTS it; the installer still decides. -->
-                    <div class="plug-sec-h">${escHtml(t('plugins.secAsks') || 'What it needs')}</div>
-                    <div class="plug-form-row">
-                        <label class="plug-form-label">${escHtml(t('plugins.createPerms') || 'Permissions it requests')}</label>
-                        <span class="plug-field-note">${escHtml(t('plugins.createPermsHint') || 'Ticking one here only ASKS. Whoever installs the plugin sees the request pre-ticked and decides. Ask for the least that works — a plugin requesting everything is one nobody reads the list of.')}</span>
-                        <!-- One block per domain, and inside it a grid rather than a wrap.
-                             Every scope used to be an inline chip flowing after a 96px label,
-                             so twenty-six of them across seven domains came out as a ragged
-                             wall where nothing lined up with anything and the eye had no
-                             column to run down.
-
-                             The description is on the ROW now, not in a tooltip. This is the
-                             one screen where "what does mods.write actually let it do" is the
-                             question being answered, and a hover is invisible to somebody
-                             scanning — which is everybody, the first time. -->
-                        <!-- Folded by default. Seven domains and twenty-six rows is the
-                             tallest block on this form, and most plugins ask for nothing at
-                             all — so it pushed everything that IS being filled in off the
-                             screen for the common case. The bar stays visible either way,
-                             because "asks for nothing" is the answer people need to see
+                    <!-- What it ASKS for. Ticking one REQUESTS it; the installer still decides. -->
+                    <section class="pc-sec" id="pc-sec-perms" data-step="perms">
+                        ${secHead(5, t('plugins.pc.stepPerms'), t('plugins.createPermsHint'))}
+                        <div class="pc-risk-legend" aria-hidden="true">
+                            <span class="pc-risk pc-risk--low">${escHtml(t('plugins.pc.riskLow'))}</span><span>${escHtml(t('plugins.pc.riskLowD'))}</span>
+                            <span class="pc-risk pc-risk--medium">${escHtml(t('plugins.pc.riskMedium'))}</span><span>${escHtml(t('plugins.pc.riskMediumD'))}</span>
+                            <span class="pc-risk pc-risk--high">${escHtml(t('plugins.pc.riskHigh'))}</span><span>${escHtml(t('plugins.pc.riskHighD'))}</span>
+                        </div>
+                        <!-- Folded by default: most plugins ask for nothing, and the bar says so
                              without opening anything. -->
                         <div class="plug-req-perms is-folded" id="pc-perms">
                             <div class="plug-req-bar">
@@ -4581,93 +4805,117 @@ function renderCreate(container) {
                                     ${uiIcon('chevron-right', 12, { cls: 'plug-req-chev' })}
                                     <span class="plug-req-count" id="pc-perm-count"></span>
                                 </button>
+                                <span class="pc-risk" id="pc-risk-summary" hidden></span>
                                 <button type="button" class="btn btn-xs btn-ghost" id="pc-perm-none">${escHtml(t('plugins.createPermsNone'))}</button>
                             </div>
                             ${permDomains().map(d => `
                                 <div class="plug-req-dom">
-                                    <div class="plug-req-dom-h" style="color:${d.color};">
+                                    <div class="plug-req-dom-h">
+                                        <span class="pc-dom-dot" style="background:${d.color};" aria-hidden="true"></span>
                                         <span>${escHtml(d.domain)}</span>
                                         <span class="plug-req-dom-n" data-dom-n="${escAttr(d.domain)}"></span>
                                     </div>
                                     <div class="plug-req-scopes">
-                                        ${d.scopes.map(sc => `
-                                            <label class="plug-req-item">
-                                                <input type="checkbox" class="pc-perm-cb" data-perm="${escAttr(sc)}"
-                                                    data-dom="${escAttr(d.domain)}" style="accent-color:${d.color};">
+                                        ${d.scopes.map(sc => {
+        const risk = scopeRisk(sc);
+        return `
+                                            <label class="plug-req-item pc-perm-item" data-risk="${risk}">
+                                                <input type="checkbox" class="pc-perm-cb" data-perm="${escAttr(sc)}" data-dom="${escAttr(d.domain)}">
                                                 <span class="plug-req-text">
-                                                    <code style="color:${d.color};">${escHtml(sc)}</code>
-                                                    <em>${escHtml(t('plugins.scope.' + sc) || '')}</em>
+                                                    <span class="pc-perm-top"><code>${escHtml(sc)}</code><span class="pc-risk pc-risk--${risk}">${escHtml(t(PC_RISK_KEY[risk]))}</span></span>
+                                                    <em>${escHtml(t('plugins.scope.' + sc))}</em>
                                                 </span>
-                                            </label>`).join('')}
+                                            </label>`;
+    }).join('')}
                                     </div>
                                 </div>`).join('')}
                         </div>
-                    </div>
-                </div>
-            </div>
+                    </section>
 
-            <div class="plug-create-mods-col">
-                <h3 class="plug-section-title">${IC.list} ${t('plugins.createModList')}</h3>
-                <div class="plug-mod-selector">
-                    <div class="plug-mod-selector-header">
-                        <div class="docs-search-field" style="flex:1;min-width:0;min-height:36px;">
-                            <span class="docs-search-icon">${IC.search}</span>
-                            <input type="text" id="pc-mod-search" class="docs-search-input" placeholder="${t('plugins.searchMods')}">
+                    <section class="pc-sec" id="pc-sec-share" data-step="share">
+                        ${secHead(6, t('plugins.pc.stepShare'), t('plugins.pc.shareLead'))}
+                        <div class="pc-share-actions">
+                            <button type="button" class="btn btn-accent" id="pc-save-local">${IC.save} ${escHtml(t('plugins.saveLocal'))}</button>
+                            <button type="button" class="btn btn-secondary" id="pc-export-bmmplug">${IC.exportIcon} ${escHtml(t('plugins.exportBmmplug'))}</button>
+                            <button type="button" class="btn btn-ghost" id="pc-dry-run" disabled>${IC.search} ${escHtml(t('plugins.pc.dryRun'))}</button>
+                            <button type="button" class="btn btn-ghost" id="pc-see-files" disabled>${IC.folder} ${escHtml(t('plugins.pc.seeFiles'))}</button>
                         </div>
-                        <div class="plug-mod-selector-filters">
-                            <select id="pc-profile-filter" class="select" style="font-size:11px;padding:4px 8px;height:28px;border-radius:6px;" data-tooltip="${t('plugins.filterByProfile')}">
-                                <option value="">${t('plugins.allMods')}</option>
-                                ${_allProfiles.map(p => `<option value="${escHtml(p.id)}">${escHtml(p.name)}</option>`).join('')}
-                            </select>
-                            <span class="plug-mod-count-hint" id="pc-mod-count">0 ${t('plugins.modsSelected')}</span>
+                        <p class="pc-share-status" id="pc-share-status" aria-live="polite">${escHtml(t('plugins.pc.notSavedYet'))}</p>
+                        <ol class="pc-next">
+                            <li>
+                                <span class="pc-next-icon" aria-hidden="true">${uiIcon('save', 14)}</span>
+                                <span class="pc-next-text"><strong>${escHtml(t('plugins.pc.next1'))}</strong><span>${escHtml(t('plugins.pc.next1D'))}</span></span>
+                            </li>
+                            <li>
+                                <span class="pc-next-icon" aria-hidden="true">${uiIcon('search', 14)}</span>
+                                <span class="pc-next-text"><strong>${escHtml(t('plugins.pc.next2'))}</strong><span>${escHtml(t('plugins.pc.next2D'))}</span></span>
+                            </li>
+                            <li>
+                                <span class="pc-next-icon" aria-hidden="true">${uiIcon('export', 14)}</span>
+                                <span class="pc-next-text"><strong>${escHtml(t('plugins.pc.next3'))}</strong><span>${escHtml(t('plugins.pc.next3D'))}</span></span>
+                            </li>
+                            <li>
+                                <span class="pc-next-icon" aria-hidden="true">${uiIcon('globe', 14)}</span>
+                                <span class="pc-next-text"><strong>${escHtml(t('plugins.pc.next4'))}</strong><span>${escHtml(t('plugins.pc.next4D'))}</span></span>
+                                <button type="button" class="btn btn-xs btn-ghost" id="pc-open-catalog-builder">${escHtml(t('plugins.pc.next4Btn'))}</button>
+                            </li>
+                            <li>
+                                <span class="pc-next-icon" aria-hidden="true">${uiIcon('link', 14)}</span>
+                                <span class="pc-next-text"><strong>${escHtml(t('plugins.pc.next5'))}</strong><code class="pc-deeplink" id="pc-deeplink">bmm://plugin/activate?id=…</code></span>
+                                <button type="button" class="btn btn-xs btn-ghost" id="pc-copy-deeplink">${IC.copy} ${escHtml(t('common.copy'))}</button>
+                            </li>
+                        </ol>
+                    </section>
+                </div>
+
+                <aside class="pc-aside" aria-label="${escAttr(t('plugins.pc.previewAria'))}">
+                    <div class="pc-aside-card">
+                        <div class="pc-aside-h">${uiIcon('eye', 14)} ${escHtml(t('plugins.pc.previewTitle'))}</div>
+                        <div class="pc-pv">
+                            <div class="pc-pv-icon" id="pc-pv-icon"><div class="plug-card-icon-default">${IC.puzzle}</div></div>
+                            <div class="pc-pv-titles">
+                                <div class="pc-pv-name" id="pc-pv-name"></div>
+                                <div class="pc-pv-sub" id="pc-pv-sub"></div>
+                            </div>
                         </div>
+                        <p class="pc-pv-desc" id="pc-pv-desc"></p>
+                        <div class="pc-pv-chips" id="pc-pv-chips"></div>
                     </div>
-                    <div class="plug-mod-available" id="pc-available-mods">
-                        ${_allModsAll.length ? _allModsAll.map(m => `
-                            <div class="plug-mod-item" data-id="${escHtml(m.id)}" data-name="${escHtml(m.name || m.id)}" data-profiles="${escHtml((m.profileIds || []).join(','))}">
-                                <span class="plug-mod-item-col">
-                                    <span class="plug-mod-item-name">${escHtml(m.name || m.id)}</span>
-                                    <button class="plug-mod-id" data-copy-id="${escAttr(m.id)}" data-tooltip="${t('plugins.copyId') || 'Copy mod id'}">${escHtml(m.id)}</button>
-                                </span>
-                                <span class="plug-mod-profile-badge" style="display:none;" data-tooltip="${t('plugins.activeInProfile')}">${IC.checkCircle}</span>
-                                <label class="plug-mod-optional-lbl" data-tooltip="${t('plugins.optional')}">
-                                    <input type="checkbox" class="plug-mod-optional-cb" tabindex="-1"> opt
-                                </label>
-                                <button class="btn btn-xs plug-mod-add-btn">${IC.plus}</button>
-                            </div>`).join('') : `<div class="plug-mod-empty">${t('plugins.noMods')}</div>`}
+                    <div class="pc-aside-card">
+                        <div class="pc-aside-h">${uiIcon('clipboard-list', 14)} ${escHtml(t('plugins.pc.checksTitle'))}</div>
+                        <ul class="pc-checks" id="pc-checks"></ul>
                     </div>
-                </div>
-
-                <div class="plug-selected-mods" id="pc-selected-list">
-                    <div class="plug-selected-header">${t('plugins.selectedMods')}</div>
-                    <div id="pc-selected-items" class="plug-selected-items">
-                        <div class="plug-mod-empty" id="pc-empty-hint">${t('plugins.noModsSelected')}</div>
-                    </div>
-                </div>
-
-                <div class="plug-create-buttons">
-                    <button class="btn btn-sm btn-accent" id="pc-save-local">${IC.save} ${t('plugins.saveLocal')}</button>
-                    <button class="btn btn-sm btn-secondary" id="pc-export-bmmplug">${IC.exportIcon} ${t('plugins.exportBmmplug')}</button>
-                </div>
+                    <details class="pc-aside-card pc-manifest" id="pc-manifest">
+                        <summary class="pc-aside-h">${uiIcon('code', 14)} plugin.json
+                            <button type="button" class="btn btn-xs btn-ghost pc-manifest-copy" id="pc-manifest-copy" aria-label="${escAttr(t('common.copy'))}" title="${escAttr(t('common.copy'))}">${IC.copy}</button>
+                        </summary>
+                        <pre class="plug-code-pre pc-manifest-pre" id="pc-manifest-pre"></pre>
+                    </details>
+                </aside>
             </div>
         </div>
     `;
     const selectedMods = new Map();
     let iconSrcPath = '';
     let iconBuiltinSvg = ''; // SVG string when user picks a builtin icon
+    let existingIconPath = ''; // the icon an edited plugin already has (kept by the backend)
     const scriptPaths = []; // absolute paths of scripts to bundle
+    let template = '';
+    let idTouched = false; // once the id is typed by hand, the name stops suggesting one
+    let savedId = ''; // the id last saved in this session of the form
     // A chip for a file/folder ALREADY bundled with the plugin (edit mode). Removal is
     // STAGED (struck-through + Undo) so nothing is lost until the user saves.
     const bundledChip = (rel, removed, kind) => {
         const fname = (rel.split('/').pop() || rel) + (kind === 'folder' ? '/' : '');
         const label = removed
-            ? `<span style="text-decoration:line-through;opacity:.55;">${escHtml(fname)}</span>`
-            : `<span>${escHtml(fname)}</span>`;
+            ? `<span class="plug-bundled-name is-removed">${escHtml(fname)}</span>`
+            : `<span class="plug-bundled-name">${escHtml(fname)}</span>`;
         const action = removed
-            ? `<button class="plug-bundled-undo" data-rel="${escAttr(rel)}" data-kind="${kind}" data-tooltip="${t('plugins.undoRemove') || 'Undo removal'}">${t('plugins.undo') || 'Undo'}</button>`
-            : `<button class="plug-bundled-rm" data-rel="${escAttr(rel)}" data-kind="${kind}" data-tooltip="${t('common.remove') || 'Remove'}">${IC.x}</button>`;
-        return `<div class="plug-script-chip plug-bundled-chip${removed ? ' plug-bundled-removed' : ''}"><span class="plug-bundled-tag">${t('plugins.bundledTag') || 'bundled'}</span>${label}${action}</div>`;
+            ? `<button type="button" class="plug-bundled-undo" data-rel="${escAttr(rel)}" data-kind="${kind}" data-tooltip="${escAttr(t('plugins.undoRemove'))}">${escHtml(t('plugins.undo'))}</button>`
+            : `<button type="button" class="plug-bundled-rm" data-rel="${escAttr(rel)}" data-kind="${kind}" aria-label="${escAttr(t('common.remove'))}" data-tooltip="${escAttr(t('common.remove'))}">${IC.x}</button>`;
+        return `<div class="plug-script-chip plug-bundled-chip${removed ? ' plug-bundled-removed' : ''}"><span class="plug-bundled-tag">${escHtml(t('plugins.bundledTag'))}</span>${label}${action}</div>`;
     };
+    const emptyLine = (text) => `<span class="pc-ship-empty">${escHtml(text)}</span>`;
     // ── Scripts: toggle row + import ──────────────────────────────────────────
     const renderScriptsList = () => {
         const list = document.getElementById('pc-scripts-list');
@@ -4676,10 +4924,9 @@ function renderCreate(container) {
         const bundled = _editScripts.map(rel => bundledChip(rel, _removedScripts.includes(rel), 'script')).join('');
         const picked = scriptPaths.map((p, i) => {
             const fname = p.split(/[\\/]/).pop() || p;
-            return `<div class="plug-script-chip"><span>${escHtml(fname)}</span><button class="plug-script-rm" data-i="${i}" data-tooltip="${t('common.remove') || 'Remove'}">${IC.x}</button></div>`;
+            return `<div class="plug-script-chip"><span>${escHtml(fname)}</span><button type="button" class="plug-script-rm" data-i="${i}" aria-label="${escAttr(t('common.remove'))}" data-tooltip="${escAttr(t('common.remove'))}">${IC.x}</button></div>`;
         }).join('');
-        list.innerHTML = (bundled + picked)
-            || `<span style="font-size:11px;color:var(--text-muted);">${t('plugins.noScripts') || 'No script imported yet.'}</span>`;
+        list.innerHTML = (bundled + picked) || emptyLine(t('plugins.noScripts'));
         setShipCount('pc-count-scripts', _editScripts.filter(x => !_removedScripts.includes(x)).length + scriptPaths.length);
         list.querySelectorAll('.plug-script-rm').forEach(b => b.addEventListener('click', () => {
             scriptPaths.splice(parseInt(b.dataset.i, 10), 1);
@@ -4696,6 +4943,7 @@ function renderCreate(container) {
             _removedScripts = _removedScripts.filter(r => r !== rel);
             renderScriptsList();
         }));
+        refresh();
     };
     _renderPcScripts = renderScriptsList;
     // The requested-permissions block, once the form exists in the DOM.
@@ -4720,11 +4968,10 @@ function renderCreate(container) {
             // files in it should say so before it ships, not after.
             return `<div class="plug-script-chip"><span>${escHtml(fname)}/</span>
                 <span class="plug-folder-facts" data-path="${escAttr(p)}"></span>
-                <button class="plug-folder-see" data-path="${escAttr(p)}" data-tooltip="${escAttr(t('plugins.tree.folderTip'))}">${IC.eye}</button>
-                <button class="plug-folder-rm" data-i="${i}" data-tooltip="${escAttr(t('common.remove') || 'Remove')}">${IC.x}</button></div>`;
+                <button type="button" class="plug-folder-see" data-path="${escAttr(p)}" aria-label="${escAttr(t('plugins.tree.folderTip'))}" data-tooltip="${escAttr(t('plugins.tree.folderTip'))}">${IC.eye}</button>
+                <button type="button" class="plug-folder-rm" data-i="${i}" aria-label="${escAttr(t('common.remove'))}" data-tooltip="${escAttr(t('common.remove'))}">${IC.x}</button></div>`;
         }).join('');
-        list.innerHTML = (bundled + picked)
-            || `<span style="font-size:11px;color:var(--text-muted);">${t('plugins.noFolders') || 'No folder imported yet.'}</span>`;
+        list.innerHTML = (bundled + picked) || emptyLine(t('plugins.noFolders'));
         setShipCount('pc-count-folders', _editFolders.filter(x => !_removedFolders.includes(x)).length + folderPaths.length);
         list.querySelectorAll('.plug-folder-rm').forEach(b => b.addEventListener('click', () => {
             folderPaths.splice(parseInt(b.dataset.i, 10), 1);
@@ -4754,9 +5001,9 @@ function renderCreate(container) {
             _removedFolders = _removedFolders.filter(r => r !== rel);
             renderFoldersList();
         }));
+        refresh();
     };
     _renderPcFolders = renderFoldersList;
-    renderFoldersList();
     container.querySelector('#pc-import-folders')?.addEventListener('click', async () => {
         const dir = await pickFolder();
         if (dir) {
@@ -4773,10 +5020,9 @@ function renderCreate(container) {
         const bundled = _editAutomations.map(rel => bundledChip(rel, _removedAutomations.includes(rel), 'automation')).join('');
         const picked = automationPaths.map((p, i) => {
             const fname = p.split(/[\\/]/).filter(Boolean).pop() || p;
-            return `<div class="plug-script-chip"><span>${escHtml(fname)}</span><button class="plug-auto-rm" data-i="${i}" data-tooltip="${escAttr(t('common.remove') || 'Remove')}">${IC.x}</button></div>`;
+            return `<div class="plug-script-chip"><span>${escHtml(fname)}</span><button type="button" class="plug-auto-rm" data-i="${i}" aria-label="${escAttr(t('common.remove'))}" data-tooltip="${escAttr(t('common.remove'))}">${IC.x}</button></div>`;
         }).join('');
-        list.innerHTML = (bundled + picked)
-            || `<span style="font-size:11px;color:var(--text-muted);">${escHtml(t('plugins.noAutomations'))}</span>`;
+        list.innerHTML = (bundled + picked) || emptyLine(t('plugins.noAutomations'));
         setShipCount('pc-count-automations', _editAutomations.filter(x => !_removedAutomations.includes(x)).length + automationPaths.length);
         list.querySelectorAll('.plug-auto-rm').forEach(b => b.addEventListener('click', () => {
             automationPaths.splice(parseInt(b.dataset.i, 10), 1);
@@ -4793,9 +5039,9 @@ function renderCreate(container) {
             _removedAutomations = _removedAutomations.filter(r => r !== rel);
             renderAutomationsList();
         }));
+        refresh();
     };
     _renderPcAutomations = renderAutomationsList;
-    renderAutomationsList();
     container.querySelector('#pc-import-automations')?.addEventListener('click', async () => {
         const f = await pickFile({ filters: [{ name: 'BMM automation', extensions: ['bmmpa', 'json'] }] }).catch(() => null);
         if (f) {
@@ -4812,10 +5058,9 @@ function renderCreate(container) {
         const bundled = _editBundles.map(rel => bundledChip(rel, _removedBundles.includes(rel), 'bundle')).join('');
         const picked = bundlePaths.map((p, i) => {
             const fname = p.split(/[\\/]/).filter(Boolean).pop() || p;
-            return `<div class="plug-script-chip"><span>${escHtml(fname)}</span><button class="plug-bundle-rm" data-i="${i}" data-tooltip="${escAttr(t('common.remove') || 'Remove')}">${IC.x}</button></div>`;
+            return `<div class="plug-script-chip"><span>${escHtml(fname)}</span><button type="button" class="plug-bundle-rm" data-i="${i}" aria-label="${escAttr(t('common.remove'))}" data-tooltip="${escAttr(t('common.remove'))}">${IC.x}</button></div>`;
         }).join('');
-        list.innerHTML = (bundled + picked)
-            || `<span style="font-size:11px;color:var(--text-muted);">${escHtml(t('plugins.noBundles'))}</span>`;
+        list.innerHTML = (bundled + picked) || emptyLine(t('plugins.noBundles'));
         setShipCount('pc-count-bundles', _editBundles.filter(x => !_removedBundles.includes(x)).length + bundlePaths.length);
         list.querySelectorAll('.plug-bundle-rm').forEach(b => b.addEventListener('click', () => {
             bundlePaths.splice(parseInt(b.dataset.i, 10), 1);
@@ -4832,9 +5077,9 @@ function renderCreate(container) {
             _removedBundles = _removedBundles.filter(r => r !== rel);
             renderBundlesList();
         }));
+        refresh();
     };
     _renderPcBundles = renderBundlesList;
-    renderBundlesList();
     container.querySelector('#pc-import-bundles')?.addEventListener('click', async () => {
         const f = await pickFile({ filters: [{ name: t('catpub.bundleKind'), extensions: ['bmmbundle', 'zip'] }] }).catch(() => null);
         if (f) {
@@ -4842,38 +5087,55 @@ function renderCreate(container) {
             renderBundlesList();
         }
     });
-    // Icon tab switching
-    container.querySelectorAll('.plug-icon-tab-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            container.querySelectorAll('.plug-icon-tab-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            const tab = btn.dataset.itab;
-            document.getElementById('pc-icon-tab-file').style.display = tab === 'file' ? '' : 'none';
-            document.getElementById('pc-icon-tab-builtin').style.display = tab === 'builtin' ? '' : 'none';
+    // ── Icon ─────────────────────────────────────────────────────────────────
+    // One preview, three sources: an image file, a glyph from the grid, or the full library.
+    // Whatever was picked last wins, and the manifest preview's card shows the same thing.
+    const iconHtml = () => {
+        if (iconSrcPath)
+            return `<img src="${escAttr(convertFileSrc(iconSrcPath))}" alt="">`;
+        if (iconBuiltinSvg)
+            return `<div class="plug-card-icon-default pc-icon-glyph">${iconBuiltinSvg}</div>`;
+        if (existingIconPath)
+            return `<img src="${escAttr(convertFileSrc(existingIconPath))}" alt="">`;
+        return `<div class="plug-card-icon-default">${IC.puzzle}</div>`;
+    };
+    const paintIcon = () => {
+        const html = iconHtml();
+        const preview = document.getElementById('pc-icon-preview');
+        if (preview)
+            preview.innerHTML = html;
+        const pv = document.getElementById('pc-pv-icon');
+        if (pv)
+            pv.innerHTML = html;
+        const clear = document.getElementById('pc-clear-icon');
+        if (clear)
+            clear.hidden = !(iconSrcPath || iconBuiltinSvg);
+    };
+    const markGlyph = (key) => {
+        container.querySelectorAll('.pc-icon-choice').forEach((b) => {
+            const on = b.dataset.ickey === key;
+            b.classList.toggle('active', on);
+            b.setAttribute('aria-selected', String(on));
         });
-    });
-    // File icon picker
+    };
     container.querySelector('#pc-pick-icon')?.addEventListener('click', async () => {
         const p = await pickFile({ filters: [{ name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'webp'] }] });
         if (!p)
             return;
         iconSrcPath = p;
-        const preview = document.getElementById('pc-icon-preview');
-        if (preview)
-            preview.innerHTML = `<img src="${convertFileSrc(p)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;">`;
-        document.getElementById('pc-clear-icon').style.display = '';
+        iconBuiltinSvg = '';
+        markGlyph('');
+        paintIcon();
     });
     container.querySelector('#pc-clear-icon')?.addEventListener('click', () => {
         iconSrcPath = '';
         iconBuiltinSvg = '';
-        const preview = document.getElementById('pc-icon-preview');
-        if (preview)
-            preview.innerHTML = `<div class="plug-card-icon-default">${IC.puzzle}</div>`;
-        document.getElementById('pc-clear-icon').style.display = 'none';
+        markGlyph('');
+        paintIcon();
     });
-    // The full icon library (Lucide + brands + upload). A picked ref renders to
-    // plain SVG markup and rides the EXISTING iconBuiltinSvg path — the plugin
-    // format already persists SVG, so nothing downstream changes.
+    // The full icon library (Lucide + brands + upload). A picked ref renders to plain SVG
+    // markup and rides the EXISTING iconBuiltinSvg path — the plugin format already persists
+    // SVG, so nothing downstream changes.
     container.querySelector('#pc-icon-library')?.addEventListener('click', async () => {
         const { openIconPicker, renderPackIcon, ensurePackFor } = await import('../../ui/icon-pack.js');
         const ref = await openIconPicker();
@@ -4885,27 +5147,19 @@ function renderCreate(container) {
             return;
         iconSrcPath = '';
         iconBuiltinSvg = svg;
-        const preview = document.getElementById('pc-icon-preview');
-        if (preview)
-            preview.innerHTML = `<div class="plug-card-icon-default" style="color:var(--accent);">${svg}</div>`;
-        container.querySelectorAll('.plug-icon-builtin-btn').forEach(b => b.classList.remove('active'));
+        markGlyph('');
+        paintIcon();
     });
-    // Builtin icon picker
-    container.querySelectorAll('.plug-icon-builtin-btn').forEach(btn => {
+    container.querySelectorAll('.pc-icon-choice').forEach(btn => {
         btn.addEventListener('click', () => {
-            const key = btn.dataset.ickey;
-            const svg = IC[key];
-            if (!svg)
-                return;
-            iconSrcPath = ''; // Clear file path when using builtin
-            iconBuiltinSvg = svg; // Store SVG to send to Rust
-            const preview = document.getElementById('pc-icon-preview');
-            if (preview)
-                preview.innerHTML = `<div class="plug-card-icon-default" style="color:var(--accent);">${svg}</div>`;
-            container.querySelectorAll('.plug-icon-builtin-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
+            const key = btn.dataset.ickey || '';
+            iconSrcPath = '';
+            iconBuiltinSvg = uiIcon(key, 24);
+            markGlyph(key);
+            paintIcon();
         });
     });
+    // ── Mods ─────────────────────────────────────────────────────────────────
     function updateCount() {
         const el = document.getElementById('pc-mod-count');
         if (el)
@@ -4913,36 +5167,44 @@ function renderCreate(container) {
         const hint = document.getElementById('pc-empty-hint');
         if (hint)
             hint.style.display = selectedMods.size ? 'none' : '';
+        refresh();
     }
     function addMod(id, name, optional) {
         if (selectedMods.has(id))
             return;
         selectedMods.set(id, { name, optional });
+        // A mod the plugin names but this PC does not have. Editing a plugin used to DROP
+        // these silently (prefill only added mods it could find in the list), so opening a
+        // server's plugin on a machine without one of its mods and saving it removed that
+        // mod from the plugin for everybody.
+        const known = !!container.querySelector(`.plug-mod-item[data-id="${CSS.escape(id)}"]`);
         const item = document.createElement('div');
         item.className = 'plug-selected-item';
         item.dataset.id = id;
         item.innerHTML = `
             <span class="plug-mod-item-col">
                 <span class="plug-selected-name">${escHtml(name)}</span>
-                <button class="plug-mod-id" data-copy-id="${escAttr(id)}" data-tooltip="${t('plugins.copyId') || 'Copy mod id'}">${escHtml(id)}</button>
+                <button type="button" class="plug-mod-id" data-copy-id="${escAttr(id)}" data-tooltip="${escAttr(t('plugins.copyId'))}">${escHtml(id)}</button>
             </span>
+            ${known ? '' : `<span class="pc-missing" data-tooltip="${escAttr(t('plugins.pc.modMissingTip'))}">${escHtml(t('plugins.pc.modMissing'))}</span>`}
             <label class="plug-sel-opt">
-                <input type="checkbox" ${optional ? 'checked' : ''}> ${t('plugins.optional')}
+                <input type="checkbox" ${optional ? 'checked' : ''}> ${escHtml(t('plugins.optional'))}
             </label>
-            <button class="btn btn-xs btn-danger plug-sel-remove">${IC.x}</button>`;
+            <button type="button" class="btn btn-xs btn-ghost plug-sel-remove" aria-label="${escAttr(t('common.remove'))}">${IC.x}</button>`;
         item.querySelector('input[type=checkbox]')?.addEventListener('change', (e) => {
             const entry = selectedMods.get(id);
             if (entry)
                 entry.optional = e.target.checked;
+            refresh();
         });
         item.querySelector('.plug-sel-remove')?.addEventListener('click', () => {
             selectedMods.delete(id);
             item.remove();
             updateCount();
-            container.querySelector(`.plug-mod-item[data-id="${id}"]`)?.classList.remove('plug-mod-selected');
+            container.querySelector(`.plug-mod-item[data-id="${CSS.escape(id)}"]`)?.classList.remove('plug-mod-selected');
         });
         document.getElementById('pc-selected-items')?.appendChild(item);
-        container.querySelector(`.plug-mod-item[data-id="${id}"]`)?.classList.add('plug-mod-selected');
+        container.querySelector(`.plug-mod-item[data-id="${CSS.escape(id)}"]`)?.classList.add('plug-mod-selected');
         updateCount();
     }
     function applyModFilters() {
@@ -4950,6 +5212,7 @@ function renderCreate(container) {
         const q = (container.querySelector('#pc-mod-search')?.value || '').toLowerCase();
         const profile = _allProfiles.find(p => p.id === profileId);
         const activeMods = new Set(profile?.active_mods || []);
+        let shown = 0;
         container.querySelectorAll('.plug-mod-item').forEach(item => {
             const el = item;
             const id = el.dataset.id || '';
@@ -4962,11 +5225,16 @@ function renderCreate(container) {
                 badge.style.display = profileId && activeMods.has(id) ? '' : 'none';
             // Visibility: no profile → show all; profile selected → only mods in that profile
             const passesProfile = !profileId || modProfiles.includes(profileId);
-            const passesSearch = !q || name.includes(q);
-            el.style.display = passesProfile && passesSearch ? '' : 'none';
+            const passesSearch = !q || name.includes(q) || id.toLowerCase().includes(q);
+            const ok = passesProfile && passesSearch;
+            el.style.display = ok ? '' : 'none';
+            if (ok)
+                shown++;
         });
+        const none = document.getElementById('pc-mod-nomatch');
+        if (none)
+            none.hidden = shown > 0 || !_allModsAll.length;
     }
-    // Profile filter
     container.querySelector('#pc-profile-filter')?.addEventListener('change', applyModFilters);
     container.querySelector('#pc-mod-search')?.addEventListener('input', applyModFilters);
     container.querySelectorAll('.plug-mod-add-btn').forEach(btn => {
@@ -4984,6 +5252,7 @@ function renderCreate(container) {
         if (hint)
             hint.textContent = e.target.checked
                 ? t('plugins.strictOn') : t('plugins.strictOff');
+        refresh();
     });
     // Click a mod id (available or selected list) to copy it — handy when hand-editing
     // a catalog or debugging a mod-list match.
@@ -4991,8 +5260,7 @@ function renderCreate(container) {
     // ONCE PER CONTAINER. renderCreate() replaces the container's innerHTML but the container
     // itself survives, so attaching a delegated listener to it on every visit stacked them:
     // the fourth time you opened the Create tab, one click fired four handlers and put four
-    // identical "id copied" toasts on screen. The children are rebuilt and their listeners go
-    // with them; a listener on the element that OUTLIVES the render has to be guarded.
+    // identical "id copied" toasts on screen.
     if (!container.dataset.pcIdCopyBound) {
         container.dataset.pcIdCopyBound = '1';
         container.addEventListener('click', (e) => {
@@ -5004,45 +5272,79 @@ function renderCreate(container) {
             navigator.clipboard?.writeText(idBtn.dataset.copyId).then(() => toast(t('plugins.idCopied') || 'Mod id copied', 'success'), () => toast(`${t('common.error')}`, 'error'));
         });
     }
-    // Say it while it is being typed, not after Save. The note under the field turns into
-    // the complaint, so there is one place to look rather than a toast that has gone by the
-    // time you look up.
-    {
-        const idEl = container.querySelector('#pc-id');
-        const note = container.querySelector('#pc-id-note');
-        const good = t('plugins.createIdHint') || '';
-        idEl?.addEventListener('input', () => {
-            const v = idEl.value.trim();
-            const bad = !!v && !isUsablePluginId(v);
-            idEl.classList.toggle('is-bad', bad);
-            if (note) {
-                note.textContent = bad
-                    ? (t('plugins.createIdBad') || 'That id will not work — letters, digits, - and . only.')
-                    : good;
-                note.classList.toggle('is-bad', bad);
-            }
+    // ── Apply mode cards ─────────────────────────────────────────────────────
+    const applyEl = container.querySelector('#pc-apply-mode');
+    const paintApply = () => {
+        const v = applyEl.value || 'modlist';
+        container.querySelectorAll('.pc-apply').forEach((b) => {
+            const on = b.dataset.apply === v;
+            b.classList.toggle('active', on);
+            b.setAttribute('aria-checked', String(on));
         });
-    }
-    function buildManifest() {
-        const id = document.getElementById('pc-id')?.value.trim();
-        const name = document.getElementById('pc-name')?.value.trim();
-        if (!id || !name) {
-            toast(t('plugins.createIdNameRequired'), 'warning');
-            return null;
+    };
+    container.querySelectorAll('.pc-apply').forEach((b) => b.addEventListener('click', () => {
+        applyEl.value = b.dataset.apply || 'modlist';
+        paintApply();
+        refresh();
+    }));
+    // ── Templates ────────────────────────────────────────────────────────────
+    const paintTemplate = () => {
+        container.querySelectorAll('.pc-tpl').forEach((b) => {
+            const on = b.dataset.tpl === template;
+            b.classList.toggle('active', on);
+            b.setAttribute('aria-checked', String(on));
+        });
+        const tp = PC_TEMPLATES.find((x) => x.id === template);
+        // The parts the template is about stand out; the rest stay usable, just quieter.
+        container.querySelectorAll('.pc-block[data-focus]').forEach((b) => {
+            const focus = tp ? tp.focus : [];
+            b.classList.toggle('is-focus', focus.includes(b.dataset.focus || ''));
+            b.classList.toggle('is-quiet', !!tp && focus.length > 0 && !focus.includes(b.dataset.focus || ''));
+        });
+    };
+    container.querySelectorAll('.pc-tpl').forEach((b) => b.addEventListener('click', () => {
+        template = b.dataset.tpl || '';
+        const tp = PC_TEMPLATES.find((x) => x.id === template);
+        if (tp) {
+            applyEl.value = tp.apply;
+            paintApply();
+            const strict = container.querySelector('#pc-strict');
+            if (strict && tp.strict !== undefined && strict.checked !== tp.strict) {
+                strict.checked = tp.strict;
+                strict.dispatchEvent(new Event('change'));
+            }
         }
-        // Checked HERE as well as while typing: the note under the field is advice, and
-        // advice is not a gate. An id with a slash or a space in it becomes a folder name,
-        // a deeplink and a catalogue key, and it fails at each of those differently.
-        if (!isUsablePluginId(id)) {
-            toast(t('plugins.createIdBad') || 'That id will not work — letters, digits, - and . only.', 'warning', 7000);
-            return null;
+        paintTemplate();
+        refresh();
+        // On to the next thing to fill in: the name, unless it is already there.
+        const name = container.querySelector('#pc-name');
+        if (name && !name.value.trim()) {
+            document.getElementById('pc-sec-identity')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            setTimeout(() => name.focus({ preventScroll: true }), 250);
         }
+    }));
+    // ── Identity ─────────────────────────────────────────────────────────────
+    // The id is suggested from the name while it has not been typed by hand, so the common
+    // case is one field. Editing a plugin never touches its id: it is what everything else
+    // already refers to.
+    const idEl = container.querySelector('#pc-id');
+    const nameEl = container.querySelector('#pc-name');
+    const slug = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+        .replace(/[^a-z0-9._-]+/g, '-').replace(/^[^a-z0-9]+/, '').replace(/-+$/, '').replace(/-{2,}/g, '-').slice(0, 64);
+    nameEl.addEventListener('input', () => {
+        if (!idTouched && !_pcEditingId)
+            idEl.value = slug(nameEl.value);
+    });
+    idEl.addEventListener('input', () => { idTouched = idEl.value.trim() !== ''; });
+    // ── Validation, preview and the step rail ─────────────────────────────────
+    function collectManifest() {
         // Bundled files the user KEPT (existing minus staged removals). The backend
         // appends newly-picked files to these and deletes the removed ones.
         const keptScripts = _editScripts.filter(s => !_removedScripts.includes(s));
         const keptFolders = _editFolders.filter(f => !_removedFolders.includes(f));
         return {
-            id, name,
+            id: idEl.value.trim(),
+            name: nameEl.value.trim(),
             version: document.getElementById('pc-version')?.value.trim() || '1.0.0',
             author: document.getElementById('pc-author')?.value.trim() || '',
             description: document.getElementById('pc-desc')?.value.trim() || '',
@@ -5064,7 +5366,7 @@ function renderCreate(container) {
             folders: keptFolders,
             automations: _editAutomations.filter(a => !_removedAutomations.includes(a)),
             bundles: _editBundles.filter(b => !_removedBundles.includes(b)),
-            apply_mode: document.getElementById('pc-apply-mode')?.value || 'modlist',
+            apply_mode: applyEl.value || 'modlist',
             modlist: {
                 strict: document.getElementById('pc-strict')?.checked || false,
                 // The map KEY is the mod id — carry it so matching survives a rename
@@ -5073,26 +5375,335 @@ function renderCreate(container) {
             },
         };
     }
+    /** The manifest as it will be written: the picked files under the names the backend gives them. */
+    function previewManifest() {
+        const m = collectManifest();
+        const base = (p) => p.split(/[\\/]/).filter(Boolean).pop() || p;
+        m.scripts = [...m.scripts, ...scriptPaths.map((p) => `scripts/${base(p)}`)];
+        m.folders = [...m.folders, ...folderPaths.map((p) => `bundle/${base(p)}`)];
+        m.automations = [...m.automations, ...automationPaths.map((p) => `automations/${base(p)}`)];
+        m.bundles = [...m.bundles, ...bundlePaths.map((p) => `bundles/${base(p)}`)];
+        return m;
+    }
+    function checks(m) {
+        const out = [];
+        const nScripts = m.scripts.length, nAuto = m.automations.length, nBundles = m.bundles.length;
+        const nMods = m.modlist.required_mods.length, nFolders = m.folders.length;
+        if (!m.name)
+            out.push({ level: 'error', text: t('plugins.pc.chkName'), step: 'identity' });
+        if (!m.id)
+            out.push({ level: 'error', text: t('plugins.pc.chkId'), step: 'identity' });
+        else if (!isUsablePluginId(m.id))
+            out.push({ level: 'error', text: t('plugins.createIdBad'), step: 'identity' });
+        else if (m.id !== _pcEditingId && _installedPlugins.some((p) => p?.manifest?.id === m.id)) {
+            out.push({ level: 'warn', text: t('plugins.pc.chkIdTaken'), step: 'identity' });
+        }
+        if (!/^\d+(\.\d+){0,3}([-+][0-9A-Za-z.-]+)?$/.test(m.version))
+            out.push({ level: 'warn', text: t('plugins.pc.chkVersion'), step: 'identity' });
+        if (m.website && !/^https?:\/\/\S+$/i.test(m.website))
+            out.push({ level: 'warn', text: t('plugins.pc.chkWebsite'), step: 'identity' });
+        if (!m.description)
+            out.push({ level: 'warn', text: t('plugins.pc.chkDesc'), step: 'identity' });
+        if (!nMods && !nScripts && !nFolders && !nAuto && !nBundles) {
+            out.push({ level: 'warn', text: t('plugins.pc.chkEmpty'), step: 'contents' });
+        }
+        const mode = m.apply_mode;
+        if ((mode === 'modlist' || mode === 'both') && !nMods && (nScripts || nAuto)) {
+            out.push({ level: 'warn', text: t('plugins.pc.chkModeNoMods'), step: 'apply' });
+        }
+        if ((mode === 'script' || mode === 'both') && !nScripts)
+            out.push({ level: 'warn', text: t('plugins.pc.chkModeNoScripts'), step: 'apply' });
+        if (mode === 'automation' && !nAuto)
+            out.push({ level: 'warn', text: t('plugins.pc.chkModeNoAuto'), step: 'apply' });
+        if (m.modlist.strict && !nMods)
+            out.push({ level: 'warn', text: t('plugins.pc.chkStrictEmpty'), step: 'apply' });
+        const high = m.permissions.filter((p) => scopeRisk(p) === 'high').length;
+        if (high)
+            out.push({ level: 'warn', text: t('plugins.pc.chkHighPerms').replace('{n}', String(high)), step: 'perms' });
+        return out;
+    }
+    let refreshQueued = false;
+    function refresh() {
+        // Coalesced: a prefill or a template click changes a dozen things in one go.
+        if (refreshQueued)
+            return;
+        refreshQueued = true;
+        // A timer, not requestAnimationFrame: rAF does not fire while the window is hidden,
+        // and a form filled from a deeplink in the background must still be right when shown.
+        setTimeout(() => { refreshQueued = false; paint(); }, 0);
+    }
+    function paint() {
+        if (!container.isConnected || !document.getElementById('pc-manifest-pre'))
+            return;
+        const m = previewManifest();
+        const found = checks(m);
+        // The field notes say it where it is being typed, not after Save.
+        const idNote = document.getElementById('pc-id-note');
+        const idBad = !!m.id && !isUsablePluginId(m.id);
+        idEl.classList.toggle('is-bad', idBad);
+        if (idNote) {
+            idNote.textContent = idBad ? t('plugins.createIdBad')
+                : (m.id && m.id !== _pcEditingId && _installedPlugins.some((p) => p?.manifest?.id === m.id)) ? t('plugins.pc.chkIdTaken')
+                    : t('plugins.createIdHint');
+            idNote.classList.toggle('is-bad', idBad || idNote.textContent === t('plugins.pc.chkIdTaken'));
+        }
+        const verEl = document.getElementById('pc-version');
+        const verBad = found.some((c) => c.text === t('plugins.pc.chkVersion'));
+        verEl?.classList.toggle('is-bad', verBad);
+        const verNote = document.getElementById('pc-version-note');
+        if (verNote) {
+            verNote.textContent = verBad ? t('plugins.pc.chkVersion') : t('plugins.pc.versionHint');
+            verNote.classList.toggle('is-bad', verBad);
+        }
+        const webEl = document.getElementById('pc-website');
+        const webBad = !!m.website && !/^https?:\/\/\S+$/i.test(m.website);
+        webEl?.classList.toggle('is-bad', webBad);
+        const webNote = document.getElementById('pc-website-note');
+        if (webNote) {
+            webNote.textContent = webBad ? t('plugins.pc.chkWebsite') : '';
+            webNote.classList.toggle('is-bad', webBad);
+        }
+        const descNote = document.getElementById('pc-desc-note');
+        if (descNote)
+            descNote.textContent = m.description ? `${m.description.length} / 600` : '';
+        // Tags as they will read on the card.
+        const tagHost = document.getElementById('pc-tag-chips');
+        if (tagHost)
+            tagHost.innerHTML = m.tags.map((x) => `<span class="plug-tag">${escHtml(x)}</span>`).join('');
+        // The card preview.
+        const pvName = document.getElementById('pc-pv-name');
+        if (pvName) {
+            pvName.textContent = m.name || t('plugins.pc.pvNoName');
+            pvName.classList.toggle('is-placeholder', !m.name);
+        }
+        const pvSub = document.getElementById('pc-pv-sub');
+        if (pvSub)
+            pvSub.textContent = [`v${m.version}`, m.author, m.game].filter(Boolean).join(' · ');
+        const pvDesc = document.getElementById('pc-pv-desc');
+        if (pvDesc) {
+            pvDesc.textContent = m.description;
+            pvDesc.hidden = !m.description;
+        }
+        const risk = maxScopeRisk(m.permissions);
+        const chips = [];
+        const chip = (icon, text, cls = '') => `<span class="pc-pv-chip${cls}">${uiIcon(icon, 12)}${escHtml(text)}</span>`;
+        if (m.modlist.required_mods.length)
+            chips.push(chip('list', t('plugins.pc.pvMods').replace('{n}', String(m.modlist.required_mods.length))));
+        if (m.scripts.length)
+            chips.push(chip('terminal', t('plugins.pc.pvScripts').replace('{n}', String(m.scripts.length))));
+        if (m.folders.length)
+            chips.push(chip('folder', t('plugins.pc.pvFolders').replace('{n}', String(m.folders.length))));
+        if (m.automations.length)
+            chips.push(chip('workflow', t('plugins.pc.pvAutomations').replace('{n}', String(m.automations.length))));
+        if (m.bundles.length)
+            chips.push(chip('package', t('plugins.pc.pvBundles').replace('{n}', String(m.bundles.length))));
+        if (m.modlist.strict)
+            chips.push(chip('lock', t('plugins.strict')));
+        chips.push(risk
+            ? chip('shield', `${t('plugins.pc.permsN').replace('{n}', String(m.permissions.length))} · ${t(PC_RISK_KEY[risk])}`, ` pc-risk--${risk}`)
+            : chip('shield-check', t('plugins.pc.permsNone'), ' pc-risk--low'));
+        const pvChips = document.getElementById('pc-pv-chips');
+        if (pvChips)
+            pvChips.innerHTML = chips.join('') + m.tags.map((x) => `<span class="plug-tag">${escHtml(x)}</span>`).join('');
+        // The overall risk beside the permission count.
+        const sum = document.getElementById('pc-risk-summary');
+        if (sum) {
+            sum.hidden = !risk;
+            sum.className = `pc-risk${risk ? ` pc-risk--${risk}` : ''}`;
+            sum.textContent = risk ? t('plugins.pc.riskOverall').replace('{r}', t(PC_RISK_KEY[risk])) : '';
+        }
+        // The checklist.
+        const list = document.getElementById('pc-checks');
+        if (list) {
+            list.innerHTML = found.length
+                ? found.map((c) => `<li class="pc-check pc-check--${c.level}">
+                        <button type="button" class="pc-check-go" data-goto="${c.step}">
+                            ${uiIcon(c.level === 'error' ? 'error' : 'warning', 14)}<span>${escHtml(c.text)}</span>
+                        </button></li>`).join('')
+                : `<li class="pc-check pc-check--ok"><span class="pc-check-go">${uiIcon('success', 14)}<span>${escHtml(t('plugins.pc.chkAllGood'))}</span></span></li>`;
+        }
+        // The step rail: a tick when a step has nothing to say, its worst finding otherwise.
+        const filled = {
+            template: !!template || !!_pcEditingId,
+            identity: !!m.id && !!m.name,
+            contents: !!(m.modlist.required_mods.length || m.scripts.length || m.folders.length || m.automations.length || m.bundles.length),
+            apply: true,
+            perms: true,
+            share: !!savedId && savedId === m.id,
+        };
+        for (const s of PC_STEPS) {
+            const mine = found.filter((c) => c.step === s.id);
+            const level = mine.some((c) => c.level === 'error') ? 'error' : mine.length ? 'warn' : filled[s.id] ? 'ok' : '';
+            const el = container.querySelector(`[data-step-state="${s.id}"]`);
+            const btn = el?.closest('.pc-step');
+            if (btn)
+                btn.dataset.state = level;
+            if (el)
+                el.innerHTML = level === 'ok' ? uiIcon('check', 12) : level === 'error' ? uiIcon('error', 12) : level === 'warn' ? uiIcon('warning', 12) : '';
+        }
+        // plugin.json, as it will be written.
+        const pre = document.getElementById('pc-manifest-pre');
+        if (pre)
+            pre.innerHTML = hlJson(JSON.stringify(m, null, 2));
+        const dl = document.getElementById('pc-deeplink');
+        if (dl)
+            dl.textContent = `bmm://plugin/activate?id=${m.id || '…'}`;
+        // Saved and not edited since: the dry run and the folder are about THIS plugin.
+        const fresh = !!savedId && savedId === m.id;
+        document.getElementById('pc-dry-run')?.toggleAttribute('disabled', !fresh);
+        document.getElementById('pc-see-files')?.toggleAttribute('disabled', !fresh);
+        // The head says which plugin is open, so "Save" is never a guess between new and edit.
+        const chipEl = document.getElementById('pc-mode-chip');
+        const title = document.getElementById('pc-head-title');
+        if (chipEl) {
+            chipEl.hidden = !_pcEditingId;
+            chipEl.textContent = _pcEditingId ? t('plugins.pc.editingChip').replace('{id}', _pcEditingId) : '';
+        }
+        if (title)
+            title.textContent = _pcEditingId ? t('plugins.editPlugin') : t('plugins.createTitle');
+    }
+    // Any field, any checkbox: one delegated listener for the whole form.
+    container.querySelector('.pc-shell')?.addEventListener('input', () => refresh());
+    container.querySelector('.pc-shell')?.addEventListener('change', () => refresh());
+    // The rail and the checklist both jump to the section a finding is about.
+    const goTo = (step) => {
+        const sec = document.getElementById(`pc-sec-${step}`);
+        if (!sec)
+            return;
+        sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (step === 'perms') {
+            const host = document.getElementById('pc-perms');
+            if (host?.classList.contains('is-folded'))
+                document.getElementById('pc-perm-fold')?.click();
+        }
+        sec.classList.remove('is-flash');
+        void sec.offsetWidth;
+        sec.classList.add('is-flash');
+    };
+    container.querySelectorAll('.pc-step').forEach((b) => b.addEventListener('click', () => goTo(b.dataset.step || '')));
+    container.querySelector('#pc-checks')?.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-goto]');
+        if (b)
+            goTo(b.dataset.goto || '');
+    });
+    container.querySelector('#pc-manifest-copy')?.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        await navigator.clipboard.writeText(JSON.stringify(previewManifest(), null, 2)).catch(() => { });
+        toast(t('common.copied'), 'success');
+    });
+    container.querySelector('#pc-reset')?.addEventListener('click', async () => {
+        const dirty = !!(nameEl.value.trim() || idEl.value.trim() || selectedMods.size || scriptPaths.length
+            || folderPaths.length || automationPaths.length || bundlePaths.length || _pcEditingId);
+        if (dirty) {
+            const ok = await window.confirmCustom?.(t('plugins.pc.startOver'), t('plugins.pc.startOverConfirm'), 'warning', { yesLabel: t('plugins.pc.startOver'), noLabel: t('common.cancel') });
+            if (!ok)
+                return;
+        }
+        renderCreate(container);
+    });
+    container.querySelector('#pc-other-page')?.addEventListener('click', async () => {
+        const { openNavbarEditor } = await import('../../ui/navbar-customize.js');
+        openNavbarEditor();
+    });
+    container.querySelector('#pc-other-script')?.addEventListener('click', () => {
+        _apiSec = 'generator';
+        selectPluginTab('scripts');
+    });
+    container.querySelector('#pc-open-catalog-builder')?.addEventListener('click', () => {
+        openPluginCatalogBuilder(() => { });
+    });
+    container.querySelector('#pc-copy-deeplink')?.addEventListener('click', async () => {
+        const id = idEl.value.trim();
+        if (!id) {
+            goTo('identity');
+            return;
+        }
+        await navigator.clipboard.writeText(`bmm://plugin/activate?id=${id}`).catch(() => { });
+        toast(t('common.copied'), 'success');
+    });
+    function buildManifest() {
+        const m = collectManifest();
+        if (!m.id || !m.name) {
+            toast(t('plugins.createIdNameRequired'), 'warning');
+            goTo('identity');
+            return null;
+        }
+        // Checked HERE as well as while typing: the note under the field is advice, and
+        // advice is not a gate. An id with a slash or a space in it becomes a folder name,
+        // a deeplink and a catalogue key, and it fails at each of those differently.
+        if (!isUsablePluginId(m.id)) {
+            toast(t('plugins.createIdBad'), 'warning', 7000);
+            goTo('identity');
+            return null;
+        }
+        return m;
+    }
     // Bundled files staged for removal — the backend physically deletes these on save.
     const removedBundledPayload = () => ({ scripts: _removedScripts.slice(), folders: _removedFolders.slice() });
-    container.querySelector('#pc-save-local')?.addEventListener('click', async () => {
+    /** Replacing a plugin that is not the one open here is said out loud, once, before it happens. */
+    async function confirmReplace(id) {
+        if (id === _pcEditingId || !_installedPlugins.some((p) => p?.manifest?.id === id))
+            return true;
+        return !!(await window.confirmCustom?.(t('plugins.pc.replaceTitle'), t('plugins.pc.replaceDesc').replace('{id}', id), 'warning', { yesLabel: t('plugins.pc.replaceYes'), noLabel: t('common.cancel') }));
+    }
+    async function save() {
         const manifest = buildManifest();
         if (!manifest)
-            return;
-        try {
-            const plugin = await invoke('create_local_plugin', {
-                manifest,
-                iconSrcPath: iconSrcPath || null,
-                iconSvg: iconBuiltinSvg || null,
-                scriptSrcPaths: scriptPaths.length ? scriptPaths : null,
-                folderSrcPaths: folderPaths.length ? folderPaths : null,
-                automationSrcPaths: automationPaths.length ? automationPaths : null,
-                bundleSrcPaths: bundlePaths.length ? bundlePaths : null,
-                removedBundled: removedBundledPayload(),
-            });
-            _installedPlugins = _installedPlugins.filter(p => p.manifest.id !== manifest.id);
+            return null;
+        if (!(await confirmReplace(manifest.id)))
+            return null;
+        const plugin = await invoke('create_local_plugin', {
+            manifest,
+            iconSrcPath: iconSrcPath || null,
+            iconSvg: iconBuiltinSvg || null,
+            scriptSrcPaths: scriptPaths.length ? scriptPaths : null,
+            folderSrcPaths: folderPaths.length ? folderPaths : null,
+            automationSrcPaths: automationPaths.length ? automationPaths : null,
+            bundleSrcPaths: bundlePaths.length ? bundlePaths : null,
+            removedBundled: removedBundledPayload(),
+        });
+        _installedPlugins = _installedPlugins.filter(p => p.manifest.id !== manifest.id);
+        if (plugin)
             _installedPlugins.push(plugin);
-            toast(t('plugins.createSaved', { name: manifest.name }), 'success');
+        // What was picked is now in the plugin. Carried over as "bundled" so a second save
+        // does not copy it again, and so the form reads the way the plugin now is.
+        const pm = plugin?.manifest || manifest;
+        _editScripts = (pm.scripts || []).slice();
+        _removedScripts = [];
+        _editFolders = (pm.folders || []).slice();
+        _removedFolders = [];
+        _editAutomations = (pm.automations || []).slice();
+        _removedAutomations = [];
+        _editBundles = (pm.bundles || []).slice();
+        _removedBundles = [];
+        scriptPaths.length = 0;
+        folderPaths.length = 0;
+        automationPaths.length = 0;
+        bundlePaths.length = 0;
+        if (plugin?.icon_path) {
+            existingIconPath = plugin.icon_path;
+        }
+        _pcEditingId = manifest.id;
+        savedId = manifest.id;
+        renderScriptsList();
+        renderFoldersList();
+        renderAutomationsList();
+        renderBundlesList();
+        const status = document.getElementById('pc-share-status');
+        if (status) {
+            status.textContent = t('plugins.pc.savedAt').replace('{time}', new Date().toLocaleTimeString());
+            status.classList.add('is-ok');
+        }
+        paintPluginHead();
+        refresh();
+        return plugin;
+    }
+    container.querySelector('#pc-save-local')?.addEventListener('click', async () => {
+        try {
+            const plugin = await save();
+            if (plugin)
+                toast(t('plugins.createSaved', { name: plugin.manifest?.name || nameEl.value.trim() }), 'success');
         }
         catch (e) {
             toast(`${t('common.error')}: ${e}`, 'error');
@@ -5106,16 +5717,9 @@ function renderCreate(container) {
         if (!path)
             return;
         try {
-            await invoke('create_local_plugin', {
-                manifest,
-                iconSrcPath: iconSrcPath || null,
-                iconSvg: iconBuiltinSvg || null,
-                scriptSrcPaths: scriptPaths.length ? scriptPaths : null,
-                folderSrcPaths: folderPaths.length ? folderPaths : null,
-                automationSrcPaths: automationPaths.length ? automationPaths : null,
-                bundleSrcPaths: bundlePaths.length ? bundlePaths : null,
-                removedBundled: removedBundledPayload(),
-            });
+            const plugin = await save();
+            if (!plugin)
+                return;
             await invoke('export_plugin', { pluginId: manifest.id, destPath: path });
             toast(t('plugins.exportSuccess', { name: manifest.name }), 'success');
         }
@@ -5123,6 +5727,54 @@ function renderCreate(container) {
             toast(`${t('common.error')}: ${e}`, 'error');
         }
     });
+    // The dry run: what applying would do to the mods on this PC, without doing it. The same
+    // comparison the installed card's Compare opens, so it can never disagree with Apply.
+    container.querySelector('#pc-dry-run')?.addEventListener('click', () => {
+        if (!savedId)
+            return;
+        const m = collectManifest();
+        if (m.modlist.required_mods.length) {
+            void handleCompare(savedId);
+            return;
+        }
+        toast(m.scripts.length || m.automations.length
+            ? t('plugins.pc.dryRunNoMods')
+            : t('plugins.noModlist'), 'info', 7000);
+    });
+    container.querySelector('#pc-see-files')?.addEventListener('click', async () => {
+        if (!savedId)
+            return;
+        const { openPluginContent } = await import('./plugin-inspect.js');
+        await openPluginContent(savedId, nameEl.value.trim() || savedId);
+    });
+    // Loaded with an existing plugin: everything prefillCreateTab set from outside, painted.
+    _pcAfterPrefill = (manifest) => {
+        _pcEditingId = manifest?.id && _installedPlugins.some((p) => p?.manifest?.id === manifest.id) ? manifest.id : '';
+        idTouched = true;
+        template = '';
+        const inst = _installedPlugins.find((p) => p?.manifest?.id === manifest?.id);
+        existingIconPath = _pcEditingId ? (inst?.icon_path || '') : '';
+        // A mod the plugin lists and this PC does not have is kept, flagged, rather than lost.
+        for (const mod of (manifest?.modlist?.required_mods || [])) {
+            const key = mod.id || mod.name;
+            if (!key)
+                continue;
+            const already = selectedMods.has(key) || Array.from(selectedMods.values()).some((v) => (v.name || '').toLowerCase() === (mod.name || '').toLowerCase());
+            if (!already)
+                addMod(key, mod.name || key, !!mod.optional);
+        }
+        paintApply();
+        paintTemplate();
+        paintIcon();
+        refresh();
+    };
+    renderScriptsList();
+    renderFoldersList();
+    renderAutomationsList();
+    renderBundlesList();
+    paintApply();
+    paintTemplate();
+    refresh();
 }
 // ── Tab: API & Scripts ─────────────────────────────────────────────────────
 function renderScripts(container) {
@@ -5240,6 +5892,11 @@ function renderScripts(container) {
                             placeholder="${t('plugins.endpointSearch') || 'Search endpoints… (GET, /api/mods, modpack…)'}" spellcheck="false">
                         <button class="btn btn-xs btn-ghost" id="plug-ep-search-clear" data-tooltip="${t('common.clear') || 'Clear'}" aria-label="${escAttr(t('common.clear'))}" style="display:none;">${IC.x}</button>
                         <span class="plug-qt-search-count" id="plug-ep-search-count"></span>
+                    </div>
+                    <div class="plug-ep-filter" id="plug-ep-filter" role="group" aria-label="${escAttr(t('plugins.epFilterAria'))}">
+                        <button type="button" class="plug-filter-chip" data-epm="" aria-pressed="true">${escHtml(t('plugins.filter.all'))}</button>
+                        ${EP_METHODS.map((m) => `<button type="button" class="plug-filter-chip" data-epm="${m}" aria-pressed="false"><span class="plug-method ${EP_METHOD_CLS[m]}">${m}</span></button>`).join('')}
+                        <button type="button" class="plug-filter-chip" data-epm="open" aria-pressed="false">${uiIcon('unlock', 12)} ${escHtml(t('plugins.epNoToken'))}</button>
                     </div>
                     <div class="plug-ep-collapse-bar">
                         <button class="btn btn-xs btn-ghost" id="plug-ep-expand-all">${t('plugins.epExpandAll') || 'Expand all'}</button>
@@ -5406,6 +6063,8 @@ function renderScripts(container) {
     const epSearchClr = container.querySelector('#plug-ep-search-clear');
     const epCount = container.querySelector('#plug-ep-search-count');
     const epList = container.querySelector('#plug-ep-list');
+    // The method filter: one method, or "no token needed", or everything.
+    let epMethod = '';
     const applyEndpointFilter = () => {
         if (!epList)
             return;
@@ -5418,25 +6077,39 @@ function renderScripts(container) {
             const path = row?.dataset.path || '';
             const desc = (w.querySelector('.plug-endpoint-desc')?.textContent || '');
             const hay = `${method} ${path} ${desc}`.toLowerCase();
-            const match = !q || hay.includes(q);
+            const byMethod = !epMethod
+                || (epMethod === 'open' ? !w.querySelector('.plug-auth-badge') : method === epMethod);
+            const match = byMethod && (!q || hay.includes(q));
             w.style.display = match ? '' : 'none';
             if (match)
                 shown++;
         });
-        // While searching, force every group open so matches across groups show.
+        const narrowed = !!q || !!epMethod;
+        // While filtering, force every group open so matches across groups show, and hide a
+        // group with nothing left in it (a heading over no rows reads as a list that failed).
         epList.querySelectorAll('.plug-ep-group').forEach(g => {
-            if (q)
+            if (narrowed)
                 g.classList.add('open', 'search-forced-open');
             else if (g.classList.contains('search-forced-open')) {
                 g.classList.remove('open', 'search-forced-open');
             }
+            const any = Array.from(g.querySelectorAll('.plug-ep-wrap')).some((w) => w.style.display !== 'none');
+            g.style.display = any ? '' : 'none';
         });
         if (epSearchClr)
             epSearchClr.style.display = q ? '' : 'none';
         if (epCount)
-            epCount.textContent = q ? `${shown}/${rows.length}` : '';
+            epCount.textContent = narrowed ? `${shown}/${rows.length}` : '';
     };
     epSearch?.addEventListener('input', applyEndpointFilter);
+    container.querySelector('#plug-ep-filter')?.addEventListener('click', (e) => {
+        const chip = e.target.closest('.plug-filter-chip');
+        if (!chip)
+            return;
+        epMethod = chip.dataset.epm || '';
+        container.querySelectorAll('#plug-ep-filter .plug-filter-chip').forEach((c) => c.setAttribute('aria-pressed', String((c.dataset.epm || '') === epMethod)));
+        applyEndpointFilter();
+    });
     epSearchClr?.addEventListener('click', () => { if (epSearch) {
         epSearch.value = '';
         applyEndpointFilter();
@@ -6164,20 +6837,20 @@ function buildEndpointRow(ep) {
     const PERM_GROUPS = permDomains().map(d => ({ g: d.domain, c: d.color, perms: d.scopes }));
     const showsPerms = ep.path === '/api/apps/permissions/:id' && ep.method === 'PUT';
     const permChipsHtml = showsPerms ? `
-        <div class="plug-ep-perms" style="margin:10px 0;padding:11px 13px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:9px;">
-            <div class="plug-ep-section-lbl" style="margin-bottom:8px;">${t('plugins.epAvailablePerms') || 'Available permissions'}</div>
+        <div class="plug-ep-perms">
+            <div class="plug-ep-section-lbl">${escHtml(t('plugins.epAvailablePerms'))}</div>
             ${PERM_GROUPS.map(grp => `
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap;">
-                <span style="font-size:9px;font-weight:800;color:${grp.c};text-transform:uppercase;letter-spacing:.6px;min-width:62px;">${grp.g}</span>
-                ${grp.perms.map(pm => `<code class="plug-perm-copy" data-perm="${pm}" data-tooltip="${t('plugins.clickToCopy') || 'Click to copy'}" style="font-size:10px;color:${grp.c};background:${grp.c}1a;border:1px solid ${grp.c}33;padding:2px 7px;border-radius:5px;cursor:pointer;">${pm}</code>`).join('')}
+              <div class="plug-ep-perm-row">
+                <span class="plug-ep-perm-dom"><span class="pc-dom-dot" style="background:${grp.c};" aria-hidden="true"></span>${escHtml(grp.g)}</span>
+                ${grp.perms.map(pm => `<code class="plug-perm-copy" data-perm="${pm}" data-tooltip="${escAttr(t('plugins.clickToCopy'))}">${pm}</code><span class="pc-risk pc-risk--${scopeRisk(pm)}">${escHtml(t(scopeRisk(pm) === 'high' ? 'plugins.pc.riskHigh' : scopeRisk(pm) === 'medium' ? 'plugins.pc.riskMedium' : 'plugins.pc.riskLow'))}</span>`).join('')}
               </div>`).join('')}
         </div>` : '';
-    const fieldsHtml = ep.fields ? `
+    const fieldsHtml = ep.fields?.length ? `
         <div class="plug-ep-fields">
             <div class="plug-ep-section-lbl">${t('plugins.epRequestBody')}</div>
             <table class="plug-ep-fields-table">
                 <colgroup><col class="col-field"><col class="col-type"><col class="col-req"><col class="col-desc"></colgroup>
-                <thead><tr><th>Field</th><th>Type</th><th></th><th>Description</th></tr></thead>
+                <thead><tr><th>${escHtml(t('plugins.epColField'))}</th><th>${escHtml(t('plugins.epColType'))}</th><th></th><th>${escHtml(t('plugins.epColDesc'))}</th></tr></thead>
                 <tbody>
                     ${ep.fields.map(f => `<tr>
                         <td style="white-space:nowrap;min-width:80px;"><code class="plug-ep-fname" data-tooltip="${escHtml(f.name)}">${escHtml(f.name)}</code></td>
@@ -6259,21 +6932,20 @@ function buildEndpointRow(ep) {
     };
     const dlEquiv = ENDPOINT_TO_DL[`${ep.method} ${ep.path}`];
     const dlBadge = dlEquiv
-        ? `<span class="plug-ep-dl-badge" data-tooltip="Équivalent bmm:// : ${dlEquiv}"
-               style="font-size:9px;padding:1px 6px;border-radius:4px;background:rgba(139,92,246,0.12);color:color-mix(in srgb, var(--bmm-purple) 70%, var(--bmm-text-primary));border:1px solid rgba(139,92,246,0.2);white-space:nowrap;font-weight:700;cursor:default;user-select:none;">bmm://</span>`
+        ? `<span class="plug-ep-dl-badge" data-tooltip="${escAttr(t('plugins.epDlEquiv'))} ${escAttr(dlEquiv)}">bmm://</span>`
         : '';
     const dlInfoHtml = dlEquiv
-        ? `<div class="plug-ep-dl-info" style="display:flex;align-items:center;gap:8px;padding:8px 12px;margin-top:6px;background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.18);border-radius:8px;">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2" style="flex-shrink:0" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                <span style="font-size:11px;color:var(--text-secondary);white-space:nowrap;flex-shrink:0;">Équivalent deeplink :</span>
-                <code class="plug-ep-copy-btn" data-copy="${escHtml(dlEquiv)}" data-tooltip="${t('plugins.copyDeeplink') || 'Click to copy'}" style="flex:1;font-size:11px;color:color-mix(in srgb, var(--bmm-purple) 70%, var(--bmm-text-primary));background:rgba(139,92,246,0.12);padding:2px 8px;border-radius:4px;cursor:pointer;user-select:all;white-space:normal;word-break:break-all;min-width:0;" tabindex="0">${escHtml(dlEquiv)}</code>
-                <button class="btn btn-xs plug-ep-copy-btn" data-copy="${escHtml(dlEquiv)}" data-tooltip="${t('common.copy') || 'Copy'}" style="flex-shrink:0;padding:3px 7px;background:rgba(139,92,246,0.15);color:color-mix(in srgb, var(--bmm-purple) 70%, var(--bmm-text-primary));border:1px solid rgba(139,92,246,0.25);border-radius:5px;">${IC.copy}</button>
+        ? `<div class="plug-ep-dl-info">
+                ${uiIcon('link', 12)}
+                <span class="plug-ep-dl-label">${escHtml(t('plugins.epDlEquiv'))}</span>
+                <code class="plug-ep-copy-btn plug-ep-dl-code" data-copy="${escHtml(dlEquiv)}" data-tooltip="${escAttr(t('plugins.copyDeeplink'))}" tabindex="0">${escHtml(dlEquiv)}</code>
+                <button class="btn btn-xs btn-ghost plug-ep-copy-btn" data-copy="${escHtml(dlEquiv)}" aria-label="${escAttr(t('common.copy'))}" data-tooltip="${escAttr(t('common.copy'))}">${IC.copy}</button>
            </div>`
         : '';
     return `
         <div class="plug-ep-wrap" id="epw-${safeId}">
             <div class="plug-endpoint-row" data-method="${ep.method}" data-path="${ep.path}" data-ep-id="${safeId}">
-                <button class="plug-ep-chevron" id="epchev-${safeId}" aria-label="expand" data-tooltip="${t('plugins.epExpandTip')}">
+                <button class="plug-ep-chevron" id="epchev-${safeId}" aria-label="${escAttr(t('plugins.epExpandTip'))}" data-tooltip="${t('plugins.epExpandTip')}">
                     ${uiIcon('chevron-down', 12)}
                 </button>
                 <span class="plug-method ${cls}">${ep.method}</span>
@@ -6917,7 +7589,7 @@ function buildDeepLinkRow(dl) {
     return `
         <div class="plug-ep-wrap plug-dl-wrap" id="epw-${safeId}" data-dlgrp="${escAttr(dlGroupOf(dl.scheme).g)}">
             <div class="plug-endpoint-row plug-dl-row" data-method="DL" data-path="${escHtml(fullUrl)}" data-ep-id="${safeId}">
-                <button class="plug-ep-chevron" id="epchev-${safeId}" aria-label="expand">
+                <button class="plug-ep-chevron" id="epchev-${safeId}" aria-label="${escAttr(t('plugins.epExpandTip'))}">
                     ${uiIcon('chevron-down', 12)}
                 </button>
                 <span class="plug-method plug-dl-badge">bmm://</span>
@@ -12170,6 +12842,9 @@ function prefillCreateTab(manifest) {
             item.querySelector('.plug-mod-add-btn')?.click();
         }
     }
+    // The rest of the form (mods this PC does not have, the apply-mode cards, the icon, the
+    // preview and the checks) is the Create tab's own business; it was handed the hook.
+    _pcAfterPrefill?.(manifest);
 }
 async function handleResetToken() {
     const ok = await window.confirmCustom(t('plugins.resetTokenTitle'), t('plugins.resetTokenDesc'), 'danger', { yesLabel: t('plugins.reset'), noLabel: t('common.cancel') });

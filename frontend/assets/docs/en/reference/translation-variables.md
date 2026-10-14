@@ -39,9 +39,9 @@ when a translation and the code disagree. It cannot go out of date.
 | `{host}` | a server name |
 | `{url}` | a web address |
 | `{file}` | a file name |
+| `{time}` | a time |
 | `{x}` | a list or a detail the code inserts |
 | `{date}` | a date |
-| `{time}` | a time |
 | `{type}` | a kind of thing (an importer, a format…) |
 
 ## Braces that are text
@@ -73,7 +73,7 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 
 ## Every key with variables
 
-1050 keys, grouped by their first segment. The text is the English one, shortened.
+1073 keys, grouped by their first segment. The text is the English one, shortened.
 
 ### activity
 
@@ -872,6 +872,7 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `plugins.deepLinkModEnabled` | `{id}` | Mod '{id}' enabled |
 | `plugins.deepLinkNotFound` | `{id}` | Plugin '{id}' not installed |
 | `plugins.deepLinkProfileActivated` | `{id}` | Profile '{id}' activated |
+| `plugins.epCount` | `{n}` | {n} endpoint(s) |
 | `plugins.errChecksumMismatch` | `{actual}` `{expected}` | the downloaded file does not match the catalogue's checksum (expected {expected}, got {actual}). |
 | `plugins.exportSuccess` | `{name}` | Plugin '{name}' exported |
 | `plugins.fromIndex` | `{n}` | Added {n} plugin catalog(s) from that index. |
@@ -881,6 +882,17 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `plugins.installSuccess` | `{name}` | Plugin '{name}' installed! |
 | `plugins.modsNotFound` | `{mods}` | Mods not found: {mods} |
 | `plugins.noChecksumBody` | `{name}` | The catalogue entry for "{name}" has no SHA-256, so BMM cannot check that the file it downloads is the one th… |
+| `plugins.pc.chkHighPerms` | `{n}` | Asks for {n} high-risk permission(s). Explain why in the description. |
+| `plugins.pc.editingChip` | `{id}` | Editing {id} |
+| `plugins.pc.permsN` | `{n}` | {n} permission(s) |
+| `plugins.pc.pvAutomations` | `{n}` | {n} automation(s) |
+| `plugins.pc.pvBundles` | `{n}` | {n} catalogue(s) |
+| `plugins.pc.pvFolders` | `{n}` | {n} folder(s) |
+| `plugins.pc.pvMods` | `{n}` | {n} mod(s) |
+| `plugins.pc.pvScripts` | `{n}` | {n} script(s) |
+| `plugins.pc.replaceDesc` | `{id}` | A plugin with the id {id} is installed. Saving replaces it with this one. |
+| `plugins.pc.riskOverall` | `{r}` | Overall risk: {r} |
+| `plugins.pc.savedAt` | `{time}` | Saved and installed at {time}. |
 | `plugins.pcbAlready` | `{id}` | {id} is already in this catalogue |
 | `plugins.pcbFromFile` | `{f}` | from {f} |
 | `plugins.pcbNotPlugin` | `{f}` | {f} is not a plugin, left out |
@@ -902,6 +914,7 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `plugins.tree.sum` | `{b}` `{d}` `{f}` | {f} file(s) in {d} folder(s) · {b} |
 | `plugins.uninstallDesc` | `{name}` | Remove '{name}' and all its files? |
 | `plugins.uninstallSuccess` | `{name}` | Plugin '{name}' removed |
+| `plugins.updateAvail` | `{v}` | v{v} available |
 | `plugins.updateNeedsChecksum` | `{name}` | {name}: an update is available, but its catalogue entry has no checksum. Install it from the catalogue to con… |
 
 ### prof
@@ -1404,6 +1417,16 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `themes.catalogExportedBundle` | `{f}` `{n}` | {n} theme(s) packed into {f}. One file, nothing to host. |
 | `themes.catalogExportedFolder` | `{n}` | Wrote catalog.json and {n} theme file(s). Upload the folder as is. |
 | `themes.dropinFound` | `{n}` | {n} preset(s) found |
+| `themes.ed.contrastSum` | `{n}` `{ok}` | {ok} of {n} pass |
+| `themes.ed.copyName` | `{name}` | {name} (copy) |
+| `themes.ed.fixTip` | `{v}` | Use {v}, the closest colour that passes |
+| `themes.ed.fontPreset` | `{name}` | Font for {name} |
+| `themes.ed.formatExplained` | `{v}` | Saved in theme format {v}. Fields BMM does not know are kept as they are. |
+| `themes.ed.needs` | `{n}` | needs {n}:1 |
+| `themes.ed.pickColour` | `{name}` | Pick a colour for {name} |
+| `themes.ed.statusErrors` | `{n}` | {n} problem(s) to fix before saving |
+| `themes.ed.statusOk` | `{v}` | Valid theme file (format {v}) |
+| `themes.ed.statusWarnings` | `{n}` | Valid, {n} warning(s) |
 | `themes.fromIndex` | `{n}` | Added {n} theme catalog(s) from that index. |
 | `themes.importFailed` | `{list}` | Could not import: {list} |
 | `themes.indexAll` | `{n}` | That index lists {n} theme catalog(s) and you already follow them all. |

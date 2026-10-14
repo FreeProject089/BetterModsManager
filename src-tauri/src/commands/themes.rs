@@ -5,6 +5,30 @@
 use tauri::Manager;
 use std::path::PathBuf;
 
+/// Built-in themes whose id named another product, and the id each one has now. The themes
+/// did not change, only their ids. Every id this file reads back from disk (the active theme,
+/// the hidden presets) goes through `canonical_builtin_id`, so a choice made under the old id
+/// keeps working. The frontend carries the same table (features/themes/theme-model.ts,
+/// BUILTIN_ID_ALIASES); tests/theme-model.test.mjs checks the two agree.
+pub const LEGACY_BUILTIN_IDS: &[(&str, &str)] = &[
+    ("bmm-discord", "bmm-indigo"),
+    ("bmm-spotify", "bmm-neon"),
+    ("bmm-claude", "bmm-clay"),
+    ("bmm-nord", "bmm-arctic"),
+    ("bmm-vscode", "bmm-charcoal"),
+    ("bmm-macos", "bmm-cobalt"),
+];
+
+/// The current id for `id`: an old built-in id becomes its new one, anything else is
+/// returned trimmed.
+pub fn canonical_builtin_id(id: &str) -> String {
+    let id = id.trim();
+    LEGACY_BUILTIN_IDS.iter()
+        .find(|(old, _)| *old == id)
+        .map(|(_, new)| new.to_string())
+        .unwrap_or_else(|| id.to_string())
+}
+
 fn themes_dir(app_handle: &tauri::AppHandle) -> PathBuf {
     app_handle.path()
         .app_data_dir().ok()
@@ -140,15 +164,23 @@ pub fn theme_presets_dir(app_handle: tauri::AppHandle) -> Result<String, String>
 
 #[tauri::command]
 pub fn get_hidden_builtins(app_handle: tauri::AppHandle) -> Vec<String> {
-    hidden_builtins_path(&app_handle)
+    let raw: Vec<String> = hidden_builtins_path(&app_handle)
         .and_then(|p| std::fs::read_to_string(p).ok())
         .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default()
+        .unwrap_or_default();
+    // A preset hidden under its old id stays hidden under its new one.
+    let mut out: Vec<String> = Vec::new();
+    for id in raw {
+        let id = canonical_builtin_id(&id);
+        if !out.contains(&id) { out.push(id); }
+    }
+    out
 }
 
 /// Hides (`hidden=true`) or restores (`false`) a built-in theme by id.
 #[tauri::command]
 pub fn set_builtin_hidden(app_handle: tauri::AppHandle, theme_id: String, hidden: bool) -> Result<(), String> {
+    let theme_id = canonical_builtin_id(&theme_id);
     let mut list = get_hidden_builtins(app_handle.clone());
     if hidden { if !list.contains(&theme_id) { list.push(theme_id); } }
     else { list.retain(|x| x != &theme_id); }
@@ -184,7 +216,8 @@ pub fn list_installed_themes(app_handle: tauri::AppHandle) -> Result<String, Str
 #[tauri::command]
 pub fn get_active_theme(app_handle: tauri::AppHandle) -> Option<String> {
     let f = themes_dir(&app_handle).parent()?.join("active_theme.txt");
-    std::fs::read_to_string(f).ok()
+    // Under its current id even when it was saved under an old built-in one.
+    std::fs::read_to_string(f).ok().map(|s| canonical_builtin_id(&s))
 }
 
 /// Persists the active theme id.
@@ -192,7 +225,7 @@ pub fn get_active_theme(app_handle: tauri::AppHandle) -> Option<String> {
 pub fn set_active_theme(app_handle: tauri::AppHandle, theme_id: String) -> Result<(), String> {
     let data_dir = app_handle.path()
         .app_data_dir().ok().ok_or("no data dir")?;
-    std::fs::write(data_dir.join("active_theme.txt"), &theme_id).map_err(|e| e.to_string())
+    std::fs::write(data_dir.join("active_theme.txt"), canonical_builtin_id(&theme_id)).map_err(|e| e.to_string())
 }
 
 /// Installs a theme from its JSON string (theme.json content).
@@ -251,9 +284,12 @@ pub fn import_theme(app_handle: tauri::AppHandle, path: String) -> Result<String
             s
         };
 
-        // Also extract assets/fonts if present into the themes dir
+        // Also extract assets/fonts if present into the themes dir. The id names that folder,
+        // so it is held to the same rule as install_theme (it was joined unchecked, and an id
+        // of `..\x` wrote outside the themes folder), and an id already taken by a different
+        // theme gets a fresh one rather than overwriting somebody's theme.
         let parsed: serde_json::Value = serde_json::from_str(&theme_raw).map_err(|e| e.to_string())?;
-        let id = parsed["id"].as_str().unwrap_or("imported").to_string();
+        let (id, raw) = import_id(&themes_dir(&app_handle), parsed)?;
         let dest = themes_dir(&app_handle).join(&id);
         std::fs::create_dir_all(&dest).map_err(|e| e.to_string())?;
 
@@ -262,7 +298,8 @@ pub fn import_theme(app_handle: tauri::AppHandle, path: String) -> Result<String
         for i in 0..arc2.len() {
             let mut entry = arc2.by_index(i).map_err(|e| e.to_string())?;
             let name = entry.name().to_string();
-            if name == "theme.json" || name.starts_with("assets/") || name.starts_with("fonts/") {
+            // theme.json itself is written below, under the id import_id chose.
+            if name.starts_with("assets/") || name.starts_with("fonts/") {
                 // CWE-22 Zip Slip: enclosed_name() rejects entries that escape the
                 // archive root (e.g. "assets/../../evil"); skip those.
                 let safe = match entry.enclosed_name() { Some(p) => p.to_path_buf(), None => continue };
@@ -274,17 +311,53 @@ pub fn import_theme(app_handle: tauri::AppHandle, path: String) -> Result<String
                 }
             }
         }
-        theme_raw
+        raw
     };
 
-    // Auto-install
+    // Auto-install, never over a different theme that already has this id.
     let v: serde_json::Value = serde_json::from_str(&theme_json).map_err(|e| e.to_string())?;
-    let id = v["id"].as_str().ok_or("missing id")?.to_string();
+    let (id, theme_json) = import_id(&themes_dir(&app_handle), v)?;
     let dir = themes_dir(&app_handle).join(&id);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     std::fs::write(dir.join("theme.json"), &theme_json).map_err(|e| e.to_string())?;
 
     Ok(theme_json)
+}
+
+/// The id an imported theme is stored under, and its JSON with that id in it.
+///
+/// Importing used to write `themes/<id>/theme.json` whatever was there: a shared file that
+/// happened to reuse the id of a theme you made replaced yours, silently and for good. Now the
+/// same theme (identical JSON) lands on itself, and a different one gets `<id>-2`, `<id>-3`…
+fn import_id(dir: &std::path::Path, mut v: serde_json::Value) -> Result<(String, String), String> {
+    let id = v["id"].as_str().map(|s| s.trim().to_string()).unwrap_or_default();
+    if id.is_empty() || id.contains("..") || id.contains('/')
+        || crate::fs_utils::safe_folder_name(&id).as_deref() != Some(id.as_str())
+    {
+        return Err("Invalid theme id".into());
+    }
+    let same_as = |candidate: &str, v: &serde_json::Value| -> bool {
+        std::fs::read_to_string(dir.join(candidate).join("theme.json")).ok()
+            .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+            .map(|old| &old == v)
+            .unwrap_or(false)
+    };
+    let free = |candidate: &str| !dir.join(candidate).join("theme.json").exists();
+    let mut chosen = id.clone();
+    if !free(&chosen) && !same_as(&chosen, &v) {
+        let mut n = 2;
+        loop {
+            let cand = format!("{}-{}", id, n);
+            let mut probe = v.clone();
+            probe["id"] = serde_json::Value::String(cand.clone());
+            if free(&cand) || same_as(&cand, &probe) { chosen = cand; break; }
+            n += 1;
+            if n > 999 { return Err("Too many themes with this id".into()); }
+        }
+    }
+    if chosen != id { v["id"] = serde_json::Value::String(chosen.clone()); }
+    let json = serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?;
+    Ok((chosen, json))
 }
 
 /// Exports a theme as a .bmmtheme zip (with theme.json + assets + fonts).

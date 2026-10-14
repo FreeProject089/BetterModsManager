@@ -102,5 +102,56 @@
 - SSH errors read as sentences (« Could not reach nas.local: Connection refused ») instead of a sentence with blanks followed by raw details.
 - Sending or fetching a single file over SSH (a repo.json, a catalogue) now shows in the activity centre, like whole-repo transfers already did.
 
+## [IMPROVED] Plugins & API
+### Create tab
+- Creating a plugin is a guided form in six steps (start from, identity, contents, on apply, permissions, save and share), with a step bar that shows what is done and what still needs attention. Click a step to go to it.
+- Start from a template: mod list, server mod list (strict), script pack, mods + scripts, automation pack, catalogue bundle or blank. It sets the apply mode and highlights what matters. Nothing typed is cleared.
+- The id is suggested from the name while you have not typed one. The id, version and website are checked as you type.
+- The apply mode is four cards that say what each one does, next to the strict switch.
+- Each permission shows a risk level (low, medium, high) beside its plain-language description, and the bar shows the overall risk of what the plugin asks for.
+- A new icon grid uses BMM's own icons; an image file and the 5000-icon library still work.
+- A live preview shows the plugin card, a checklist (missing name or id, an empty plugin, an apply mode that does not match the contents, high-risk permissions without a description) and the plugin.json that will be written, with a copy button.
+- After saving: « Dry run » shows what applying would change on this PC without changing anything, « See the files » opens what was packed, and the next steps explain how to export the .bmmplug, publish it in a plugin catalogue and copy its `bmm://plugin/activate` link.
+- « Start over » clears the form. The head says when you are editing an existing plugin. Saving over another installed plugin with the same id asks first.
+
+### Fixed in the Create tab
+- Editing a plugin on a PC that does not have all of its mods no longer drops those mods on save. They stay in the list, marked « not on this PC ».
+- The scripts list showed nothing (not even « No script imported yet ») until something was added.
+- Editing a plugin now shows its current icon.
+- When the all-profiles mod list cannot be read, the creator falls back to the current profile's mods instead of offering nothing.
+
+### Installed plugins
+- Filters: all, update available, mod lists, scripts, automations and catalogues, asks for permissions. Only filters with plugins in them are shown.
+- Each card shows how many permissions the plugin asks for with its highest risk, and « vX available » when its catalogue has a newer version that was not installed automatically (auto-update off, or no checksum).
+- « New plugin » next to the search, and in the empty state.
+
+### API reference
+- Endpoints are grouped by area (mods, profiles, modpacks, plugins, server repos, apps and catalogues, automation and hooks, data and privacy, BMM itself) instead of by HTTP method. Each group shows how many of each method it has.
+- Filter by method, or show only the endpoints that need no token.
+- The bmm:// equivalent, the field table and the permission list are translated and follow the theme (they were partly in French only, with fixed colours). An endpoint without fields no longer shows an empty field table.
+
+## [IMPROVED] Theme editor, rebuilt
+- A new layout: sections on the left (Basics, All tokens, Pictures, Elements, CSS, Library), a preview of real BMM parts on the right (sidebar, cards, buttons, fields, a dialog, notifications, a tooltip), the contrast checks under it. It still floats, docks to the side and pops out into its own window.
+- The preview wears only the theme you are editing. The app changes when you save, or as you edit if you tick « Apply to BMM as I edit ». Until then the editor itself stays readable whatever colours you try.
+- Basics: dark or light mode, a whole palette from one colour, a built-in to start from, and the four families (background, surfaces, text, accent and status). Switching mode rebuilds the backgrounds and text for the other mode and keeps your accent, so a light version of a dark theme is one click.
+- All tokens: every `--bmm-*` token BMM declares, explained, searchable, with a « Changed only » filter.
+- Contrast: each pair that must stay readable shows its WCAG ratio and grade. A failing pair offers « Fix » (the closest colour that passes); « Fix all » fixes them all.
+- Undo and redo (Ctrl+Z, Ctrl+Y) over every change; Ctrl+S saves. Reset either undoes the unsaved changes or starts again from the default look.
+- Save writes over your own theme, Save as new makes another one; a built-in is never overwritten. Export, import, copy as JSON and share link are in the File menu. Questions are asked inside the editor, so they also work in its own window.
+- The footer says whether the theme file is valid, and why not.
+- Pick on screen now matches any colour token, not only nine fixed colours.
+
+## [IMPROVED] Theme files
+- Theme files have a format version (`format_version`, now 2). An older file is migrated when it is read (token names without their `--`, numbers, an invalid mode) and is only rewritten when you save it. Fields BMM does not know are kept.
+- A token value that would break out of the stylesheet is ignored, in token lists, per-page tokens and element styles alike.
+- Importing a theme whose id is already used by a different theme no longer overwrites it: the import gets a new id. An imported archive whose id is not a plain name is refused (it could write outside the themes folder).
+- `bmm://theme/apply?id=…` now applies built-in themes too (it answered « Theme not found »).
+
+## [CHANGED] Built-in theme names
+- Six built-in ids named other products. They are renamed; the themes are unchanged: `bmm-discord` → `bmm-indigo`, `bmm-spotify` → `bmm-neon`, `bmm-claude` → `bmm-clay`, `bmm-nord` → `bmm-arctic`, `bmm-vscode` → `bmm-charcoal` (shown as « Charcoal », was « Editor »), `bmm-macos` → `bmm-cobalt`.
+- Old ids keep working everywhere: your saved theme, hidden presets, scheduler tasks, links, the installer's choice and the MCP bridge are read under the new id.
+- Arctic's and Charcoal's descriptions no longer refer to other products, and Cobalt no longer asks for another system's font.
+- `THEMES.md` and `THEMES_FR.md` show every built-in theme, with a picture of each, and explain how to make and share one.
+
 ## [IMPROVED] Release
 - One version everywhere: 1.0.3.

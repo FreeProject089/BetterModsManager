@@ -92,7 +92,7 @@ export const KNOWN_GLUED = new Set([
     // Still written with (s)/(x) in French: next in line for a .one/.many pair.
     'anim.matches', 'bench.selected', 'i18n.unsavedEdits', 'modpack.modsSelected',
     'navedit.imported', 'navedit.skipped', 'plugins.modsSelected', 'plugins.pluginsCount',
-    'sched.imported', 'themes.unsaved',
+    'sched.imported',
 ]);
 
 /** `{name}` placeholders t() would fill. Dotted `{event.name}` is scheduler syntax, never a t() var. */

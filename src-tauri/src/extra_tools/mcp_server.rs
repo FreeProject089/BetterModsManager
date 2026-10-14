@@ -791,7 +791,7 @@ enum Commands {
 
     /// Set the active theme by id (applies when BMM reloads themes)
     ThemeApply {
-        /// Theme id (e.g. bmm-discord, or an installed custom theme id)
+        /// Theme id (e.g. bmm-indigo, or an installed custom theme id)
         theme_id: String,
     },
 

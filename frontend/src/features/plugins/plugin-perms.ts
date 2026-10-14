@@ -30,3 +30,33 @@ export function permDomains(): { domain: string; color: string; scopes: string[]
         { domain: t('plugins.permDomTelemetry') || 'Privacy & recording', color: '#f43f5e', scopes: ['replay.read', 'replay.write', 'telemetry.write'] },
     ];
 }
+
+/**
+ * How much a scope lets a plugin do, in three steps, for the creator's permission chooser
+ * and the installed list's summary chip.
+ *
+ * Not a security boundary: the router enforces the scope itself. This is the answer to the
+ * question an author or an installer actually asks ("is this one worth reading twice?"),
+ * and it is kept beside permDomains() so a scope added there is one line away from its risk.
+ *
+ *  - low:    reads a list and changes nothing.
+ *  - medium: changes your setup (mods, profiles, packs, catalogue entries, automations).
+ *  - high:   runs programs, touches every file BMM holds, deletes plugins, signs as you,
+ *            publishes to the network or watches your screen.
+ */
+export type ScopeRisk = 'low' | 'medium' | 'high';
+const HIGH_SCOPES = new Set([
+    'plugins.write', 'repo.write', 'keys.write', 'app.write', 'data.read', 'data.write',
+    'system.write', 'replay.read', 'replay.write', 'telemetry.write',
+]);
+export function scopeRisk(scope: string): ScopeRisk {
+    if (HIGH_SCOPES.has(scope)) return 'high';
+    return scope.endsWith('.write') ? 'medium' : 'low';
+}
+/** The highest risk in a set of scopes, or null when it asks for nothing. */
+export function maxScopeRisk(scopes: string[]): ScopeRisk | null {
+    if (!scopes.length) return null;
+    if (scopes.some((s) => scopeRisk(s) === 'high')) return 'high';
+    if (scopes.some((s) => scopeRisk(s) === 'medium')) return 'medium';
+    return 'low';
+}

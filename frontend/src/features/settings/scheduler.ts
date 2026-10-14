@@ -4143,7 +4143,9 @@ async function evalConditionRaw(cond: Condition, ctx: RunCtx, task?: Task): Prom
             const want = String(p.id || '').trim();
             if (!want) return false;
             const active = await invoke('get_active_theme').catch(() => null);
-            return String(active || '') === want;
+            // A task written with an old built-in id (bmm-nord…) still matches its theme.
+            const { canonicalThemeId } = await import('../themes/theme-model.js');
+            return canonicalThemeId(active) === canonicalThemeId(want);
         }
         // Resources (A3): read from the governor's status, never from a cached copy.
         case 'gameRunning':

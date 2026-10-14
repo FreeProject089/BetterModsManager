@@ -102,5 +102,56 @@
 - Les erreurs SSH se lisent comme des phrases (« Impossible de joindre nas.local : Connection refused ») au lieu d'une phrase à trous suivie des détails bruts.
 - Envoyer ou récupérer un seul fichier en SSH (un repo.json, un catalogue) apparaît maintenant dans le centre d'activité, comme les transferts de dépôt entier.
 
+## [AMÉLIORÉ] Plugins & API
+### Onglet Créer
+- Créer un plugin se fait dans un formulaire guidé en six étapes (point de départ, identité, contenu, à l'application, permissions, enregistrer et partager), avec une barre d'étapes qui montre ce qui est fait et ce qui demande encore de l'attention. Un clic sur une étape y mène.
+- Partir d'un modèle : liste de mods, mods d'un serveur (strict), pack de scripts, mods + scripts, pack d'automatisations, catalogue groupé ou vierge. Il règle le mode d'application et met en avant ce qui compte. Rien de ce qui est saisi n'est effacé.
+- L'id est proposé à partir du nom tant que vous n'en avez pas saisi. L'id, la version et le site web sont vérifiés pendant la saisie.
+- Le mode d'application est fait de quatre cartes qui disent ce que fait chacune, à côté de l'interrupteur strict.
+- Chaque permission affiche un niveau de risque (faible, moyen, élevé) à côté de sa description en clair, et la barre affiche le risque global de ce que le plugin demande.
+- Une nouvelle grille d'icônes utilise les icônes de BMM ; une image et la bibliothèque de 5000 icônes restent disponibles.
+- Un aperçu en direct montre la carte du plugin, une liste de vérifications (nom ou id manquant, plugin vide, mode d'application qui ne correspond pas au contenu, permissions à risque élevé sans description) et le plugin.json qui sera écrit, avec un bouton copier.
+- Après l'enregistrement : « Essai à blanc » montre ce que l'application changerait sur ce PC sans rien changer, « Voir les fichiers » ouvre ce qui a été empaqueté, et les étapes suivantes expliquent comment exporter le .bmmplug, le publier dans un catalogue de plugins et copier son lien `bmm://plugin/activate`.
+- « Recommencer » vide le formulaire. L'en-tête indique quand vous modifiez un plugin existant. Enregistrer par-dessus un autre plugin installé du même id demande d'abord.
+
+### Corrigé dans l'onglet Créer
+- Modifier un plugin sur un PC qui n'a pas tous ses mods ne retire plus ces mods à l'enregistrement. Ils restent dans la liste, marqués « absent de ce PC ».
+- La liste des scripts n'affichait rien (pas même « Aucun script importé ») tant que rien n'était ajouté.
+- Modifier un plugin affiche maintenant son icône actuelle.
+- Quand la liste des mods de tous les profils ne peut pas être lue, le créateur se rabat sur les mods du profil actuel au lieu de ne rien proposer.
+
+### Plugins installés
+- Filtres : tous, mise à jour disponible, listes de mods, scripts, automatisations et catalogues, demande des permissions. Seuls les filtres qui contiennent des plugins sont affichés.
+- Chaque carte indique combien de permissions le plugin demande avec son risque le plus élevé, et « vX disponible » quand son catalogue a une version plus récente qui n'a pas été installée automatiquement (mise à jour auto désactivée, ou pas d'empreinte).
+- « Nouveau plugin » à côté de la recherche, et dans l'état vide.
+
+### Référence de l'API
+- Les endpoints sont groupés par domaine (mods, profils, modpacks, plugins, dépôts serveur, applications et catalogues, automatisation et hooks, données et confidentialité, BMM lui-même) au lieu de l'être par méthode HTTP. Chaque groupe indique combien il compte de chaque méthode.
+- Filtrer par méthode, ou n'afficher que les endpoints qui n'ont pas besoin de jeton.
+- L'équivalent bmm://, le tableau des champs et la liste des permissions sont traduits et suivent le thème (ils étaient en partie en français seulement, avec des couleurs fixes). Un endpoint sans champ n'affiche plus de tableau vide.
+
+## [AMÉLIORÉ] Éditeur de thème, reconstruit
+- Une nouvelle disposition : les sections à gauche (Essentiel, Tous les jetons, Images, Éléments, CSS, Bibliothèque), un aperçu de vrais éléments de BMM à droite (barre latérale, cartes, boutons, champs, une boîte de dialogue, des notifications, une bulle d'aide), les vérifications de contraste dessous. Il flotte toujours, s'ancre sur le côté et s'ouvre dans sa propre fenêtre.
+- L'aperçu ne porte que le thème en cours d'édition. L'application change à l'enregistrement, ou pendant la saisie si vous cochez « Appliquer à BMM pendant la saisie ». D'ici là, l'éditeur lui-même reste lisible, quelles que soient les couleurs essayées.
+- Essentiel : mode sombre ou clair, une palette entière à partir d'une couleur, un thème intégré comme point de départ, et les quatre familles (fond, surfaces, texte, accent et états). Changer de mode reconstruit les fonds et le texte pour l'autre mode et garde votre accent : la version claire d'un thème sombre tient en un clic.
+- Tous les jetons : chaque jeton `--bmm-*` que déclare BMM, expliqué, avec une recherche et un filtre « Modifiés seulement ».
+- Contraste : chaque paire qui doit rester lisible affiche son ratio et son niveau WCAG. Une paire en échec propose « Corriger » (la couleur la plus proche qui passe) ; « Tout corriger » les corrige toutes.
+- Annuler et rétablir (Ctrl+Z, Ctrl+Y) sur chaque modification ; Ctrl+S enregistre. La réinitialisation annule les modifications non enregistrées ou repart de l'apparence par défaut.
+- Enregistrer écrase votre propre thème, Enregistrer comme nouveau en crée un autre ; un thème intégré n'est jamais écrasé. Exporter, importer, copier en JSON et le lien de partage sont dans le menu Fichier. Les questions sont posées dans l'éditeur lui-même, elles fonctionnent donc aussi dans sa fenêtre à part.
+- Le pied de l'éditeur indique si le fichier de thème est valide, et sinon pourquoi.
+- Désigner à l'écran reconnaît maintenant n'importe quel jeton de couleur, plus seulement neuf couleurs fixes.
+
+## [AMÉLIORÉ] Fichiers de thème
+- Les fichiers de thème ont une version de format (`format_version`, désormais 2). Un fichier plus ancien est migré à la lecture (noms de jetons sans leur `--`, nombres, mode invalide) et n'est réécrit que lorsque vous l'enregistrez. Les champs que BMM ne connaît pas sont conservés.
+- Une valeur de jeton qui sortirait de la feuille de style est ignorée, dans les listes de jetons, les jetons par page et les styles d'éléments.
+- Importer un thème dont l'identifiant est déjà pris par un autre thème ne l'écrase plus : l'import reçoit un nouvel identifiant. Une archive importée dont l'identifiant n'est pas un nom simple est refusée (elle pouvait écrire hors du dossier des thèmes).
+- `bmm://theme/apply?id=…` applique aussi les thèmes intégrés (il répondait « Thème introuvable »).
+
+## [MODIFIÉ] Noms des thèmes intégrés
+- Six identifiants intégrés reprenaient le nom d'autres produits. Ils sont renommés ; les thèmes ne changent pas : `bmm-discord` → `bmm-indigo`, `bmm-spotify` → `bmm-neon`, `bmm-claude` → `bmm-clay`, `bmm-nord` → `bmm-arctic`, `bmm-vscode` → `bmm-charcoal` (affiché « Charcoal », auparavant « Editor »), `bmm-macos` → `bmm-cobalt`.
+- Les anciens identifiants fonctionnent toujours partout : votre thème enregistré, les thèmes masqués, les tâches planifiées, les liens, le choix fait dans l'installateur et le pont MCP sont lus sous le nouvel identifiant.
+- Les descriptions d'Arctic et de Charcoal ne font plus référence à d'autres produits, et Cobalt ne demande plus la police d'un autre système.
+- `THEMES.md` et `THEMES_FR.md` présentent chaque thème intégré, avec une image de chacun, et expliquent comment en créer et en partager un.
+
 ## [AMÉLIORÉ] Version
 - Une seule version partout : 1.0.3.

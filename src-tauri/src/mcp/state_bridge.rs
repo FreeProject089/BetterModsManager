@@ -722,6 +722,24 @@ pub fn get_docs_base_path() -> anyhow::Result<std::path::PathBuf> {
 /// Reject any name that could escape its base directory (CWE-22): the callers
 /// join user-supplied names under a fixed base, so path separators and `..`
 /// must never be honoured.
+/// Built-in themes whose id named another product, and their current ids. This bridge is
+/// also compiled into the standalone bmm-mcp-server example, which does not carry
+/// `commands::themes`, so the table is repeated here; tests/theme-model.test.mjs checks that
+/// both copies match the frontend's BUILTIN_ID_ALIASES.
+const LEGACY_BUILTIN_IDS: &[(&str, &str)] = &[
+    ("bmm-discord", "bmm-indigo"),
+    ("bmm-spotify", "bmm-neon"),
+    ("bmm-claude", "bmm-clay"),
+    ("bmm-nord", "bmm-arctic"),
+    ("bmm-vscode", "bmm-charcoal"),
+    ("bmm-macos", "bmm-cobalt"),
+];
+
+fn canonical_builtin_id(id: &str) -> String {
+    let id = id.trim();
+    LEGACY_BUILTIN_IDS.iter().find(|(old, _)| *old == id).map(|(_, new)| new.to_string()).unwrap_or_else(|| id.to_string())
+}
+
 fn require_plain_name(name: &str) -> anyhow::Result<()> {
     if name.is_empty() || name.contains("..") || name.contains('/') || name.contains('\\') || name.contains(':') {
         anyhow::bail!("Invalid file name (path components are not allowed): {}", name);
@@ -1215,7 +1233,8 @@ pub fn list_connected_repos() -> anyhow::Result<serde_json::Value> {
 /// List installed themes (id/name/author/version) + which one is active.
 pub fn list_themes() -> anyhow::Result<serde_json::Value> {
     let data_dir = get_bmm_data_dir();
-    let active = std::fs::read_to_string(data_dir.join("active_theme.txt")).ok().map(|s| s.trim().to_string());
+    let active = std::fs::read_to_string(data_dir.join("active_theme.txt")).ok()
+        .map(|s| canonical_builtin_id(&s));
     let mut themes = Vec::new();
     if let Ok(entries) = std::fs::read_dir(data_dir.join("themes")) {
         for e in entries.flatten() {
@@ -1547,6 +1566,9 @@ pub fn get_theme(theme_id: &str) -> anyhow::Result<serde_json::Value> {
 /// the app's resource bundle). Takes effect when the BMM app (re)loads themes.
 pub fn apply_theme(theme_id: &str) -> anyhow::Result<String> {
     require_plain_name(theme_id)?;
+    // An old built-in id (bmm-nord…) names the same theme under its current id.
+    let canonical = canonical_builtin_id(theme_id);
+    let theme_id = canonical.as_str();
     let data_dir = get_bmm_data_dir();
     let installed = data_dir.join("themes").join(theme_id).join("theme.json").exists();
     std::fs::write(data_dir.join("active_theme.txt"), theme_id)?;
