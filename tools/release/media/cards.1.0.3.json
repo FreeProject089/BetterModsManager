@@ -1,0 +1,28 @@
+{
+  "en": {
+    "sub": "Update · Windows · Free and open source",
+    "chips": ["Notification centre", "Conflicts view", "14 BMM Tools", "Theme editor"],
+    "whatsNew": "What's new in {version}",
+    "features": [
+      ["Notification centre", "Groups, snooze, do not disturb"],
+      ["Conflicts view", "See who wins each file, then apply"],
+      ["BMM Tools", "Seven new tools, 14 in all"],
+      ["Follow a repo by IP", "Address, test, password kept sealed"],
+      ["Theme editor, rebuilt", "Live preview, contrast fixes, undo"],
+      ["Plugin creator", "Six guided steps, risk levels"]
+    ]
+  },
+  "fr": {
+    "sub": "Mise à jour · Windows · Gratuit et libre",
+    "chips": ["Centre de notifications", "Vue Conflits", "14 Outils BMM", "Éditeur de thème"],
+    "whatsNew": "Les nouveautés de la {version}",
+    "features": [
+      ["Centre de notifications", "Groupes, report, ne pas déranger"],
+      ["Vue Conflits", "Qui gagne chaque fichier, puis appliquer"],
+      ["Outils BMM", "Sept nouveaux outils, 14 en tout"],
+      ["Suivre un dépôt par IP", "Adresse, test, mot de passe scellé"],
+      ["Éditeur de thème refait", "Aperçu, contraste corrigé, annuler"],
+      ["Créateur de plugins", "Six étapes guidées, niveaux de risque"]
+    ]
+  }
+}

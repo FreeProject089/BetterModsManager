@@ -3,9 +3,12 @@
 
 export const SUMS_NAME = 'SHA256SUMS.txt';
 
-/** Files of a release folder that the checksum list covers. Logs and the list itself are not. */
+/**
+ * Files of a release folder that the checksum list covers. Logs, the list itself and hidden working
+ * folders (a recorder's .chrome-profile/ or .frames/, held open while it runs) are not.
+ */
 export function sumsFilter(rel) {
-  return rel !== SUMS_NAME && !rel.startsWith('logs/') && !/(^|\/)(Thumbs\.db|desktop\.ini|\.DS_Store)$/i.test(rel);
+  return rel !== SUMS_NAME && !rel.startsWith('logs/') && !/(^|\/)\./.test(rel) && !/(^|\/)(Thumbs\.db|desktop\.ini|\.DS_Store)$/i.test(rel);
 }
 
 /** entries: [{ path, sha256 }] → text. Throws on a malformed hash or a duplicate path. */

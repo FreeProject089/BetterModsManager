@@ -123,6 +123,8 @@ describe('checksums', () => {
   test('filter skips logs and the list itself', () => {
     assert.equal(sumsFilter('SHA256SUMS.txt'), false);
     assert.equal(sumsFilter('logs/x.log'), false);
+    assert.equal(sumsFilter('media/gifs/.chrome-profile/Default/LOCK'), false);
+    assert.equal(sumsFilter('media/gifs/.frames/0001.png'), false);
     assert.equal(sumsFilter('bench/BENCHMARK.md'), true);
     assert.match(sumsTable([{ path: 'a', sha256: h('a') }]), /\| `a` \| `a{64}` \|/);
   });

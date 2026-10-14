@@ -1,158 +1,107 @@
-# Changelog v1.0.3 (depuis e4b7943d, la build 1.0.2)
+# Changelog v1.0.3 (depuis 627f956c, le build 1.0.2)
 
-1.0.3 relie Better Mods Manager à BetterCommunity v2. Tout est livré désactivé : BMM continue de parler à BetterCommunity v1 exactement comme la 1.0.2. Le jour où BetterCommunity v2 ouvre, son équipe change une valeur dans le fichier de liens que BMM lit à chaque démarrage, et les copies 1.0.3 installées suivent sans nouvelle version.
+La 1.0.3 apporte un centre de notifications, une vue Conflits qui montre quel mod l'emporte sur chaque fichier partagé, des panneaux qui s'ouvrent dans leur propre fenêtre, sept nouveaux Outils BMM, le suivi d'un dépôt par son adresse ou sa simple IP, un dialogue Serveurs SSH refait, une seule liste pour toutes les sources de catalogues, un créateur de plugins guidé et un éditeur de thème reconstruit. C'est aussi le premier build capable de se relier plus tard à BetterCommunity v2 : cette liaison est livrée désactivée, et rien ne change tant qu'elle n'est pas annoncée.
 
-## [NOUVEAU] BetterCommunity v2, prêt et en sommeil
-### Un interrupteur, décidé au démarrage
-- BMM lit l'interrupteur dans cet ordre : votre `app.cfg` (`BCApiVersion`, `BCv2Base`), puis le fichier de liens publié par BetterCommunity (`bc_api`, `bc_v2_base`), puis v1. Un `BCApiVersion=v1` explicite dans `app.cfg` garde une installation sur v1 quoi que dise le fichier de liens.
-- v2 n'est utilisé qu'après que BetterCommunity v2 a répondu à son contrôle de santé pendant la session. S'il ne répond pas, BMM reste sur v1 pour la session et en écrit la raison dans son journal. Tant que le contrôle n'a pas répondu, BMM est sur v1.
-- Sans l'interrupteur rien ne change : chaque adresse appelée par BMM est celle de la 1.0.2 (vérifié par un test, adresse par adresse).
+## [NEW] Centre de notifications
+- Un seul endroit pour tous les messages, avec un seul compteur de non lus (aussi sur l'icône de la barre des tâches). Les messages sont groupés selon leur origine : Mises à jour, Dépôts suivis, Planificateur, Tâches de fond, BetterCommunity et BMM lui-même.
+- Ouvrez un message quand il mène quelque part (une mise à jour disponible, un dépôt suivi), reportez-le (1 heure, 4 heures, demain 9 h) ou retirez-le. Un message reporté revient non lu à l'heure prévue.
+- **Paramètres → Notifications** : chaque groupe s'affiche dans l'application, dans l'application et en notification Windows (seulement quand BMM est en arrière-plan), ou pas du tout (il reste dans la liste). Vos anciens réglages par source sont repris.
+- **Ne pas déranger**, depuis la cloche ou dans les Paramètres, et des heures calmes chaque jour. Pendant ce temps rien ne s'affiche ; les erreurs s'affichent quand même dans l'application, et tout reste dans la liste.
+- Le même événement deux fois donne un seul message avec un compteur, pas une pile de copies. La liste garde les 200 derniers messages, aucun de plus de 30 jours.
+- Une tâche de fond longue qui se termine pendant que BMM est en arrière-plan vous le signale.
+- Clavier : Haut et Bas pour se déplacer, Entrée ouvre, Suppr retire, S reporte d'une heure, Échap ferme.
 
-### Compte BetterCommunity lié (v2)
-- Les Paramètres affichent une carte « Compte BetterCommunity lié » quand la session tourne sur v2. « Se connecter avec BetterCommunity » affiche un code court ; vous l'approuvez sur le site. Aucun mot de passe n'est saisi dans BMM.
-- La connexion est gardée comme BMM garde ses autres secrets : protégée par Windows pour votre compte utilisateur (le trousseau du système sur macOS et Linux). Si aucun des deux ne fonctionne, elle dure jusqu'à la fermeture de BMM, et la carte le dit. BMM ne l'affiche jamais et ne l'envoie qu'à l'adresse BetterCommunity v2 qui l'a délivrée.
-- Se déconnecter révoque la connexion sur le site et l'oublie sur ce PC.
-- En mode v1 la carte est masquée et la liaison de compte existante fonctionne comme avant.
+## [NEW] Vue Conflits
+- Pour chaque fichier partagé par deux mods actifs, la vue Conflits indique quelle copie est sur le disque avec l'ordre d'activation actuel, avec un résumé par paire de mods.
+- Résolvez un conflit en réordonnant (monter ou descendre, « Faire gagner X »), en gardant la copie d'un mod pour certains fichiers quel que soit l'ordre (retenu par profil), ou en désactivant un mod. Cochez plusieurs fichiers pour décider pour tous d'un coup.
+- Rien ne change avant **Appliquer**. BMM indique d'abord combien de fichiers il recopierait, et « Voir les changements » les liste un par un. Appliquer passe par le centre d'activité et ne recopie que ces fichiers.
+- Elle s'ouvre depuis le badge de conflit d'un mod dans la bibliothèque, depuis les détails du mod, ou depuis la palette de commandes (« Résoudre les conflits »).
 
-### Ce qui passe sur v2 quand l'interrupteur est activé
-- Les retours, bugs et rapports de plantage vont au centre de retours v2 : sous votre compte si vous êtes connecté, sinon avec la clé d'application publique de BMM.
-- Les reçus de consentement : vos réponses sur la télémétrie, et vos réponses aux Conditions d'utilisation et à la Politique de confidentialité dès que BetterCommunity v2 publie la version livrée avec cette build. Même règle qu'avant : envoyés seulement avec la télémétrie activée, ou quand vous appuyez sur « Envoyer au serveur » dans Mes consentements.
-- Quand BetterCommunity v2 publie une version plus récente des Conditions ou de la Politique de confidentialité de BMM que celle que vous avez acceptée, BMM affiche la nouvelle version avec un lien pour la lire et demande Accepter, Refuser ou Plus tard. Votre réponse est enregistrée par BetterCommunity avec la version et la révision affichées, et une copie du reçu est gardée dans Mes consentements.
-- Les notifications BetterCommunity sont lues avec votre connexion v2 (plus de clé d'API à coller).
-- La page Communauté lit le journal sur v2. Les avatars restent sur v1 (v2 n'en a pas encore).
-- Les suggestions BetterCommunity de Laya utilisent votre connexion v2.
-- Le flux de secours de la vérification des mises à jour et la liste des crédits viennent de v2. Chaque mise à jour reste vérifiée avec le `update-manifest.json` ou le `update.json` signé de la version, exactement comme avant.
-- Le modèle hors ligne de Laya peut aussi être téléchargé depuis v2. Son empreinte SHA-256 épinglée ne change pas.
-- La télémétrie anonyme, si vous l'avez activée, va sur v2 avec seulement les catégories acceptées, lues dans vos reçus de consentement. BMM ne garde que les détails déclarés par l'équipe BetterCommunity et retire le reste avant l'envoi, dont l'identité précise du matériel. Le replay de session reste sur le serveur de télémétrie actuel.
+## [NEW] Des panneaux dans leur propre fenêtre
+- L'éditeur de thème, le bac à sable de traduction et le débogueur de tâches peuvent sortir de la fenêtre de BMM : « Ouvrir dans sa propre fenêtre » dans leur en-tête, ou glisser l'en-tête au-delà du bord de la fenêtre. Placez le panneau où vous voulez, sur un autre écran aussi, à côté de ce qu'il modifie plutôt que par-dessus.
+- Le panneau continue de fonctionner, reste synchronisé avec BMM et suit le thème clair ou sombre.
+- La fenêtre de chaque panneau retient sa taille et sa place. « Remettre dans la fenêtre de BMM », ou fermer cette fenêtre, replace le panneau là où il était.
 
-### Toujours sur v1 en mode v2
-- Les avatars, les annonces de lancement, la recherche d'auteur par identifiant de créateur et la liaison Discord. BetterCommunity v2 ne les sert pas encore.
+## [IMPROVED] Outils BMM : 14 outils
+- Sept nouveaux outils : **Vérification des fichiers déployés** (fichiers disparus du dossier du jeu, liens cassés, fichiers absents d'un mod), **Gros fichiers**, **Noms et versions** (suggestions de rangement, rien n'est renommé), **Profils en double**, **Nettoyage des caches** (mesure, puis vide seulement ce que vous cochez, après confirmation), **Lecteur de journaux** (le journal de cette session et les rapports enregistrés, filtrés par niveau et par mots) et **Différences de catalogues** (deux versions d'un catalogue ou d'un repo.json comparées).
+- La liste des outils a une recherche, des groupes et une ligne de description pour chaque outil.
+- Chaque outil dit où il en est (pas lancé, en cours avec progression et Annuler, échec avec la raison et Réessayer, terminé) et propose les mêmes boutons Copier le JSON, Enregistrer en JSON et Enregistrer en CSV.
+- Les analyses longues apparaissent dans le centre d'activité et peuvent y être arrêtées.
 
-## [AMÉLIORÉ] Notifications
-- Un seul centre de notifications, un seul compteur de non lues (aussi sur l'icône de la barre des tâches). Les messages sont groupés selon leur origine : Mises à jour, Dépôts suivis, Planificateur, Tâches de fond, BetterCommunity et BMM lui-même.
-- Chaque message peut être ouvert (quand il mène quelque part, par exemple une mise à jour disponible ou un dépôt suivi), reporté (1 heure, 4 heures, demain 9 h) ou retiré. Un message reporté revient non lu à l'heure prévue.
-- Paramètres, Notifications : chaque groupe s'affiche dans l'application, dans l'application et en notification système (seulement quand BMM est en arrière-plan), ou est désactivé (gardé dans la liste seulement). Les anciens réglages par source sont repris.
-- Ne pas déranger, depuis la cloche ou dans les paramètres, et des heures calmes chaque jour. Pendant ce temps rien ne s'affiche et aucune notification système n'est envoyée ; les erreurs s'affichent quand même dans l'application, et tout reste dans la liste.
-- Le même événement deux fois donne une bulle avec un compteur et une entrée avec un compteur, pas une pile de copies. Une mise à jour retrouvée par une vérification suivante met son entrée à jour.
-- La liste garde les 200 derniers messages et rien de plus de 30 jours.
-- Clavier : Haut et Bas pour passer d'un message à l'autre, Entrée ouvre, Suppr retire, S reporte d'une heure, Échap ferme et revient à la cloche.
-- Une tâche de fond longue (15 secondes ou plus) qui se termine pendant que BMM est en arrière-plan est signalée dans Tâches de fond.
+## [IMPROVED] Dépôts suivis : en suivre un par son adresse ou son IP
+- « Suivre un dépôt » se trouve dans la carte Dépôts suivis et ouvre un seul dialogue : l'adresse, un mot de passe de téléchargement et une clé facultatifs, « Tester la connexion », la fréquence de vérification, et quoi faire d'une mise à jour (me prévenir, la télécharger, la télécharger et l'appliquer).
+- Le test affiche le nom du dépôt, sa version, son format, sa signature (valide, ne correspond pas, ou non signé) et le nombre de mods proposés, ou dit clairement pourquoi il a échoué (rien n'a répondu, délai dépassé, erreur HTTP, mot de passe nécessaire).
+- Un bouton « Suivre » partout où BMM connaît déjà un dépôt : celui qui vient d'être lu, les résultats de la liste des dépôts et les entrées de l'historique.
+- Saisissez l'adresse comme vous joignez la machine : `192.168.1.20:8000`, `[::1]:8000`, `nas.local:8080/mods/` ou un `http://…/repo.json` complet. BMM affiche l'adresse du repo.json qu'il utilisera. Le http simple convient sur votre PC et votre réseau local ; sur Internet, BMM prévient qu'un mot de passe circulerait en clair.
+- Les dépôts sur votre PC et votre réseau local ne passent plus par le proxy du système, qui ne pouvait pas les joindre.
 
-## [AMÉLIORÉ] Conflits
-- Une nouvelle vue Conflits indique, pour chaque fichier partagé par deux mods actifs, quelle copie est sur le disque selon l'ordre d'activation actuel, avec un résumé par paire de mods (combien de fichiers partagés, qui en gagne combien).
-- Résoudre en réordonnant (monter ou descendre, « Faire gagner X », le plus petit déplacement qui place X après l'autre mod), en gardant la copie d'un mod pour certains fichiers quel que soit l'ordre (un choix par fichier, gardé par profil), ou en désactivant un mod. Cocher plusieurs fichiers pour choisir pour tous d'un coup.
-- Rien ne change avant Appliquer. Le pied de la vue indique combien de fichiers Appliquer recopierait, et « Voir les changements » les liste un par un (de quel mod vers quel mod, ou retour au fichier d'origine du jeu). Appliquer est une tâche du centre d'activité et ne recopie que ces fichiers.
-- La règle est celle du déploiement : le choix par fichier gagne tant que son mod est actif, sinon le dernier mod de l'ordre. Activer ou désactiver un mod remet ensuite les fichiers gardés en place.
-- Le badge de conflit actif de la bibliothèque, les détails du mod et l'ancienne liste des conflits ouvrent la vue sur ce mod. Elle est aussi dans la palette de commandes (« Résoudre les conflits »). Les chevauchements avec des mods désactivés ou d'autres profils restent dans la liste existante, à un clic.
-
-## [AMÉLIORÉ] Des panneaux dans leur propre fenêtre
-- L'éditeur de thème, le bac à sable de traduction et le débogueur de tâches peuvent sortir de la fenêtre de BMM : « Ouvrir dans sa propre fenêtre » dans leur en-tête, ou glisser l'en-tête au-delà du bord de la fenêtre de BMM et relâcher. Le panneau devient une fenêtre à part, à placer où vous voulez, sur un autre écran aussi, à côté de ce qu'il modifie plutôt que par-dessus.
-- Tout continue de fonctionner depuis cette fenêtre et reste synchronisé avec BMM : le panneau tourne toujours dans BMM, la fenêtre l'affiche et lui renvoie vos clics et votre saisie. Elle suit le thème, clair ou sombre.
-- La fenêtre de chaque panneau retient sa taille et sa place. « Remettre dans la fenêtre de BMM » replace le panneau là où il était ; son bouton de fermeture ferme le panneau. Fermer la fenêtre autrement (Alt+F4, la barre des tâches) remet aussi le panneau en place.
-- Dans cette fenêtre, les listes de choix s'ouvrent avec la liste du système, et ce qui se glisse à l'intérieur du panneau (réordonner, redimensionner) se fait dans la fenêtre de BMM.
-
-## [AMÉLIORÉ] Cartes, Paramètres et dialogues
-- Plus de barre de couleur le long du bord gauche des cartes et des lignes : l'entrée active des Paramètres, le menu principal, les cartes de mods, les astuces et notes, les citations, les étapes du planificateur, les cartes Sécurité et Identité, et le reste. L'élément courant a un fond légèrement teinté, une astuce est un encadré légèrement teinté, un type se reconnaît à son icône.
-- Paramètres : la colonne d'index peut être masquée (bouton à côté de la recherche) pour laisser toute la largeur aux cartes, et revient avec le bouton « Index » au-dessus des cartes. BMM retient le choix, et Ctrl+F la fait revenir pour chercher. Dans une fenêtre étroite, l'index reste la bande au-dessus des cartes.
-- Les cartes des Paramètres ont le même en-tête : l'icône sur une tuile discrète, le titre, les actions, et la description juste sous le titre. Plus de trait sous le titre, une carte plus calme.
-- Les boutons de l'éditeur de navigation suivent l'ordre de tous les dialogues : Réinitialiser et Partager à gauche, Terminé à droite à sa taille normale.
-
-## [CORRIGÉ] Catalogue d'applications : « une source n'a pas répondu » sans aucune source ajoutée
-- Le catalogue officiel d'applications liste une adresse partenaire vide en guise de réserve. BMM essayait de lire cette adresse vide, comptait l'échec et annonçait qu'une source n'avait pas répondu à des personnes qui n'en avaient ajouté aucune. Les adresses vides ou qui ne sont pas web sont désormais ignorées, jamais comptées.
-- Un `.bmmbundle` suivi était aussi passé au lecteur web et compté comme un échec alors que ses applications se chargeaient bien. Ce n'est plus le cas, et en ajouter un depuis l'onglet Sources l'enregistre maintenant pour le prochain démarrage.
-- Les flux dont l'adresse a déjà des paramètres (`catalog.json?project=bmm&kind=APP`) sont lus avec leurs paramètres intacts.
-- Quand une source échoue vraiment, l'avis la nomme, dit pourquoi (délai dépassé, code HTTP, signature refusée, pas un catalogue) et propose Réessayer, Désactiver, Retirer (vos sources) et Détails. Les sources désactivées ne sont jamais lues ni comptées.
-- Avec le catalogue officiel désactivé et aucune source active, la page dit qu'il n'y a aucune source et propose d'en ajouter une, au lieu de « catalogue vide » ou d'une erreur.
-
-## [AMÉLIORÉ] Sources de catalogues
-- Une seule liste dans le catalogue d'applications (Sources) et dans Paramètres, Index de catalogues : nom, adresse, type, officielle, partenaire ou la vôtre, état de la signature, dernière actualisation, nombre d'éléments, état et un interrupteur.
-- Ajouter et Modifier ouvrent un dialogue avec Tester, qui lit l'adresse comme BMM le fera : nombre d'éléments, format, signature. Un index est reconnu et ses catalogues peuvent être ajoutés d'un coup.
-- Vos sources peuvent monter et descendre (le premier catalogue l'emporte quand deux listent le même élément), recevoir un nom, être retirées après confirmation, et être importées ou exportées en fichier JSON.
-- Les sources officielles viennent du fichier de liens de BMM et sont affichées en lecture seule, avec une courte explication des catalogues officiels et partenaires face aux vôtres.
-
-## [AMÉLIORÉ] Outils BMM
-- La liste des outils a une recherche, des groupes et une ligne sous chaque outil. La zone de résultats dit toujours où elle en est : pas encore lancé, en cours (avec progression et Annuler), échec (avec la raison et Réessayer), ou terminé (résumé et les mêmes boutons Copier le JSON, Enregistrer en JSON, Enregistrer en CSV pour chaque outil).
-- Nouveau : Vérification des fichiers déployés. Pour chaque mod actif, les fichiers disparus du dossier du jeu, les liens qui ne pointent nulle part, les fichiers absents du mod dans la bibliothèque, et les liens cassés restés à côté.
-- Nouveau : Gros fichiers. Les plus gros fichiers des dossiers de mods et de sauvegardes d'un profil, avec leur mod.
-- Nouveau : Noms et versions. Les noms et versions de mods à ranger (espaces en trop, version dans le nom, version vide ou bizarre), avec une suggestion pour chacun. Rien n'est renommé.
-- Nouveau : Profils en double. Les profils aux mêmes mods actifs (ou presque), ou qui partagent un dossier de jeu ou de mods.
-- Nouveau : Nettoyage des caches. Mesure le cache des catalogues, les archives de mods extraites, les restes de mises à jour et les rapports archivés, puis vide seulement ceux que vous cochez, après une confirmation qui montre la taille. Il refuse de toucher aux archives extraites pendant l'activation d'un mod.
-- Nouveau : Lecteur de journaux. Le journal de cette session et les rapports de session et de plantage enregistrés, filtrés par niveau et par mots.
-- Nouveau : Différences de catalogues. Deux versions d'un catalogue ou d'un repo.json : entrées ajoutées, retirées et modifiées, avec les champs qui ont changé.
-- Les analyses longues (doublons, espace disque, gros fichiers, fichiers déployés, mesure des caches) apparaissent dans le centre d'activité et peuvent y être arrêtées.
-
-## [AMÉLIORÉ] Dépôts suivis : en suivre un par son adresse ou son IP
-- « Suivre un dépôt » se trouve dans la carte Dépôts suivis elle-même et ouvre un dialogue : l'adresse, un mot de passe de téléchargement et une clé facultatifs, « Tester la connexion », la fréquence de vérification, et quoi faire d'une mise à jour (me prévenir, la télécharger, la télécharger et l'appliquer). Rien n'est enregistré avant « Suivre ».
-- Le test lit le dépôt une fois et affiche son nom, sa version, le format de son repo.json, sa signature (valide, NE correspond PAS, ou non signé) et le nombre de mods proposés. Les erreurs sont dites clairement : rien n'a répondu, délai dépassé, code HTTP, mot de passe nécessaire.
-- Un bouton « Suivre » là où un dépôt est déjà connu : le dépôt qui vient d'être lu, chaque résultat de la liste des dépôts et chaque entrée de l'historique. Il ouvre le même dialogue, déjà rempli.
-- Un mot de passe de téléchargement donné là est enregistré scellé sur ce PC (protégé par Windows pour votre compte, le trousseau du système sur macOS et Linux), jamais dans le fichier de réglages de BMM, et utilisé par les vérifications planifiées. Avant, un dépôt suivi protégé par mot de passe échouait à chaque vérification. Ne plus suivre un dépôt l'oublie.
-
-## [AMÉLIORÉ] Dépôts joignables par simple IP
-- Une adresse peut être saisie comme on joint la machine : `192.168.1.20:8000`, `http://192.168.1.20:8000/repo.json`, `[::1]:8000`, `nas.local:8080/mods/`, ou un simple nom. BMM en fait l'adresse du repo.json et l'affiche sous le champ. `HTTP://` en majuscules, une clé de partage (`?k=…`) et un `#…` final sont gérés.
-- Le http simple est accepté. Sur ce PC ou le réseau local, le dialogue dit que c'est normal ; sur Internet, il prévient qu'un mot de passe de téléchargement circulerait en clair.
-- Les requêtes vers ce PC et vers les adresses du réseau local ne passent plus par le proxy du système, qui ne peut pas les joindre. Les adresses Internet l'utilisent toujours. Les blocages d'adresses privées de BMM pour les tâches planifiées, les points d'accès IA et les pages personnalisées ne changent pas : ils concernent des adresses que vous n'avez pas saisies.
-- `192.168.1.20:8000` et `http://192.168.1.20:8000/repo.json` sont le même dépôt suivi, pas deux.
-
-## [AMÉLIORÉ] Serveurs SSH
-- Le dialogue Serveurs SSH est refait : une liste des serveurs enregistrés avec leur état (incomplet, pas encore testé, clé du serveur approuvée, test réussi, dernier test échoué), et un formulaire dont chaque champ dit ce qui ne va pas (hôte, port de 1 à 65535, utilisateur, fichier de clé, dossier de base, un nom utilisable dans `ssh://nom/`). Coller `moi@nas.local:2222` dans l'hôte remplit l'utilisateur et le port.
+## [IMPROVED] Serveurs SSH
+- Un dialogue refait : vos serveurs enregistrés avec leur état (incomplet, pas testé, clé approuvée, test réussi, dernier test échoué) et un formulaire qui dit ce qui ne va pas dans chaque champ. Coller `moi@nas.local:2222` dans l'hôte remplit l'utilisateur et le port.
 - « Tester la connexion » procède par étapes : joindre le serveur, vérifier sa clé, se connecter, examiner le dossier de base (existe, inscriptible, et sinon, à qui il appartient).
-- Un serveur vu pour la première fois affiche l'empreinte de sa clé (`SHA256:…`) et demande « Approuver ce serveur » avant que quoi que ce soit lui soit envoyé : ni mot de passe, ni signature de clé. Une clé changée est refusée, avec l'empreinte approuvée et la nouvelle côte à côte, et la marche à suivre si vous avez reconstruit le serveur.
-- La phrase de passe ou le mot de passe se saisit dans le formulaire, sert au Test et à Parcourir, et n'est jamais enregistré. L'ancien dialogue le demandait dans une boîte que l'application ne pouvait pas afficher, et ses confirmations Supprimer et Abandonner ne pouvaient pas non plus recevoir de réponse ; les deux utilisent maintenant les dialogues de BMM.
-- Clavier : Haut et Bas parcourent les serveurs, Entrée va au formulaire, Entrée ou Ctrl+S enregistre, Échap ferme.
-- Les erreurs SSH se lisent comme des phrases (« Impossible de joindre nas.local : Connection refused ») au lieu d'une phrase à trous suivie des détails bruts.
-- Envoyer ou récupérer un seul fichier en SSH (un repo.json, un catalogue) apparaît maintenant dans le centre d'activité, comme les transferts de dépôt entier.
+- Les erreurs SSH se lisent comme des phrases au lieu de détails bruts. Envoyer ou récupérer un seul fichier en SSH apparaît dans le centre d'activité.
+- Clavier : Haut et Bas parcourent les serveurs, Entrée ou Ctrl+S enregistre, Échap ferme.
 
-## [AMÉLIORÉ] Plugins & API
-### Onglet Créer
-- Créer un plugin se fait dans un formulaire guidé en six étapes (point de départ, identité, contenu, à l'application, permissions, enregistrer et partager), avec une barre d'étapes qui montre ce qui est fait et ce qui demande encore de l'attention. Un clic sur une étape y mène.
-- Partir d'un modèle : liste de mods, mods d'un serveur (strict), pack de scripts, mods + scripts, pack d'automatisations, catalogue groupé ou vierge. Il règle le mode d'application et met en avant ce qui compte. Rien de ce qui est saisi n'est effacé.
-- L'id est proposé à partir du nom tant que vous n'en avez pas saisi. L'id, la version et le site web sont vérifiés pendant la saisie.
-- Le mode d'application est fait de quatre cartes qui disent ce que fait chacune, à côté de l'interrupteur strict.
-- Chaque permission affiche un niveau de risque (faible, moyen, élevé) à côté de sa description en clair, et la barre affiche le risque global de ce que le plugin demande.
-- Une nouvelle grille d'icônes utilise les icônes de BMM ; une image et la bibliothèque de 5000 icônes restent disponibles.
-- Un aperçu en direct montre la carte du plugin, une liste de vérifications (nom ou id manquant, plugin vide, mode d'application qui ne correspond pas au contenu, permissions à risque élevé sans description) et le plugin.json qui sera écrit, avec un bouton copier.
-- Après l'enregistrement : « Essai à blanc » montre ce que l'application changerait sur ce PC sans rien changer, « Voir les fichiers » ouvre ce qui a été empaqueté, et les étapes suivantes expliquent comment exporter le .bmmplug, le publier dans un catalogue de plugins et copier son lien `bmm://plugin/activate`.
-- « Recommencer » vide le formulaire. L'en-tête indique quand vous modifiez un plugin existant. Enregistrer par-dessus un autre plugin installé du même id demande d'abord.
+## [IMPROVED] Sources de catalogues
+- Une seule liste de sources, la même dans le catalogue d'applications (onglet Sources) et dans **Paramètres → Index de catalogues** : nom, adresse, type (officielle, partenaire ou la vôtre), signature, dernière actualisation, nombre d'éléments, état et un interrupteur.
+- Ajouter et Modifier ouvrent un dialogue avec **Tester**, qui lit l'adresse comme BMM le fera. Un index de catalogues est reconnu et ses catalogues peuvent être ajoutés d'un coup.
+- Réordonnez vos sources (la première l'emporte quand deux listent le même élément), renommez, retirez, importez ou exportez-les en JSON. Les sources officielles sont affichées en lecture seule.
+- Quand une source échoue vraiment, le message la nomme, dit pourquoi et propose Réessayer, Désactiver, Retirer et Détails.
 
-### Corrigé dans l'onglet Créer
-- Modifier un plugin sur un PC qui n'a pas tous ses mods ne retire plus ces mods à l'enregistrement. Ils restent dans la liste, marqués « absent de ce PC ».
-- La liste des scripts n'affichait rien (pas même « Aucun script importé ») tant que rien n'était ajouté.
-- Modifier un plugin affiche maintenant son icône actuelle.
-- Quand la liste des mods de tous les profils ne peut pas être lue, le créateur se rabat sur les mods du profil actuel au lieu de ne rien proposer.
-- « Dupliquer » copie maintenant les fichiers du plugin d'origine (scripts, dossiers embarqués, automatisations, catalogues groupés et son icône) dans le nouveau plugin à l'enregistrement. La copie listait ces fichiers sans les avoir. Seuls les fichiers du dossier du plugin d'origine sont copiés : un chemin absolu, qui en sort par `..` ou qui passe par un lien est laissé hors de la copie.
+## [IMPROVED] Plugins & API
+- **Créer** : un formulaire guidé en six étapes (point de départ, identité, contenu, à l'application, permissions, enregistrer et partager) avec une barre d'étapes qui montre ce qui demande encore de l'attention. Partez d'un modèle (liste de mods, mods d'un serveur, pack de scripts, mods + scripts, pack d'automatisations, catalogue groupé, vierge).
+- Chaque permission affiche un niveau de risque (faible, moyen, élevé), et le risque global du plugin s'affiche au fil de la création.
+- Un aperçu en direct montre la carte du plugin, une liste de ce qui manque ou présente un risque, et le `plugin.json` qui sera écrit.
+- Après l'enregistrement : « Essai à blanc » montre ce que l'application changerait sans rien changer, « Voir les fichiers » ouvre ce qui a été empaqueté, et les étapes suivantes expliquent comment exporter et partager le plugin.
+- **Installés** : des filtres (mise à jour disponible, listes de mods, scripts, automatisations, catalogues, demande des permissions), le nombre de permissions et le risque le plus élevé sur chaque carte, et « vX disponible » quand une version plus récente n'a pas été installée automatiquement.
+- **Référence de l'API** : les endpoints sont groupés par domaine (mods, profils, plugins, dépôts serveur, …) au lieu de l'être par méthode HTTP, avec des filtres par méthode ou « sans jeton ».
 
-### Plugins installés
-- Filtres : tous, mise à jour disponible, listes de mods, scripts, automatisations et catalogues, demande des permissions. Seuls les filtres qui contiennent des plugins sont affichés.
-- Chaque carte indique combien de permissions le plugin demande avec son risque le plus élevé, et « vX disponible » quand son catalogue a une version plus récente qui n'a pas été installée automatiquement (mise à jour auto désactivée, ou pas d'empreinte).
-- « Nouveau plugin » à côté de la recherche, et dans l'état vide.
+## [IMPROVED] Éditeur de thème, reconstruit
+- Les sections à gauche (Essentiel, Tous les jetons, Images, Éléments, CSS, Bibliothèque), un aperçu en direct de vrais éléments de BMM à droite, les vérifications de contraste dessous. Il flotte toujours, s'ancre sur le côté, et peut désormais s'ouvrir dans sa propre fenêtre.
+- L'aperçu ne porte que le thème en cours d'édition ; BMM change à l'enregistrement, ou pendant la saisie si vous cochez « Appliquer à BMM pendant la saisie ». L'éditeur lui-même reste lisible quelles que soient les couleurs essayées.
+- **Essentiel** : sombre ou clair, une palette entière à partir d'une couleur, un thème intégré comme point de départ. Changer de mode reconstruit les fonds et le texte et garde votre accent : la version claire d'un thème sombre tient en un clic.
+- **Tous les jetons** : chaque réglage de couleur et de style utilisé par BMM, expliqué et cherchable, avec un filtre « Modifiés seulement ».
+- **Contraste** : chaque paire qui doit rester lisible affiche son niveau WCAG ; « Corriger » choisit la couleur la plus proche qui passe, « Tout corriger » les corrige toutes.
+- Annuler et rétablir (Ctrl+Z, Ctrl+Y), Ctrl+S pour enregistrer, Enregistrer comme nouveau, et un menu Fichier pour exporter, importer, copier en JSON et le lien de partage. Un thème intégré n'est jamais écrasé.
+- Les fichiers de thème portent désormais une version de format. Les fichiers plus anciens sont mis à niveau à la lecture et réécrits seulement quand vous enregistrez ; rien de ce que vous avez créé n'est perdu.
 
-### Référence de l'API
-- Les endpoints sont groupés par domaine (mods, profils, modpacks, plugins, dépôts serveur, applications et catalogues, automatisation et hooks, données et confidentialité, BMM lui-même) au lieu de l'être par méthode HTTP. Chaque groupe indique combien il compte de chaque méthode.
-- Filtrer par méthode, ou n'afficher que les endpoints qui n'ont pas besoin de jeton.
-- L'équivalent bmm://, le tableau des champs et la liste des permissions sont traduits et suivent le thème (ils étaient en partie en français seulement, avec des couleurs fixes). Un endpoint sans champ n'affiche plus de tableau vide.
+## [VISUAL] Cartes, Paramètres et identifiants des thèmes
+- Plus de barre de couleur le long du bord gauche des cartes et des lignes, nulle part dans l'application. L'élément courant a un fond légèrement teinté, et les astuces sont des encadrés légèrement teintés.
+- **Paramètres** : la colonne d'index peut être masquée pour laisser toute la largeur aux cartes (bouton à côté de la recherche), et revient avec « Index ». BMM retient votre choix.
+- Les cartes des Paramètres ont un même en-tête, plus calme : icône, titre, actions, et la description juste sous le titre.
+- Six thèmes intégrés avaient un identifiant reprenant le nom d'autres produits. Ces identifiants sont renommés ; les thèmes ne changent pas, et les noms affichés dans BMM restent les mêmes, sauf « Editor », désormais « Charcoal ». Les anciens identifiants fonctionnent toujours partout (votre thème enregistré, les tâches planifiées, les liens) :
 
-## [AMÉLIORÉ] Éditeur de thème, reconstruit
-- Une nouvelle disposition : les sections à gauche (Essentiel, Tous les jetons, Images, Éléments, CSS, Bibliothèque), un aperçu de vrais éléments de BMM à droite (barre latérale, cartes, boutons, champs, une boîte de dialogue, des notifications, une bulle d'aide), les vérifications de contraste dessous. Il flotte toujours, s'ancre sur le côté et s'ouvre dans sa propre fenêtre.
-- L'aperçu ne porte que le thème en cours d'édition. L'application change à l'enregistrement, ou pendant la saisie si vous cochez « Appliquer à BMM pendant la saisie ». D'ici là, l'éditeur lui-même reste lisible, quelles que soient les couleurs essayées.
-- Essentiel : mode sombre ou clair, une palette entière à partir d'une couleur, un thème intégré comme point de départ, et les quatre familles (fond, surfaces, texte, accent et états). Changer de mode reconstruit les fonds et le texte pour l'autre mode et garde votre accent : la version claire d'un thème sombre tient en un clic.
-- Tous les jetons : chaque jeton `--bmm-*` que déclare BMM, expliqué, avec une recherche et un filtre « Modifiés seulement ».
-- Contraste : chaque paire qui doit rester lisible affiche son ratio et son niveau WCAG. Une paire en échec propose « Corriger » (la couleur la plus proche qui passe) ; « Tout corriger » les corrige toutes.
-- Annuler et rétablir (Ctrl+Z, Ctrl+Y) sur chaque modification ; Ctrl+S enregistre. La réinitialisation annule les modifications non enregistrées ou repart de l'apparence par défaut.
-- Enregistrer écrase votre propre thème, Enregistrer comme nouveau en crée un autre ; un thème intégré n'est jamais écrasé. Exporter, importer, copier en JSON et le lien de partage sont dans le menu Fichier. Les questions sont posées dans l'éditeur lui-même, elles fonctionnent donc aussi dans sa fenêtre à part.
-- Le pied de l'éditeur indique si le fichier de thème est valide, et sinon pourquoi.
-- Désigner à l'écran reconnaît maintenant n'importe quel jeton de couleur, plus seulement neuf couleurs fixes.
+| Ancien identifiant | Nouvel identifiant |
+|---|---|
+| `bmm-discord` | `bmm-indigo` (Indigo) |
+| `bmm-spotify` | `bmm-neon` (Neon) |
+| `bmm-claude` | `bmm-clay` (Clay) |
+| `bmm-nord` | `bmm-arctic` (Arctic) |
+| `bmm-vscode` (Editor) | `bmm-charcoal` (Charcoal) |
+| `bmm-macos` | `bmm-cobalt` (Cobalt) |
 
-## [AMÉLIORÉ] Fichiers de thème
-- Les fichiers de thème ont une version de format (`format_version`, désormais 2). Un fichier plus ancien est migré à la lecture (noms de jetons sans leur `--`, nombres, mode invalide) et n'est réécrit que lorsque vous l'enregistrez. Les champs que BMM ne connaît pas sont conservés.
-- Une valeur de jeton qui sortirait de la feuille de style est ignorée, dans les listes de jetons, les jetons par page et les styles d'éléments.
-- Importer un thème dont l'identifiant est déjà pris par un autre thème ne l'écrase plus : l'import reçoit un nouvel identifiant. Une archive importée dont l'identifiant n'est pas un nom simple est refusée (elle pouvait écrire hors du dossier des thèmes).
-- `bmm://theme/apply?id=…` applique aussi les thèmes intégrés (il répondait « Thème introuvable »).
+## [NEW] Prêt pour BetterCommunity v2 (désactivé)
+- La 1.0.3 sait parler à BetterCommunity v2, la prochaine version du service BetterCommunity. **Elle est livrée désactivée** : tant que la v2 n'est pas annoncée, BMM parle à BetterCommunity exactement comme la 1.0.2, adresse pour adresse.
+- À l'ouverture de la v2, l'équipe BetterCommunity l'active depuis le fichier de liens que BMM lit déjà au démarrage : les copies 1.0.3 installées suivent sans nouvelle mise à jour. BMM n'utilise la v2 qu'après qu'elle a répondu à un contrôle de santé ; sinon il reste sur le service actuel pour la session. Une ligne dans `app.cfg` peut garder une installation sur le service actuel quoi que dise le fichier de liens.
+- Une fois activée : une carte **Compte BetterCommunity lié** dans les Paramètres, où vous vous connectez en approuvant un code court sur le site (aucun mot de passe saisi dans BMM ; se déconnecter révoque la connexion). Les retours, les notifications, la page Communauté et les suggestions de Laya utilisent alors ce compte. Les mises à jour restent vérifiées avec les manifestes signés de la version, exactement comme avant.
+- Le consentement reste la règle : la télémétrie et les reçus de consentement ne sont envoyés que si vous avez activé la télémétrie, et si BetterCommunity v2 publie une version plus récente des Conditions ou de la Politique de confidentialité, BMM l'affiche et demande Accepter, Refuser ou Plus tard, avec un reçu gardé dans **Mes consentements**.
 
-## [MODIFIÉ] Noms des thèmes intégrés
-- Six identifiants intégrés reprenaient le nom d'autres produits. Ils sont renommés ; les thèmes ne changent pas : `bmm-discord` → `bmm-indigo`, `bmm-spotify` → `bmm-neon`, `bmm-claude` → `bmm-clay`, `bmm-nord` → `bmm-arctic`, `bmm-vscode` → `bmm-charcoal` (affiché « Charcoal », auparavant « Editor »), `bmm-macos` → `bmm-cobalt`.
-- Les anciens identifiants fonctionnent toujours partout : votre thème enregistré, les thèmes masqués, les tâches planifiées, les liens, le choix fait dans l'installateur et le pont MCP sont lus sous le nouvel identifiant.
-- Les descriptions d'Arctic et de Charcoal ne font plus référence à d'autres produits, et Cobalt ne demande plus la police d'un autre système.
-- `THEMES.md` et `THEMES_FR.md` présentent chaque thème intégré, avec une image de chacun, et expliquent comment en créer et en partager un.
+## [FIXED]
+- **Catalogue d'applications** : « une source n'a pas répondu » s'affichait chez des personnes qui n'avaient ajouté aucune source. Les adresses de réserve vides sont ignorées, les fichiers `.bmmbundle` suivis ne sont plus comptés comme des échecs (et en ajouter un depuis Sources survit maintenant à un redémarrage), et les adresses de flux avec des paramètres `?…` restent intactes. Sans aucune source active, la page le dit et propose d'en ajouter une.
+- **Dépôts suivis avec mot de passe de téléchargement** : ils échouaient à chaque vérification planifiée. Le mot de passe est désormais enregistré scellé sur ce PC, jamais dans le fichier de réglages de BMM, et oublié quand vous cessez de suivre le dépôt.
+- `192.168.1.20:8000` et `http://192.168.1.20:8000/repo.json` sont désormais le même dépôt suivi, pas deux.
+- **Serveurs SSH** : la demande de phrase de passe et les confirmations Supprimer et Abandonner ne pouvaient pas recevoir de réponse. Elles utilisent maintenant les dialogues de BMM ; la phrase de passe se saisit dans le formulaire et n'est jamais enregistrée.
+- **Plugins, Dupliquer** : la copie listait les scripts, dossiers, automatisations, catalogues groupés et l'icône du plugin d'origine sans les avoir. Ils sont maintenant copiés dans le nouveau plugin à l'enregistrement.
+- **Plugins, Créer** : modifier un plugin sur un PC qui n'a pas tous ses mods ne les retire plus (ils sont marqués « absent de ce PC ») ; la liste des scripts affiche son état vide ; l'icône actuelle s'affiche en modification ; la liste des mods se rabat sur le profil actuel quand celle de tous les profils ne peut pas être lue.
+- **Référence de l'API** : une partie n'était qu'en français et ignorait le thème ; un endpoint sans champ n'affiche plus de tableau vide.
+- **Thèmes** : `bmm://theme/apply` applique aussi les thèmes intégrés (il répondait « Thème introuvable »). Importer un thème dont l'identifiant est déjà pris par un autre thème ne l'écrase plus. « Désigner à l'écran » reconnaît maintenant n'importe quelle couleur, plus seulement neuf couleurs fixes.
+- Les boutons de l'éditeur de navigation suivent l'ordre de tous les autres dialogues.
 
-## [AMÉLIORÉ] Version
+## [SECURITY]
+- **SSH** : un serveur vu pour la première fois affiche l'empreinte de sa clé et demande « Approuver ce serveur » avant que quoi que ce soit lui soit envoyé. Une clé changée est refusée, avec les deux empreintes côte à côte.
+- **Thèmes** : une valeur de couleur qui tente de sortir de la feuille de style est ignorée, et une archive de thème importée dont l'identifiant n'est pas un nom simple est refusée (elle pouvait écrire hors du dossier des thèmes).
+- **Plugins, Dupliquer** : seuls les fichiers du dossier du plugin d'origine sont copiés ; les chemins absolus, `..` et les liens sont laissés de côté.
+- **Secrets** : les mots de passe de téléchargement des dépôts et la connexion BetterCommunity v2 sont gardés comme les autres secrets de BMM (protégés par Windows pour votre compte) et envoyés seulement à l'adresse à laquelle ils appartiennent.
+- Le contournement du proxy du système ne concerne que les adresses de dépôts sur votre PC ou votre réseau local. Les blocages d'adresses du réseau local pour les tâches planifiées, les points d'accès IA et les pages personnalisées ne changent pas.
+
+## Version
 - Une seule version partout : 1.0.3.
