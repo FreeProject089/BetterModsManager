@@ -1,48 +1,39 @@
----
-title: BetterModsManager
-hide:
-  - navigation
-  - path
----
-
-<div class="bmm-hero" markdown>
-
 ![](assets/docs/media/bmm-logo-tile.svg)
 
-<div class="bmm-hero__body" markdown>
+
 
 # BetterModsManager
 
 BMM installs, organises and shares your mods — across games, without ever touching the
 original files more than it has to.
-{ .bmm-hero__tagline }
 
-<div class="bmm-hero__actions" markdown>
 
-[:material-download: Download](https://github.com/FreeProject089/BetterModsManager/releases/latest)
-[:material-rocket-launch-outline: Get started](doc-page:getting-started/install)
 
-</div>
+
+[Download](https://github.com/FreeProject089/BetterModsManager/releases/latest)
+[Get started](doc-page:getting-started/install)
+
+
 
 Free and open source · GPL-3.0 · English & français
-{ .bmm-hero__meta }
 
-</div>
-</div>
 
-<div class="bmm-hero-shot" markdown>
+
+
+
+
 
 ![BMM 1.0.2: the Mod Library, with tagged mods and one switch per mod](assets/docs/media/screenshots/library.png)
 
-</div>
 
-<div class="bmm-new" markdown>
 
-<span class="bmm-badge-new">New in 1.0.2</span> The [Activity centre](doc-page:features/activity) shows everything BMM is doing,
+
+
+**New in 1.0.2** The [Activity centre](doc-page:features/activity) shows everything BMM is doing,
 [BMM Tools](doc-page:features/tools) checks your library without changing it, and the
 [Server Repo](doc-page:features/repo) page walks you through syncing or hosting a repo step by step.
 
-<div class="bmm-gallery" markdown>
+
 
 <figure markdown="span">
   ![The Activity centre, open over the Library](assets/docs/media/screenshots/activity.png)
@@ -54,8 +45,8 @@ Free and open source · GPL-3.0 · English & français
   <figcaption>Server Repo, Host tab, with the running server's card</figcaption>
 </figure>
 
-</div>
-</div>
+
+
 
 If you're new, read this page. It's short, and it explains the one idea the rest of the app
 is built on. Skipping it is why people get lost on screen three.
@@ -88,57 +79,57 @@ an undo.
 
 ## What each screen is for
 
-<div class="grid cards bmm-features" markdown>
 
--   :material-bookshelf:{ .bmm-ico } **[Library](doc-page:features/library)**
+
+-   **[Library](doc-page:features/library)**
 
     You want to see, add, or verify the mods you own.
 
--   :material-account-switch-outline:{ .bmm-ico } **[Profiles](doc-page:features/profiles)**
+-   **[Profiles](doc-page:features/profiles)**
 
     You want a setup per game — or several per game (vanilla-ish, heavy, testing).
 
--   :material-format-list-bulleted-square:{ .bmm-ico } **[.MM Lists](doc-page:features/modlist)**
+-   **[.MM Lists](doc-page:features/modlist)**
 
     You want to hand your exact setup to someone, links included.
 
--   :material-package-variant-closed:{ .bmm-ico } **[Modpacks](doc-page:features/modpacks)**
+-   **[Modpacks](doc-page:features/modpacks)**
 
     You want to toggle a whole bundle of mods on and off at once.
 
--   :material-server-network:{ .bmm-ico } **[Server Repo](doc-page:features/repo)**
+-   **[Server Repo](doc-page:features/repo)**
 
     You want a source that tells BMM when a mod has an update.
 
--   :material-puzzle-outline:{ .bmm-ico } **[Plugins & API](doc-page:features/plugins)**
+-   **[Plugins & API](doc-page:features/plugins)**
 
     You want BMM to do something it doesn't do out of the box.
 
--   :material-apps:{ .bmm-ico } **[App Catalog](doc-page:features/apps)**
+-   **[App Catalog](doc-page:features/apps)**
 
     You want the tools *around* modding, installed in one click.
 
--   :material-sitemap-outline:{ .bmm-ico } **[Mapper](doc-page:features/mapper)**
+-   **[Mapper](doc-page:features/mapper)**
 
     A mod's folders don't match what the game expects.
 
--   :material-account-group-outline:{ .bmm-ico } **[BetterCommunity](doc-page:features/community)**
+-   **[BetterCommunity](doc-page:features/community)**
 
     You want news and posts from the project's blogs.
 
--   :material-cog-outline:{ .bmm-ico } **[Settings](doc-page:features/settings)**
+-   **[Settings](doc-page:features/settings)**
 
     Themes, updates, storage limits, data export.
 
--   :material-pulse:{ .bmm-ico } **[Activity centre](doc-page:features/activity)**
+-   **[Activity centre](doc-page:features/activity)**
 
     You want to see, or stop, everything BMM is doing right now.
 
--   :material-toolbox-outline:{ .bmm-ico } **[BMM Tools](doc-page:features/tools)**
+-   **[BMM Tools](doc-page:features/tools)**
 
     You want to find duplicates, conflicts, orphans, or check a file or a manifest.
 
-</div>
+
 
 ## Conflicts, in one paragraph
 

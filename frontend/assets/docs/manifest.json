@@ -82,10 +82,10 @@
         "fr": "BetterModsManager"
       },
       "summary": {
-        "en": "BMM installs, organises and shares your mods — across games, without ever touching the original files more than it has to. { .bmm-herotagline }",
-        "fr": "BMM installe, organise et partage tes mods — sur plusieurs jeux, sans jamais toucher aux fichiers d'origine plus qu'il ne le faut. { .bmm-herotagline }"
+        "en": "BMM installs, organises and shares your mods — across games, without ever touching the original files more than it has to.",
+        "fr": "BMM installe, organise et partage tes mods — sur plusieurs jeux, sans jamais toucher aux fichiers d'origine plus qu'il ne le faut."
       },
-      "words": 1027,
+      "words": 945,
       "diagrams": 0,
       "fr": true
     },
