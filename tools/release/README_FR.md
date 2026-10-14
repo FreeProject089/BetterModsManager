@@ -59,7 +59,7 @@ NSIS/MSI classiques restent dans `extras/` et ne vont jamais sur GitHub.
 | `--skip-bmm-build` | build : réutiliser l'exe déjà construit (`release.ps1 -SkipBmmBuild`) |
 | `--no-bundles` | build : pas d'extras NSIS/MSI |
 | `--lenient-artifacts` | verify : un échec de `check-release-versions --artifacts` n'est qu'un avertissement |
-| `--no-screenshots`, `--no-tasky`, `--tasky app|br|off` | options des médias |
+| `--no-screenshots`, `--no-tasky`, `--tasky app|br|off`, `--gifs` | options des médias (`--gifs` : enregistre aussi les clips d'usage) |
 | `--bench-skip-run`, `--bench-only rust,js,hyperfine,mem` | options des benchmarks |
 | `--gource-seconds N`, `--no-credits` | options de Gource |
 | `--no-wait`, `--force` | ne pas attendre une machine libre ; lancer quand même |
@@ -108,6 +108,16 @@ Rapport seul (sans nouvelle exécution) : `node tools/release/bench/run.mjs --ve
   L'outil sert lui-même `frontend/` sur un port local aléatoire ; sans Tauri, l'application utilise
   son simulateur intégré, alimenté **uniquement avec des données de démonstration** (`fixtures.mjs` :
   adresses example.org, un utilisateur « Demo »). Ajoutez une scène dans `scenes.mjs`. Aperçus des thèmes (THEMES.md) : `node tools/release/screenshots/themes.mjs --frontend <checkout>/frontend --out <checkout>/.github/themes`, une image de la Bibliothèque par thème intégré de ce checkout, même composition.
+- Clips d'usage (GIF + MP4) : `tools/release/screenshots/gifs.mjs`, scènes dans `gif-scenes.mjs`
+  (suivre un dépôt, résoudre un conflit, centre d'activité, éditeur de thème, créer un plugin,
+  Outils BMM, notifications, paramètres). Même aperçu, mêmes données de démonstration et même
+  composition que les captures, avec un pointeur dessiné. Le screencast DevTools enregistre chaque
+  rafraîchissement ; ffmpeg (`C:\ffmpeg\bin`, ou `FFMPEG`) garde chaque image sa vraie durée et
+  produit un MP4 (taille native, 30 i/s) et un GIF à palette optimisée (1000 px, 14 i/s, réduit
+  jusqu'à passer sous 8 Mo). Une scène peut répondre elle-même à des commandes du mock (`mock`)
+  quand les fixtures ne suffisent pas, et être accélérée (`speed`). Seul : `node tools/release/screenshots/gifs.mjs [--previews] [--width 1000] [--fps 14] [--max-mb 8] [scène …]` ;
+  avec l'étape media : `--gifs`. Sortie : `Release/<version>/media/gifs/` (`<nom>.gif`, `.mp4`,
+  `gifs.json`, `previews/`), à relire ; copiez à la main ceux qui sont validés dans `.github/gifs/`.
 - Sources modifiables :
   - **SVG à calques** (calques Inkscape ; Illustrator et Affinity lisent les id des groupes comme
     noms de calques ; Photoshop importe un SVG aplati) : cartes `background / logo / title /
