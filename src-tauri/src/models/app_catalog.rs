@@ -92,6 +92,23 @@ pub struct MergedCatalog {
     pub apps: Vec<AppEntry>,
     pub sources_loaded: Vec<String>,
     pub sources_failed: Vec<String>,
+    /// One line per source that was actually requested: its tier, outcome, why it failed,
+    /// how many apps it gave and how long it took. Blank and non-http entries are not here.
+    #[serde(default)]
+    pub sources: Vec<AppSourceStatus>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct AppSourceStatus {
+    pub url: String,
+    /// `official` · `partner` · `community`
+    pub tier: String,
+    pub ok: bool,
+    pub error: Option<String>,
+    pub items: usize,
+    /// The catalogue's own `name`, when it answered with one.
+    pub name: Option<String>,
+    pub ms: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

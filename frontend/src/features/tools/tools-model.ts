@@ -3,16 +3,45 @@
 // Import-free on purpose, like every *-model.ts here: tests/tools-model.test.mjs loads the
 // compiled file in plain node, which cannot load anything that touches Tauri.
 
-/** The hub's tools, in rail order. `icon` is a ui/icons.ts glyph name. */
+/** The hub's tools, in rail order. `icon` is a ui/icons.ts glyph name. `group`: the rail
+ *  section. `long`: walks folders, shows progress and can be cancelled (tools_cancel).
+ *  `writes`: can change something on disk, and only after a confirmation. */
 export const TOOLS = [
-    { id: 'duplicates', icon: 'copy', audience: 'user' },
-    { id: 'conflicts', icon: 'alert', audience: 'user' },
-    { id: 'disk', icon: 'hard-drive', audience: 'user' },
-    { id: 'diff', icon: 'git-branch', audience: 'user' },
-    { id: 'orphans', icon: 'search', audience: 'user' },
-    { id: 'hash', icon: 'fingerprint', audience: 'author' },
-    { id: 'validate', icon: 'shield-check', audience: 'author' },
+    { id: 'duplicates', icon: 'copy', audience: 'user', group: 'library', long: true, writes: false },
+    { id: 'conflicts', icon: 'alert', audience: 'user', group: 'library', long: false, writes: false },
+    { id: 'deployed', icon: 'link', audience: 'user', group: 'library', long: true, writes: false },
+    { id: 'orphans', icon: 'search', audience: 'user', group: 'library', long: false, writes: false },
+    { id: 'names', icon: 'tag', audience: 'user', group: 'library', long: false, writes: false },
+    { id: 'diff', icon: 'git-branch', audience: 'user', group: 'profiles', long: false, writes: false },
+    { id: 'dupprofiles', icon: 'users', audience: 'user', group: 'profiles', long: false, writes: false },
+    { id: 'disk', icon: 'hard-drive', audience: 'user', group: 'space', long: true, writes: false },
+    { id: 'largefiles', icon: 'file', audience: 'user', group: 'space', long: true, writes: false },
+    { id: 'cache', icon: 'database', audience: 'user', group: 'space', long: true, writes: true },
+    { id: 'logs', icon: 'file-text', audience: 'user', group: 'app', long: false, writes: false },
+    { id: 'hash', icon: 'fingerprint', audience: 'author', group: 'author', long: false, writes: false },
+    { id: 'validate', icon: 'shield-check', audience: 'author', group: 'author', long: false, writes: false },
+    { id: 'jsondiff', icon: 'layers', audience: 'author', group: 'author', long: false, writes: false },
 ] as const;
+
+/** Rail sections, in order. */
+export const TOOL_GROUPS = ['library', 'profiles', 'space', 'app', 'author'] as const;
+
+/** Lower case, accents removed: "Électron" finds "electron" and the other way round. */
+export function fold(s: unknown): string {
+    return String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+/** The tools whose id, name or description holds every word of `q`. Empty query: all. */
+export function filterTools<T extends { id: string }>(tools: readonly T[], q: string, text: (t: T) => string): T[] {
+    const words = fold(q).split(/\s+/).filter(Boolean);
+    if (!words.length) return tools.slice();
+    return tools.filter((x) => { const hay = fold(`${x.id} ${text(x)}`); return words.every((w) => hay.includes(w)); });
+}
+
+/** Does this tool walk folders (progress, cancel)? */
+export function isLongTool(id: string): boolean {
+    return TOOLS.some((t) => t.id === id && t.long);
+}
 
 export type ToolId = typeof TOOLS[number]['id'];
 
@@ -162,6 +191,24 @@ export function rowsFor(tool: ToolId, r: any): Record<string, unknown>[] {
             return [{ file: r.path, size: r.size, algo: r.algo, hash: r.hash, expected: r.expected || '', verdict: r.verdict }];
         case 'validate':
             return [{ format: r.format, ok: r.ok, count: r.count, problems: (r.problems || []).join(' | ') }];
+        case 'deployed':
+            return (r.items || []).map((x: any) => ({ kind: x.kind, mod: x.mod_name || '', profile: x.profile_name || '', path: x.path }));
+        case 'largefiles':
+            return (r.files || []).map((f: any) => ({ bytes: f.bytes, area: f.area, profile: f.profile_name || '', mod: f.mod_name || '', path: f.path }));
+        case 'names':
+            return (r.mods || []).flatMap((m: any) => (m.issues || []).map((i: any) => ({ name: m.name, version: m.version, profile: m.profile_name || '', issue: i.code, suggestion: i.suggestion })));
+        case 'dupprofiles':
+            return (r.pairs || []).map((p: any) => ({ a: p.a_name, b: p.b_name, similarity: p.similarity, shared: p.shared, only_a: p.only_a, only_b: p.only_b, same_game_path: p.same_game_path, same_mods_path: p.same_mods_path }));
+        case 'cache':
+            return (r.items || []).map((c: any) => ({ id: c.id, path: c.path, bytes: c.bytes, entries: c.entries }));
+        case 'logs':
+            return (r.lines || []).map((l: any) => ({ line: l.n, level: l.level, text: l.text }));
+        case 'jsondiff':
+            return [
+                ...(r.added || []).map((e: any) => ({ change: 'added', key: e.key, name: e.name, fields: '' })),
+                ...(r.removed || []).map((e: any) => ({ change: 'removed', key: e.key, name: e.name, fields: '' })),
+                ...(r.changed || []).map((e: any) => ({ change: 'changed', key: e.key, name: e.name, fields: (e.fields || []).join(' ') })),
+            ];
     }
     return [];
 }
@@ -177,8 +224,68 @@ export function findingCount(tool: ToolId, r: any): number {
         case 'orphans': return r.items?.length || 0;
         case 'hash': return r.verdict === 'mismatch' ? 1 : 0;
         case 'validate': return r.problems?.length || 0;
+        case 'deployed': return (r.items || []).filter((x: any) => x.kind !== 'no_file_list').length;
+        case 'largefiles': return r.files?.length || 0;
+        case 'names': return r.mods?.length || 0;
+        case 'dupprofiles': return r.pairs?.length || 0;
+        case 'cache': return 0;
+        case 'logs': return r.errors || 0;
+        case 'jsondiff': return (r.added?.length || 0) + (r.removed?.length || 0) + (r.changed?.length || 0);
     }
     return 0;
+}
+
+// ── Logs ────────────────────────────────────────────────────────────────────────────────
+
+export type LogLevel = 'error' | 'warn' | 'info';
+
+/** A log line's level, from the words BMM's logs use (`ERROR`, `[WARN]`, `panic`, `failed to`).
+ *  "Failed to fetch" is a failure; a summary such as "2 OK | 1 failed" is not. */
+export function logLevel(line: string): LogLevel {
+    const l = String(line || '');
+    if (/\b(error|panic|panicked|fatal)\b|\bfailed to\b|\[err/i.test(l)) return 'error';
+    if (/\b(warn|warning)\b|\[warn/i.test(l)) return 'warn';
+    return 'info';
+}
+
+export interface LogView {
+    lines: { n: number; level: LogLevel; text: string }[];
+    total: number;
+    errors: number;
+    warnings: number;
+    /** More lines matched than `limit`: the newest `limit` are kept. */
+    clipped: boolean;
+}
+
+/** Filter a log: by minimum level (`all` · `warn` = warnings and errors · `error`) and by
+ *  text (every word, accent- and case-insensitive). Keeps the newest `limit` lines. */
+export function filterLog(text: string, opts: { level?: string; q?: string; limit?: number } = {}): LogView {
+    const all = String(text || '').split(/\r?\n/);
+    if (all.length && all[all.length - 1] === '') all.pop();
+    const words = fold(opts.q || '').split(/\s+/).filter(Boolean);
+    const min = opts.level === 'error' ? 2 : opts.level === 'warn' ? 1 : 0;
+    const rank: Record<LogLevel, number> = { info: 0, warn: 1, error: 2 };
+    let errors = 0;
+    let warnings = 0;
+    const out: LogView['lines'] = [];
+    all.forEach((line, i) => {
+        const level = logLevel(line);
+        if (level === 'error') errors += 1; else if (level === 'warn') warnings += 1;
+        if (rank[level] < min) return;
+        if (words.length) { const f = fold(line); if (!words.every((w) => f.includes(w))) return; }
+        out.push({ n: i + 1, level, text: line });
+    });
+    const limit = Math.max(1, opts.limit ?? 2000);
+    return { lines: out.slice(-limit), total: all.length, errors, warnings, clipped: out.length > limit };
+}
+
+// ── Cache cleaner ───────────────────────────────────────────────────────────────────────
+
+/** What a clean of `ids` would empty, from a preview: entries that hold something and are
+ *  not busy, and their total size. */
+export function cacheSelection(r: any, ids: string[]): { ids: string[]; bytes: number } {
+    const items = (r?.items || []).filter((c: any) => ids.includes(c.id) && !c.busy && (c.bytes > 0 || c.entries > 0));
+    return { ids: items.map((c: any) => String(c.id)), bytes: items.reduce((n: number, c: any) => n + (Number(c.bytes) || 0), 0) };
 }
 
 /** Percentage for a progress event, clamped; null when the total is unknown. */

@@ -11,7 +11,12 @@
 //!   · **Orphans**: profiles naming mods that no longer exist, mods whose folder is gone,
 //!     folders in a mods directory BMM does not know about, profile folders that vanished.
 //!
-//! Everything here READS. Nothing deletes, moves or rewrites: a finder that also cleans up is
+//! Added in 1.0.3: deployed-files check (active mods' files gone from the game folder, broken
+//! or stale links, files missing from the library), large files, mod name / version report,
+//! duplicate profiles, cache cleaner (preview, then a confirmed clean of fixed cache folders),
+//! BMM log reader, and a catalogue / repo.json diff.
+//!
+//! Everything here READS, except `tools_cache_clean`. Nothing else deletes, moves or rewrites: a finder that also cleans up is
 //! one misread result away from losing somebody's mods, and the hub's job is to show, with an
 //! "open folder" next to each finding so the person decides.
 //!
@@ -601,6 +606,854 @@ pub fn tools_find_orphans(state: tauri::State<AppState>) -> Result<OrphanReport,
     }
     let items = find_orphans_in(&profiles, &mods, &listings, &|p: &Path| p.exists());
     Ok(OrphanReport { items, profiles_checked: profiles.len(), mods_checked: mods.len() })
+}
+
+// ═════════════════════════════════════════════════════════════════════════════════════════
+// 1.0.3 additions. Same rules as above: every finder READS; the one command that deletes
+// (`tools_cache_clean`) only ever touches the fixed cache folders listed in `cache_targets`,
+// never a path from an argument, and the hub asks before calling it.
+// ═════════════════════════════════════════════════════════════════════════════════════════
+
+// ── Deployed files: what an active mod put in the game folder, still there? ─────────────
+
+/// What a path is on disk, for the deployed-files rules (injected so they test without one).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Probe {
+    Missing,
+    File,
+    Dir,
+    /// A symbolic link; `target_exists` = it resolves.
+    Link { target_exists: bool },
+}
+
+pub fn probe_path(p: &Path) -> Probe {
+    match std::fs::symlink_metadata(p) {
+        Err(_) => Probe::Missing,
+        Ok(md) if md.file_type().is_symlink() => Probe::Link { target_exists: p.metadata().is_ok() },
+        Ok(md) if md.is_dir() => Probe::Dir,
+        Ok(_) => Probe::File,
+    }
+}
+
+/// One active mod, with the files it deployed (relative to the game folder).
+#[derive(Debug, Clone)]
+pub struct DeployedMod {
+    pub id: String,
+    pub name: String,
+    pub folder: PathBuf,
+    pub archive: bool,
+    pub files: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct DeployIssue {
+    /// `mod_folder_missing` · `missing_target` · `broken_link` · `missing_source` ·
+    /// `unsafe_path` · `no_file_list` · `stale_link`
+    pub kind: String,
+    pub mod_id: Option<String>,
+    pub mod_name: Option<String>,
+    pub profile_name: String,
+    /// The file concerned (absolute), or the mod folder.
+    pub path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct DeployReport {
+    pub items: Vec<DeployIssue>,
+    pub profiles_checked: usize,
+    pub mods_checked: usize,
+    pub files_checked: usize,
+    pub truncated: bool,
+    pub cancelled: bool,
+}
+
+pub const DEPLOY_ISSUE_CAP: usize = 5000;
+
+/// The deployed-files rules for one profile's active mods.
+pub fn check_deployed_in(mods: &[DeployedMod], game: &Path, profile_name: &str, probe: &dyn Fn(&Path) -> Probe) -> (Vec<DeployIssue>, usize) {
+    let mut out = Vec::new();
+    let mut checked = 0usize;
+    let issue = |kind: &str, m: &DeployedMod, path: String| DeployIssue {
+        kind: kind.into(), mod_id: Some(m.id.clone()), mod_name: Some(m.name.clone()), profile_name: profile_name.to_string(), path,
+    };
+    for m in mods {
+        let folder_ok = probe(&m.folder) != Probe::Missing;
+        if !folder_ok {
+            out.push(issue("mod_folder_missing", m, m.folder.to_string_lossy().to_string()));
+        }
+        if m.files.is_empty() {
+            out.push(issue("no_file_list", m, m.folder.to_string_lossy().to_string()));
+            continue;
+        }
+        for rel in &m.files {
+            checked += 1;
+            let Some(safe) = crate::fs_utils::safe_relative_path(rel) else {
+                out.push(issue("unsafe_path", m, rel.clone()));
+                continue;
+            };
+            let target = game.join(&safe);
+            match probe(&target) {
+                Probe::Missing => out.push(issue("missing_target", m, target.to_string_lossy().to_string())),
+                Probe::Link { target_exists: false } => out.push(issue("broken_link", m, target.to_string_lossy().to_string())),
+                _ => {}
+            }
+            // An archived mod's files live in its archive; a missing folder is reported once.
+            if folder_ok && !m.archive && probe(&m.folder.join(&safe)) == Probe::Missing {
+                out.push(issue("missing_source", m, m.folder.join(&safe).to_string_lossy().to_string()));
+            }
+        }
+    }
+    (out, checked)
+}
+
+/// Active mods' deployed files that are gone or point nowhere, mod files missing from the
+/// library, and dangling links left next to them. `profile_id` = one profile, else all.
+#[tauri::command]
+pub async fn tools_check_deployed(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+    profile_id: Option<String>,
+) -> Result<DeployReport, String> {
+    CANCEL.store(false, Ordering::Relaxed);
+    // (profile name, game path, active mods with their files)
+    let work: Vec<(String, PathBuf, Vec<DeployedMod>)> = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        data.profiles.iter()
+            .filter(|p| profile_id.as_deref().map(|id| id == p.id).unwrap_or(true))
+            .map(|p| {
+                let mods = p.active_mods.iter().filter_map(|id| data.mods.iter().find(|m| &m.id == id)).map(|m| DeployedMod {
+                    id: m.id.clone(), name: m.name.clone(), folder: m.mod_folder_path.clone(),
+                    archive: crate::archive::is_archive(&m.mod_folder_path),
+                    files: m.installed_files.clone(),
+                }).collect();
+                (p.name.clone(), p.game_path.clone(), mods)
+            }).collect()
+    };
+    if profile_id.is_some() && work.is_empty() { return Err("tools.err.noProfile".into()); }
+    tauri::async_runtime::spawn_blocking(move || {
+        let ticket = crate::governor::runtime::global()
+            .begin(crate::governor::config::OpKind::Scan, "tools: deployed files");
+        let mut report = DeployReport { profiles_checked: work.len(), ..Default::default() };
+        let total = work.len();
+        for (i, (pname, game, mods)) in work.iter().enumerate() {
+            if cancelled() || ticket.checkpoint().is_err() { report.cancelled = true; break; }
+            progress(&app, "deployed", "files", i, total);
+            report.mods_checked += mods.len();
+            let (mut items, n) = check_deployed_in(mods, game, pname, &|p: &Path| probe_path(p));
+            report.files_checked += n;
+            // Dangling links in the folders these files live in (a link BMM or a tool made,
+            // whose target went away).
+            let mut dirs: Vec<PathBuf> = mods.iter().flat_map(|m| m.files.iter())
+                .filter_map(|r| crate::fs_utils::safe_relative_path(r))
+                .filter_map(|r| game.join(r).parent().map(Path::to_path_buf))
+                .collect();
+            dirs.sort();
+            dirs.dedup();
+            let reported: HashSet<String> = items.iter().map(|x| x.path.to_lowercase()).collect();
+            for (n, d) in dirs.iter().enumerate() {
+                if n % 64 == 0 && (cancelled() || ticket.checkpoint().is_err()) { report.cancelled = true; break; }
+                let Ok(rd) = std::fs::read_dir(d) else { continue };
+                for e in rd.flatten() {
+                    let p = e.path();
+                    if probe_path(&p) == (Probe::Link { target_exists: false }) && !reported.contains(&p.to_string_lossy().to_lowercase()) {
+                        items.push(DeployIssue { kind: "stale_link".into(), mod_id: None, mod_name: None, profile_name: pname.clone(), path: p.to_string_lossy().to_string() });
+                    }
+                }
+            }
+            report.items.extend(items);
+            if report.items.len() > DEPLOY_ISSUE_CAP { report.items.truncate(DEPLOY_ISSUE_CAP); report.truncated = true; break; }
+        }
+        progress(&app, "deployed", "done", total, total);
+        report
+    }).await.map_err(|e| e.to_string())
+}
+
+// ── Large files ─────────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct LargeFile {
+    pub path: String,
+    pub bytes: u64,
+    /// `mods` · `backups`
+    pub area: String,
+    pub profile_name: String,
+    pub mod_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct LargeFileReport {
+    pub files: Vec<LargeFile>,
+    pub files_scanned: usize,
+    pub bytes_scanned: u64,
+    pub min_bytes: u64,
+    pub cancelled: bool,
+}
+
+/// Keep the `n` largest of what is pushed, without holding everything (a min-heap).
+pub struct TopN {
+    n: usize,
+    heap: std::collections::BinaryHeap<std::cmp::Reverse<(u64, String)>>,
+}
+
+impl TopN {
+    pub fn new(n: usize) -> Self { TopN { n: n.max(1), heap: std::collections::BinaryHeap::new() } }
+    pub fn push(&mut self, size: u64, key: String) {
+        if self.heap.len() < self.n { self.heap.push(std::cmp::Reverse((size, key))); return; }
+        if let Some(std::cmp::Reverse((min, _))) = self.heap.peek() {
+            if size > *min { self.heap.pop(); self.heap.push(std::cmp::Reverse((size, key))); }
+        }
+    }
+    /// Largest first, then by path.
+    pub fn into_sorted(self) -> Vec<(u64, String)> {
+        let mut v: Vec<(u64, String)> = self.heap.into_iter().map(|std::cmp::Reverse(x)| x).collect();
+        v.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
+        v
+    }
+}
+
+/// The largest files in a profile's mods and backups folders (or every profile's).
+#[tauri::command]
+pub async fn tools_large_files(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+    profile_id: Option<String>,
+    min_mb: Option<u64>,
+    limit: Option<usize>,
+) -> Result<LargeFileReport, String> {
+    CANCEL.store(false, Ordering::Relaxed);
+    let (profiles, mods) = snapshot(&state);
+    let chosen: Vec<ProfileSnap> = profiles.into_iter().filter(|p| profile_id.as_deref().map(|id| id == p.id).unwrap_or(true)).collect();
+    if profile_id.is_some() && chosen.is_empty() { return Err("tools.err.noProfile".into()); }
+    let min_bytes = min_mb.unwrap_or(50).min(1_048_576).saturating_mul(1024 * 1024);
+    let limit = limit.unwrap_or(50).clamp(1, 500);
+    tauri::async_runtime::spawn_blocking(move || {
+        let ticket = crate::governor::runtime::global()
+            .begin(crate::governor::config::OpKind::Scan, "tools: large files");
+        let mut report = LargeFileReport { min_bytes, ..Default::default() };
+        let mut top = TopN::new(limit);
+        // (root, area, profile name), each folder once even when profiles share it.
+        let mut roots: Vec<(PathBuf, &'static str, String)> = Vec::new();
+        for p in &chosen {
+            for (dir, area) in [(&p.mods_path, "mods"), (&p.backup_path, "backups")] {
+                if dir.as_os_str().is_empty() || roots.iter().any(|(d, _, _)| same_path(d, dir)) { continue; }
+                roots.push((dir.clone(), area, p.name.clone()));
+            }
+        }
+        let mut meta: HashMap<String, (&'static str, String)> = HashMap::new();
+        let total = roots.len();
+        'roots: for (ri, (root, area, pname)) in roots.iter().enumerate() {
+            progress(&app, "largefiles", "walk", ri, total);
+            for (n, e) in walkdir::WalkDir::new(root).follow_links(false).into_iter().flatten().enumerate() {
+                if n % 512 == 0 && (cancelled() || ticket.checkpoint().is_err()) { report.cancelled = true; break 'roots; }
+                if !e.file_type().is_file() { continue; }
+                let size = e.metadata().map(|m| m.len()).unwrap_or(0);
+                report.files_scanned += 1;
+                report.bytes_scanned += size;
+                if size >= min_bytes.max(1) {
+                    let key = e.path().to_string_lossy().to_string();
+                    meta.insert(key.clone(), (area, pname.clone()));
+                    top.push(size, key);
+                }
+            }
+        }
+        report.files = top.into_sorted().into_iter().map(|(bytes, path)| {
+            let (area, profile_name) = meta.get(&path).cloned().unwrap_or(("mods", String::new()));
+            let pb = PathBuf::from(&path);
+            let mod_name = mods.iter().find(|m| !m.path.is_empty() && pb.starts_with(&m.path)).map(|m| m.name.clone());
+            LargeFile { path, bytes, area: area.to_string(), profile_name, mod_name }
+        }).collect();
+        progress(&app, "largefiles", "done", total, total);
+        report
+    }).await.map_err(|e| e.to_string())
+}
+
+// ── Mod names and versions ──────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct NameIssue {
+    /// `trim` · `spaces` · `separators` · `version_in_name` · `version_empty` ·
+    /// `version_prefix` · `version_format`
+    pub code: String,
+    /// The value the rule suggests (a name or a version), or empty when there is none.
+    pub suggestion: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct NamedMod {
+    pub mod_id: String,
+    pub name: String,
+    pub version: String,
+    pub profile_name: Option<String>,
+    pub issues: Vec<NameIssue>,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct NamesReport {
+    pub mods: Vec<NamedMod>,
+    pub mods_checked: usize,
+    pub by_code: BTreeMap<String, usize>,
+}
+
+/// A trailing version in a name: ` v1.2`, `_1.2.3`, `-V2`, ` (1.0)`. Returns (name without
+/// it, the version without its `v`).
+pub fn split_trailing_version(name: &str) -> Option<(String, String)> {
+    let t = name.trim_end();
+    let t2 = t.trim_end_matches(')');
+    let paren = t2.len() != t.len();
+    let cut = t2.rfind(|c: char| c == ' ' || c == '_' || c == '-' || (paren && c == '('))?;
+    let tail = &t2[cut + 1..];
+    let ver = tail.strip_prefix(['v', 'V']).unwrap_or(tail);
+    let ok = !ver.is_empty()
+        && ver.chars().next().is_some_and(|c| c.is_ascii_digit())
+        && ver.chars().all(|c| c.is_ascii_digit() || c == '.')
+        && (ver.contains('.') || tail.len() != ver.len());
+    if !ok { return None; }
+    let head = t2[..cut].trim_end_matches([' ', '_', '-', '(']).trim_end();
+    if head.is_empty() { return None; }
+    Some((head.to_string(), ver.to_string()))
+}
+
+/// `1`, `1.2`, `1.2.3`, with an optional `-beta`, `+build` or ` rc1` style suffix.
+pub fn version_is_standard(v: &str) -> bool {
+    let core: &str = v.split(['-', '+', ' ']).next().unwrap_or("");
+    !core.is_empty() && core.split('.').all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()))
+}
+
+/// The name and version rules for one mod. Suggestions only: nothing is renamed.
+pub fn name_issues(name: &str, version: &str) -> Vec<NameIssue> {
+    let mut v = Vec::new();
+    let mk = |code: &str, s: String| NameIssue { code: code.into(), suggestion: s };
+    if name != name.trim() { v.push(mk("trim", name.trim().to_string())); }
+    let collapsed = name.split_whitespace().collect::<Vec<_>>().join(" ");
+    if name.trim().contains("  ") { v.push(mk("spaces", collapsed.clone())); }
+    if collapsed.contains('_') && !collapsed.contains(' ') { v.push(mk("separators", collapsed.replace('_', " "))); }
+    let vt = version.trim();
+    if let Some((head, ver)) = split_trailing_version(&collapsed) {
+        v.push(mk("version_in_name", head));
+        if vt.is_empty() { v.push(mk("version_empty", ver)); }
+    } else if vt.is_empty() {
+        v.push(mk("version_empty", String::new()));
+    }
+    if let Some(rest) = vt.strip_prefix(['v', 'V']) {
+        if rest.chars().next().is_some_and(|c| c.is_ascii_digit()) { v.push(mk("version_prefix", rest.to_string())); }
+    } else if !vt.is_empty() && !version_is_standard(vt) {
+        v.push(mk("version_format", String::new()));
+    }
+    v
+}
+
+/// Mod names and versions that do not follow one shape, with what each would become.
+#[tauri::command(async)]
+pub fn tools_names_report(state: tauri::State<AppState>) -> Result<NamesReport, String> {
+    let (_, mods) = snapshot(&state);
+    let mut r = NamesReport { mods_checked: mods.len(), ..Default::default() };
+    for m in &mods {
+        let issues = name_issues(&m.name, &m.version);
+        if issues.is_empty() { continue; }
+        for i in &issues { *r.by_code.entry(i.code.clone()).or_default() += 1; }
+        r.mods.push(NamedMod { mod_id: m.id.clone(), name: m.name.clone(), version: m.version.clone(), profile_name: m.profile_name.clone(), issues });
+    }
+    r.mods.sort_by(|a, b| b.issues.len().cmp(&a.issues.len()).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())));
+    Ok(r)
+}
+
+// ── Duplicate profiles ──────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct ProfilePair {
+    pub a_id: String,
+    pub a_name: String,
+    pub b_id: String,
+    pub b_name: String,
+    /// Shared active mods ÷ all active mods of the two (1.0 = the same set).
+    pub similarity: f64,
+    pub shared: usize,
+    pub only_a: usize,
+    pub only_b: usize,
+    pub identical: bool,
+    pub same_game_path: bool,
+    pub same_mods_path: bool,
+}
+
+/// Pairs of profiles worth a look: the same active mods (or nearly: `threshold`), or the same
+/// game or mods folder. `sets` = each profile's active mods as match keys.
+fn profile_pairs(profiles: &[ProfileSnap], sets: &[HashSet<String>], threshold: f64) -> Vec<ProfilePair> {
+    let mut out = Vec::new();
+    for i in 0..profiles.len() {
+        for j in (i + 1)..profiles.len() {
+            let (a, b) = (&profiles[i], &profiles[j]);
+            let (sa, sb) = (&sets[i], &sets[j]);
+            let shared = sa.intersection(sb).count();
+            let union = sa.union(sb).count();
+            let similarity = if union == 0 { 0.0 } else { shared as f64 / union as f64 };
+            let identical = union > 0 && shared == union;
+            let same_game_path = !a.game_path.as_os_str().is_empty() && same_path(&a.game_path, &b.game_path);
+            let same_mods_path = !a.mods_path.as_os_str().is_empty() && same_path(&a.mods_path, &b.mods_path);
+            if identical || (union > 0 && similarity >= threshold) || same_game_path || same_mods_path {
+                out.push(ProfilePair {
+                    a_id: a.id.clone(), a_name: a.name.clone(), b_id: b.id.clone(), b_name: b.name.clone(),
+                    similarity: (similarity * 1000.0).round() / 1000.0, shared,
+                    only_a: sa.len() - shared, only_b: sb.len() - shared,
+                    identical, same_game_path, same_mods_path,
+                });
+            }
+        }
+    }
+    out.sort_by(|x, y| y.similarity.partial_cmp(&x.similarity).unwrap_or(std::cmp::Ordering::Equal).then_with(|| x.a_name.cmp(&y.a_name)));
+    out
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct ProfilePairsReport {
+    pub pairs: Vec<ProfilePair>,
+    pub profiles_checked: usize,
+    pub threshold: f64,
+}
+
+/// Profiles that duplicate each other: same active mods, or sharing a game or mods folder.
+#[tauri::command(async)]
+pub fn tools_duplicate_profiles(state: tauri::State<AppState>, threshold: Option<f64>) -> Result<ProfilePairsReport, String> {
+    let (profiles, mods) = snapshot(&state);
+    let threshold = threshold.unwrap_or(0.8).clamp(0.1, 1.0);
+    let by_id: HashMap<&str, &ToolMod> = mods.iter().map(|m| (m.id.as_str(), m)).collect();
+    let sets: Vec<HashSet<String>> = profiles.iter().map(|p| p.active_mods.iter()
+        .filter_map(|id| by_id.get(id.as_str()))
+        .map(|m| match_key(m.content_id.as_deref(), &m.name))
+        .filter(|k| k != "name:")
+        .collect()).collect();
+    Ok(ProfilePairsReport { pairs: profile_pairs(&profiles, &sets, threshold), profiles_checked: profiles.len(), threshold })
+}
+
+// ── Cache cleaner ───────────────────────────────────────────────────────────────────────
+
+/// The only places `tools_cache_clean` may delete, each rebuilt by BMM when needed.
+/// `(id, folder, name prefix)`: a prefix = the entries of `folder` whose name starts with it.
+pub fn cache_targets(app_data: &Path, temp: &Path) -> Vec<(&'static str, PathBuf, Option<&'static [&'static str]>)> {
+    vec![
+        ("catalog_cache", app_data.join("catalog-cache"), None),
+        ("mod_cache", temp.join("bmm_mod_cache"), None),
+        ("update_leftovers", temp.to_path_buf(), Some(&["bmm_update_", "bmm_incremental_update", "bmm_catalog_build"][..])),
+        ("crash_archive", app_data.join("Crashes").join("Archive"), None),
+    ]
+}
+
+/// The entries a target covers: the folder's children, or the matching entries of it.
+pub fn cache_entries(folder: &Path, prefixes: Option<&[&str]>) -> Vec<PathBuf> {
+    let Ok(rd) = std::fs::read_dir(folder) else { return Vec::new() };
+    rd.flatten().map(|e| e.path()).filter(|p| match prefixes {
+        None => true,
+        Some(ps) => p.file_name().map(|n| n.to_string_lossy().to_string()).is_some_and(|n| ps.iter().any(|x| n.starts_with(x))),
+    }).collect()
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct CacheItem {
+    pub id: String,
+    pub path: String,
+    pub bytes: u64,
+    pub entries: usize,
+    /// Cleaning it now would race a running mod operation.
+    pub busy: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct CacheReport {
+    pub items: Vec<CacheItem>,
+    pub total_bytes: u64,
+    /// For a clean: what was freed and what could not be removed.
+    pub freed_bytes: u64,
+    pub errors: Vec<String>,
+}
+
+fn mod_ops_running() -> bool {
+    use crate::governor::config::OpKind;
+    crate::governor::runtime::global().queue().snapshot().iter()
+        .any(|t| matches!(t.kind, OpKind::Deploy | OpKind::Extract | OpKind::Install))
+}
+
+fn app_data_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    use tauri::Manager;
+    app.path().app_data_dir().map_err(|e| e.to_string())
+}
+
+fn measure(paths: &[PathBuf], ticket: &crate::governor::queue::Ticket) -> u64 {
+    paths.iter().map(|p| path_size(p, ticket)).sum()
+}
+
+/// What each cache folder holds. Nothing is removed.
+#[tauri::command]
+pub async fn tools_cache_preview(app: tauri::AppHandle) -> Result<CacheReport, String> {
+    CANCEL.store(false, Ordering::Relaxed);
+    let app_data = app_data_dir(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let ticket = crate::governor::runtime::global()
+            .begin(crate::governor::config::OpKind::Scan, "tools: cache preview");
+        let busy = mod_ops_running();
+        let mut r = CacheReport::default();
+        for (id, folder, prefixes) in cache_targets(&app_data, &std::env::temp_dir()) {
+            let entries = cache_entries(&folder, prefixes);
+            let bytes = measure(&entries, &ticket);
+            r.total_bytes += bytes;
+            r.items.push(CacheItem { id: id.to_string(), path: folder.to_string_lossy().to_string(), bytes, entries: entries.len(), busy: busy && id == "mod_cache" });
+        }
+        r
+    }).await.map_err(|e| e.to_string())
+}
+
+/// Empty the chosen cache folders. `ids` must name targets of `cache_targets`; `confirmed`
+/// must be true (the hub sets it only after the person said yes to the sizes it showed).
+#[tauri::command]
+pub async fn tools_cache_clean(app: tauri::AppHandle, ids: Vec<String>, confirmed: bool) -> Result<CacheReport, String> {
+    if !confirmed { return Err("tools.cache.notConfirmed".into()); }
+    let app_data = app_data_dir(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let ticket = crate::governor::runtime::global()
+            .begin(crate::governor::config::OpKind::Maintenance, "tools: cache clean");
+        let mut r = CacheReport::default();
+        for (id, folder, prefixes) in cache_targets(&app_data, &std::env::temp_dir()) {
+            if !ids.iter().any(|x| x == id) { continue; }
+            if id == "mod_cache" && mod_ops_running() { r.errors.push(format!("{}: tools.cache.busy", id)); continue; }
+            for p in cache_entries(&folder, prefixes) {
+                if ticket.checkpoint().is_err() { r.errors.push("cancelled".into()); return r; }
+                let bytes = path_size(&p, &ticket);
+                // symlink_metadata: a link is removed as a link, never followed into.
+                let res = match std::fs::symlink_metadata(&p) {
+                    Ok(md) if md.is_dir() => std::fs::remove_dir_all(&p),
+                    Ok(_) => std::fs::remove_file(&p),
+                    Err(e) => Err(e),
+                };
+                match res {
+                    Ok(()) => r.freed_bytes += bytes,
+                    Err(e) => r.errors.push(format!("{}: {}", p.to_string_lossy(), e)),
+                }
+            }
+        }
+        log_cache_clean(&ids, r.freed_bytes, r.errors.len());
+        r
+    }).await.map_err(|e| e.to_string())
+}
+
+fn log_cache_clean(ids: &[String], freed: u64, errors: usize) {
+    crate::commands::crash::log_line(format!("[TOOLS] cache clean {:?}: {} bytes freed, {} error(s)", ids, freed, errors));
+}
+
+// ── Logs ────────────────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct LogEntry {
+    /// `current`, or `<Reports|Archive>/<Crash|Session>/<file>.zip`.
+    pub id: String,
+    /// `current` · `session` · `crash`
+    pub kind: String,
+    pub archived: bool,
+    pub bytes: u64,
+    /// Seconds since the epoch.
+    pub modified: u64,
+}
+
+const LOG_DIRS: [&str; 4] = ["Reports/Crash", "Reports/Session", "Archive/Crash", "Archive/Session"];
+
+/// A log id → its zip under the crash folder, or None for anything else (no `..`, no other
+/// folder, only a plain `.zip` name).
+pub fn log_zip_path(crash_dir: &Path, id: &str) -> Option<PathBuf> {
+    let (dir, file) = id.rsplit_once('/')?;
+    if !LOG_DIRS.contains(&dir) { return None; }
+    let ok = file.ends_with(".zip") && file.len() > 4
+        && file.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'))
+        && !file.starts_with('.');
+    if !ok { return None; }
+    let mut p = crash_dir.to_path_buf();
+    for seg in dir.split('/') { p.push(seg); }
+    Some(p.join(file))
+}
+
+/// BMM's logs: this session, then the saved session and crash reports, newest first.
+#[tauri::command(async)]
+pub fn tools_log_list(app: tauri::AppHandle) -> Result<Vec<LogEntry>, String> {
+    let crash = crate::commands::crash::get_crash_dir(Some(&app));
+    let mut out = vec![LogEntry { id: "current".into(), kind: "current".into(), archived: false, bytes: 0, modified: SystemTimeNow::secs() }];
+    for dir in LOG_DIRS {
+        let Ok(rd) = std::fs::read_dir(crash.join(dir)) else { continue };
+        for e in rd.flatten() {
+            let name = e.file_name().to_string_lossy().to_string();
+            let id = format!("{}/{}", dir, name);
+            if log_zip_path(&crash, &id).is_none() { continue; }
+            let md = e.metadata().ok();
+            out.push(LogEntry {
+                id, kind: if dir.ends_with("Crash") { "crash".into() } else { "session".into() },
+                archived: dir.starts_with("Archive"),
+                bytes: md.as_ref().map(|m| m.len()).unwrap_or(0),
+                modified: md.and_then(|m| m.modified().ok()).and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs()).unwrap_or(0),
+            });
+        }
+    }
+    out[1..].sort_by(|a, b| b.modified.cmp(&a.modified));
+    out.truncate(400);
+    Ok(out)
+}
+
+struct SystemTimeNow;
+impl SystemTimeNow {
+    fn secs() -> u64 { std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0) }
+}
+
+const LOG_READ_CAP: u64 = 8 * 1024 * 1024;
+
+/// The text of one log (the app log inside a report zip), capped at 8 MB.
+#[tauri::command(async)]
+pub fn tools_log_read(app: tauri::AppHandle, id: String) -> Result<String, String> {
+    if id == "current" {
+        return Ok(crate::commands::crash::read_session_log_tail(Some(LOG_READ_CAP as usize)));
+    }
+    let crash = crate::commands::crash::get_crash_dir(Some(&app));
+    let path = log_zip_path(&crash, &id).ok_or("tools.logs.badId")?;
+    let file = std::fs::File::open(&path).map_err(|e| e.to_string())?;
+    let mut zip = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
+    let mut entry = zip.by_name("app_logs.txt").map_err(|_| "tools.logs.noAppLog".to_string())?;
+    use std::io::Read;
+    let mut buf = Vec::new();
+    (&mut entry).take(LOG_READ_CAP).read_to_end(&mut buf).map_err(|e| e.to_string())?;
+    Ok(String::from_utf8_lossy(&buf).to_string())
+}
+
+// ── Catalogue / repo.json diff ──────────────────────────────────────────────────────────
+
+const LIST_KEYS: [&str; 11] = ["apps", "items", "mods", "plugins", "themes", "presets", "entries", "catalogs", "modpacks", "lists", "tutorials"];
+
+/// The entries of a catalogue-like document: the first known list key (or the document
+/// itself when it is an array), each keyed by `id`, else `name` / `title` / `url`.
+pub fn doc_entries(v: &serde_json::Value) -> (String, Vec<(String, serde_json::Value)>) {
+    let (key, list) = match v {
+        serde_json::Value::Array(a) => ("(root)".to_string(), a.clone()),
+        serde_json::Value::Object(o) => match LIST_KEYS.iter().find(|k| o.get(**k).is_some_and(|x| x.is_array())) {
+            Some(k) => (k.to_string(), o[*k].as_array().cloned().unwrap_or_default()),
+            None => (String::new(), Vec::new()),
+        },
+        _ => (String::new(), Vec::new()),
+    };
+    let entries = list.into_iter().enumerate().map(|(i, e)| {
+        let k = ["id", "repo_mod_id", "name", "title", "url"].iter()
+            .find_map(|f| e.get(*f).and_then(|x| match x { serde_json::Value::String(s) if !s.trim().is_empty() => Some(s.trim().to_string()), serde_json::Value::Number(n) => Some(n.to_string()), _ => None }))
+            .unwrap_or_else(|| format!("#{}", i));
+        (k, e)
+    }).collect();
+    (key, entries)
+}
+
+fn entry_name(v: &serde_json::Value) -> String {
+    ["name", "title", "id"].iter().find_map(|f| v.get(*f).and_then(|x| x.as_str()).map(str::to_string)).unwrap_or_default()
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct DiffEntry {
+    pub key: String,
+    pub name: String,
+    /// For a changed entry: its top-level fields that differ.
+    pub fields: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Default, PartialEq)]
+pub struct JsonDiff {
+    pub a_path: String,
+    pub b_path: String,
+    pub a_list: String,
+    pub b_list: String,
+    pub a_count: usize,
+    pub b_count: usize,
+    pub added: Vec<DiffEntry>,
+    pub removed: Vec<DiffEntry>,
+    pub changed: Vec<DiffEntry>,
+    pub same: usize,
+    /// Top-level fields outside the list that differ (name, version, signatures…).
+    pub meta_changed: Vec<String>,
+}
+
+pub fn diff_docs(a: &serde_json::Value, b: &serde_json::Value) -> JsonDiff {
+    let (la, ea) = doc_entries(a);
+    let (lb, eb) = doc_entries(b);
+    let mut d = JsonDiff { a_list: la.clone(), b_list: lb.clone(), a_count: ea.len(), b_count: eb.len(), ..Default::default() };
+    let ma: BTreeMap<String, serde_json::Value> = ea.into_iter().collect();
+    let mb: BTreeMap<String, serde_json::Value> = eb.into_iter().collect();
+    for (k, va) in &ma {
+        match mb.get(k) {
+            None => d.removed.push(DiffEntry { key: k.clone(), name: entry_name(va), fields: vec![] }),
+            Some(vb) if vb == va => d.same += 1,
+            Some(vb) => {
+                let mut fields: Vec<String> = Vec::new();
+                let keys: std::collections::BTreeSet<String> = va.as_object().map(|o| o.keys().cloned().collect::<Vec<String>>()).unwrap_or_default().into_iter()
+                    .chain(vb.as_object().map(|o| o.keys().cloned().collect::<Vec<_>>()).unwrap_or_default()).collect();
+                for f in keys { if va.get(&f) != vb.get(&f) { fields.push(f); } }
+                if fields.is_empty() { fields.push("(value)".into()); }
+                d.changed.push(DiffEntry { key: k.clone(), name: entry_name(vb), fields });
+            }
+        }
+    }
+    for (k, vb) in &mb {
+        if !ma.contains_key(k) { d.added.push(DiffEntry { key: k.clone(), name: entry_name(vb), fields: vec![] }); }
+    }
+    if let (Some(oa), Some(ob)) = (a.as_object(), b.as_object()) {
+        let keys: std::collections::BTreeSet<&String> = oa.keys().chain(ob.keys()).collect();
+        for k in keys {
+            if *k == la || *k == lb { continue; }
+            if oa.get(k) != ob.get(k) { d.meta_changed.push(k.clone()); }
+        }
+    }
+    d
+}
+
+const DIFF_FILE_CAP: u64 = 32 * 1024 * 1024;
+
+fn read_json_file(path: &str) -> Result<serde_json::Value, String> {
+    let md = std::fs::metadata(path).map_err(|e| e.to_string())?;
+    if !md.is_file() { return Err("tools.jsondiff.notFile".into()); }
+    if md.len() > DIFF_FILE_CAP { return Err("tools.jsondiff.tooLarge".into()); }
+    let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+    serde_json::from_str(text.trim_start_matches('\u{feff}')).map_err(|_| "tools.jsondiff.notJson".to_string())
+}
+
+/// Compare two catalogue / repo.json files the person picked. Reads them; writes nothing.
+#[tauri::command(async)]
+pub fn tools_json_diff(path_a: String, path_b: String) -> Result<JsonDiff, String> {
+    let a = read_json_file(&path_a)?;
+    let b = read_json_file(&path_b)?;
+    let mut d = diff_docs(&a, &b);
+    d.a_path = path_a;
+    d.b_path = path_b;
+    Ok(d)
+}
+
+#[cfg(test)]
+mod tests_more {
+    use super::*;
+    use serde_json::json;
+
+    fn dm(id: &str, folder: &str, archive: bool, files: &[&str]) -> DeployedMod {
+        DeployedMod { id: id.into(), name: id.to_uppercase(), folder: PathBuf::from(folder), archive, files: files.iter().map(|s| s.to_string()).collect() }
+    }
+
+    #[test]
+    fn tools_deployed_rules() {
+        let present: HashMap<PathBuf, Probe> = [
+            ("G/a.lua", Probe::File), ("G/link.dds", Probe::Link { target_exists: false }),
+            ("M/a", Probe::Dir), ("M/a/a.lua", Probe::File), ("M/a/link.dds", Probe::File),
+            ("M/z.zip", Probe::File),
+        ].iter().map(|(p, k)| (PathBuf::from(p), *k)).collect();
+        let probe = |p: &Path| *present.get(&PathBuf::from(p.to_string_lossy().replace('\\', "/"))).unwrap_or(&Probe::Missing);
+        let mods = vec![
+            dm("a", "M/a", false, &["a.lua", "link.dds", "gone.lua", "../evil"]),
+            dm("z", "M/z.zip", true, &["inside.lua"]),
+            dm("lost", "M/lost", false, &[]),
+        ];
+        let (items, checked) = check_deployed_in(&mods, Path::new("G"), "Main", &probe);
+        let kinds: Vec<(&str, &str)> = items.iter().map(|i| (i.kind.as_str(), i.mod_id.as_deref().unwrap_or(""))).collect();
+        assert!(kinds.contains(&("broken_link", "a")), "{:?}", kinds);
+        assert!(kinds.contains(&("missing_target", "a")), "{:?}", kinds);
+        assert!(kinds.contains(&("missing_source", "a")), "{:?}", kinds);
+        assert!(kinds.contains(&("unsafe_path", "a")), "{:?}", kinds);
+        // An archived mod's files are not looked for next to the archive.
+        assert!(kinds.contains(&("missing_target", "z")) && !kinds.contains(&("missing_source", "z")), "{:?}", kinds);
+        assert!(kinds.contains(&("mod_folder_missing", "lost")) && kinds.contains(&("no_file_list", "lost")), "{:?}", kinds);
+        assert_eq!(checked, 5);
+        assert_eq!(items.iter().filter(|i| i.kind == "missing_source").count(), 1, "{:?}", kinds);
+    }
+
+    #[test]
+    fn tools_top_n_keeps_the_largest() {
+        let mut t = TopN::new(3);
+        for (s, k) in [(5, "e"), (1, "a"), (9, "i"), (7, "g"), (9, "h"), (2, "b")] { t.push(s, k.into()); }
+        assert_eq!(t.into_sorted(), vec![(9, "h".into()), (9, "i".into()), (7, "g".into())]);
+    }
+
+    #[test]
+    fn tools_trailing_version_is_found() {
+        assert_eq!(split_trailing_version("Better Trees v1.2"), Some(("Better Trees".into(), "1.2".into())));
+        assert_eq!(split_trailing_version("F-16 Cockpit_2.0.1"), Some(("F-16 Cockpit".into(), "2.0.1".into())));
+        assert_eq!(split_trailing_version("Mod (1.0)"), Some(("Mod".into(), "1.0".into())));
+        assert_eq!(split_trailing_version("Pack V2"), Some(("Pack".into(), "2".into())));
+        assert_eq!(split_trailing_version("F-16"), None);
+        assert_eq!(split_trailing_version("Mirage 2000"), None);
+        assert_eq!(split_trailing_version("v1.2"), None);
+    }
+
+    #[test]
+    fn tools_name_rules() {
+        let codes = |n: &str, v: &str| name_issues(n, v).into_iter().map(|i| i.code).collect::<Vec<_>>();
+        assert!(codes("Clean Mod", "1.0.2").is_empty());
+        assert!(codes("Clean Mod", "2.0-beta").is_empty());
+        assert_eq!(codes(" Padded  Name ", "1"), vec!["trim", "spaces"]);
+        assert_eq!(codes("under_score_name", "1"), vec!["separators"]);
+        let i = name_issues("Trees v1.4", "");
+        assert_eq!(i.iter().map(|x| x.code.as_str()).collect::<Vec<_>>(), vec!["version_in_name", "version_empty"]);
+        assert_eq!(i[1].suggestion, "1.4");
+        assert_eq!(name_issues("X", "v2.1")[0], NameIssue { code: "version_prefix".into(), suggestion: "2.1".into() });
+        assert_eq!(codes("X", "latest"), vec!["version_format"]);
+        assert!(version_is_standard("1.2.3+build5") && !version_is_standard("1..2"));
+    }
+
+    #[test]
+    fn tools_profile_pairs() {
+        let p = |id: &str, game: &str, mods: &str| ProfileSnap {
+            id: id.into(), name: id.to_uppercase(), mods_path: PathBuf::from(mods), game_path: PathBuf::from(game),
+            backup_path: PathBuf::new(), active_mods: vec![],
+        };
+        let set = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<HashSet<String>>();
+        let profiles = vec![p("a", "G1", "M1"), p("b", "G2", "M2"), p("c", "G1", "M3"), p("d", "G4", "M4")];
+        let sets = vec![set(&["x", "y", "z"]), set(&["x", "y", "z"]), set(&["q"]), set(&["x", "y", "z", "w", "v"])];
+        let pairs = profile_pairs(&profiles, &sets, 0.8);
+        let ids: Vec<(String, String)> = pairs.iter().map(|x| (x.a_id.clone(), x.b_id.clone())).collect();
+        assert_eq!(pairs[0].a_id, "a");
+        assert!(pairs[0].identical && pairs[0].similarity == 1.0);
+        assert!(ids.contains(&("a".into(), "c".into())), "same game folder: {:?}", ids);
+        assert!(!ids.contains(&("a".into(), "d".into())), "0.6 is under the threshold: {:?}", ids);
+        // Two empty profiles on different folders are not "the same".
+        let none = profile_pairs(&[p("e", "", ""), p("f", "", "")], &[set(&[]), set(&[])], 0.8);
+        assert!(none.is_empty());
+    }
+
+    #[test]
+    fn tools_cache_targets_are_fixed_and_prefixed() {
+        let dir = std::env::temp_dir().join(format!("bmm-tools-cache-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("bmm_update_1")).unwrap();
+        std::fs::write(dir.join("bmm_catalog_build"), b"x").unwrap();
+        std::fs::write(dir.join("unrelated.txt"), b"keep").unwrap();
+        let t = cache_targets(Path::new("A"), &dir);
+        assert_eq!(t.iter().map(|x| x.0).collect::<Vec<_>>(), vec!["catalog_cache", "mod_cache", "update_leftovers", "crash_archive"]);
+        let left = t.iter().find(|x| x.0 == "update_leftovers").unwrap();
+        let mut names: Vec<String> = cache_entries(&left.1, left.2).iter().map(|p| p.file_name().unwrap().to_string_lossy().to_string()).collect();
+        names.sort();
+        assert_eq!(names, vec!["bmm_catalog_build", "bmm_update_1"]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tools_log_ids_stay_in_the_crash_folder() {
+        let c = Path::new("C");
+        assert_eq!(log_zip_path(c, "Reports/Crash/crash_2026-10-13_23-38-11.zip"), Some(PathBuf::from("C").join("Reports").join("Crash").join("crash_2026-10-13_23-38-11.zip")));
+        for bad in ["../x.zip", "Reports/Crash/../../x.zip", "Other/x.zip", "Reports/Crash/x.txt", "Reports/Crash/.zip", "Reports/Crash/a b.zip", "x.zip"] {
+            assert_eq!(log_zip_path(c, bad), None, "{}", bad);
+        }
+    }
+
+    #[test]
+    fn tools_json_diff_by_id() {
+        let a = json!({ "name": "Cat", "version": "1", "apps": [ { "id": "a", "version": "1" }, { "id": "b", "title": "B" }, { "id": "c" } ] });
+        let b = json!({ "name": "Cat", "version": "2", "apps": [ { "id": "a", "version": "2" }, { "id": "c" }, { "id": "d", "name": "D" } ] });
+        let d = diff_docs(&a, &b);
+        assert_eq!(d.a_list, "apps");
+        assert_eq!(d.added.iter().map(|x| x.key.as_str()).collect::<Vec<_>>(), vec!["d"]);
+        assert_eq!(d.added[0].name, "D");
+        assert_eq!(d.removed.iter().map(|x| x.key.as_str()).collect::<Vec<_>>(), vec!["b"]);
+        assert_eq!(d.changed.len(), 1);
+        assert_eq!(d.changed[0].fields, vec!["version".to_string()]);
+        assert_eq!(d.same, 1);
+        assert_eq!(d.meta_changed, vec!["version".to_string()]);
+        // A repo.json keyed by name, and a bare array.
+        let r = diff_docs(&json!({ "mods": [ { "name": "X" } ] }), &json!([ { "name": "X" }, { "url": "u" } ]));
+        assert_eq!(r.b_list, "(root)");
+        assert_eq!(r.added[0].key, "u");
+        assert_eq!(r.same, 1);
+    }
 }
 
 #[cfg(test)]

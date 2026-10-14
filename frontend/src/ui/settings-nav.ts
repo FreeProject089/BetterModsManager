@@ -86,6 +86,7 @@ function ensureLayout(): HTMLElement | null {
     layout.className = 'stg-layout';
     layout.innerHTML = `
         <aside class="stg-index" id="settings-index">
+            <div class="stg-index-top">
             <div class="stg-search">
                 ${uiIcon('search', 14, { cls: 'stg-search-icon' })}
                 <input type="search" class="form-input stg-search-input" id="settings-search"
@@ -93,11 +94,16 @@ function ensureLayout(): HTMLElement | null {
                 <kbd class="stg-search-kbd" aria-hidden="true">Ctrl F</kbd>
                 <button type="button" class="stg-search-clear" id="settings-search-clear" hidden>${uiIcon('close', 14)}</button>
             </div>
+            <button type="button" class="stg-index-toggle" id="settings-index-hide">${uiIcon('panel-left-close', 16)}</button>
+            </div>
             <div class="stg-search-count" id="settings-search-count" aria-live="polite"></div>
             <nav class="stg-nav" id="settings-index-nav"></nav>
             <div class="stg-index-foot" id="settings-index-foot"></div>
         </aside>
         <div class="stg-main">
+            <button type="button" class="btn btn-ghost btn-sm stg-index-show" id="settings-index-show">
+                ${uiIcon('panel-left-open', 16)}<span></span>
+            </button>
             <div class="stg-empty" id="settings-search-empty" hidden>
                 ${uiIcon('search', 24)}
                 <p class="stg-empty-text"></p>
@@ -120,6 +126,15 @@ function ensureLayout(): HTMLElement | null {
     const clear = () => { input.value = ''; applySearch(''); input.focus(); };
     layout.querySelector('#settings-search-clear')!.addEventListener('click', clear);
     layout.querySelector('#settings-search-reset')!.addEventListener('click', clear);
+    layout.querySelector('#settings-index-hide')!.addEventListener('click', () => {
+        setIndexHidden(true);
+        (document.getElementById('settings-index-show') as HTMLElement | null)?.focus();
+    });
+    layout.querySelector('#settings-index-show')!.addEventListener('click', () => {
+        setIndexHidden(false);
+        (document.getElementById('settings-index-hide') as HTMLElement | null)?.focus();
+    });
+    setIndexHidden(indexHiddenPref(), false);
     translateChrome(layout);
     return layout;
 }
@@ -131,6 +146,39 @@ function translateChrome(layout: HTMLElement): void {
     layout.querySelector('#settings-index')!.setAttribute('aria-label', t('settings.indexLabel'));
     layout.querySelector('#settings-search-clear')!.setAttribute('aria-label', t('settings.searchClear'));
     layout.querySelector('#settings-search-reset')!.textContent = t('settings.searchClear');
+    const hide = layout.querySelector('#settings-index-hide') as HTMLElement;
+    hide.setAttribute('aria-label', t('settings.indexHide'));
+    hide.title = t('settings.indexHide');
+    const show = layout.querySelector('#settings-index-show') as HTMLElement;
+    show.setAttribute('aria-label', t('settings.indexShow'));
+    show.title = t('settings.indexShow');
+    show.querySelector('span')!.textContent = t('settings.indexShowShort');
+}
+
+// ── Hiding the index ─────────────────────────────────────────────────────────
+// The column can be put away to give the cards the whole width, and the choice is kept. A
+// compact « Index » button above the cards brings it back. Narrow windows ignore it: there
+// the index is the strip above the cards, which costs no width (settings-page.css).
+
+const INDEX_HIDDEN_KEY = 'bmm.settings.indexHidden';
+
+function indexHiddenPref(): boolean {
+    try { return localStorage.getItem(INDEX_HIDDEN_KEY) === '1'; } catch { return false; }
+}
+
+function setIndexHidden(hidden: boolean, remember = true): void {
+    const layout = document.querySelector('#view-settings .stg-layout') as HTMLElement | null;
+    if (!layout) return;
+    layout.classList.toggle('is-index-hidden', hidden);
+    for (const id of ['#settings-index-hide', '#settings-index-show']) {
+        const b = layout.querySelector(id) as HTMLElement | null;
+        b?.setAttribute('aria-expanded', String(!hidden));
+        b?.setAttribute('aria-controls', 'settings-index');
+    }
+    // A hidden index had nothing to measure: mark the current card now that it shows again.
+    if (!hidden) queueSpy();
+    if (!remember) return;
+    try { localStorage.setItem(INDEX_HIDDEN_KEY, hidden ? '1' : '0'); } catch { /* storage off: forgotten on restart */ }
 }
 
 // ── Index ────────────────────────────────────────────────────────────────────
@@ -533,6 +581,8 @@ export function initSettingsNav(): void {
         const input = document.getElementById('settings-search') as HTMLInputElement | null;
         if (!input) return;
         e.preventDefault();
+        // The search lives in the index: a hidden index comes back to be typed in.
+        if (document.querySelector('#view-settings .stg-layout.is-index-hidden')) setIndexHidden(false);
         input.focus();
         input.select();
     });

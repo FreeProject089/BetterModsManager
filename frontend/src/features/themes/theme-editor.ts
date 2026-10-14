@@ -20,6 +20,7 @@ import {
 import type { BmmTheme, CustomElement, HtmlSwap } from './theme-engine.js';
 import { learnMore } from '../../core/learn-more.js';
 import { uiIcon } from '../../ui/icons.js';
+import { popoutButtonHtml, wirePopout, type PopoutSpec } from '../../ui/popout.js';
 
 // ── Icons (lucide outline set, consistent across the editor) ────────────────────
 const ICON = {
@@ -320,6 +321,18 @@ function closeEditor(): void {
     stopPick();
 }
 
+// The editor in a window of its own (ui/popout.ts): beside BMM rather than over it, so the
+// app it recolours stays in view. Undocked first; the window keeps its own size and place.
+const BTE_POPOUT: PopoutSpec = {
+    id: 'theme-editor',
+    title: () => t('themes.editorTitle') || 'Theme Editor',
+    panel: () => _panel,
+    isOpen: () => !!_panel && _panel.isConnected && _panel.style.display !== 'none',
+    prepare: () => { if (_bteDocked()) _bteSetDock(false); },
+    close: () => closeEditor(),
+    dragOut: () => !_bteDocked(),
+};
+
 // ── Panel ─────────────────────────────────────────────────────────────────────
 function buildPanel(): void {
     _panel = document.createElement('div');
@@ -330,7 +343,8 @@ function buildPanel(): void {
             <span class="bte-title">${t('themes.editorTitle')||'Theme Editor'}</span>
             <div class="bte-header-actions">
                 ${learnMore('making-themes', { compact: true, className: 'bte-tool' })}
-                <button class="bte-tool" id="bte-dock" data-tooltip="${t('themes.dockToggle')||'Dock to the side / float'}">${uiIcon('panel-right', 14)}</button>
+                ${popoutButtonHtml('bte-tool', 'theme-editor')}
+                <button class="bte-tool" id="bte-dock" data-popout-hide data-tooltip="${t('themes.dockToggle')||'Dock to the side / float'}">${uiIcon('panel-right', 14)}</button>
                 <button class="bte-tool" id="bte-pick-token" data-tooltip="${t('themes.pickElement')||'Pick element to edit token'}">${ICON.eyedropper(14)}</button>
                 <button class="bte-tool" id="bte-reset" data-tooltip="${t('common.reset')||'Reset'}">${ICON.reset(13)}</button>
                 <button class="bte-close" id="bte-close">${ICON.close(14)}</button>
@@ -375,6 +389,7 @@ function buildPanel(): void {
     host.appendChild(_panel);
     applyGeom();
     makeDraggable(_panel, _panel.querySelector('#bte-header') as HTMLElement);
+    wirePopout(BTE_POPOUT, _panel, _panel.querySelector('#bte-header') as HTMLElement);
     if (!_ro) { _ro = new ResizeObserver(() => saveGeom()); _ro.observe(_panel!); }
 
     // Delegated: the tabs re-render on every edit, so per-row listeners would be
@@ -400,6 +415,12 @@ function buildPanel(): void {
                 // Fixed to the viewport, above the button: the modal and the app frame clip
                 // their overflow, and an absolute menu opening upward was cut by both.
                 const r = btn.getBoundingClientRect();
+                // No box: the editor is shown in its own window (ui/popout.ts), where nothing
+                // clips it. The stylesheet's own placement (above the button) applies there.
+                if (!r.width && !r.height) {
+                    Object.assign(menu.style, { position: '', left: '', bottom: '', top: '' });
+                    return;
+                }
                 menu.style.position = 'fixed';
                 menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 210))}px`;
                 menu.style.bottom = `${Math.max(8, window.innerHeight - r.top + 6)}px`;
@@ -2313,6 +2334,8 @@ function saveGeom(): void {
     // float geometry (the ResizeObserver fires for dock width drags too).
     if (_bteDocked()) return;
     const r = _panel.getBoundingClientRect();
+    // Hidden (closed, or shown in its own window: ui/popout.ts) has no size worth keeping.
+    if (r.width < 1 || r.height < 1) return;
     localStorage.setItem(OVL_KEY, JSON.stringify({ left:r.left, top:r.top, width:r.width, height:r.height }));
 }
 

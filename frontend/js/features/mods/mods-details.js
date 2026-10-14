@@ -249,7 +249,7 @@ export async function renderModDetail(modId) {
                     // handler, so it is reachable by keyboard and announced as something you can press.
                     listContainer.innerHTML = conflicts.map(c => `
             <button type="button" class="mdc-card ${c.status === 'Active' ? 'is-active' : 'is-potential'}"
-                    ${actAttrs('openGlobalConflictModal', mod.id)}
+                    ${actAttrs(c.category === 'Intra' && c.status === 'Active' ? 'openConflictsFor' : 'openGlobalConflictModal', mod.id)}
                     data-tooltip="${escAttr(t('conflict.openFor') || 'Open the conflict view for this mod')}">
               <span class="mdc-top">
                 <span class="tag-conflict tag-${c.category.toLowerCase()}-conflict ${c.status.toLowerCase()}">

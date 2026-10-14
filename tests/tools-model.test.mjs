@@ -123,3 +123,70 @@ describe('wiring', () => {
         }
     });
 });
+
+describe('1.0.3 tools: search, logs, cache, exports', () => {
+    test('filterTools matches every word, accent- and case-insensitively', () => {
+        const tools = [{ id: 'logs', txt: 'Lecteur de journaux' }, { id: 'cache', txt: 'Nettoyage des caches' }];
+        assert.deepEqual(M.filterTools(tools, '', (x) => x.txt).map((x) => x.id), ['logs', 'cache']);
+        assert.deepEqual(M.filterTools(tools, 'JOURNAUX lect', (x) => x.txt).map((x) => x.id), ['logs']);
+        assert.deepEqual(M.filterTools(tools, 'nettoyage', (x) => x.txt).map((x) => x.id), ['cache']);
+        assert.equal(M.fold('Électron Évité'), 'electron evite');
+    });
+    test('the long tools are the ones that report progress', () => {
+        for (const id of ['duplicates', 'disk', 'largefiles', 'deployed', 'cache']) assert.ok(M.isLongTool(id), id);
+        for (const id of ['names', 'logs', 'jsondiff', 'hash']) assert.ok(!M.isLongTool(id), id);
+        assert.deepEqual(M.TOOLS.filter((x) => x.writes).map((x) => x.id), ['cache'], 'only the cache cleaner writes');
+        for (const x of M.TOOLS) assert.ok(M.TOOL_GROUPS.includes(x.group), x.id);
+    });
+    test('logLevel and filterLog', () => {
+        assert.equal(M.logLevel('[12:00] [APPS] Failed to fetch x'), 'error');
+        assert.equal(M.logLevel('[WARN] slow disk'), 'warn');
+        assert.equal(M.logLevel('[12:00] started'), 'info');
+        const text = 'a start\n[WARN] b\nERROR c café\nd\n';
+        const all = M.filterLog(text);
+        assert.equal(all.total, 4);
+        assert.equal(all.errors, 1);
+        assert.equal(all.warnings, 1);
+        assert.deepEqual(M.filterLog(text, { level: 'warn' }).lines.map((l) => l.n), [2, 3]);
+        assert.deepEqual(M.filterLog(text, { level: 'error' }).lines.map((l) => l.text), ['ERROR c café']);
+        assert.deepEqual(M.filterLog(text, { q: 'CAFE' }).lines.map((l) => l.n), [3]);
+        const clipped = M.filterLog(text, { limit: 2 });
+        assert.equal(clipped.clipped, true);
+        assert.deepEqual(clipped.lines.map((l) => l.n), [3, 4], 'the newest lines are kept');
+    });
+    test('cacheSelection skips busy and empty caches', () => {
+        const r = { items: [
+            { id: 'catalog_cache', bytes: 100, entries: 2 },
+            { id: 'mod_cache', bytes: 900, entries: 1, busy: true },
+            { id: 'update_leftovers', bytes: 0, entries: 0 },
+            { id: 'crash_archive', bytes: 50, entries: 3 },
+        ] };
+        assert.deepEqual(M.cacheSelection(r, ['catalog_cache', 'mod_cache', 'update_leftovers']), { ids: ['catalog_cache'], bytes: 100 });
+        assert.deepEqual(M.cacheSelection(null, ['x']), { ids: [], bytes: 0 });
+    });
+    test('rows and counts of the new tools', () => {
+        assert.equal(M.findingCount('deployed', { items: [{ kind: 'missing_target' }, { kind: 'no_file_list' }] }), 1);
+        assert.equal(M.rowsFor('names', { mods: [{ name: 'A', version: '', issues: [{ code: 'version_empty', suggestion: '' }, { code: 'trim', suggestion: 'A' }] }] }).length, 2);
+        const jd = { added: [{ key: 'a', name: 'A' }], removed: [], changed: [{ key: 'b', name: 'B', fields: ['version', 'url'] }] };
+        assert.equal(M.findingCount('jsondiff', jd), 2);
+        assert.deepEqual(M.rowsFor('jsondiff', jd).map((r) => `${r.change}:${r.fields}`), ['added:', 'changed:version url']);
+        assert.equal(M.rowsFor('logs', { lines: [{ n: 1, level: 'info', text: 'x' }] })[0].line, 1);
+    });
+    test('every tool has its one-line rail text in en and fr, and the backend words exist', () => {
+        const en = JSON.parse(read('frontend/Lang/en.json'));
+        const fr = JSON.parse(read('frontend/Lang/fr.json'));
+        for (const x of M.TOOLS) assert.ok(en[`tools.${x.id}.short`] && fr[`tools.${x.id}.short`], `tools.${x.id}.short`);
+        const rust = read('src-tauri/src/commands/tools.rs');
+        const keys = [...new Set([...rust.matchAll(/"(tools\.[a-zA-Z]+\.[a-zA-Z]+)"/g)].map((m) => m[1]))];
+        assert.ok(keys.length >= 5, keys.join(','));
+        for (const k of keys) assert.ok(en[k] && fr[k], k);
+    });
+    test('the long scans are rows of the activity centre, stopped by tools_cancel', () => {
+        const act = read('frontend/src/core/activity-sources.ts');
+        for (const c of ['tools_find_duplicates', 'tools_disk_usage', 'tools_large_files', 'tools_check_deployed']) {
+            const line = act.split('\n').find((l) => l.trim().startsWith(`${c}: {`)) || '';
+            assert.ok(line.includes("channel: 'tools'") && line.includes("inv('tools_cancel')"), c);
+        }
+        assert.match(act, /'tools': 'tools-progress'/);
+    });
+});

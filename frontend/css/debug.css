@@ -235,16 +235,6 @@
     background: color-mix(in srgb, var(--debug-accent) 14%, transparent);
     color: var(--debug-accent);
 }
-.debug-tab.active::before {
-    content: '';
-    position: absolute;
-    left: -6px;
-    top: 6px;
-    bottom: 6px;
-    width: 3px;
-    border-radius: 0 3px 3px 0;
-    background: var(--debug-accent);
-}
 .debug-tab.active .debug-tab-icon { opacity: 1; }
 .debug-tab:focus-visible {
     outline: 2px solid var(--debug-accent);
@@ -262,7 +252,6 @@
         position: absolute; width: 1px; height: 1px; overflow: hidden;
         clip: rect(0 0 0 0); white-space: nowrap;
     }
-    .debug-tab.active::before { left: -4px; }
     .debug-footer { gap: 12px; }
 }
 
@@ -386,9 +375,9 @@
 /* A timeline row's expanded ARGS / RESULT: a long JSON string wraps, never runs off the row. */
 .timeline-detail { min-width: 0; overflow-wrap: anywhere; }
 
-.log-entry.INFO { color: var(--debug-text-secondary); border-left: 2px solid transparent; }
-.log-entry.WARN { background: rgba(245, 158, 11, 0.08); color: var(--warning); border-left: 2px solid #fbbf24; }
-.log-entry.ERROR { background: rgba(239, 68, 68, 0.08); color: var(--danger); border-left: 2px solid #ef4444; }
+.log-entry.INFO { color: var(--debug-text-secondary); }
+.log-entry.WARN { background: rgba(245, 158, 11, 0.08); color: var(--warning); }
+.log-entry.ERROR { background: rgba(239, 68, 68, 0.08); color: var(--danger); }
 .log-entry:hover { background: var(--bmm-s03); }
 
 /* IPC Entries */

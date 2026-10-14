@@ -20,9 +20,8 @@
     line-height: 1.5;
     color: var(--bmm-text-primary);
     border: 1px solid var(--bmm-border);
-    border-inline-start: 3px solid var(--bmm-accent);
     border-radius: 8px;
-    background: var(--bmm-bg-elevated);
+    border-color: color-mix(in srgb, var(--bmm-accent) 30%, var(--bmm-border)); background: color-mix(in srgb, var(--bmm-accent) 5%, var(--bmm-bg-elevated));
 }
 
 /* ── The categories ─────────────────────────────────────────────────────────── */

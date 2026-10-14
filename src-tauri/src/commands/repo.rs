@@ -2480,20 +2480,13 @@ pub async fn generate_standalone_server(
 
 #[tauri::command]
 pub async fn fetch_repo_info(url: String, creator_id: Option<String>, password: Option<String>) -> Result<ServerRepo, String> {
-    let mut target_url = url.trim().to_string();
-    if !target_url.starts_with("http://") && !target_url.starts_with("https://") {
-        target_url = format!("http://{}", target_url);
-    }
+    // `192.168.1.20:8000`, `[::1]:8000`, `HTTP://host/mods/`, `host/?k=share`: one rule for
+    // what was typed (repo_addr), which falls back to the old prefix-and-append for anything
+    // it refuses, so an address that used to work still does.
+    let target_url = crate::commands::repo_addr::manifest_url(&url);
 
-    if !target_url.ends_with("repo.json") {
-        if target_url.ends_with('/') {
-            target_url.push_str("repo.json");
-        } else {
-            target_url.push_str("/repo.json");
-        }
-    }
-
-    let mut client_builder = reqwest::Client::builder();
+    // Direct (no system proxy) for a LAN / loopback host: a proxy cannot reach 192.168.x.
+    let mut client_builder = crate::commands::repo_addr::client_builder(&target_url);
     let mut headers = reqwest::header::HeaderMap::new();
     if let Some(ref cid) = creator_id {
         if let Ok(hv) = reqwest::header::HeaderValue::from_str(cid) {

@@ -65,7 +65,6 @@
 .ai-row.is-on {
     border-color: color-mix(in srgb, var(--bmm-accent) 60%, var(--bmm-border));
     background: color-mix(in srgb, var(--bmm-accent) 8%, transparent);
-    box-shadow: inset 3px 0 0 var(--bmm-accent);
 }
 .ai-row input { margin-top: 2px; flex: none; width: 16px; height: 16px; accent-color: var(--bmm-accent); }
 .ai-row:focus-within { outline: 2px solid var(--bmm-accent); outline-offset: 2px; }
@@ -513,7 +512,8 @@
 .laya-dbg-card {
     display: flex; flex-direction: column; gap: 4px; min-width: 0;
     padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bmm-s02);
-    border-left: 3px solid var(--ldbg-tone, var(--border));
+    border-color: color-mix(in srgb, var(--ldbg-tone, var(--border)) 35%, var(--border));
+    background: color-mix(in srgb, var(--ldbg-tone, transparent) 7%, var(--bmm-s02));
 }
 .laya-dbg-card-k { font-size: 11px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .laya-dbg-card-sub { font-size: 10.5px; color: var(--text-secondary); font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -536,7 +536,7 @@
 .laya-dbg-table tbody tr:last-child td { border-bottom: 0; }
 .laya-dbg-table tbody tr:hover td { background: var(--bmm-s04); }
 .laya-dbg-table .num { text-align: right; font-family: var(--font-mono); }
-.laya-dbg-table tr.is-bad td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
+.laya-dbg-table tr.is-bad td { background: color-mix(in srgb, var(--danger) 8%, transparent); }
 .laya-dbg-name { font-weight: 600; }
 
 /* Latency: a bar scaled to the slowest call kept, then the figure. */

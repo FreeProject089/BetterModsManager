@@ -1,0 +1,57 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: asset: http://asset.localhost https:; media-src 'self' blob: data:; connect-src 'self' ipc: http://ipc.localhost tauri: http://tauri.localhost https://tauri.localhost; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+    <title>BMM</title>
+    <!-- A BMM panel in a window of its own (commands/popout.rs open_popout_window). It runs none
+         of the panel's code: the main window sends its markup, its stylesheets and its theme
+         (ui/popout.ts), and this page sends back the clicks and the values (ui/popout-window.ts).
+         The stylesheets arrive as <link>s before #po-own-css, so the rules below win. -->
+    <style id="po-own-css">
+        html.po-doc, html.po-doc body.po-body { margin: 0; height: 100%; overflow: hidden; background: var(--bmm-bg-base, var(--bg-primary, #0f141b)) !important; }
+        /* BMM's main window is transparent and click-through outside its frame (mascot.css); this one is neither. */
+        html.po-doc, html.po-doc body.po-body, #po-bar, #po-host { pointer-events: auto !important; }
+        body.po-body { display: flex; flex-direction: column; color: var(--bmm-text-primary, #e6edf3); font-family: var(--font-sans, system-ui, sans-serif); }
+        #po-bar { flex: none; display: flex; align-items: center; gap: 4px; height: 36px; padding: 0 6px 0 12px; box-sizing: border-box;
+            background: var(--bmm-bg-elevated, #161c24); border-bottom: 1px solid var(--bmm-border, rgba(255,255,255,.08)); user-select: none; }
+        #po-title { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 600; color: var(--bmm-text-secondary, #a3adba); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .po-btn { display: inline-grid; place-items: center; width: 28px; height: 26px; padding: 0; border: 0; border-radius: 7px; background: transparent; color: var(--bmm-text-secondary, #a3adba); cursor: pointer; }
+        .po-btn:hover { background: var(--bmm-s06, rgba(255,255,255,.06)); color: var(--bmm-text-primary, #e6edf3); }
+        .po-btn:focus-visible { outline: 2px solid var(--bmm-accent, #3b82f6); outline-offset: -2px; }
+        #po-close:hover { background: color-mix(in srgb, var(--bmm-danger, #ef4444) 20%, transparent); color: var(--bmm-text-primary, #e6edf3); }
+        #po-host { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; overflow: hidden; }
+        #po-host .po-anc { display: contents !important; }
+        /* The panel fills the window: whatever placed it in BMM's window (fixed position, a
+           saved size, a drop shadow, the resize corner) does not apply here. */
+        #po-host [data-po-panel] {
+            position: relative !important; inset: auto !important; left: auto !important; top: auto !important; right: auto !important; bottom: auto !important;
+            width: 100% !important; height: 100% !important; min-width: 0 !important; min-height: 0 !important; max-width: none !important; max-height: none !important;
+            margin: 0 !important; transform: none !important; resize: none !important; opacity: 1 !important;
+            border: 0 !important; border-radius: 0 !important; box-shadow: none !important; animation: none !important;
+            box-sizing: border-box; flex: 1 1 auto; pointer-events: auto !important; visibility: visible !important;
+        }
+        /* Moving and docking belong to BMM's window; this one moves by its own title bar.
+           A panel marks the controls that only make sense in BMM's window with data-popout-hide. */
+        #po-host [data-po-panel] [data-popout-hide],
+        #po-host [data-po-panel] .bmm-popout-btn, #po-host [data-po-panel] [class*="resize-handle"], #po-host [data-po-panel] .bmm-dock-grip { display: none !important; }
+        /* The themed list of a select opens in BMM's window, not here: the native list is used. */
+        #po-host select.bmm-csel-native-hidden { display: inline-block !important; }
+        #po-host .bmm-csel { display: none !important; }
+        #po-grip { position: fixed; right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize; z-index: 2147483647; }
+    </style>
+</head>
+<body class="po-body">
+    <header id="po-bar" data-tauri-drag-region>
+        <span id="po-title" data-tauri-drag-region></span>
+        <button type="button" class="po-btn" id="po-min"></button>
+        <button type="button" class="po-btn" id="po-back"></button>
+        <button type="button" class="po-btn" id="po-close"></button>
+    </header>
+    <main id="po-host"></main>
+    <div id="po-grip" aria-hidden="true"></div>
+    <script type="module" src="js/ui/popout-window.js"></script>
+</body>
+</html>

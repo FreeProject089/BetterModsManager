@@ -106,6 +106,17 @@ before the server has to.
 the two buttons Discord shows. `BoutonRPC1` and `BoutonRPC2` pick which of each pair is used —
 `1` or `2`.
 
+### BetterCommunity v2
+
+| Key | What it does |
+|---|---|
+| `bc_api` | `"v2"` turns the session to **BetterCommunity v2**, once v2 answers its health check. Absent: v1. A `BCApiVersion` line in [`app.cfg`](doc-page:reference/app-cfg) wins over it. |
+| `bc_v2_base` | Where v2 lives (`https://`). Empty: production. |
+| `bc_v2_client_id`, `bc_v2_app_key`, `bc_v2_app_id` | BMM's public v2 identifiers: the sign-in client, the publishable app key and the app id for telemetry. All public, safe to ship. |
+
+links.json itself is still read from the v1 address, since it carries the switch. What the
+switch moves is in [BetterCommunity v2](doc-page:features/community#bettercommunity-v2).
+
 ## Testing against a local BetterCommunity
 
 To point BMM at a BetterCommunity that is not the public site — a tunnel, a local instance —

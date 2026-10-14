@@ -96,8 +96,8 @@ fichier qu'on a oublié d'enlever.
 | `AutoEULA_on_first_Start` | `=true` | Affiche la licence automatiquement au premier lancement. Sinon elle reste lisible depuis Aide &amp; autres. |
 | `BCTestMode` | `BCTestMode=true` | Pointe le blog et les écrans communautaires vers `BCTestBase` au lieu du vrai site. |
 | `BCTestBase` | un hôte, port facultatif | La base de test ou locale, p. ex. `http://localhost:5176`. Ignorée si `BCTestMode` n'est pas `true`. |
-| `BCApiVersion` | `BCApiVersion=v2` (ou `2`) | Passe à **BetterCommunity v2** ce qui a un adaptateur v2. Absente ou toute autre valeur : v1. Voir plus bas. |
-| `BCv2Base` | une adresse `https://` | L'adresse de la v2. Vide ou absente : l'adresse de la v1. |
+| `BCApiVersion` | `BCApiVersion=v2` (ou `2`) | Passe à **BetterCommunity v2** ce qui a un adaptateur v2, une fois que la v2 répond à son contrôle de santé. `v1` force la v1 quoi que dise links.json. Absente : le `bc_api` de links.json, sinon v1. Voir plus bas. |
+| `BCv2Base` | une adresse `https://` | L'adresse de la v2. Vide ou absente : le `bc_v2_base` de links.json, sinon la production. |
 | `DocsReplays` | `DocsReplays=false` (ou `off`) | Retire tous les rejeux de session (`.bmmreplay`) de la documentation d'Aide &amp; autres. |
 
 `DisableUpdate` décide *si* la vérification a lieu ; `autoupdate_api` dans `links.json` décide
@@ -114,26 +114,35 @@ machine qui n'est pas la sienne.
 
 ## BetterCommunity v2 : `BCApiVersion` et `BCv2Base`
 
-L'interrupteur de **BetterCommunity v2**, pour les builds de test tant que la v2 tourne à côté de
-la v1. Aucune des deux clés n'est dans le fichier livré : sans elles, BMM parle à la v1 et rien ne
-change.
+L'interrupteur de **BetterCommunity v2**. Aucune des deux clés n'est dans le fichier livré.
+Depuis BMM 1.0.3, le même interrupteur peut aussi venir du fichier de liens publié par
+BetterCommunity (`bc_api`, `bc_v2_base` dans [links.json](doc-page:reference/links-and-updates)), pour que les
+copies installées suivent la v2 le jour où elle ouvre. **Ce fichier l'emporte** : une ligne
+`BCApiVersion` ici décide quoi que dise links.json, et `BCApiVersion=v1` garde cette installation
+sur la v1. Sans la ligne ici et sans `bc_api` dans links.json, BMM est sur la v1 et rien ne change.
 
 ```ini
 BCApiVersion=v2
 BCv2Base=https://v2.example.org
 ```
 
-`BCApiVersion=v2` ne déplace que ce qui a un adaptateur v2 : les retours et rapports de bug vont au
-centre de retours de la v2, les
+`BCApiVersion=v2` (ou `2`, sans tenir compte de la casse) demande la v2. BMM vérifie alors
+`GET <base>/v2/health` une fois au démarrage ; si la v2 ne répond pas `ok` ou `degraded`, la
+session reste sur la v1 et le journal dit pourquoi. En v2, ce qui a un adaptateur v2 bascule :
+les retours et rapports de bug, les
 [reçus de consentement](doc-page:features/privacy-telemetry#preuve-du-consentement-mes-consentements)
-sont proposés au registre de consentements de la v2 (avec la même autorisation que la copie
-télémétrie), et les catalogues, listes de dépôts et dépôts hébergés que la v2 sert elle-même sont
-lus depuis la v2. Tous les autres appels à BetterCommunity restent sur la v1.
+et les textes légaux, la connexion du compte, les notifications, la page Communauté, les
+suggestions de Laya, la télémétrie de l'application et les flux de catalogues signés ; les
+chemins v1 que la v2 sert elle-même sont lus depuis la v2. Les avatars, les annonces de
+lancement, la recherche d'auteur et le lien Discord restent sur l'adresse de la v1. Toute autre
+valeur, c'est la v1. La liste complète est dans
+[BetterCommunity v2](doc-page:features/community#bettercommunity-v2).
 
-`BCv2Base` doit être en `https://`, ou en `http://` simple vers cette machine uniquement
-(`localhost`, `127.0.0.1`, `*.localhost`) ; toute autre valeur est ignorée et la v2 utilise
-l'adresse de la v1. Les deux clés sont lues une fois au démarrage : les changer demande un
-redémarrage.
+`BCv2Base` est l'adresse de la v2 ; vide ou absente, c'est le `bc_v2_base` de links.json, sinon
+la base de test en mode test, sinon la production. Elle doit être en `https://`, ou en `http://`
+simple vers cette machine uniquement (`localhost`, `127.0.0.1`, `*.localhost`) ; toute autre
+valeur est refusée et la session reste sur la v1. Les deux clés sont lues une fois au démarrage :
+les changer demande un redémarrage.
 
 La télémétrie n'a pas d'interrupteur à elle : chaque lot que BMM envoie (seulement avec votre
 consentement) est emballé dans une enveloppe versionnée (`"schema": "bmm-telemetry"`, `"v"`). Ces deux champs ne

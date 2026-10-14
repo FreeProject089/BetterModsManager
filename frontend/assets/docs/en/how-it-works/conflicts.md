@@ -147,6 +147,32 @@ Two safety details in that cleanup:
 
 ---
 
+## The Conflicts view
+
+**Resolve conflicts** (in the command palette, from the library's live conflict badge, the mod
+details, or the conflict list) opens the **Conflicts** view on the active profile, or on one mod.
+For every file two **active** mods share, it says which mod's copy is on disk under the current
+activation order, with a summary per pair of mods: how many shared files, and who gets how many.
+Overlaps with disabled mods or other profiles stay under **Inactive mods and other profiles**,
+one click away: nothing to choose there until they are active.
+
+There are three ways to change who wins:
+
+- **Reorder.** Move a mod up (applied earlier, loses more often) or down (applied later, wins more
+  often), or press **Make X win**: the smallest move that puts X after the other mod.
+- **Keep X's copy.** A per-file choice, kept per profile: that file comes from X whatever the
+  order says. A kept file is marked *kept*. Tick several files to choose for all of them at once;
+  **Follow the activation order** removes the choice.
+- **Disable** a mod.
+
+The rule is the one deployment uses: **a kept copy wins while its mod is active; otherwise the
+last mod in the order wins**. Enabling or disabling a mod later puts kept files back afterwards.
+
+**Nothing changes until Apply.** The footer says how many files Apply would re-copy (and how many
+mods it would disable); **Show changes** lists each one, from which mod to which, or back to the
+game's own file. **Discard** forgets the plan. Applying is a job in the
+[activity centre](doc-page:features/activity) and re-copies only those files.
+
 ## What this means in practice
 
 | You want | Do this |

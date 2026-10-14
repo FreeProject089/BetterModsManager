@@ -58,14 +58,14 @@ frappe compile parfaitement et échoue à l'exécution en promesse rejetée.
 `check-invoke-names.mjs` garde déjà un sens — tout nom passé à `invoke()` doit atteindre une
 commande enregistrée. Voici le reste de la forme :
 
-- **637** commandes enregistrées, **534** appelées depuis le frontend, **123** modules qui en
+- **669** commandes enregistrées, **600** appelées depuis le frontend, **137** modules qui en
   appellent au moins une. `features/settings/scheduler.ts` en touche 125 à lui seul.
 - Par module Rust, la part réellement utilisée par l'interface.
-- **62 commandes sans appelant frontend.** Signalées exactement ainsi et *jamais* comme
+- **69 commandes sans appelant frontend.** Signalées exactement ainsi et *jamais* comme
   « inutilisées » : le serveur MCP, la CLI et les deeplinks `bmm://` atteignent des commandes
   que l'UI ne touche jamais. L'outil ne sait pas distinguer une commande réservée au MCP
   d'une commande oubliée, et ne prétend pas le savoir.
-- Les **invocations dynamiques** — `invoke(nom)` plutôt que `invoke('nom')`. Il y en a 38, et
+- Les **invocations dynamiques** — `invoke(nom)` plutôt que `invoke('nom')`. Il y en a 83, et
   ce compte est la mesure honnête de ce qui échappe à toute vérification.
 
 ---

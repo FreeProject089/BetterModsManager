@@ -3,16 +3,16 @@ import { sourceAccessHtml, wireSourceAccess } from '../../core/source-access.js'
 import { invoke, pickFolder, pickFile, saveFile } from '../../core/api.js';
 import { toast, openExternal } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
-import {
-    readOrigins, originLabel, forgetOrigin, enabledOnly, isDisabled, setDisabled, recordHistory,
-    looksLikeIndex, importIndexForType, describeKinds } from '../catalogs/catalog-index.js';
+import { readOrigins, enabledOnly, recordHistory } from '../catalogs/catalog-index.js';
 import { showConfirm } from '../../ui/confirm.js';
 import { copyIdButtons, wireCopyIds } from '../../core/copy-id.js';
 import { bundleEntryKind, resolveBundleEntry } from '../../core/catalog-bundle.js';
 import { draftFromCatalog as parseCatalog, draftProblems as problemsOf, entryProblems } from './catalog-draft.js';
-import { writeSources } from '../catalogs/catalog-sources.js';
 import { escHtml, escAttr } from '../../core/utils.js';
-import { getLinks } from '../../core/links-config.js';
+import { getLinks, catalogSources } from '../../core/links-config.js';
+import { mountSourceList, setAppSourceReport, noteSourceResult, openSourceDetails, ensureSourceListCss, type AppSourceReport } from '../catalogs/source-list.js';
+import { makeRow } from '../catalogs/source-list-model.js';
+import { removeFollowed, toggleFollowed, readLabels } from '../catalogs/source-store.js';
 import { fetchSourceText } from '../../core/source-fetch.js';
 import { learnMore } from '../../core/learn-more.js';
 import { uiIcon } from '../../ui/icons.js';
@@ -87,6 +87,11 @@ let _loading = false;
 // Sources that did not answer on the last load. All failed is the full-page error state; some
 // failed is a notice above the grid, so a partial catalogue does not pass for the whole one.
 let _failedSources: string[] = [];
+/** What each requested source answered on the last load (tier, error, items). */
+let _sourceReport: AppSourceReport[] = [];
+/** No source at all is configured or switched on: the official catalogue is off in links.json
+ *  and nothing is followed (or everything followed is off). Its own empty state, not an error. */
+let _noSources = false;
 
 // ── Per-card work in progress ────────────────────────────────────────────────
 // What the CARD shows while an install, update or removal runs, and what it shows if one
@@ -410,16 +415,37 @@ async function loadCatalog(force = false) {
     if (content) content.innerHTML = APPS_SKELETON;
 
     try {
+        // The official catalogue: links.json may list several (the first is the official one,
+        // the others are read like followed sources) or none (empty = switched off).
+        const official = catalogSources('apps_catalog' as any);
+        const enabled = enabledOnly(_state.community_sources || []);
+        // `bundle:` sources are files, opened below. Handing them to the HTTP fetcher made
+        // every followed bundle count as a source that "did not answer".
+        const httpExtra = [...official.slice(1), ...enabled.filter((u) => !u.startsWith('bundle:'))];
+        _noSources = !official.length && !enabled.length;
+        if (_noSources) {
+            _catalog = [];
+            _failedSources = [];
+            _sourceReport = [];
+            setAppSourceReport([]);
+            _loading = false;
+            paintAppsCounts();
+            renderCurrentTab();
+            return;
+        }
         // The Rust fetcher reads the feed: in v2 mode pin the feed keys first, so a signed v2
         // feed is checked against them (v1 mode: nothing happens).
-        if (await isV2SignedFeed(getLinks().apps_catalog)) await ensureFeedKeys();
-        const result = await invoke('fetch_app_catalogs', {
-            catalogUrl: getLinks().apps_catalog,
+        if (official[0] && await isV2SignedFeed(official[0])) await ensureFeedKeys();
+        const raw = await invoke('fetch_app_catalogs', {
+            catalogUrl: official[0] || '',
             // enabledOnly, so a source switched off is kept in the list and not fetched.
-            // The flag is inert until a fetcher honours it, and this is the app fetcher.
-            extraCommunityUrls: enabledOnly(_state.community_sources),
+            extraCommunityUrls: httpExtra,
         });
-        _catalog = result.apps;
+        // An older backend (or the browser preview) may answer without some fields.
+        const result = (raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {}) as any;
+        result.sources_failed = Array.isArray(result.sources_failed) ? result.sources_failed : [];
+        _catalog = Array.isArray(result.apps) ? result.apps : [];
+        const report: AppSourceReport[] = Array.isArray(result.sources) ? result.sources.slice() : [];
         // A catalogue that CARRIES its apps.
         //
         // `fetch_app_catalogs` speaks http; a `.bmmbundle` is a zip on this disk, so it is
@@ -427,27 +453,37 @@ async function loadCatalog(force = false) {
         // and app catalogues were the one kind that could only ever point at an address —
         // which meant publishing one always needed a host, and following one meant that
         // host still being there.
-        for (const src of enabledOnly(_state.community_sources)) {
+        for (const src of enabled) {
             if (!src.startsWith('bundle:')) continue;
             try {
-                _catalog = _catalog.concat(await appsFromBundle(src));
+                const got = await appsFromBundle(src);
+                _catalog = _catalog.concat(got);
+                noteSourceResult(src, true, got.length);
+                report.push({ url: src, tier: 'community', ok: true, items: got.length });
             } catch (e) {
                 console.warn('[BMM] bundle source failed:', src, e);
                 result.sources_failed.push(src);
+                noteSourceResult(src, false, 0, String(e));
+                report.push({ url: src, tier: 'community', ok: false, error: String(e).slice(0, 300), items: 0 });
             }
         }
-        _failedSources = [...(result.sources_failed || [])];
-        // Only alert if EVERY source failed; partial failures (e.g. a placeholder
-        // partner URL) get a quiet notice above the grid (renderBrowse), not a toast.
-        if (result.sources_failed.length) {
-            console.warn('[BMM] App catalog sources failed:', result.sources_failed);
-            if (result.sources_loaded.length === 0) {
+        _sourceReport = report;
+        setAppSourceReport(report.filter((r) => !r.url.startsWith('bundle:')));
+        // Only what was actually requested and failed. Blank, disabled and non-http entries
+        // were never requested, so they can never be counted here.
+        _failedSources = report.filter((r) => !r.ok).map((r) => r.url);
+        // Only alert if EVERY source failed; partial failures get a notice above the grid
+        // (renderBrowse) that names each one, not a toast.
+        if (_failedSources.length) {
+            console.warn('[BMM] App catalog sources failed:', report.filter((r) => !r.ok));
+            if (!report.some((r) => r.ok)) {
                 toast(t('apps.allSourcesFailed') || 'Could not load any catalog source', 'error');
             }
         }
     } catch {
         _catalog = [];
         _failedSources = [];
+        _sourceReport = [];
         if (content) {
             content.innerHTML = appsEmpty('cloud', t('apps.catalogUnavail') || 'Catalog unavailable', t('apps.catalogUnavailSub'),
                 `<button type="button" class="btn btn-sm btn-accent" id="apps-retry">${IC.refresh} ${escHtml(t('apps.retry'))}</button>`);
@@ -540,16 +576,9 @@ function renderBrowse() {
 
     let html = '';
 
-    // Some sources did not answer: say so above what did, with the way to try again. A grid
+    // Some sources did not answer: name each one, with what can be done about it. A grid
     // with one catalogue missing otherwise reads as that catalogue having no apps.
-    if (_failedSources.length && _catalog.length) {
-        const names = _failedSources.map(sourceShort).join(', ');
-        html += `<div class="apps-notice" role="status">
-          ${uiIcon('alert', 14)}
-          <span class="apps-notice-text" data-tooltip="${escAttr(names)}">${escHtml(t('apps.someSourcesFailed').replace('{n}', String(_failedSources.length)))}</span>
-          <button type="button" class="btn btn-sm btn-ghost" id="apps-notice-retry">${IC.refresh} ${escHtml(t('apps.retry'))}</button>
-        </div>`;
-    }
+    if (_failedSources.length && _catalog.length) html += failedSourcesHtml(false);
 
     if (allTags.length) {
         html += `<div class="apps-tags-row">
@@ -576,11 +605,16 @@ function renderBrowse() {
         html += filtering
             ? appsEmpty('search', t('apps.noResults') || 'No results', t('apps.noResultsSub'),
                 `<button type="button" class="btn btn-sm btn-secondary" id="apps-empty-clear">${uiIcon('clear', 14)} ${escHtml(t('apps.clearFilters'))}</button>`)
+            : _noSources
+            // Truly nothing to read: the official catalogue is switched off and nothing
+            // (switched on) is followed. Not an error, and not "the catalogue is empty".
+            ? appsEmpty('globe', t('apps.noSources.title'), t('apps.noSources.sub'),
+                `<button type="button" class="btn btn-sm btn-accent" id="apps-empty-sources">${uiIcon('add', 14)} ${escHtml(t('apps.noSources.add'))}</button>`)
             : _failedSources.length
             // Every source failed but the call itself answered: this is the offline state, not
-            // an empty catalogue. Same words and the same retry as a load that threw.
+            // an empty catalogue. Each failed source is named, with its own actions.
             ? appsEmpty('cloud', t('apps.catalogUnavail') || 'Catalog unavailable', t('apps.catalogUnavailSub'),
-                `<button type="button" class="btn btn-sm btn-accent" id="apps-notice-retry">${IC.refresh} ${escHtml(t('apps.retry'))}</button>`)
+                `<button type="button" class="btn btn-sm btn-accent" id="apps-notice-retry">${IC.refresh} ${escHtml(t('apps.retry'))}</button>`) + failedSourcesHtml(true)
             : appsEmpty('grid', t('apps.emptyBrowse') || 'Catalog is empty', t('apps.emptyBrowseSub'),
                 `<button type="button" class="btn btn-sm btn-secondary" id="apps-empty-sources">${uiIcon('globe', 14)} ${escHtml(t('apps.tab.sources'))}</button>`);
     } else {
@@ -591,6 +625,7 @@ function renderBrowse() {
     content.querySelector('#apps-empty-clear')?.addEventListener('click', () => document.getElementById('apps-clear-filters')?.click());
     content.querySelector('#apps-empty-sources')?.addEventListener('click', () => selectAppsTab('sources'));
     content.querySelector('#apps-notice-retry')?.addEventListener('click', () => loadCatalog(true));
+    wireFailedSources(content);
 
     content.querySelectorAll('.apps-tag-chip').forEach(chip => {
         chip.addEventListener('click', () => {
@@ -628,6 +663,69 @@ function plainSummary(md: string): string {
         .replace(/(\*\*|__|\*|`|~~)/g, '')
         .replace(/\s+/g, ' ')
         .trim();
+}
+
+/** The failed sources, by name, each with Retry / Disable / Remove / Details. `full` = the
+ *  page has nothing else to show (every source failed). */
+function failedSourcesHtml(full: boolean): string {
+    ensureSourceListCss();
+    const failed = _sourceReport.filter((r) => !r.ok);
+    if (!failed.length) return '';
+    const own = new Set((_state.community_sources || []).map((u) => u.toLowerCase()));
+    const labels = readLabels();
+    const tierWord = (r: AppSourceReport) => r.tier === 'official' ? t('catsrc.tier.official') : r.tier === 'partner' ? t('catsrc.tier.partner') : t('catsrc.tier.custom');
+    const rows = failed.map((r) => {
+        const mine = own.has(r.url.toLowerCase());
+        const name = labels[r.url] || sourceShort(r.url);
+        return `<li class="apps-failed-row" data-url="${escAttr(r.url)}">
+            <div class="apps-failed-main">
+              <span class="apps-failed-name">${escHtml(name)}</span>
+              <span class="apps-failed-tier">${escHtml(tierWord(r))}</span>
+              <code class="apps-failed-url" title="${escAttr(r.url)}">${escHtml(r.url)}</code>
+              ${r.error ? `<span class="apps-failed-why">${escHtml(r.error)}</span>` : ''}
+            </div>
+            <div class="apps-failed-actions">
+              <button type="button" class="btn btn-xs btn-ghost" data-fs="retry">${IC.refresh} ${escHtml(t('catsrc.act.retry'))}</button>
+              ${mine ? `<button type="button" class="btn btn-xs btn-ghost" data-fs="disable">${escHtml(t('catsrc.act.disable'))}</button>
+              <button type="button" class="btn btn-xs btn-ghost btn-danger-ghost" data-fs="remove">${escHtml(t('catsrc.act.remove'))}</button>` : ''}
+              <button type="button" class="btn btn-xs btn-ghost" data-fs="details">${escHtml(t('catsrc.act.details'))}</button>
+            </div>
+          </li>`;
+    }).join('');
+    const head = full ? '' : `<div class="apps-notice-head">${uiIcon('alert', 14)}
+          <span class="apps-notice-text">${escHtml(t(failed.length === 1 ? 'apps.sourceFailedOne' : 'apps.sourcesFailedMany', { n: String(failed.length) }))}</span>
+          <button type="button" class="btn btn-sm btn-ghost" id="apps-notice-retry">${IC.refresh} ${escHtml(t('apps.retry'))}</button></div>`;
+    return `<div class="apps-notice apps-notice--sources${full ? ' is-full' : ''}" role="status">${head}<ul class="apps-failed-list">${rows}</ul></div>`;
+}
+
+function wireFailedSources(root: HTMLElement): void {
+    root.querySelectorAll<HTMLElement>('[data-fs]').forEach((b) => b.addEventListener('click', async () => {
+        const url = b.closest<HTMLElement>('[data-url]')?.dataset.url || '';
+        const r = _sourceReport.find((x) => x.url === url);
+        if (!url) return;
+        switch (b.dataset.fs) {
+            case 'retry': await loadCatalog(true); break;
+            case 'disable':
+                toggleFollowed(url, false);
+                toast(t('apps.sourceDisabled', { name: sourceShort(url) }), 'info');
+                await loadCatalog(true);
+                break;
+            case 'remove': {
+                const ok = await showConfirm(t('catsrc.remove.title'), t('catsrc.remove.msg', { name: sourceShort(url), url }), true);
+                if (!ok) return;
+                try { await removeFollowed('app', url); await refreshState(); await loadCatalog(true); }
+                catch (e) { toast(String(e), 'error'); }
+                break;
+            }
+            case 'details':
+                openSourceDetails(makeRow({
+                    kind: 'app', url, enabled: true, label: readLabels()[url],
+                    tier: r?.tier === 'official' ? 'official' : r?.tier === 'partner' ? 'partner' : 'custom',
+                    status: { state: 'error', error: r?.error || '', lastTry: Date.now() },
+                }));
+                break;
+        }
+    }));
 }
 
 /** A short, readable name for where an entry came from: `owner/repo`, a host, or a file. */
@@ -1412,39 +1510,15 @@ function renderSources() {
     content.innerHTML = `
     <div class="apps-sources-wrap">
       <div class="apps-sources-header">
-        <h3>${t('apps.sources.title')||'Community Catalog Sources'}</h3>
-        <p class="apps-sources-desc">${t('apps.sources.desc')||'Add raw JSON URLs of community catalogs.'}</p>
+        <h3>${escHtml(t('apps.sources.title2'))}</h3>
+        <p class="apps-sources-desc">${escHtml(t('apps.sources.desc2'))}</p>
       </div>
+      <div id="apps-source-list"></div>
       <div class="apps-sources-add">
-        <input class="apps-source-input" id="apps-source-input" type="text" placeholder="https://raw.githubusercontent.com/.../catalog.json">
-        <button class="btn btn-sm btn-accent" id="apps-add-source">${IC.plus} ${t('apps.sources.add')||'Add'}</button>
         <!-- A catalogue that needs no host at all. -->
         <button class="btn btn-sm btn-secondary" id="apps-add-bundle">${IC.folder} ${escHtml(t('apps.sources.addBundle') || 'Follow a .bmmbundle…')}</button>
       </div>
       ${sourceAccessHtml('apps')}
-      <div class="apps-sources-list">
-        ${_state.community_sources.map(url => `
-        <div class="apps-source-row${isDisabled(url) ? ' is-off' : ''}">
-          ${uiIcon('globe', 14)}
-          <span class="apps-source-url" data-tooltip="${escAttr(url)}">${escHtml(url)}</span>
-          ${httpChip(url, 'apps-source-label')}
-          ${(() => {
-            // Where this source came from. Shown because a list of a dozen URLs gives no
-            // way to tell one you chose from one an index brought in — which matters when
-            // you want to stop following a whole index rather than hunt its entries.
-            //
-            // No badge at all when nobody recorded an origin: absent means "added by hand",
-            // which is a real answer, and labelling it would be inventing one.
-            const from = _origins[url];
-            return from ? `<span class="apps-source-from" data-tooltip="${escAttr(from)}">${escHtml(t('apps.sources.via') || 'via')} ${escHtml(originLabel(from))}</span>` : '';
-          })()}
-          <button class="btn btn-xs btn-ghost apps-source-toggle" data-url="${escAttr(url)}"
-                  data-tooltip="${escAttr(isDisabled(url)
-                      ? (t('apps.sources.on') || 'Fetch this one again')
-                      : (t('apps.sources.off') || 'Keep it listed but stop fetching it'))}">${escHtml(isDisabled(url) ? (t('apps.sources.isOff') || 'off') : (t('apps.sources.isOn') || 'on'))}</button>
-          <button class="btn btn-xs btn-ghost btn-danger-ghost apps-source-remove" data-url="${escAttr(url)}">${IC.close}</button>
-        </div>`).join('')}
-      </div>
     </div>`;
 
     // Wired HERE, right after the markup is in the DOM — not inside a click handler.
@@ -1455,7 +1529,18 @@ function renderSources() {
     // wire call that was never written, and neither says anything.
     wireSourceAccess('apps', (m, k) => toast(m, k === 'warning' ? 'warning' : 'success'),
         () => { (document.getElementById('nav-settings') as HTMLElement | null)?.click(); setTimeout(() => document.getElementById('settings-identity-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250); },
-        () => (document.getElementById('apps-source-input') as HTMLInputElement | null)?.value?.trim() || '');
+        () => '');
+
+    // The one list (shared with Settings → Catalogue index): official, partner and yours,
+    // each with its state, on/off, order, edit, details and remove.
+    const listHost = content.querySelector<HTMLElement>('#apps-source-list');
+    if (listHost) {
+        mountSourceList(listHost, {
+            kinds: ['app'],
+            retryApps: () => loadCatalog(true),
+            onChanged: async () => { await refreshState(); await loadCatalog(true); },
+        });
+    }
 
     document.getElementById('apps-add-bundle')?.addEventListener('click', async () => {
         const path = await pickFile({ filters: [{ name: t('catpub.bundleKind') || 'Bundle', extensions: ['bmmbundle', 'zip'] }] }).catch(() => null);
@@ -1468,93 +1553,15 @@ function renderSources() {
             // nothing to the list.
             const found = await appsFromBundle(src);
             if (!found.length) { toast(t('apps.create.errNoApps') || 'No apps in there', 'warning', 7000); return; }
-            _state.community_sources.push(src);
-            await writeSources('apps', _state.community_sources);
+            _state.community_sources = await invoke('add_community_source', { url: src });
+            recordHistory({ action: 'add', type: 'app', url: src });
+            noteSourceResult(src, true, found.length);
             toast((t('apps.sources.bundleAdded') || 'Following — {n} app(s)').replace('{n}', String(found.length)), 'success');
-            _catalog = null;
             renderSources();
+            await loadCatalog(true);
         } catch (e) {
             toast(`${t('common.error')}: ${e}`, 'error', 7000);
         }
-    });
-
-    document.getElementById('apps-add-source')?.addEventListener('click', async () => {
-        const input = document.getElementById('apps-source-input') as HTMLInputElement;
-        const url = input.value.trim();
-        if (!url.startsWith('http')) { toast(t('apps.sources.invalidUrl')||'Invalid URL', 'error'); return; }
-        try {
-            // An index pasted here would be accepted and then read as an app catalog with no
-            // `apps` array — a source that "works" and contains nothing, with no hint that
-            // the wrong kind of document was added. Somebody handed an index URL pastes it
-            // into whichever box is in front of them; they all take a URL and none of them
-            // says which document it wants.
-            //
-            // Checked by SHAPE, not by the address: a file called catalogs.json can be
-            // anything. Fetched through the backend so the same TLS and identity handling
-            // every other catalog fetch gets applies here too.
-            try {
-                const probe: string = await fetchSourceText(url, true);
-                const doc = JSON.parse(probe);
-                if (looksLikeIndex(doc)) {
-                    // Imported HERE, and only its app entries. This used to refuse and point at
-                    // Settings, which was correct and unhelpful: this panel knows it is the app
-                    // browser, the index says which entries are apps, and following them is the
-                    // same three writes this handler already does by hand.
-                    //
-                    // Its other four types are left alone. An index lists catalogues for all of
-                    // them, and an app browser quietly following theme catalogues would be a
-                    // bigger action than the one that was asked for.
-                    const r = await importIndexForType(doc, 'app', url,
-                        async (u) => { _state.community_sources = await invoke('add_community_source', { url: u }); },
-                        writeSources);
-                    input.value = '';
-                    toast(r.added
-                        ? (t('apps.sources.fromIndex') || 'Added {n} app catalog(s) from that index.').replace('{n}', String(r.added))
-                        : r.ofType
-                            ? (t('apps.sources.indexAll') || 'That index lists {n} app catalog(s) and you already follow them all.').replace('{n}', String(r.ofType))
-                            : (t('apps.sources.indexNone2') || 'No app catalogues in that index — it holds {what}. Add those from their own screens.')
-                                .replace('{what}', describeKinds(r.kinds) || String(r.total)),
-                        r.added ? 'success' : 'info');
-                    renderSources();
-                    await loadCatalog(true);
-                    return;
-                }
-            } catch { /* unreachable or not JSON — let the normal add path report it */ }
-
-            _state.community_sources = await invoke('add_community_source', { url });
-            input.value = '';
-            toast(t('apps.sources.added')||'Source added', 'success');
-            renderSources();
-            // Auto-reload catalog to include the new source
-            await loadCatalog(true);
-        } catch (e) { toast(String(e), 'error'); }
-    });
-
-    content.querySelectorAll('.apps-source-toggle').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            const url = (btn as HTMLElement).dataset.url || '';
-            setDisabled(url, !isDisabled(url));
-            renderSources();
-            await loadCatalog(true);
-        });
-    });
-
-    content.querySelectorAll('.apps-source-remove').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            const url = (btn as HTMLElement).dataset.url || '';
-            try {
-                _state.community_sources = await invoke('remove_community_source', { url });
-                // The same three things Settings drops when it unfollows. Removing here used
-                // to leave the origin behind, write no history line — so a source removed
-                // from this panel could not be brought back from the history that exists for
-                // exactly that — and keep an OFF flag that would come back with it.
-                forgetOrigin(url);
-                setDisabled(url, false);
-                recordHistory({ action: 'remove', type: 'app', url });
-                renderSources();   // re-reads _origins itself
-                await loadCatalog(true);
-            } catch (e) { toast(String(e), 'error'); }
-        });
     });
 }
 

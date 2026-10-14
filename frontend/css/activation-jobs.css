@@ -137,12 +137,12 @@
 .mod-card.job-queued .mod-job-bar > span { transform: scaleX(0); }
 .mod-card.job-queued .mod-job-state { color: var(--bmm-text-muted); }
 
-/* running: the bar fills; the left border breathes in the operation's colour */
+/* running: the bar fills; the card's border takes the operation's colour and breathes */
 .mod-card.job-running {
-    border-left-color: var(--bmm-accent);
+    border-color: color-mix(in srgb, var(--bmm-accent) 55%, var(--bmm-border));
     animation: actjob-breathe 1.6s ease-in-out infinite;
 }
-.mod-card.job-running.job-op-disable { border-left-color: var(--bmm-warning); }
+.mod-card.job-running.job-op-disable { border-color: color-mix(in srgb, var(--bmm-warning) 55%, var(--bmm-border)); }
 .mod-card.job-running .mod-job-state { color: var(--bmm-accent); border-color: var(--bmm-border-accent); }
 .mod-card.job-op-disable .mod-job-bar > span { background: var(--bmm-warning); }
 .mod-card.job-indeterminate .mod-job-bar > span {
@@ -160,7 +160,7 @@
 .mod-card.job-done:not(.job-op-disable) .badge-accent { animation: actjob-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
 
 /* failed / cancelled */
-.mod-card.job-failed { border-left-color: var(--bmm-danger); animation: actjob-shake 0.36s ease both; }
+.mod-card.job-failed { border-color: color-mix(in srgb, var(--bmm-danger) 60%, var(--bmm-border)); animation: actjob-shake 0.36s ease both; }
 .mod-card.job-failed .mod-job-bar > span { background: var(--bmm-danger); }
 .mod-card.job-failed .mod-job-state { color: var(--bmm-danger); border-color: var(--bmm-danger); }
 .mod-card.job-cancelled .mod-job-state { color: var(--bmm-text-muted); }

@@ -132,17 +132,56 @@ la plus récente en premier. Utile pour la question « qu'est-ce que j'ai chang�
 
 > Ajoute les URL JSON brutes de catalogues communautaires.
 
-Un catalogue n'est qu'un fichier JSON hébergé par quelqu'un. Ouvre **Sources**, colle une URL
-de catalogue, et ses apps fusionnent dans la liste ; retire celles qui échouent à charger. Le
-catalogue officiel peut aussi **importer automatiquement** des catalogues communautaires :
-souvent, tu n'as rien à ajouter à la main. Les chaînes de catalogues importés sont suivies
-jusqu'à un total de **30 sources**, pour qu'une grande toile communautaire de catalogues reste
-bornée.
+Un catalogue n'est qu'un fichier JSON hébergé par quelqu'un. Le catalogue officiel peut aussi
+**importer automatiquement** des catalogues communautaires : souvent, tu n'as rien à ajouter à la
+main. Les chaînes de catalogues importés sont suivies jusqu'à un total de **30 sources**, pour
+qu'une grande toile communautaire de catalogues reste bornée.
 
 Chaque catalogue que lit BMM, quels que soient son âge et son type, passe par un seul format
 versionné, qui lit aussi les flux signés de BetterCommunity v2. Le format est décrit dans
 [Format des catalogues](doc-page:reference/catalog-format), et une seule adresse qui apporte
 plusieurs catalogues d'un coup est un [index de catalogues](doc-page:reference/catalog-index).
+
+### La liste des sources
+
+La même liste est dans le Catalogue d'apps (**Sources**) et dans *Paramètres → Index des
+catalogues*. Chaque ligne montre le nom, l'adresse, le type, la provenance, l'état de la
+signature, le dernier rafraîchissement, le nombre d'éléments, l'état et un interrupteur.
+
+| Provenance | Ce que ça veut dire |
+|---|---|
+| **Officielle** | Vient avec BMM, de son [fichier de liens](doc-page:reference/links-and-updates). Affichée en lecture seule : elle ne se retire pas ici. |
+| **Partenaire** | Un catalogue que le catalogue officiel nomme. Il disparaît quand le catalogue officiel cesse de le nommer. |
+| **La vôtre** | Une source que tu as ajoutée, à la main, depuis un index ou par un lien. Tu peux la désactiver, la modifier, la déplacer ou la retirer. |
+
+**L'ordre compte** : quand deux catalogues listent le même élément, le premier gagne (officiel,
+puis partenaires, puis les tiens depuis le haut). Déplace les tiens avec **Monter** et
+**Descendre**.
+
+| État | |
+|---|---|
+| **OK** | Elle a répondu, avec son nombre d'éléments. |
+| **Dernière copie valide** | Elle n'a pas répondu cette fois ; BMM montre ce qu'il a lu en dernier. |
+| **N'a pas répondu** | Elle a échoué, et la ligne dit pourquoi : délai dépassé, code HTTP, signature refusée, pas un catalogue. **Réessayer**, **Désactiver**, **Retirer** (les tiennes) et **Détails** sont sur la ligne. |
+| **Désactivée** | Éteinte : jamais récupérée, jamais comptée. |
+| **Pas encore vérifiée** | Rien de lu pour l'instant. |
+
+La colonne signature dit **Signée, vérifiée**, **Signature invalide**, **Signée, clé inconnue**
+ou **Non signée**.
+
+**Ajouter une source** et **Modifier** ouvrent une fenêtre avec **Tester**, qui lit l'adresse
+comme BMM le fera : nombre d'éléments, format, signature. Si l'adresse est un **index**, le test
+dit combien de catalogues il liste et **Ajouter les N catalogues** ajoute d'un coup ceux qui
+conviennent. Un `.bmmbundle` n'a pas besoin d'adresse : utilise *Suivre un .bmmbundle* sous la
+liste ; il est gardé pour le prochain démarrage. **Retirer** demande d'abord, et laisse une ligne
+dans l'historique pour faire revenir la source. **Importer** et **Exporter** lisent et écrivent
+tes sources dans un fichier JSON ; à l'import, les sources que tu suis déjà sont ignorées. **Tout
+vérifier** récupère toutes les sources allumées.
+
+Une adresse vide ou qui n'est pas web (le catalogue officiel liste une adresse partenaire vide
+comme espace réservé) est ignorée, jamais comptée comme un échec. Avec le catalogue officiel
+désactivé et aucune source allumée, la page dit qu'il n'y a pas de source et propose d'en
+ajouter une.
 
 ## Un catalogue qui porte ses applications
 

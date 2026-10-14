@@ -12,7 +12,9 @@
 // delta-syncs only the changed files.
 
 import { invoke } from '../../core/api.js';
-import { toast } from '../../ui/app.js';
+import { toast as appToast } from '../../ui/app.js';
+// Grouped under Updates in the notification centre.
+const toast = (message: string, type = 'info', duration = 3000, icon = '', source = 'Updates') => appToast(message, type, duration, icon, source);
 import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { appState } from '../../core/state.js';

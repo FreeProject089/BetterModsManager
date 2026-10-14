@@ -31,7 +31,7 @@ type Args = Record<string, unknown>;
 
 export type Channel =
     | 'repo-sync' | 'repo-export' | 'mm-export' | 'mod-download' | 'repair'
-    | 'ai-analyze' | 'ai-embedded' | 'ssh' | 'repo-validate';
+    | 'ai-analyze' | 'ai-embedded' | 'ssh' | 'repo-validate' | 'tools';
 
 export interface CommandSpec {
     kind: ActivityKind;
@@ -65,6 +65,9 @@ export const COMMANDS: Record<string, CommandSpec> = {
     update_server_repo: { kind: 'export', title: (t) => t('activity.cmd.updateRepo'), channel: 'repo-export' },
     ssh_upload_repo: { kind: 'sync', title: (t) => t('activity.cmd.sshUpload'), channel: 'ssh' },
     ssh_download_repo: { kind: 'sync', title: (t) => t('activity.cmd.sshDownload'), channel: 'ssh' },
+    // One file (a repo.json, a catalogue): no progress events, the row says which file.
+    ssh_upload_file: { kind: 'sync', title: (t) => t('activity.cmd.sshUploadFile'), detail: (a) => str(a.remoteName) },
+    ssh_download_file: { kind: 'sync', title: (t) => t('activity.cmd.sshDownloadFile'), detail: (a) => str(a.remoteName) },
     scan_repo_hub: { kind: 'scan', title: (t) => t('activity.cmd.scanRepoHub'), ephemeralMs: 1500 },
     // Server Repo tools: the check and the conversion hash every file (stopped by their run token).
     repo_validate: { kind: 'hash', title: (t) => t('activity.cmd.validateRepo'), channel: 'repo-validate', cancel: (inv, a) => runCancel(inv, (a.args as Args | undefined)?.runId) },
@@ -103,6 +106,13 @@ export const COMMANDS: Record<string, CommandSpec> = {
     ai_laya_run_task: { kind: 'ai', title: (t) => t('activity.cmd.layaTask'), channel: 'ai-analyze', cancel: (inv) => () => inv('ai_analyze_cancel') },
     // Pausing, not discarding: the download resumes from where it stopped next time.
     ai_embedded_install: { kind: 'ai', title: (t) => t('activity.cmd.layaInstall'), channel: 'ai-embedded', cancel: (inv) => () => inv('ai_embedded_cancel', { discard: false }) },
+    // BMM Tools (features/tools): the scans that walk folders, stopped by tools_cancel.
+    tools_find_duplicates: { kind: 'hash', title: (t) => t('activity.cmd.toolsDuplicates'), channel: 'tools', cancel: (inv) => () => inv('tools_cancel') },
+    tools_disk_usage: { kind: 'scan', title: (t) => t('activity.cmd.toolsDisk'), channel: 'tools', cancel: (inv) => () => inv('tools_cancel') },
+    tools_large_files: { kind: 'scan', title: (t) => t('activity.cmd.toolsLargeFiles'), channel: 'tools', cancel: (inv) => () => inv('tools_cancel') },
+    tools_check_deployed: { kind: 'scan', title: (t) => t('activity.cmd.toolsDeployed'), channel: 'tools', cancel: (inv) => () => inv('tools_cancel') },
+    tools_cache_preview: { kind: 'scan', title: (t) => t('activity.cmd.toolsCachePreview'), channel: 'tools', ephemeralMs: 1500, cancel: (inv) => () => inv('tools_cancel') },
+    tools_cache_clean: { kind: 'repair', title: (t) => t('activity.cmd.toolsCacheClean') },
     // benchmark
     run_app_benchmark: { kind: 'benchmark', title: (t) => t('activity.cmd.benchmark'), cancel: (inv) => () => inv('cancel_app_benchmark') },
 };
@@ -118,6 +128,7 @@ export const CHANNEL_EVENTS: Record<Channel, string> = {
     'ai-embedded': 'ai-embedded-progress',
     'ssh': 'repo-ssh-progress',
     'repo-validate': 'bmm://repo-validate-progress',
+    'tools': 'tools-progress',
 };
 
 const num = (v: unknown): number => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
@@ -178,6 +189,8 @@ export function readProgress(ch: Channel, raw: unknown, t: T): { progress?: numb
         case 'ssh':
         case 'repo-validate':
             return { progress: ratio(num(p.done), num(p.total)), detail: str(p.current) };
+        case 'tools':
+            return { progress: ratio(num(p.done), num(p.total)), detail: num(p.total) ? `${num(p.done)}/${num(p.total)}` : '' };
     }
     return {};
 }

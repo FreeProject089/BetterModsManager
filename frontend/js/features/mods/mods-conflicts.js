@@ -56,8 +56,10 @@ export function updateConflictBadgeOnCard(modId) {
         let conflictHtml = '';
         const intraSvg = (uiIcon('home', 12));
         const interSvg = (uiIcon('globe', 12));
+        // A live conflict inside this profile is one the user can resolve: straight to the conflicts
+        // view, focused on this mod. The others (an inactive mod, another profile) go to the list.
         if (hasIntraActive)
-            conflictHtml += `<div class="tag-conflict tag-intra-conflict active" data-tasky="lib.conflictActiveTip" data-tasky-icon="warning" ${actAttrs('openGlobalConflictModal', modId)} style="cursor:pointer">${intraSvg}Intra</div>`;
+            conflictHtml += `<div class="tag-conflict tag-intra-conflict active" data-tasky="lib.conflictActiveTip" data-tasky-icon="warning" ${actAttrs('openConflictsFor', modId)} style="cursor:pointer">${intraSvg}Intra</div>`;
         else if (hasIntraPotential)
             conflictHtml += `<div class="tag-conflict tag-intra-conflict potential" data-tasky="lib.conflictPotentialTip" data-tasky-icon="warning" ${actAttrs('openGlobalConflictModal', modId)} style="cursor:pointer">${intraSvg}Intra</div>`;
         if (hasInterActive)
@@ -68,6 +70,16 @@ export function updateConflictBadgeOnCard(modId) {
             nameRow.insertAdjacentHTML('beforeend', conflictHtml);
     }
 }
+/**
+ * The conflicts view (conflicts-view.ts), loaded on first use, focused on `modId`. Published on
+ * window for the library badges (`data-act="openConflictsFor"`).
+ */
+export function openConflictsFor(modId = null) {
+    return import('./conflicts-view.js')
+        .then((m) => m.openConflictsView(modId))
+        .catch((e) => toast(String(e), 'error'));
+}
+window.openConflictsFor = openConflictsFor;
 export function saveConflictCache() {
     try {
         localStorage.setItem('bmm_conflict_cache', JSON.stringify(S.conflictCache));
@@ -242,7 +254,7 @@ export async function openGlobalConflictModal(preselectModId = null) {
                         const statusColor = isActive ? 'var(--danger)' : 'var(--warning)';
                         const statusBg = isActive ? 'rgba(239,68,68,0.08)' : 'rgba(245,158,11,0.08)';
                         return `
-                   <div class="cflt-row" style="background:${statusBg};border-left:2px solid ${statusColor}">
+                   <div class="cflt-row" style="background:${statusBg}">
                      <span style="font-size:11.5px;font-weight:600;color:var(--text-primary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:help"
                            data-tooltip="${escAttr(r.other_mod_name)}"
                            data-tasky="${escAttr(escJs(r.other_mod_name))}" data-tasky-icon="package" data-tasky-literal="1"
@@ -295,6 +307,7 @@ export async function openGlobalConflictModal(preselectModId = null) {
           <span class="cflt-summary-main">${rendered.length} ${t('conflict.modsInConflict') || 'mods in conflict'}</span>
           ${totalActive > 0 ? `<span class="cflt-summary-active">— ${totalActive} ${t('conflict.active') || 'active'}</span>` : ''}
           ${totalPotential > 0 ? `<span class="cflt-summary-potential">— ${totalPotential} ${t('conflict.potential') || 'potential'}</span>` : ''}
+          <button type="button" class="cflt-linkbtn" id="cflt-resolve">${escHtml(t('cv.openResolver'))}</button>
           <button type="button" class="cflt-linkbtn cflt-foldall" id="cflt-fold-all">${escHtml(allOpen
                     ? (t('conflict.collapseAll') || 'Collapse all')
                     : (t('conflict.expandAll') || 'Expand all'))}</button>
@@ -306,6 +319,10 @@ export async function openGlobalConflictModal(preselectModId = null) {
                     : '';
                 container.innerHTML = summaryBar + filterNote + rendered.join('');
                 container.querySelector('#cflt-note-reset')?.addEventListener('click', () => resetFilters());
+                container.querySelector('#cflt-resolve')?.addEventListener('click', () => {
+                    modal.classList.remove('open');
+                    void openConflictsFor(preselectModId);
+                });
                 container.querySelector('#cflt-fold-all')?.addEventListener('click', () => {
                     if (allOpen)
                         openCards.clear();
@@ -497,14 +514,15 @@ export async function openConflictTree(mod1Id, mod2Id) {
                    ${escHtml(t('conflict.makeWin').replace('{m}', nameOf(loserId, byId.get(loserId))))}
                </button>
                <button type="button" class="btn btn-sm btn-ghost" id="conf-order">${escHtml(t('conflict.openOrder'))}</button>
+               <button type="button" class="btn btn-sm btn-ghost" id="conf-resolve">${escHtml(t('cv.openResolver'))}</button>
                <p style="font-size:10.5px;color:var(--text-muted);margin:6px 2px 0;line-height:1.45">${escHtml(t('conflict.makeWinHint'))}</p></div>`
                 : ''}`;
             container.innerHTML = summary + files.map(f => {
                 const base = String(f).replace(/^.*[/\\]/, '');
                 const dir = String(f).slice(0, String(f).length - base.length).replace(/[/\\]$/, '');
                 return `<div style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.05);line-height:1.4;min-height:24px;display:flex;align-items:center;gap:8px;cursor:pointer;transition:all 0.15s ease;border-radius:6px;margin-bottom:2px"
-           data-hover="background:rgba(59,130,246,0.15);border-left:2px solid var(--accent)"
-           data-hover-out="background:transparent;border-left:none"
+           data-hover="background:rgba(59,130,246,0.15)"
+           data-hover-out="background:transparent"
            ${actAttrs('showFileConflictSelector', f, mod1Id, mod2Id)} data-act-with="event"
            data-tooltip="${escAttr(f)}">
         ${uiIcon('file', 14, { style: 'flex-shrink:0;color:var(--accent)' })}
@@ -517,6 +535,11 @@ export async function openConflictTree(mod1Id, mod2Id) {
             // The whole order, not just this pair: every mod, who it overrides, drag to change.
             container.querySelector('#conf-order')?.addEventListener('click', () => {
                 void import('../profiles/load-order.js').then((m) => m.openLoadOrder(null, undefined, toast));
+            });
+            container.querySelector('#conf-resolve')?.addEventListener('click', () => {
+                modal.classList.remove('open');
+                document.getElementById('modal-global-conflicts')?.classList.remove('open');
+                void openConflictsFor(mod1Id);
             });
             container.querySelector('#conf-flip')?.addEventListener('click', async () => {
                 if (!loserId)
@@ -634,7 +657,7 @@ export function showActivationWarning(modId, conflicts, onConfirm) {
     if (!modal)
         return;
     list.innerHTML = conflicts.map(c => `
-    <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.3);padding:8px 12px;border-radius:6px;border-left:3px solid ${c.status === 'Active' ? 'var(--danger)' : 'var(--warning)'}">
+    <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.3);padding:8px 12px;border-radius:6px">
       <div style="flex:1;min-width:0;padding-right:10px">
         <div style="font-size:12px;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" data-tooltip="${escAttr(c.other_mod_name)}">${escHtml(c.other_mod_name)}</div>
         <div style="font-size:10px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(c.other_profile_name)}</div>

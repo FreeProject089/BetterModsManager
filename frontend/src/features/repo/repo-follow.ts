@@ -17,11 +17,14 @@ import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { uiIcon } from '../../ui/icons.js';
 import { runActivationJob } from '../../core/activation-jobs.js';
+import { openFollowDialog } from './follow-dialog.js';
 
 // window.toast, not ui/app.js: ui/app.ts imports repo.ts, which imports this module.
 const toast = (msg: string, type = 'info', duration?: number): void => {
     const fn = (window as any).toast;
-    if (typeof fn === 'function') fn(msg, type, duration);
+    // Source 'Repo': the notification centre groups it under followed repos, and Settings
+    // decides per group how it is delivered (ui/notification-center.ts).
+    if (typeof fn === 'function') fn(msg, type, duration, '', 'Repo', { action: { kind: 'view', arg: 'repo' } });
 };
 
 interface Follow {
@@ -33,7 +36,7 @@ interface Follow {
     lastUpdates: number;
     lastError: string | null;
 }
-interface FollowedRepo { url: string; name: string; follow: Follow; due: boolean }
+interface FollowedRepo { url: string; name: string; follow: Follow; due: boolean; hasPassword?: boolean }
 interface ApplyStep { localProfileId: string; repoProfileId: string; repoModIds: string[]; localModIds: string[]; enabledLocalIds: string[] }
 interface FollowCheck {
     url: string; name: string; notModified: boolean; version: string | null;
@@ -94,7 +97,7 @@ function rowHtml(r: FollowedRepo): string {
         <div class="rp-follow-main">
             <label class="bmm-switch" title="${escAttr(t('repo.follow.enabled'))}"><input type="checkbox" data-f="enabled"${f.enabled ? ' checked' : ''} aria-label="${escAttr(t('repo.follow.enabled'))}"><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
             <div class="rp-follow-id">
-                <span class="rp-follow-name">${escHtml(displayName(r))}${f.lastVersion ? ` <span class="rp-follow-ver rp-mono">v${escHtml(f.lastVersion)}</span>` : ''}</span>
+                <span class="rp-follow-name">${escHtml(displayName(r))}${f.lastVersion ? ` <span class="rp-follow-ver rp-mono">v${escHtml(f.lastVersion)}</span>` : ''}${r.hasPassword ? ` <span class="rp-follow-ver" title="${escAttr(t('repo.followDlg.pwSavedShort'))}">${uiIcon('lock', 12)}</span>` : ''}</span>
                 <span class="rp-follow-url rp-mono" title="${escAttr(r.url)}">${escHtml(r.url)}</span>
                 ${statusHtml(r)}
             </div>
@@ -133,7 +136,13 @@ async function patch(url: string, p: { enabled?: boolean; intervalMin?: number; 
     await renderFollowList();
 }
 
-/** Follow the repo in the sync screen's URL field (or `url`). */
+/** Open « Follow a repo », prefilled when the repo is already known (the repo just fetched,
+ *  a browse result, a history entry). The list redraws after a follow. */
+export function followDialog(url?: string, name?: string): void {
+    void openFollowDialog({ url, name, onSaved: () => { void renderFollowList(); } });
+}
+
+/** Follow the repo in the sync screen's URL field (or `url`) at once, with the defaults. */
 export async function followRepo(url?: string, name?: string): Promise<void> {
     const u = (url ?? (document.getElementById('repo-sync-url') as HTMLInputElement | null)?.value ?? '').trim();
     if (!u) { toast(t('repo.follow.errNoUrl'), 'warning'); return; }
@@ -251,7 +260,15 @@ export function startFollowRunner(): void {
 export function initRepoFollow(): void {
     const card = document.getElementById('repo-follow-card');
     if (card) {
-        document.getElementById('btn-repo-follow-add')?.addEventListener('click', () => { void followRepo(); });
+        // « + Follow a repo »: its own dialog (address, access, test, schedule), not the URL
+        // field higher up, which is about syncing once.
+        document.getElementById('btn-repo-follow-add')?.addEventListener('click', () => followDialog());
+        // « Follow » on the repo just fetched (the joined card).
+        document.getElementById('btn-repo-follow-joined')?.addEventListener('click', () => {
+            const url = (document.getElementById('repo-sync-url') as HTMLInputElement | null)?.value?.trim() || '';
+            const name = document.getElementById('repo-sync-name-display')?.textContent?.trim() || '';
+            followDialog(url, name);
+        });
         document.getElementById('btn-repo-follow-check-all')?.addEventListener('click', async () => {
             for (const r of lastList.filter((x) => x.follow.enabled)) await checkFollowed(r.url, true);
         });

@@ -223,7 +223,6 @@
 .dh-toc-i:hover, .dh-nav-i:hover {
     background: var(--bmm-bg-hover);
     color: var(--bmm-text-primary, #e6edf3);
-    box-shadow: inset 2px 0 0 var(--bmm-border-hover, #3a4556);
 }
 .dh-toc-h4 { padding-left: 24px; font-size: 12px; color: var(--bmm-text-muted, #7c8698); }
 .dh-nav-sec {
@@ -232,11 +231,11 @@
     letter-spacing: .09em; color: var(--bmm-text-muted, #7c8698);
 }
 .dh-nav-sec:first-child { margin-top: 0; }
-/* Current page: a rail ON the guide line. Bolder text alone is hard to spot in a 36-row list. */
+/* Current page: a tinted row in bold. The accent is the fill, the text stays on the text token
+   (an accent-coloured label is unreadable on a light theme). */
 .dh-nav-i.on, .dh-toc-i.on {
-    color: var(--bmm-accent, #3b82f6); font-weight: 700;
-    background: color-mix(in srgb, var(--bmm-accent, #3b82f6) 11%, transparent);
-    box-shadow: inset 2px 0 0 var(--bmm-accent, #3b82f6);
+    color: var(--bmm-text-primary, #e6edf3); font-weight: 700;
+    background: color-mix(in srgb, var(--bmm-accent, #3b82f6) 14%, transparent);
 }
 
 /* The aside scrolls on its own once it is taller than the window. Style the bar, or it is the
@@ -373,7 +372,7 @@
 .dh-content b { color: var(--bmm-text-primary, #e6edf3); font-weight: 700; }
 .dh-content code { font-family: var(--bmm-font-mono, ui-monospace, monospace); font-size: .9em; padding: 1px 6px; border-radius: 6px; background: var(--bmm-bg-base, #0f1420); border: 1px solid var(--bmm-border, #2a3242); }
 .dh-content .dh-diagnote { font-size: 12.5px; color: var(--bmm-text-muted, #7c8698); font-style: italic; margin-top: 14px; }
-.dh-content blockquote { margin: 0 0 14px; padding: 6px 16px; border-left: 3px solid var(--bmm-accent, #3b82f6); color: var(--bmm-text-secondary, #b7c0cc); font-style: italic; }
+.dh-content blockquote { margin: 0 0 14px; padding: 8px 14px; border: 1px solid var(--bmm-border); border-radius: 10px; background: var(--bmm-s03); color: var(--bmm-text-secondary, #b7c0cc); font-style: italic; }
 .dh-content pre.dh-code { margin: 4px 0 14px; padding: 14px 16px; border-radius: 10px; overflow-x: auto; background: var(--bmm-bg-base, #0f1420); border: 1px solid var(--bmm-border, #2a3242); }
 .dh-content pre.dh-code code { border: 0; background: none; padding: 0; font-size: 13px; line-height: 1.6; }
 
@@ -582,8 +581,8 @@
 .dh-content > p:first-child { margin-top: 0; }
 .dh-content hr { height: 1px; margin: 26px 0; border: 0; background: var(--bmm-s08); }
 .dh-content blockquote {
-    margin: 0 0 14px; padding: 2px 0 2px 14px;
-    border-left: 3px solid var(--bmm-s15);
+    margin: 0 0 14px; padding: 8px 14px;
+    border: 1px solid var(--bmm-border); border-radius: 10px; background: var(--bmm-s03);
     color: var(--bmm-text-muted, #7c8698); font-style: italic;
 }
 .dh-content ol { margin: 0 0 14px; padding-left: 22px; }
@@ -789,7 +788,7 @@ button.doc-card-title:hover { color: var(--bmm-accent, #3b82f6); }
 .doc-stat-delta { display: inline-block; margin-top: 6px; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px; background: rgba(127,127,127,.12); }
 .doc-stat-up { color: var(--bmm-success); } .doc-stat-down { color: var(--bmm-danger); } .doc-stat-flat { color: var(--bmm-text-muted); }
 .doc-stat-note { font-size: 12px; color: var(--bmm-text-muted); margin-top: 6px; }
-.doc-quote { --q: var(--bmm-accent); border: 0; border-left: 4px solid var(--q); border-radius: 0 12px 12px 0; padding: 12px 16px; margin: 0 0 16px; background: rgba(var(--bmm-accent-r), var(--bmm-accent-g), var(--bmm-accent-b), .07); color: var(--bmm-text-primary); }
+.doc-quote { --q: var(--bmm-accent); border: 1px solid color-mix(in srgb, var(--q) 28%, var(--bmm-border)); border-radius: 12px; padding: 12px 16px; margin: 0 0 16px; background: rgba(var(--bmm-accent-r), var(--bmm-accent-g), var(--bmm-accent-b), .07); color: var(--bmm-text-primary); }
 .doc-quote-body { font-size: 1.05em; line-height: 1.55; font-style: italic; }
 .doc-quote-foot { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-style: normal; }
 .doc-quote-avatar { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; }

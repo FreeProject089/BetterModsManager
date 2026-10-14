@@ -20,6 +20,7 @@ import { invoke, pickFile, askConfirm } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
 import { escHtml } from '../../core/utils.js';
+import { fillSshMessage } from './ssh-validate.js';
 
 type AuthMethod = 'key' | 'password';
 
@@ -373,13 +374,9 @@ export async function pullStoredTarget(localDir: string, name = DEFAULT_TARGET):
  * second copy — which is exactly how the sync panel got one.
  */
 export function explainSsh(raw: string): string {
-    const [key, ...rest] = String(raw).split('|');
-    const msg = t(key);
-    // t() returning the key unchanged means there is no translation; the raw text is then more
-    // use than the key name.
-    const base = msg === key ? raw : msg;
-    return rest.length ? `${base} — ${rest.join(' ')}` : base;
+    return fillSshMessage(String(raw), t);
 }
+
 
 
 /** Does a usable headless target exist? Used to enable/disable the scheduler action. */

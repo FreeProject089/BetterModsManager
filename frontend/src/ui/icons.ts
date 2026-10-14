@@ -89,6 +89,12 @@ const GLYPHS = {
     'arrow-right': ['arrow-right', '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>'],
     home: ['house', '<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'],
     'panel-right': ['panel-right', '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/>'],
+    // Hide / show a side column (the Settings index).
+    'panel-left-close': ['panel-left-close', '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/>'],
+    'panel-left-open': ['panel-left-open', '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m14 9 3 3-3 3"/>'],
+    // A panel into its own OS window, and back into BMM's (ui/popout.ts).
+    'pop-out': ['square-arrow-out-up-right', '<path d="M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6"/><path d="m21 3-9 9"/><path d="M15 3h6v6"/>'],
+    'pop-in': ['square-arrow-down-left', '<path d="M15 15H9l6-6"/><path d="M9 15V9"/><rect x="3" y="3" width="18" height="18" rx="2"/>'],
     grid: ['layout-grid', '<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>'],
     list: ['list', '<path d="M3 5h.01"/><path d="M3 12h.01"/><path d="M3 19h.01"/><path d="M8 5h13"/><path d="M8 12h13"/><path d="M8 19h13"/>'],
     // Status

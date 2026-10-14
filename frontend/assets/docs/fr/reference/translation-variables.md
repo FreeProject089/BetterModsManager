@@ -25,24 +25,24 @@ la compilation quand une traduction et le code ne sont pas d’accord. Elle ne p
 | `{v}` | une version ou une valeur |
 | `{total}` | le total sur lequel porte le compte |
 | `{count}` | un nombre d’éléments |
-| `{err}` | un message d’erreur |
 | `{s}` | des secondes, ou un mot court choisi par le code |
+| `{err}` | un message d’erreur |
 | `{id}` | un identifiant |
-| `{size}` | une taille déjà formatée (Ko, Mo…) |
 | `{e}` | un message d’erreur |
+| `{size}` | une taille déjà formatée (Ko, Mo…) |
 | `{label}` | un titre court |
 | `{path}` | un chemin de fichier ou de dossier |
 | `{profile}` | un nom de profil |
 | `{version}` | un numéro de version |
 | `{mod}` | un nom de mod |
 | `{error}` | un message d’erreur |
-| `{file}` | un nom de fichier |
 | `{host}` | un nom de serveur |
+| `{url}` | une adresse web |
+| `{file}` | un nom de fichier |
 | `{x}` | une liste ou un détail inséré par le code |
 | `{date}` | une date |
-| `{type}` | un genre (un importateur, un format…) |
-| `{url}` | une adresse web |
 | `{time}` | une heure |
+| `{type}` | un genre (un importateur, un format…) |
 
 ## Accolades qui sont du texte
 
@@ -73,7 +73,7 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 
 ## Toutes les clés avec variables
 
-973 clés, regroupées par leur premier segment. Le texte est le texte français, raccourci.
+1050 clés, regroupées par leur premier segment. Le texte est le texte français, raccourci.
 
 ### activity
 
@@ -208,13 +208,25 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `apps.detail.versionPair` | `{installed}` `{latest}` | v{installed} installée, v{latest} dans le catalogue |
 | `apps.shownOf` | `{n}` `{total}` | {n} sur {total} |
 | `apps.someSourcesFailed` | `{n}` | {n} source(s) n'ont pas répondu. Leurs apps manquent ci-dessous. |
+| `apps.sourceDisabled` | `{name}` | {name} est désactivée. Elle reste dans Sources. |
+| `apps.sourceFailedOne` | `{n}` | {n} source n'a pas répondu. Ses applications manquent ci-dessous. |
 | `apps.sources.bundleAdded` | `{n}` | Suivi : {n} application(s) |
 | `apps.sources.fromIndex` | `{n}` | {n} catalogue(s) d’apps ajouté(s) depuis cet index. |
 | `apps.sources.indexAll` | `{n}` | Cet index liste {n} catalogue(s) d’apps et vous les suivez déjà tous. |
 | `apps.sources.indexNone` | `{n}` | Cet index ne liste aucun catalogue d’apps, seulement {n} entrée(s) d’autres types. |
 | `apps.sources.indexNone2` | `{what}` | Aucun catalogue d’apps dans cet index, seulement {what}. Ajoute-les depuis leurs écrans. |
+| `apps.sourcesFailedMany` | `{n}` | {n} sources n'ont pas répondu. Leurs applications manquent ci-dessous. |
 | `apps.state.updatedToast` | `{name}` | {name} : mise à jour terminée |
 | `apps.updatesMany` | `{n}` | {n} mises à jour |
+
+### bcv2
+
+| Clé | Variables | Texte |
+|---|---|---|
+| `bcv2.account.signedInAs` | `{name}` | Connecté en tant que {name} |
+| `bcv2.legal.revision` | `{r}` | révision {r} |
+| `bcv2.legal.shipped` | `{v}` | vous avez accepté la version {v} |
+| `bcv2.legal.version` | `{v}` | Version {v} |
 
 ### bench
 
@@ -254,6 +266,30 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `catpub.dropped` | `{n}` | {n} entrée(s) laissée(s) de côté |
 | `catpub.plusLinked` | `{l}` | plus {l} liée(s) |
 | `catpub.split` | `{f}` `{l}` | {f} emballé(s), {l} lié(s) |
+
+### catsrc
+
+| Clé | Variables | Texte |
+|---|---|---|
+| `catsrc.age.d` | `{n}` | il y a {n} j |
+| `catsrc.age.h` | `{n}` | il y a {n} h |
+| `catsrc.age.m` | `{n}` | il y a {n} min |
+| `catsrc.editor.addIndex` | `{n}` | Ajouter les {n} catalogues |
+| `catsrc.export.done` | `{n}` | {n} source(s) exportée(s). |
+| `catsrc.health.okN` | `{n}` | OK · {n} éléments |
+| `catsrc.import.done` | `{n}` `{s}` | {n} source(s) ajoutée(s), {s} ignorée(s). |
+| `catsrc.import.msg` | `{n}` | {n} source(s) seront suivies. Celles que vous suivez déjà sont ignorées. |
+| `catsrc.indexAdded` | `{n}` | {n} catalogue(s) ajouté(s) depuis cet index. |
+| `catsrc.lastOk` | `{a}` | Actualisée {a} |
+| `catsrc.remove.msg` | `{name}` `{url}` | {name} ({url}) ne sera plus lue. Une ligne reste dans l'historique pour la remettre. |
+| `catsrc.retryFail` | `{e}` | Toujours pas de réponse : {e} |
+| `catsrc.summary` | `{f}` `{n}` `{off}` `{y}` | {n} sources, dont {y} à vous ({off} désactivées). {f} n'ont pas répondu. |
+| `catsrc.test.index` | `{n}` | C'est un index : il liste {n} catalogues. |
+| `catsrc.test.indexImport` | `{n}` | {n} d'entre eux vont dans cette liste et peuvent être ajoutés d'un coup. |
+| `catsrc.test.items` | `{n}` | {n} éléments |
+| `catsrc.test.okNamed` | `{name}` | Elle répond : {name} |
+| `catsrc.test.warnings` | `{n}` | {n} avertissements |
+| `catsrc.via` | `{i}` | via {i} |
 
 ### cm
 
@@ -332,6 +368,31 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `csp.errNotDirective` | `{name}` | « {name} » n'est pas un nom de directive. |
 | `csp.executeWarning` | `{n}` | {n} qui autorisent l'exécution de code |
 | `csp.shippedPolicy` | `{n}` | Politique livrée : {n} directives |
+
+### cv
+
+| Clé | Variables | Texte |
+|---|---|---|
+| `cv.allWin` | `{m}` | {m} gagne tous les fichiers |
+| `cv.applied` | `{d}` `{n}` | Terminé : {n} fichier(s) recopié(s), {d} mod(s) désactivé(s). |
+| `cv.disableM` | `{m}` | Désactiver {m} |
+| `cv.files` | `{n}` | {n} fichiers partagés |
+| `cv.keepCopy` | `{m}` | Garder la copie de {m} |
+| `cv.listCut` | `{n}` `{total}` | Affichage de {n} sur {total}. |
+| `cv.makeWin` | `{m}` | Faire gagner {m} |
+| `cv.moveDown` | `{m}` | Descendre {m} |
+| `cv.moveUp` | `{m}` | Monter {m} |
+| `cv.onlyMod` | `{m}` | Seulement {m} |
+| `cv.pairsTitle` | `{n}` | Conflits par paire ({n}) |
+| `cv.selectAll` | `{n}` | Les {n} fichiers |
+| `cv.selected` | `{n}` | {n} sélectionné(s) |
+| `cv.selectFile` | `{f}` | Sélectionner {f} |
+| `cv.showMore` | `{n}` | Afficher {n} de plus |
+| `cv.split` | `{a}` `{b}` `{na}` `{nb}` | {a} : {na}, {b} : {nb} |
+| `cv.statusClean` | `{n}` `{p}` | {n} fichiers partagés entre {p} paires de mods. |
+| `cv.statusDirty` | `{n}` | Appliquer change {n} fichier(s) sur le disque. |
+| `cv.statusDisable` | `{n}` | {n} mod(s) seront désactivés. |
+| `cv.winnerFor` | `{f}` | Quelle copie de {f} garder |
 
 ### debug
 
@@ -639,6 +700,17 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 |---|---|---|
 | `mods.sha.missingDesc` | `{name}` | Le mod "{name}" n'a pas de hachage SHA valide. Pour des raisons de sécurité, il est recommandé de calculer le… |
 
+### notif
+
+| Clé | Variables | Texte |
+|---|---|---|
+| `notif.dndQuietHours` | `{to}` | Heures calmes jusqu'à {to}. Modifiables dans les paramètres. |
+| `notif.jobDone` | `{job}` | Terminé : {job} |
+| `notif.jobFailed` | `{err}` `{job}` | Échec : {job}. {err} |
+| `notif.repeated` | `{n}` | Reçu {n} fois |
+| `notif.snoozedUntil` | `{when}` | retour {when} |
+| `notif.unreadN` | `{n}` | {n} non lue(s) |
+
 ### nudge
 
 | Clé | Variables | Texte |
@@ -900,6 +972,10 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `repo.follow.lastError` | `{err}` | La dernière vérification a échoué : {err} |
 | `repo.follow.updates` | `{n}` | {n} mise(s) à jour |
 | `repo.follow.upToDate` | `{name}` | {name} : vos mods sont à jour. |
+| `repo.followDlg.content` | `{mods}` `{profiles}` | {mods} mod(s) dans {profiles} profil(s) |
+| `repo.followDlg.errHttp` | `{code}` | Le serveur a répondu HTTP {code} : il n'y a pas de dépôt à cette adresse, ou il refuse BMM. |
+| `repo.followDlg.fmtVersion` | `{v}` | format repo.json {v} |
+| `repo.followDlg.testing` | `{url}` | Lecture de {url}… |
 | `repo.format.label` | `{v}` | format {v} |
 | `repo.format.legacy` | `{v}` | ancien {v} |
 | `repo.format.legacyHint` | `{cur}` | Écrit par un ancien BMM. Il fonctionne toujours ; le convertir le passe au format {cur}. |
@@ -1256,6 +1332,12 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | Clé | Variables | Texte |
 |---|---|---|
 | `sshsrv.confirmDelete` | `{name}` | Supprimer le serveur « {name} » ? |
+| `sshsrv.forgetConfirm` | `{host}` | Oublier la clé approuvée de {host} ? La prochaine connexion affichera la clé du serveur et redemandera. |
+| `sshsrv.stepLoggedIn` | `{user}` | Connecté en tant que {user}. |
+| `sshsrv.stepLogin` | `{user}` | Connexion en tant que {user}… |
+| `sshsrv.stepReach` | `{where}` | Connexion à {where}… |
+| `sshsrv.stepReached` | `{where}` | {where} a répondu. |
+| `sshsrv.stepWritable` | `{dir}` `{n}` | {dir} existe et est inscriptible ({n} élément(s) dedans). |
 
 ### stm
 
@@ -1340,8 +1422,13 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 
 | Clé | Variables | Texte |
 |---|---|---|
+| `tools.cache.clean` | `{b}` | Vider la sélection ({b}) |
+| `tools.cache.cleaned` | `{b}` | {b} libérés. |
+| `tools.cache.confirmMsg` | `{b}` `{names}` | {names} : {b} seront supprimés. BMM les reconstruit quand il en a besoin. |
+| `tools.cache.summary` | `{t}` | {t} dans les caches et restes. |
 | `tools.conflicts.files` | `{n}` | {n} fichier(s) |
 | `tools.conflicts.summary` | `{a}` `{n}` | {n} paire(s) en conflit, dont {a} active(s). |
+| `tools.deployed.summary` | `{f}` `{m}` `{n}` `{p}` | {n} constat(s) dans {p} profil(s) : {m} mod(s) actif(s), {f} fichier(s) vérifié(s). |
 | `tools.diff.onlyA` | `{a}` | Seulement dans {a} |
 | `tools.diff.onlyB` | `{b}` | Seulement dans {b} |
 | `tools.diff.summary` | `{a}` `{b}` `{n}` `{s}` | {a} et {b} : {n} différence(s), {s} mod(s) identique(s). |
@@ -1350,8 +1437,18 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `tools.duplicates.copies` | `{n}` | {n} copies |
 | `tools.duplicates.summary` | `{f}` `{h}` `{m}` `{s}` `{w}` | {m} mod(s) en double, {f} groupe(s) de fichiers identiques, {w} récupérables. {s} fichiers listés, {h} hachés. |
 | `tools.duplicates.wasted` | `{w}` | {w} en double |
+| `tools.dupprofiles.counts` | `{a}` `{b}` `{s}` | {s} en commun, {a} seulement dans le premier, {b} seulement dans le second |
+| `tools.dupprofiles.similar` | `{p}` | {p} semblables |
+| `tools.dupprofiles.summary` | `{n}` `{p}` | {n} paire(s) parmi {p} profil(s). |
+| `tools.jsondiff.meta` | `{f}` | Modifié aussi hors des entrées : {f} |
+| `tools.jsondiff.summary` | `{a}` `{b}` `{c}` `{m}` `{p}` `{s}` | {a} entrées, puis {b} : {p} ajoutées, {m} retirées, {c} modifiées, {s} identiques. |
+| `tools.largefiles.summary` | `{m}` `{n}` `{s}` `{t}` | {n} fichier(s) de {m} ou plus, sur {s} fichier(s) ({t}) parcourus. |
+| `tools.logs.clipped` | `{n}` | Seules les {n} dernières lignes correspondantes sont affichées. L’export les contient aussi. |
+| `tools.logs.summary` | `{e}` `{n}` `{t}` `{w}` | {n} ligne(s) affichée(s) sur {t} : {e} erreur(s), {w} avertissement(s). |
 | `tools.moreInExport` | `{n}` | {n} de plus dans l’export. |
+| `tools.names.summary` | `{m}` `{n}` | {n} mod(s) sur {m} pourraient être rangés. |
 | `tools.orphans.summary` | `{m}` `{n}` `{p}` | {n} résultat(s) dans {p} profil(s) et {m} mod(s). |
+| `tools.ranAt` | `{time}` | Résultat de {time} |
 | `tools.validate.bad` | `{f}` `{n}` | Format {f} : {n} problème(s). |
 | `tools.validate.ok` | `{f}` `{n}` | Format {f} : aucun problème trouvé ({n} entrées). |
 

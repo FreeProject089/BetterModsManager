@@ -134,6 +134,46 @@ To see it again after dismissing it, open it from the Community screen or the co
 (`Ctrl+K`) — opened deliberately, it drops the checkbox, since there is nothing to suppress
 about something you just asked for.
 
+## BetterCommunity v2
+
+BMM 1.0.3 is ready for BetterCommunity v2 and ships with it **switched off**: until the switch
+is on, BMM talks to BetterCommunity v1 exactly as 1.0.2 did.
+
+**The switch** is read once at start, in this order: your [`app.cfg`](doc-page:reference/app-cfg)
+(`BCApiVersion`, `BCv2Base`), then the [links file](doc-page:reference/links-and-updates)
+BetterCommunity publishes (`bc_api`, `bc_v2_base`), then v1. The day v2 goes live, its team flips
+`bc_api` and installed copies follow without a new release. An explicit `BCApiVersion=v1` in
+`app.cfg` keeps an install on v1 whatever the links file says.
+
+**The health check.** v2 is used only after it answered `GET <base>/v2/health` with `ok` or
+`degraded` in this session. If it does not answer, BMM stays on v1 for the session and writes the
+reason in its log. Until the check answers, BMM is on v1.
+
+### The linked account
+
+When the session runs on v2, *Settings* shows a **Linked BetterCommunity account** card.
+**Sign in with BetterCommunity** shows a short code; open the page, check it shows the same code,
+and approve it on the website. **No password is typed into BMM.** The sign-in is kept the way
+BMM keeps its other secrets: protected by Windows for your user account (the OS keyring on macOS
+and Linux). If neither works it lasts until BMM closes, and the card says so. BMM never shows it,
+and only sends it to the BetterCommunity v2 address that issued it. **Sign out** revokes it on
+the website and forgets it on this PC. In v1 mode the card is hidden and the existing account
+link works as before.
+
+### What moves to v2, and what stays on v1
+
+On v2: feedback, bug and crash reports (as your account when signed in, else with BMM's public
+app key); consent receipts and the Terms and Privacy Policy answers (same permission rule as
+before); a newer Terms or Privacy Policy published by v2 is shown with **Accept**, **Refuse** or
+**Later**; BetterCommunity notifications (read with your sign-in, no API key to paste); the
+Community journal on this screen; Laya's BetterCommunity suggestions; the update check's fallback
+feed and the credits list (every update is still checked against the release's signed manifest);
+Laya's offline model download (same SHA-256 pin); and anonymous telemetry, if you turned it on,
+with only the categories you accepted. Session replay stays on the current telemetry server.
+
+**Still on v1**: avatars, launch announcements, author search by creator id and the Discord
+link. BetterCommunity v2 does not serve them yet.
+
 ## How it fits the rest of BMM
 
 The blog is the visible tip of BetterCommunity. The same platform:

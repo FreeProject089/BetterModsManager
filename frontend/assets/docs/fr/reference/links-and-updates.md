@@ -107,6 +107,17 @@ injoignable) est gardé et envoyé au prochain démarrage ; l’appli se limite 
 les deux boutons affichés par Discord. `BoutonRPC1` et `BoutonRPC2` choisissent laquelle de
 chaque paire est utilisée — `1` ou `2`.
 
+### BetterCommunity v2
+
+| Clé | Ce qu'elle fait |
+|---|---|
+| `bc_api` | `"v2"` fait passer la session sur **BetterCommunity v2**, une fois que la v2 répond à son contrôle de santé. Absente : v1. Une ligne `BCApiVersion` dans [`app.cfg`](doc-page:reference/app-cfg) l'emporte. |
+| `bc_v2_base` | L'adresse de la v2 (`https://`). Vide : la production. |
+| `bc_v2_client_id`, `bc_v2_app_key`, `bc_v2_app_id` | Les identifiants v2 publics de BMM : le client de connexion, la clé d'application publiable et l'identifiant d'application pour la télémétrie. Tous publics, sans risque à livrer. |
+
+links.json lui-même est toujours lu depuis l'adresse de la v1, puisqu'il porte l'interrupteur. Ce
+que l'interrupteur déplace est dans [BetterCommunity v2](doc-page:features/community#bettercommunity-v2).
+
 ## Tester contre un BetterCommunity local
 
 Pour pointer BMM vers un BetterCommunity qui n'est pas le site public — un tunnel, une instance

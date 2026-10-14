@@ -18,6 +18,34 @@ pour aller à sa carte.
 qui ne correspondent pas à ce que tu tapes et indique combien de sections restent. Vide la case pour
 tout revoir.
 
+**Masquer l'index** (le bouton à côté de la recherche) donne toute la largeur aux cartes ; le
+bouton **Index** au-dessus des cartes le fait revenir. BMM retient ce choix, et :kbd[Ctrl+F] fait
+revenir l'index pour chercher. Dans une fenêtre étroite, l'index reste la bande au-dessus des
+cartes.
+
+Toutes les cartes ont le même en-tête : leur icône sur une tuile discrète, le titre, les actions de
+la carte, et la description juste sous le titre.
+
+## Des panneaux dans leur propre fenêtre
+
+L'**éditeur de thème**, le **bac à sable des traductions** et le **débogueur de tâches** peuvent
+quitter la fenêtre de BMM : appuie sur **Ouvrir dans sa propre fenêtre** dans leur en-tête, ou fais
+glisser l'en-tête au-delà du bord de la fenêtre de BMM et lâche. Le panneau devient une fenêtre à
+part que tu peux placer où tu veux, sur un autre écran aussi, à côté de ce sur quoi il travaille
+plutôt que par-dessus.
+
+Tout continue de fonctionner depuis là et reste synchronisé avec BMM : le panneau tourne toujours
+dans BMM, la fenêtre l'affiche et renvoie tes clics et ta saisie. Elle suit le thème, clair ou
+sombre.
+
+- La fenêtre de chaque panneau retient sa taille et sa place.
+- **Remettre dans la fenêtre de BMM** remet le panneau où il était ; son bouton de fermeture ferme
+  le panneau. Fermer la fenêtre autrement (:kbd[Alt+F4], la barre des tâches) remet aussi le
+  panneau en place.
+- Dans cette fenêtre, les listes de choix s'ouvrent comme la liste du système, et faire glisser
+  des éléments à l'intérieur du panneau (réordonner, redimensionner) se fait dans la fenêtre de
+  BMM.
+
 ## Les quatre qui comptent le plus
 
 ### Thèmes & Apparence
@@ -288,21 +316,41 @@ catalogue — sans rien de plus à faire.
 
 ### Notifications
 
-Deux interrupteurs, et ils ne font pas la même chose.
+Tout ce que BMM te dit arrive dans **un seul centre de notifications** (la cloche), avec un seul
+compteur de non-lus, affiché aussi sur l'icône de la barre des tâches. Les messages sont groupés
+selon leur origine :
 
-**Notifications contextuelles** coupe les bulles en bas de l'écran. Ce qu'il ne coupe *pas*,
-c'est le message : chaque notification est enregistrée dans le **centre de notifications**
-avant d'être affichée, donc désactiver les bulles change l'endroit où tu les lis, pas leur
-existence. C'est précisément pour ça que le réglage est sans risque — rien n'est perdu, ça
-cesse juste de t'interrompre.
+| Groupe | Ce qu'il contient |
+|---|---|
+| **Mises à jour** | Nouvelles versions de BMM, vérifications de mise à jour |
+| **Dépôts suivis** | Les dépôts que tu suis : nouveaux mods, téléchargements |
+| **Planificateur** | Tes automatisations et leurs résultats |
+| **Tâches de fond** | Les tâches longues (15 secondes ou plus) qui se terminent pendant que BMM est en arrière-plan |
+| **BetterCommunity** | Les messages de ton compte BetterCommunity |
+| **BMM** | Tout le reste de ce que BMM te dit |
 
-**Les erreurs ne sont jamais silencées.** Une erreur que personne ne voit et que personne ne
-pense à aller chercher, c'est une appli qui a échoué en silence — pire qu'une bulle non
-désirée.
+**Comment chaque type de notification vous parvient** règle chaque groupe sur **Dans
+l'application**, **Dans l'application et en notification système** (celle du système seulement
+quand BMM est en arrière-plan), ou **Désactivé (gardé dans la liste)**. Les anciens
+interrupteurs par source sont repris. **Envoyer une notification de test** montre à quoi
+ressemble une bulle.
 
-**Notifications système** est un réglage distinct : ce sont les bulles de l'OS, envoyées par
-les [automatisations](doc-page:features/scheduler) et les tâches longues pour que tu sois prévenu quand BMM
-n'est pas la fenêtre que tu regardes.
+**Ne pas déranger**, depuis la cloche ou ici, met les bulles en pause jusqu'à ce que tu le
+désactives. **Heures calmes chaque jour** (De … à …) fait la même chose selon un horaire. Pendant
+le calme, rien ne s'affiche et aucune notification système n'est envoyée. **Les erreurs
+s'affichent quand même dans l'application, et tout reste dans le centre de notifications** : une
+erreur que personne ne voit et que personne ne pense à aller chercher, c'est une appli qui a
+échoué en silence.
+
+Dans le centre, chaque message peut être **ouvert** (quand il mène quelque part, par exemple une
+mise à jour disponible ou un dépôt suivi), **reporté** (1 heure, 4 heures, demain 9 h) ou écarté.
+Un message reporté revient non lu à son heure, ou tout de suite avec **La remettre maintenant**.
+Le même évènement deux fois, c'est une bulle et une entrée avec un compteur, pas une pile de
+copies ; une mise à jour retrouvée par une vérification suivante rafraîchit son entrée. La liste
+garde les 200 derniers messages et rien de plus de 30 jours.
+
+Clavier dans le centre : :kbd[Haut] et :kbd[Bas] passent d'un message à l'autre, :kbd[Entrée]
+ouvre, :kbd[Suppr] écarte, :kbd[S] reporte d'une heure, :kbd[Échap] ferme et revient à la cloche.
 
 ### Son & raccourcis clavier
 

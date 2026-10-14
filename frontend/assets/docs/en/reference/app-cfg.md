@@ -92,8 +92,8 @@ there.
 | `AutoEULA_on_first_Start` | `=true` | Shows the licence automatically on first launch. With it off the licence is still readable from Help &amp; other. |
 | `BCTestMode` | `BCTestMode=true` | Points the in-app blog and community screens at `BCTestBase` instead of the real site. |
 | `BCTestBase` | any host, port optional | The staging or local base, e.g. `http://localhost:5176`. Ignored unless `BCTestMode=true`. |
-| `BCApiVersion` | `BCApiVersion=v2` (or `2`) | Moves what has a **BetterCommunity v2** adapter to v2. Absent or any other value: v1. See below. |
-| `BCv2Base` | an `https://` address | Where v2 lives. Empty or missing: the v1 address. |
+| `BCApiVersion` | `BCApiVersion=v2` (or `2`) | Moves what has a **BetterCommunity v2** adapter to v2, once v2 answers its health check. `v1` pins v1 whatever links.json says. Absent: links.json's `bc_api`, else v1. See below. |
+| `BCv2Base` | an `https://` address | Where v2 lives. Empty or missing: links.json's `bc_v2_base`, else production. |
 | `DocsReplays` | `DocsReplays=false` (or `off`) | Removes every session replay (`.bmmreplay`) from the documentation in Help &amp; other. |
 
 `DisableUpdate` decides *whether* the update check happens; `links.json`'s `autoupdate_api`
@@ -109,23 +109,31 @@ Leaving a stale `BCTestBase` in a shipped file is harmless. Leaving `BCTestMode=
 
 ## BetterCommunity v2: `BCApiVersion` and `BCv2Base`
 
-The switch for **BetterCommunity v2**, for test builds while v2 runs beside v1. Neither key is
-in the shipped file: without them, BMM talks to v1 and nothing changes.
+The switch for **BetterCommunity v2**. Neither key is in the shipped file. Since BMM 1.0.3 the
+same switch can also come from the links file BetterCommunity publishes (`bc_api`,
+`bc_v2_base` in [links.json](doc-page:reference/links-and-updates)), so installed copies follow v2 the day it goes
+live. **This file wins**: a `BCApiVersion` line here decides whatever links.json says, and
+`BCApiVersion=v1` keeps this install on v1. Without the line here and without `bc_api` in
+links.json, BMM is on v1 and nothing changes.
 
 ```ini
 BCApiVersion=v2
 BCv2Base=https://v2.example.org
 ```
 
-`BCApiVersion=v2` moves only what has a v2 adapter: feedback and bug reports go to the v2
-feedback centre, [consent receipts](doc-page:features/privacy-telemetry#proof-of-consent-my-consents)
-are offered to the v2 consent ledger (under the same permission as the telemetry copy), and the
-catalogues, repo lists and hosted repos that v2 serves itself are read from v2. Every other
-BetterCommunity call stays on v1.
+`BCApiVersion=v2` (or `2`, any case) asks for v2. BMM then checks `GET <base>/v2/health` once at
+start; if v2 does not answer `ok` or `degraded`, the session stays on v1 and the log says why. On
+v2, what has a v2 adapter moves: feedback and bug reports, [consent
+receipts](doc-page:features/privacy-telemetry#proof-of-consent-my-consents) and the legal texts, the
+account sign-in, notifications, the Community page, Laya's suggestions, app telemetry and signed
+catalogue feeds; the v1 paths v2 serves itself are read from v2. Avatars, launch announcements,
+author search and the Discord link stay on the v1 address. Any other value is v1. The whole list
+is in [BetterCommunity v2](doc-page:features/community#bettercommunity-v2).
 
-`BCv2Base` must be `https://`, or plain `http://` to this machine only (`localhost`,
-`127.0.0.1`, `*.localhost`); anything else is ignored and v2 uses the v1 address. Both keys
-are read once at start-up: changing them needs a restart.
+`BCv2Base` is where v2 lives; empty or missing means links.json's `bc_v2_base`, else the test
+base in test mode, else production. It must be `https://`, or plain `http://` to this machine
+only (`localhost`, `127.0.0.1`, `*.localhost`); anything else is refused and the session stays
+on v1. Both keys are read once at start-up: changing them needs a restart.
 
 Telemetry has no switch of its own: every batch BMM sends (only with your consent) is wrapped
 in a versioned envelope (`"schema": "bmm-telemetry"`, `"v"`). The two fields carry no data

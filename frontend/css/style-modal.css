@@ -66,7 +66,7 @@
     cursor: pointer; transition: background var(--bmm-transition-fast), border-color var(--bmm-transition-fast);
 }
 .secm-choice:hover { background: var(--bmm-s05); }
-.secm-choice.is-on { border-color: var(--bmm-accent); background: var(--bmm-s05); box-shadow: inset 3px 0 0 var(--bmm-accent); }
+.secm-choice.is-on { border-color: var(--bmm-accent); background: color-mix(in srgb, var(--bmm-accent) 8%, var(--bmm-s05)); }
 .secm-choice input { accent-color: var(--bmm-accent); margin: 3px 0 0; flex-shrink: 0; }
 .secm-choice-txt { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .secm-choice-name { font-size: 13.5px; font-weight: 650; color: var(--bmm-text-primary); }

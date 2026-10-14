@@ -16,6 +16,7 @@ import { getAllTranslations, getLang, t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { uiIcon } from '../../ui/icons.js';
+import { popoutButtonHtml, wirePopout, type PopoutSpec } from '../../ui/popout.js';
 
 let _allTrans: Record<string, Record<string, string>> = {};
 let _allKeys: string[] = [];
@@ -138,6 +139,21 @@ export function initI18nSandbox(): void {
     document.getElementById('i18n-highlight-hc')?.addEventListener('click', () => toggleHighlight());
     document.getElementById('i18n-overlay-toggle')?.addEventListener('click', () => toggleOverlayMode(modal));
     document.getElementById('i18n-dock-toggle')?.addEventListener('click', () => toggleDockMode(modal));
+    // Pop out (ui/popout.ts): the sandbox in a window of its own, beside the screen whose text
+    // it edits. It goes to overlay mode underneath, the mode in which it floats; the window's
+    // close button closes the sandbox, « back to BMM » leaves it floating where it was.
+    const popSpec: PopoutSpec = {
+        id: 'i18n-sandbox',
+        title: () => t('i18n.title') || 'Translation Sandbox',
+        panel: () => modal.querySelector('.modal') as HTMLElement | null,
+        isOpen: () => modal.classList.contains('open') && _overlayMode,
+        prepare: () => { if (!_overlayMode) toggleOverlayMode(modal, true); },
+        close: closeModal,
+        dragOut: () => _overlayMode,
+    };
+    const dockBtn = document.getElementById('i18n-dock-toggle');
+    if (dockBtn && !modal.querySelector('[data-popout]')) dockBtn.insertAdjacentHTML('beforebegin', popoutButtonHtml('i18x-tool i18x-tool--icon', 'i18n-sandbox'));
+    wirePopout(popSpec, modal, modal.querySelector('.modal-header') as HTMLElement | null);
     document.getElementById('i18n-new-lang')?.addEventListener('click', promptNewLanguage);
 
     // Filters — debounce the search so we don't rebuild the (large) key list on

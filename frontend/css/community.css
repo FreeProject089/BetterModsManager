@@ -796,7 +796,7 @@
 .community-stat-delta { display: inline-block; margin-top: 6px; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px; background: rgba(127,127,127,.12); }
 .community-stat-up { color: var(--bmm-success); } .community-stat-down { color: var(--bmm-danger); } .community-stat-flat { color: var(--bmm-text-muted); }
 .community-stat-note { font-size: 12px; color: var(--bmm-text-muted); margin-top: 6px; }
-.community-quote { --q: var(--bmm-accent); border: 0; border-left: 4px solid var(--q); border-radius: 0 12px 12px 0; padding: 12px 16px; margin: 0 0 16px; background: rgba(var(--bmm-accent-r), var(--bmm-accent-g), var(--bmm-accent-b), .07); color: var(--bmm-text-primary); }
+.community-quote { --q: var(--bmm-accent); border: 1px solid color-mix(in srgb, var(--q) 28%, var(--bmm-border)); border-radius: 12px; padding: 12px 16px; margin: 0 0 16px; background: rgba(var(--bmm-accent-r), var(--bmm-accent-g), var(--bmm-accent-b), .07); color: var(--bmm-text-primary); }
 .community-quote-body { font-size: 1.05em; line-height: 1.55; font-style: italic; }
 .community-quote-foot { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-style: normal; }
 .community-quote-avatar { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; }

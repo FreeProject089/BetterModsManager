@@ -16,9 +16,9 @@ import type { KeyPinProblem } from '../../core/key-pin.js';
 import { initI18nSandbox } from './i18n-sandbox.js';
 import { renderShortcutsManager } from '../../core/commands.js';
 import {
-    parseCatalogIndex, planImport, STORE_KEY, rememberOrigin, addSource, removeSource,
-    originOf, originLabel, forgetOrigin, readHistory, recordHistory, clearHistory,
-    forgetHistoryAt, isDisabled, setDisabled, INDEX_TYPES,
+    parseCatalogIndex, planImport, STORE_KEY, rememberOrigin, addSource,
+    originLabel, readHistory, recordHistory, clearHistory,
+    forgetHistoryAt, INDEX_TYPES,
 } from '../catalogs/catalog-index.js';
 import type { CatalogIndex, IndexEntry } from '../catalogs/catalog-index.js';
 import { writeSources } from '../catalogs/catalog-sources.js';
@@ -1694,85 +1694,22 @@ async function initCatalogIndexSettings() {
     // write the same stores, and until now nothing showed them together — so a catalog you
     // did not remember following could only be removed by finding whichever screen owned it.
 
+    // The shared source list (features/catalogs/source-list.ts): the same rows as the App
+    // catalogue's Sources tab, for every kind. Official sources first and read-only; yours
+    // with on/off, order, edit (with Test), details, remove; import and export of the lot.
+    let followList: { render(): Promise<void>; refresh(force?: boolean): Promise<void> } | null = null;
+    const followFold = document.getElementById('cat-index-following-fold') as HTMLDetailsElement | null;
     const renderFollowing = async () => {
         if (!followHost) return;
-        const all = await readAllSources();
-        const rows: string[] = [];
-        for (const type of Object.keys(all)) {
-            for (const u of all[type]) {
-                const from = originOf(u);
-                const off = isDisabled(u);
-                rows.push(`<div class="cat-index-row${off ? ' is-off' : ''}">
-                    <span class="cat-index-type">${escHtml(t(`settings.catIndex.type.${type}`) || type)}</span>
-                    <span class="cat-index-url" title="${escAttr(u)}">${escHtml(u)}</span>
-                    ${from ? `<span class="cat-index-from" title="${escAttr(from)}">${escHtml(originLabel(from))}</span>` : ''}
-                    <span class="cat-index-state" data-state-for="${escAttr(u)}"></span>
-                    <button class="btn btn-ghost btn-sm cat-index-toggle" data-u="${escAttr(u)}"
-                            title="${escAttr(off ? (t('settings.catIndex.enable.h') || 'Fetch this one again') : (t('settings.catIndex.disable.h') || 'Keep it in the list but stop fetching it'))}">${escHtml(off ? (t('settings.catIndex.enable') || 'Off') : (t('settings.catIndex.disable') || 'On'))}</button>
-                    <button class="btn btn-ghost btn-sm cat-index-unfollow"
-                            data-t="${escAttr(type)}" data-u="${escAttr(u)}">${escHtml(t('common.remove') || 'Remove')}</button>
-                  </div>`);
-            }
-        }
-        followHost.innerHTML = rows.length
-            ? rows.join('')
-            : `<div class="cat-index-empty">${escHtml(t('settings.catIndex.noneFollowed') || 'You follow no community catalogs yet.')}</div>`;
-        paintSourceStates(all).catch(() => {});
-
-        // On/off, which is NOT remove. Removing the only copy of a URL you might want back is
-        // what makes people keep catalogs they do not want; this keeps it listed and skips it.
-        followHost.querySelectorAll('.cat-index-toggle').forEach((b) => b.addEventListener('click', async () => {
-            const u = (b as HTMLElement).dataset.u || '';
-            setDisabled(u, !isDisabled(u));
-            await renderFollowing(); await renderContents();
-        }));
-
-        followHost.querySelectorAll('.cat-index-unfollow').forEach((b) => b.addEventListener('click', async () => {
-            const el = b as HTMLElement;
-            const type = el.dataset.t || ''; const u = el.dataset.u || '';
-            try {
-                if (type === 'app') {
-                    await invoke('remove_community_source', { url: u });
-                } else {
-                    const key = STORE_KEY[type];
-                    if (!key) return;
-                    // removeSource, matching addSource's case-insensitivity. An exact-match
-                    // filter here would leave a source that was added under a different case
-                    // unremovable by the button that says it removes it.
-                    const { list, removed } = removeSource(readSources(type), u);
-                    if (!removed) return;
-                    writeSources(key, list);
-                }
-                forgetOrigin(u);
-                recordHistory({ action: 'remove', type, url: u });
-                await renderFollowing(); await renderHistory(); await renderContents();
-                toast(t('settings.catIndex.removed') || 'Removed.', 'success');
-            } catch (e) {
-                toast(`${t('common.failed') || 'Failed'} — ${String(e).slice(0, 80)}`, 'error');
-            }
-        }));
+        if (followList) { await followList.render(); return; }
+        const m = await import('../catalogs/source-list.js');
+        followList = m.mountSourceList(followHost, {
+            // Checked when the fold is opened, not at start: Settings is built at boot.
+            autoRefresh: !!followFold?.open,
+            onChanged: async () => { await renderHistory(); await renderContents(); },
+        });
     };
-
-    // Per-source health, from the catalogue index (features/catalogs/catalog-hub.ts): what
-    // was known at once, then again after an incremental refresh of the sources that are due.
-    // One failing source is marked on its own row and never hides the others.
-    const paintSourceStates = async (all: Record<string, string[]>) => {
-        if (!followHost) return;
-        const hub = await import('../catalogs/catalog-hub.js');
-        const paint = (list: Array<{ url: string; state: string; error?: string; items: number }>) => {
-            const by = new Map(list.map((x) => [x.url.toLowerCase(), x]));
-            followHost.querySelectorAll<HTMLElement>('.cat-index-state').forEach((el) => {
-                const st = by.get(String(el.dataset.stateFor || '').toLowerCase());
-                if (!st || st.state === 'pending') { el.textContent = ''; el.removeAttribute('data-state'); return; }
-                el.dataset.state = st.state;
-                el.textContent = t(`settings.catIndex.state.${st.state}`, { n: String(st.items) });
-                el.title = st.error || '';
-            });
-        };
-        paint(hub.catalogIndexStatus());
-        const extra = (all.app || []).filter((u) => !isDisabled(u)).map((url) => ({ url, kind: 'app' }));
-        paint(await hub.refreshCatalogIndex({ extra }));
-    };
+    followFold?.addEventListener('toggle', () => { if (followFold.open) void followList?.refresh(false); });
 
     // ── History ─────────────────────────────────────────────────────────────────
 

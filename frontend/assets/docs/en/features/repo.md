@@ -89,9 +89,11 @@ to a repo that publishes versions.
 
 ## Following a repo
 
-Instead of pressing *Check for mod updates* yourself, you can **follow** a repo: enter its
-address on the sync side, then **Follow this repo**. It joins the **Followed repos** list,
-where each repo has:
+Instead of pressing *Check for mod updates* yourself, you can **follow** a repo. **Follow a
+repo** sits in the **Followed repos** card and opens a dialog; a **Follow** button also appears
+where a repo is already known (the repo you just fetched, each browse result, each history
+entry) and opens the same dialog, filled in. Nothing is saved before you press **Follow**.
+Each followed repo then has:
 
 | Setting | Choices |
 |---|---|
@@ -113,6 +115,56 @@ BMM's built-in repo server also serves `feed.xml`, an **Atom feed** of the repo'
 next to `repo.json`. Any feed reader can follow a repo that way, BMM or not, and so can a
 [scheduled task](doc-page:features/scheduler) with an `on feed` trigger.
 :::
+
+### The Follow a repo dialog
+
+| Field | What it does |
+|---|---|
+| **Address** | A web address, or the way you reach the machine. BMM turns it into the `repo.json` address and shows it under the field (*BMM will read …*). |
+| **Download password** *(optional)* | Only if the repo has one. Saved sealed on this PC, never in BMM's settings file (see below). |
+| **Sign with this key** | Which identity key answers a repo [protected by a public key](#protecting-a-repo-password-or-a-public-key). *As now (automatic)* keeps BMM's usual choice. |
+| **Check**, **When there is an update** | The schedule and the mode from the table above. |
+
+The address can be typed in any of these shapes, and they all lead to the same repo:
+
+```text
+192.168.1.20:8000
+http://192.168.1.20:8000/repo.json
+[::1]:8000
+nas.local:8080/mods/
+my-server
+```
+
+An IPv6 address goes in brackets when it carries a port. `HTTP://` in capitals, a share key
+(`?k=…`) and a trailing `#…` are handled. `192.168.1.20:8000` and
+`http://192.168.1.20:8000/repo.json` are **one** followed repo, not two: following an address
+you already follow updates its schedule instead of adding a copy.
+
+**Plain `http://` is accepted.** On this PC or on the local network the dialog says it is
+normal. Over the internet it warns that a download password would travel readable: use
+`https://` there.
+
+**Local addresses skip the system proxy.** Requests to this PC and to local-network addresses
+(`192.168.*`, `10.*`, `172.16-31.*`, `*.local`, IPv6 link-local and unique-local) no longer go
+through a system proxy, which cannot reach them anyway. Internet addresses still use it. BMM's
+blocks on private addresses for scheduled tasks, AI endpoints and custom pages are unchanged:
+those are about addresses you did **not** type.
+
+**Test the connection** reads the repo once and shows its name, version, `repo.json` format,
+signature (*Signed, signature valid*, *Signature does NOT match*, or *Not signed*), game,
+author and how many mods it offers in how many profiles. A signature that does not match means
+the manifest was changed after it was signed: follow it only if you know why. Errors are said
+plainly: nothing answered at this address, the server did not answer in time, the HTTP code it
+answered, or that a password is needed.
+
+#### The saved password
+
+A download password given here is **saved sealed on this PC**: protected by Windows for your
+user account (the system keychain on macOS and Linux), only for this repo's checks, and never in
+BMM's settings file. The scheduled checks use it, so a followed repo with a password no longer
+fails every check. Leave the field empty to keep the saved one; **Forget the saved password**
+removes it, and so does **Stop following**. If the PC cannot seal it, the dialog says so and the
+password lasts for this session only.
 
 ## Hosting your own repo
 
@@ -422,6 +474,23 @@ Who this is for: a private repo whose mods live behind a password. Without the b
 person you hand the repo to gets addresses that answer 401 and no way to know why before
 trying.
 
+### The SSH servers dialog
+
+**SSH servers** lists your saved servers with their state: *Incomplete*, *Not tested yet*,
+*Server key trusted*, *Test passed* or *Last test failed*. Pick one to edit it, or **Add a
+server**. Every field of the form says what is wrong with it while you type: the host (a name or
+an IP, no spaces, no `http://`), the port (1 to 65535), the user, the key file, the base folder,
+and the name used in `ssh://name/` addresses (letters, digits, dot, dash and underscore). Pasting
+`me@nas.local:2222` into the host fills the user and the port.
+
+**Test the connection** goes step by step and says which step failed: reach the server, check
+its key, sign in, then look at the base folder (it exists, it is writable, and if not, who owns
+it).
+
+Keyboard: :kbd[Up] and :kbd[Down] move through the servers, :kbd[Enter] goes to the form,
+:kbd[Enter] or :kbd[Ctrl+S] saves, :kbd[Escape] closes. Deleting a server and discarding changes
+ask in BMM's own dialogs.
+
 ### What you fill in
 
 | Field | Notes |
@@ -527,9 +596,28 @@ key itself never is, and neither is the passphrase or the password. A key copied
 config would be a key in every backup, every export and every crash report that attaches
 settings.
 
-The server's fingerprint is recorded on the first connection and must match on every later
-one. A **changed** fingerprint is refused outright rather than warned about: the case it
-protects against is exactly the one where a warning gets clicked through.
+The passphrase or password is typed in the form, used for **Test** and **Browse**, and never
+stored.
+
+### The server's key
+
+**First connection.** A server BMM has never seen shows its key fingerprint (`SHA256:…`) and
+asks *First connection to this server. Is this its key?* **before anything is sent to it**: no
+password, no key signature. Compare it with the server's own, on the server:
+
+```bash
+ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
+```
+
+If both say the same `SHA256:…`, press **Trust this server**; the fingerprint is recorded and
+must match on every later connection. If they differ, press **Do not connect**.
+
+**A changed key is refused.** If the server later presents another key, BMM refuses to connect
+and shows the *Trusted* and the *Now* fingerprints side by side. It is refused outright rather
+than warned about: the case it protects against is exactly the one where a warning gets clicked
+through. If you rebuilt or reinstalled the server, use **Forget the fingerprint**, then test
+again: the next connection shows the new key and asks again. If you did not, do not connect:
+someone may be between you and the server.
 
 ### Order of transfer
 
