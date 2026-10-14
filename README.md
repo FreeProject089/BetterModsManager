@@ -1,45 +1,44 @@
 <div align="center">
-  <img src="frontend/assets/BMm.png" alt="Better Mod Manager" width="200" />
-  
+
+  <img src=".github/screenshots/hero.png" alt="Better Mod Manager 1.0.2" width="100%" />
+
   # Better Mod Manager
 
-  **Language Selection / Sélection de langue**
-
-  ![Version](https://img.shields.io/badge/version-1.0.0-blue.svg?style=flat-square)
+  ![Version](https://img.shields.io/badge/version-1.0.2-blue.svg?style=flat-square)
   ![License](https://img.shields.io/badge/license-GPL--3.0-green.svg?style=flat-square)
   ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-important?style=flat-square)
 
-  ---
-
 </div>
 
-## Choose Your Language / Choisissez votre langue
+## English
 
-### 🇬🇧 English
-📖 **[View README in English](README_EN.md)**
+A universal mod manager for Windows. Your mods live in a Library, a Profile decides which are
+on for one game, and turning a mod on copies its files with backups and SHA-256 checks, so it can
+always be turned off cleanly. Modpacks, `.MM` lists, Server Repo sync and hosting, an App
+Catalog, optional offline AI (Laya), a scheduler, plugins, themes, and a CLI, MCP server and
+local API.
 
-A modern, high-performance universal mod manager for Windows. Built with Rust + Tauri v2, featuring the Smart Physical Copy Engine for safe, reliable mod management with SHA-256 integrity, Server Repository sync, and AI integration via MCP.
+**[Read the README in English](README_EN.md)** · [What's new in 1.0.2](Update/changelog_v1.0.2_EN.md)
 
----
+## Français
 
-### 🇫🇷 Français
-📖 **[Consulter le README en français](README_FR.md)**
+Un gestionnaire de mods universel pour Windows. Vos mods vivent dans une Bibliothèque, un Profil
+décide lesquels sont actifs pour un jeu, et activer un mod copie ses fichiers avec sauvegardes et
+contrôle SHA-256, pour pouvoir toujours le désactiver proprement. Modpacks, listes `.MM`,
+synchronisation et hébergement Serveur Repo, Catalogue d'applications, IA hors ligne facultative
+(Laya), planificateur, plugins, thèmes, ainsi qu'une CLI, un serveur MCP et une API locale.
 
-Un gestionnaire de mods universel, moderne et haute performance pour Windows. Construit avec Rust + Tauri v2, doté du moteur Smart Physical Copy pour une gestion fiable des mods avec intégrité SHA-256, synchronisation Serveur de dépôt et intégration IA via MCP.
+**[Lire le README en français](README_FR.md)** · [Nouveautés de la 1.0.2](Update/changelog_v1.0.2_FR.md)
 
 ---
 
 <div align="center">
 
-  ## Quick Links | Liens rapides
-
-  [Official Website](https://freeproject089.github.io/BMM_Web/) •
-  [GitHub Repository](https://github.com/FreeProject089/BetterModsManager) •
+  [Download / Télécharger](https://github.com/FreeProject089/BetterModsManager/releases/latest) •
+  [Documentation](https://bettercommunity.ch/docs) •
   [Discord](https://discord.gg/CTaaEF9R75) •
-  [Support Development](https://ko-fi.com/I2I31ZIPPG)
+  [Ko-fi](https://ko-fi.com/I2I31ZIPPG)
 
-  ---
-
-  **Better Mod Manager** — Made with ❤️ for the Modding Community
+  <sub>GPL-3.0 · [LICENSE.md](LICENSE.md) · [Privacy](PRIVACY.md) / [Confidentialité](PRIVACY_FR.md)</sub>
 
 </div>

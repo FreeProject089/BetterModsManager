@@ -104,5 +104,6 @@ La 1.0.2 est une grosse mise à jour : les mises à jour remarchent en un clic, 
 - Libellé « Multi-profil » raccourci.
 
 ## [IMPROVED] Installateur
+- **Anciennes installations** : BMM trouve un ancien BMM (0.9.x, la version de test 1.0.0), son ancien dossier de données, son cache et les raccourcis morts, et propose de les retirer, entièrement facultatif : une fois au démarrage après la reprise de tes données, et toujours dans Paramètres › Application › Anciennes installations. La désinstallation lance le désinstalleur de l'ancienne version ; l'ancien dossier de données peut être sauvegardé en .zip d'abord et n'est supprimé qu'après une seconde confirmation.
 - L'étape de confidentialité ne pose qu'une question, comme un bandeau cookies, sans rien de présélectionné : *L'essentiel uniquement*, *Tout accepter* ou *Personnaliser*.
 - *Tout accepter* n'active jamais le rapport matériel hebdomadaire (numéros de série, UUID de la machine, adresses MAC) : seul *Personnaliser* le peut, et la carte le dit.

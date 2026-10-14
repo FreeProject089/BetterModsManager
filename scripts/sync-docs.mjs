@@ -108,6 +108,10 @@ function resolveRoute(fromDir, target) {
 function forApp(md, route) {
   const dir = route.includes('/') ? route.slice(0, route.lastIndexOf('/')) : '';
   return md
+    // A page's mkdocs front matter (title:, hide:) is site metadata, not text.
+    .replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, '')
+    // A paragraph attribute list on a line of its own (`{ .bmm-hero__tagline }`).
+    .replace(/^[ \t]*\{[ \t]*[.#][^}\n]*\}[ \t]*$/gm, '')
     // "Open in BMM" blocks are pointless inside BMM — it is already open.
     .replace(/^!!! tip "(Open in BMM|Ouvrir dans BMM)"[\s\S]*?(?=\n(?:#{1,6} |---|\S))/gm, '')
     // Same for the site's own "open this in the app" buttons, in both the raw-HTML and the
@@ -140,6 +144,17 @@ function forApp(md, route) {
       return `<div class="bmm-replay"${local} data-remote="${SITE}${siteRel}" data-page="${route}"`
         + (title ? ` data-title="${title.replace(/"/g, '&quot;')}"` : '') + '></div>';
     })
+    // Layout-only HTML of the site's home page (Material `md_in_html`: `<div class="…" markdown>`
+    // wrappers, badges, plain buttons). md-lite would print it as text; the app keeps the
+    // markdown inside and drops the wrappers. Only `markdown` containers are unwrapped, so the
+    // recording embed above is untouched.
+    .replace(/^[ \t]*<div\b[^>]*\bmarkdown\b[^>]*>[ \t]*$/gm, '')
+    .replace(/^[ \t]*<\/div>[ \t]*$/gm, '')
+    .replace(/<span\b[^>]*>([^<]*)<\/span>/g, '**$1**')
+    .replace(/<a\s+class="md-button[^"]*"\s+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g, '[$2]($1)')
+    // Material icon shortcodes (`:material-download:`) are turned into SVG by the site's emoji
+    // extension; the app has no such extension, so they would print as text.
+    .replace(/:(?:material|octicons|fontawesome-[a-z]+|simple)-[a-z0-9-]+:(?:\{[^}\n]*\})?\s?/g, '')
     // Site-relative .md links become app doc routes, resolved against this page's folder.
     .replace(/\]\((?!https?:|bmm:|#)([^)]+?)\.md(#[^)]*)?\)/g,
       (_m, p, hash) => `](doc-page:${resolveRoute(dir, p)}${hash || ''})`)

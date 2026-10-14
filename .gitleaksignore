@@ -23,6 +23,10 @@ ac70961075e5ad733ab63634705810a791076c34:frontend/Lang/en.json:generic-api-key:4
 ac70961075e5ad733ab63634705810a791076c34:frontend/Lang/en.json:generic-api-key:507
 e56a14d07407153aa23044c09b977dd0b7412ee4:frontend/Lang/template.json:generic-api-key:719
 e56a14d07407153aa23044c09b977dd0b7412ee4:frontend/Lang/template.json:generic-api-key:754
+# "i18n.hcReuse": "Existing key with this text" (commit f246e187): the word "key" followed by UI
+# text matched generic-api-key; the captured "secret" is the English phrase. Reviewed 2026-10-14.
+f246e187359287e204625946da2a5d6e3c7b83ce:frontend/Lang/en.json:generic-api-key:897
+f246e187359287e204625946da2a5d6e3c7b83ce:frontend/Lang/template.json:generic-api-key:893
 
 # localStorage key NAMES (bmm.i18nsb.dock / .dockw) matched generic-api-key.
 4dc53471910e52de71bc800b65864b8ed5b0dccf:frontend/src/features/settings/i18n-sandbox.ts:generic-api-key:631

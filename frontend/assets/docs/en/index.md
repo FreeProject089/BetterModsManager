@@ -1,7 +1,52 @@
+![](assets/docs/media/bmm-logo-tile.svg)
+
+
+
 # BetterModsManager
 
 BMM installs, organises and shares your mods — across games, without ever touching the
 original files more than it has to.
+
+
+
+
+[Download](https://github.com/FreeProject089/BetterModsManager/releases/latest)
+[Get started](doc-page:getting-started/install)
+
+
+
+Free and open source · GPL-3.0 · English & français
+
+
+
+
+
+
+
+![BMM 1.0.2: the Mod Library, with tagged mods and one switch per mod](assets/docs/media/screenshots/library.png)
+
+
+
+
+
+**New in 1.0.2** The [Activity centre](doc-page:features/activity) shows everything BMM is doing,
+[BMM Tools](doc-page:features/tools) checks your library without changing it, and the
+[Server Repo](doc-page:features/repo) page walks you through syncing or hosting a repo step by step.
+
+
+
+<figure markdown="span">
+  ![The Activity centre, open over the Library](assets/docs/media/screenshots/activity.png)
+  <figcaption>The Activity centre, open over the Library</figcaption>
+</figure>
+
+<figure markdown="span">
+  ![Server Repo, Host tab, with the running server's card](assets/docs/media/screenshots/repo-host.png)
+  <figcaption>Server Repo, Host tab, with the running server's card</figcaption>
+</figure>
+
+
+
 
 If you're new, read this page. It's short, and it explains the one idea the rest of the app
 is built on. Skipping it is why people get lost on screen three.
@@ -34,20 +79,57 @@ an undo.
 
 ## What each screen is for
 
-| Screen | Use it when |
-|---|---|
-| **[Library](doc-page:features/library)** | You want to see, add, or verify the mods you own. |
-| **[Profiles](doc-page:features/profiles)** | You want a setup per game — or several per game (vanilla-ish, heavy, testing). |
-| **[.MM Lists](doc-page:features/modlist)** | You want to hand your exact setup to someone, links included. |
-| **[Modpacks](doc-page:features/modpacks)** | You want to toggle a whole bundle of mods on and off at once. |
-| **[Server Repo](doc-page:features/repo)** | You want a source that tells BMM when a mod has an update. |
-| **[Plugins & API](doc-page:features/plugins)** | You want BMM to do something it doesn't do out of the box. |
-| **[App Catalog](doc-page:features/apps)** | You want the tools *around* modding, installed in one click. |
-| **[Mapper](doc-page:features/mapper)** | A mod's folders don't match what the game expects. |
-| **[BetterCommunity](doc-page:features/community)** | You want news and posts from the project's blogs. |
-| **[Settings](doc-page:features/settings)** | Themes, updates, storage limits, data export. |
-| **[Activity centre](doc-page:features/activity)** | You want to see, or stop, everything BMM is doing right now. |
-| **[BMM Tools](doc-page:features/tools)** | You want to find duplicates, conflicts, orphans, or check a file or a manifest. |
+
+
+-   **[Library](doc-page:features/library)**
+
+    You want to see, add, or verify the mods you own.
+
+-   **[Profiles](doc-page:features/profiles)**
+
+    You want a setup per game — or several per game (vanilla-ish, heavy, testing).
+
+-   **[.MM Lists](doc-page:features/modlist)**
+
+    You want to hand your exact setup to someone, links included.
+
+-   **[Modpacks](doc-page:features/modpacks)**
+
+    You want to toggle a whole bundle of mods on and off at once.
+
+-   **[Server Repo](doc-page:features/repo)**
+
+    You want a source that tells BMM when a mod has an update.
+
+-   **[Plugins & API](doc-page:features/plugins)**
+
+    You want BMM to do something it doesn't do out of the box.
+
+-   **[App Catalog](doc-page:features/apps)**
+
+    You want the tools *around* modding, installed in one click.
+
+-   **[Mapper](doc-page:features/mapper)**
+
+    A mod's folders don't match what the game expects.
+
+-   **[BetterCommunity](doc-page:features/community)**
+
+    You want news and posts from the project's blogs.
+
+-   **[Settings](doc-page:features/settings)**
+
+    Themes, updates, storage limits, data export.
+
+-   **[Activity centre](doc-page:features/activity)**
+
+    You want to see, or stop, everything BMM is doing right now.
+
+-   **[BMM Tools](doc-page:features/tools)**
+
+    You want to find duplicates, conflicts, orphans, or check a file or a manifest.
+
+
 
 ## Conflicts, in one paragraph
 

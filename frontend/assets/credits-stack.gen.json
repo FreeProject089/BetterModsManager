@@ -35,12 +35,12 @@
      "installer"
     ],
     "commits": {
-     "bmm": 1672,
-     "bcw": 1736,
-     "docs": 304,
-     "installer": 105
+     "bmm": 1679,
+     "bcw": 1740,
+     "docs": 310,
+     "installer": 107
     },
-    "total": 3817,
+    "total": 3836,
     "since": "2026"
    }
   ]
@@ -427,12 +427,22 @@
    "items": [
     {
      "name": "DOMPurify",
-     "version": "3.4.11",
+     "version": "3.4.17",
      "license": "Apache-2.0 OR MPL-2.0",
      "url": "https://github.com/cure53/DOMPurify",
      "key": "dompurify",
      "source": "frontend/js/lib/purify.min.js",
-     "licenseFrom": "frontend/js/lib/purify.min.js (licence banner)"
+     "licenseFrom": "frontend/js/lib/purify.min.js (licence banner)",
+     "lic": [
+      {
+       "f": "LICENSE",
+       "id": "283ea6cc2997"
+      },
+      {
+       "f": "LICENSE-MPL",
+       "id": "4b89d4518bd1"
+      }
+     ]
     },
     {
      "name": "marked",
@@ -1695,7 +1705,7 @@
     },
     {
      "name": "pypdf",
-     "version": "6.16.2",
+     "version": "6.20.1",
      "license": "BSD-3-Clause",
      "url": "https://pypi.org/project/pypdf/",
      "key": "pypdf",
@@ -3087,24 +3097,6 @@
      ]
     },
     {
-     "name": "@tanstack/query-core",
-     "version": "5.91.2",
-     "license": "MIT",
-     "url": "https://www.npmjs.com/package/@tanstack/query-core",
-     "key": "tanstack-query",
-     "source": "package-lock.json",
-     "req": "^5.91.2",
-     "desc": "The framework agnostic core that powers TanStack Query",
-     "repo": "https://github.com/TanStack/query",
-     "home": "https://tanstack.com/query",
-     "lic": [
-      {
-       "f": "LICENSE",
-       "id": "277d2a8e4597"
-      }
-     ]
-    },
-    {
      "name": "@tauri-apps/cli",
      "version": "2.11.3",
      "license": "Apache-2.0 OR MIT",
@@ -3126,26 +3118,8 @@
      ]
     },
     {
-     "name": "cheerio",
-     "version": "1.2.0",
-     "license": "MIT",
-     "url": "https://www.npmjs.com/package/cheerio",
-     "key": "cheerio",
-     "source": "package-lock.json",
-     "req": "^1.2.0",
-     "desc": "The fast, flexible & elegant library for parsing and manipulating HTML and XML.",
-     "repo": "https://github.com/cheeriojs/cheerio",
-     "home": "https://cheerio.js.org",
-     "lic": [
-      {
-       "f": "LICENSE",
-       "id": "dd3227aff228"
-      }
-     ]
-    },
-    {
      "name": "concurrently",
-     "version": "9.2.4",
+     "version": "9.2.5",
      "license": "MIT",
      "url": "https://www.npmjs.com/package/concurrently",
      "key": "concurrently",
@@ -3162,7 +3136,7 @@
     },
     {
      "name": "dompurify",
-     "version": "3.4.13",
+     "version": "3.4.17",
      "license": "(MPL-2.0 OR Apache-2.0)",
      "url": "https://www.npmjs.com/package/dompurify",
      "key": "dompurify",

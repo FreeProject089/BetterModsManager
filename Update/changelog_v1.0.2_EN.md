@@ -104,5 +104,6 @@
 - Shorter « Multi-profile » label.
 
 ## [IMPROVED] Installer
+- **Old installations**: BMM finds an older BMM (0.9.x, the 1.0.0 test build), its old data folder, cache and dead shortcuts, and offers to remove them, entirely optional: once at start-up after your data was carried across, and always in Settings › Application › Old installations. Uninstalls run the old version's own uninstaller; the old data folder can be backed up as a .zip first and is deleted only after a second confirmation.
 - The privacy step asks once, cookie-banner style, with nothing pre-selected: *Essential only*, *Accept all* or *Customize*.
 - *Accept all* never turns on the weekly hardware report (serial numbers, machine UUID, MAC addresses): only *Customize* can, and the card says so.

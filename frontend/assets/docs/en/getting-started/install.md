@@ -199,6 +199,26 @@ A jump to a new major version (0.9 → 1.0) is always a full install with the in
 file-by-file patch: the data folder moves, and BMM copies your data across on first launch
 (see [Where BMM puts things](#where-bmm-puts-things)).
 
+### Removing an old installation
+
+An older BMM (the 0.9.x « Better Mod Manager », or the 1.0.0 test build) stays installed next to
+1.0 until you remove it. BMM finds what is left over and offers to remove it; it is entirely
+optional and nothing is removed without a click.
+
+- **What it finds**: other BMM installs registered with Windows (NSIS or MSI), the old data folder
+  `%APPDATA%\com.bettermm.app`, the old browser cache in `%LOCALAPPDATA%\com.bettermm.app`, and
+  Start menu or desktop shortcuts that open a program that is gone or belongs to an old install.
+  The BMM you are running is never listed.
+- **When**: once at start-up, after your data was carried across (or when something new turns
+  up), as a list where nothing is ticked. **Not now** keeps it for later, **Never ask again** stops
+  the question. It is always in **Settings › Application › Old installations**, with **Scan again**.
+- **How**: an old install is removed by its own uninstaller (tick *Silent* to skip its window).
+  Shortcuts and caches are deleted after one confirmation. The old data folder is offered only
+  once your data is in the new folder; BMM first offers to **back it up as a .zip** (on by default,
+  into Documents or a folder you pick), then asks a second time, naming the folder and its size.
+- **Safety**: BMM deletes only those exact folders, never through a link or junction, and never
+  a path the scan did not find a moment before.
+
 ### Turning it off
 
 Untick **Check for updates automatically** in **Settings → Auto Update**, and nothing is

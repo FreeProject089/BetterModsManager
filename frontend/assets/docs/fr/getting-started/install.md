@@ -204,6 +204,28 @@ Un passage à une nouvelle version majeure (0.9 → 1.0) est toujours une instal
 l'installeur, jamais un correctif fichier par fichier : le dossier de données change, et BMM y
 recopie tes données au premier lancement (voir [Où BMM range les choses](#ou-bmm-range-les-choses)).
 
+### Retirer une ancienne installation
+
+Un ancien BMM (le « Better Mod Manager » 0.9.x, ou la version de test 1.0.0) reste installé à côté
+de la 1.0 tant que tu ne le retires pas. BMM trouve ce qui reste et propose de le retirer ; c'est
+entièrement facultatif et rien n'est retiré sans un clic.
+
+- **Ce qu'il trouve** : les autres installations de BMM enregistrées dans Windows (NSIS ou MSI),
+  l'ancien dossier de données `%APPDATA%\com.bettermm.app`, l'ancien cache de navigateur dans
+  `%LOCALAPPDATA%\com.bettermm.app`, et les raccourcis du menu Démarrer ou du bureau qui ouvrent un
+  programme disparu ou appartenant à une ancienne installation. Le BMM en cours n'est jamais listé.
+- **Quand** : une fois au démarrage, après la reprise de tes données (ou quand quelque chose de
+  nouveau apparaît), sous forme de liste où rien n'est coché. **Pas maintenant** garde la question
+  pour plus tard, **Ne plus demander** l'arrête. C'est toujours dans **Paramètres › Application ›
+  Anciennes installations**, avec **Analyser à nouveau**.
+- **Comment** : une ancienne installation est retirée par son propre désinstalleur (coche
+  *Silencieux* pour éviter sa fenêtre). Raccourcis et caches sont supprimés après une confirmation.
+  L'ancien dossier de données n'est proposé qu'une fois tes données dans le nouveau dossier ; BMM
+  propose d'abord de **le sauvegarder en .zip** (activé par défaut, dans Documents ou le dossier de
+  ton choix), puis redemande en nommant le dossier et sa taille.
+- **Sécurité** : BMM ne supprime que ces dossiers précis, jamais à travers un lien ou une jonction,
+  et jamais un chemin que l'analyse n'a pas trouvé juste avant.
+
 ### La couper
 
 Décoche **Vérifier les mises à jour automatiquement** dans **Paramètres → Mise à jour automatique**,

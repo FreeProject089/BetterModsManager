@@ -344,6 +344,70 @@ pub fn explain_launch_error(code: u32, what: &str) -> String {
 /// once with a failure code is reported instead of being taken for a started installer.
 #[cfg(windows)]
 pub fn shell_launch(file: &std::path::Path, args: Option<&str>) -> Result<(), LaunchError> {
+    let (process, what) = shell_start(file, args)?;
+    if process != 0 {
+        // SAFETY: `process` is the handle ShellExecuteExW returned (NOCLOSEPROCESS); closed once.
+        let early_failure = unsafe {
+            let mut code = 0u32;
+            let failed = k32::WaitForSingleObject(process, 1500) == k32::WAIT_OBJECT_0
+                && k32::GetExitCodeProcess(process, &mut code) != 0
+                && code != 0;
+            k32::CloseHandle(process);
+            failed.then_some(code)
+        };
+        if let Some(exit) = early_failure {
+            return Err(LaunchError {
+                code: 0,
+                exit_code: Some(exit),
+                message: format!(
+                    "{what} started and closed at once with exit code {exit} (0x{exit:08X}). Nothing was \
+                     installed; download the installer from the release page and run it by hand."
+                ),
+            });
+        }
+    }
+    Ok(())
+}
+
+/// [`shell_launch`]'s start (same verb, same elevation retry, same plain-language errors), then
+/// WAIT for the program to finish, at most `max_secs`. `Ok(Some(code))` is its exit code,
+/// `Ok(None)` that it was still running at the deadline (or Windows gave no handle). Used for
+/// an old installation's uninstaller (commands::old_installs): BMM must know it ended before it
+/// scans again. `args` follows the same rule: constants, or values BMM validated, never user text.
+#[cfg(windows)]
+pub fn shell_run_wait(file: &std::path::Path, args: Option<&str>, max_secs: u64) -> Result<Option<u32>, LaunchError> {
+    let (process, _what) = shell_start(file, args)?;
+    if process == 0 {
+        return Ok(None);
+    }
+    let millis = u32::try_from(max_secs.saturating_mul(1000)).unwrap_or(u32::MAX - 1);
+    // SAFETY: `process` is the handle ShellExecuteExW returned (NOCLOSEPROCESS); closed once.
+    let code = unsafe {
+        let mut code = 0u32;
+        let ended = k32::WaitForSingleObject(process, millis) == k32::WAIT_OBJECT_0
+            && k32::GetExitCodeProcess(process, &mut code) != 0;
+        k32::CloseHandle(process);
+        ended.then_some(code)
+    };
+    Ok(code)
+}
+
+#[cfg(windows)]
+mod k32 {
+    #[link(name = "kernel32")]
+    extern "system" {
+        pub fn WaitForSingleObject(handle: isize, millis: u32) -> u32;
+        pub fn GetExitCodeProcess(handle: isize, code: *mut u32) -> i32;
+        pub fn CloseHandle(handle: isize) -> i32;
+    }
+    pub const WAIT_OBJECT_0: u32 = 0;
+}
+
+/// The start half of [`shell_launch`]: ShellExecuteExW with `open`, `runas` on
+/// ERROR_ELEVATION_REQUIRED, a few retries on a sharing violation. Returns the process handle
+/// (0 when Windows gave none; the caller closes a non-zero one) and the file's display name.
+#[cfg(windows)]
+fn shell_start(file: &std::path::Path, args: Option<&str>) -> Result<(isize, String), LaunchError> {
     use std::os::windows::ffi::OsStrExt;
 
     // A #[repr(C)] mirror of SHELLEXECUTEINFOW: windows-sys only exposes it behind a feature
@@ -370,17 +434,10 @@ pub fn shell_launch(file: &std::path::Path, args: Option<&str>) -> Result<(), La
     extern "system" {
         fn ShellExecuteExW(info: *mut ShellExecuteInfoW) -> i32;
     }
-    #[link(name = "kernel32")]
-    extern "system" {
-        fn WaitForSingleObject(handle: isize, millis: u32) -> u32;
-        fn GetExitCodeProcess(handle: isize, code: *mut u32) -> i32;
-        fn CloseHandle(handle: isize) -> i32;
-    }
     const SEE_MASK_NOCLOSEPROCESS: u32 = 0x40;
     const SEE_MASK_NOASYNC: u32 = 0x100;
     const SEE_MASK_FLAG_NO_UI: u32 = 0x400;
     const SW_SHOWNORMAL: i32 = 1;
-    const WAIT_OBJECT_0: u32 = 0;
 
     let wide = |s: &std::ffi::OsStr| s.encode_wide().chain(std::iter::once(0)).collect::<Vec<u16>>();
     let file_w = wide(file.as_os_str());
@@ -437,28 +494,7 @@ pub fn shell_launch(file: &std::path::Path, args: Option<&str>) -> Result<(), La
         }
     };
 
-    if process != 0 {
-        // SAFETY: `process` is the handle ShellExecuteExW returned (NOCLOSEPROCESS); closed once.
-        let early_failure = unsafe {
-            let mut code = 0u32;
-            let failed = WaitForSingleObject(process, 1500) == WAIT_OBJECT_0
-                && GetExitCodeProcess(process, &mut code) != 0
-                && code != 0;
-            CloseHandle(process);
-            failed.then_some(code)
-        };
-        if let Some(exit) = early_failure {
-            return Err(LaunchError {
-                code: 0,
-                exit_code: Some(exit),
-                message: format!(
-                    "{what} started and closed at once with exit code {exit} (0x{exit:08X}). Nothing was \
-                     installed; download the installer from the release page and run it by hand."
-                ),
-            });
-        }
-    }
-    Ok(())
+    Ok((process, what))
 }
 
 #[cfg(all(test, windows))]

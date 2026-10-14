@@ -1365,6 +1365,13 @@ async function main() {
             console.error("[BMM] Auto-Calibration startup failed:", e);
         }
     }, 2000); // 2s delay to ensure disks are mounted and system is stable
+    // Old BMM installations: one quiet scan after boot; the dialog only when something new and
+    // removable was found and nobody said « Never ask again » (features/settings/old-installs.ts).
+    setTimeout(() => {
+        import('../features/settings/old-installs.js')
+            .then((m) => m.offerOldInstallsAtStartup())
+            .catch((e) => console.warn('[old-installs] start-up check failed', e));
+    }, 8000);
     // Make the Settings glass cards collapsible (declutter).
     try {
         const { initCollapsibleSettingsCards } = await import('./settings-fold.js');

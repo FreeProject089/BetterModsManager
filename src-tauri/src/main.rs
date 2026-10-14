@@ -252,8 +252,13 @@ fn migrate_legacy_appdata(new_dir: &std::path::Path) {
     if old_dir == new_dir || !old_dir.join("data.json").exists() { return; } // nothing to bring over
     if std::fs::create_dir_all(new_dir).is_err() { return; }
     match copy_dir_recursive(&old_dir, new_dir) {
-        Ok(n) => crate::commands::crash::log_line(format!(
-            "[MIGRATE] copied {n} legacy app-data entries from {} → {}", old_dir.display(), new_dir.display())),
+        Ok(n) => {
+            crate::commands::crash::log_line(format!(
+                "[MIGRATE] copied {n} legacy app-data entries from {} → {}", old_dir.display(), new_dir.display()));
+            // The proof Settings › Old installations reads before it offers to delete the old
+            // folder (commands::old_installs::migration_complete).
+            let _ = std::fs::write(new_dir.join(crate::commands::old_installs::MIGRATED_MARKER), n.to_string());
+        }
         Err(e) => crate::commands::crash::log_line(format!("[MIGRATE] legacy app-data copy failed: {e}")),
     }
 }
@@ -587,6 +592,12 @@ fn main() {
             commands::modlist::remove_download_link,
             commands::ovgme::import_ovgme_profiles,
             commands::legacy_scan::scan_legacy_managers,
+            commands::old_installs::old_installs_scan,
+            commands::old_installs::old_installs_offer,
+            commands::old_installs::old_installs_dismiss,
+            commands::old_installs::old_installs_uninstall,
+            commands::old_installs::old_installs_backup,
+            commands::old_installs::old_installs_remove,
             commands::update::get_update_notes,
             commands::update::get_old_updates_count,
             commands::update::get_update_folder_structure,

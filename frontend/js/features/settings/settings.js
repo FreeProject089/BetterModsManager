@@ -6,6 +6,7 @@ import { invoke, getSettings, updateSettings, pickFile, saveFile, askConfirm } f
 import { calibrationDue, withCalibrated, readCalibMap, writeCalibMap } from './disk-calib.js';
 import { initStorageModal, refreshIfOpen, openStorageManager } from './storage-modal.js';
 import { initGraphicsSettings } from './graphics-settings.js';
+import { mountOldInstallsCard } from './old-installs.js';
 import { t } from '../../core/i18n.js';
 import { bcRoot, bcTestMode } from '../../core/links-config.js';
 import { bcLinkState, openAccountLinkFlow, forgetBcLinkState } from '../../core/bc-link.js';
@@ -441,6 +442,13 @@ async function initStorageSettings() {
     }
     catch (e) {
         console.warn('[graphics] card:', e);
+    }
+    // Old installations (old-installs.ts): an Application card, scanned when first seen.
+    try {
+        mountOldInstallsCard();
+    }
+    catch (e) {
+        console.warn('[old-installs] card:', e);
     }
     const openBtn = document.getElementById('btn-open-storage');
     if (openBtn) {
