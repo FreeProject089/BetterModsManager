@@ -100,7 +100,7 @@
         "en": "BMM is a Windows application. Installing it takes three steps:",
         "fr": "BMM est une application Windows. L'installation tient en trois étapes :"
       },
-      "words": 1283,
+      "words": 1537,
       "diagrams": 0,
       "fr": true
     },
@@ -1030,7 +1030,7 @@
         "en": "Some texts in BMM contain a word between braces, such as {n} or {name}. BMM replaces it with a value when it shows the text: \"{n} new mods added\" becomes « 3…",
         "fr": "Certains textes de BMM contiennent un mot entre accolades, comme {n} ou {name}."
       },
-      "words": 334,
+      "words": 335,
       "diagrams": 0,
       "fr": true
     }

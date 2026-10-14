@@ -85,6 +85,11 @@ export const COMMANDS: Record<string, CommandSpec> = {
     scan_mods_folder: { kind: 'scan', title: (t) => t('activity.cmd.scanMods'), ephemeralMs: 1500 },
     scan_installed_apps: { kind: 'scan', title: (t) => t('activity.cmd.scanApps'), ephemeralMs: 1500 },
     scan_legacy_managers: { kind: 'scan', title: (t) => t('activity.cmd.scanLegacy'), ephemeralMs: 1500 },
+    // Old BMM installations (features/settings/old-installs.ts).
+    old_installs_scan: { kind: 'scan', title: (t) => t('activity.cmd.oldInstallsScan'), ephemeralMs: 1500 },
+    old_installs_offer: { kind: 'scan', title: (t) => t('activity.cmd.oldInstallsScan'), ephemeralMs: 1500 },
+    old_installs_uninstall: { kind: 'install', title: (t) => t('activity.cmd.oldInstallsUninstall') },
+    old_installs_backup: { kind: 'export', title: (t) => t('activity.cmd.oldInstallsBackup') },
     verify_integrity: { kind: 'scan', title: (t) => t('activity.cmd.verifyIntegrity') },
     recalculate_all_hashes: { kind: 'hash', title: (t) => t('activity.cmd.hashes') },
     // installs (app catalogue, plugins)

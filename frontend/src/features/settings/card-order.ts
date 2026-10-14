@@ -79,6 +79,7 @@ export const SETTINGS_GROUPS: { id: string; label: string; keys: string[] }[] = 
     // after it when it was unlisted.
     { id: 'app', label: 'settings.group.app', keys: [
         'settings-auto-update-card',
+        'settings-old-installs-card',
         'k:settings.dataTitle',
         'k:settings.crashTitle',
         'k:betahub.cardTitle',

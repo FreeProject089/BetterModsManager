@@ -28,8 +28,8 @@ la compilation quand une traduction et le code ne sont pas d’accord. Elle ne p
 | `{err}` | un message d’erreur |
 | `{s}` | des secondes, ou un mot court choisi par le code |
 | `{id}` | un identifiant |
-| `{e}` | un message d’erreur |
 | `{size}` | une taille déjà formatée (Ko, Mo…) |
+| `{e}` | un message d’erreur |
 | `{label}` | un titre court |
 | `{path}` | un chemin de fichier ou de dossier |
 | `{profile}` | un nom de profil |
@@ -73,7 +73,7 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 
 ## Toutes les clés avec variables
 
-957 clés, regroupées par leur premier segment. Le texte est le texte français, raccourci.
+973 clés, regroupées par leur premier segment. Le texte est le texte français, raccourci.
 
 ### activity
 
@@ -644,6 +644,27 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | Clé | Variables | Texte |
 |---|---|---|
 | `nudge.waiting.many` | `{n}` | {n} autres messages en attente |
+
+### oldInstalls
+
+| Clé | Variables | Texte |
+|---|---|---|
+| `oldInstalls.backingUp` | `{name}` | Sauvegarde de {name}… |
+| `oldInstalls.backupLede` | `{size}` | Ce dossier contient les données de l’ancienne version ({size}). Cette version a déjà sa propre copie. |
+| `oldInstalls.backupSaved` | `{path}` | Ta sauvegarde : {path} |
+| `oldInstalls.confirmData` | `{size}` | Le dossier ci-dessous ({size}) sera supprimé définitivement. Il ne passe pas par la Corbeille. |
+| `oldInstalls.confirmQuickTitle` | `{n}` | Supprimer {n} élément(s) ? |
+| `oldInstalls.found` | `{n}` `{size}` | {n} élément(s) trouvé(s), {size} au total |
+| `oldInstalls.lineBackup` | `{path}` | Sauvegarde enregistrée : {path} |
+| `oldInstalls.lineCancelled` | `{name}` | {name} : désinstallation annulée. |
+| `oldInstalls.lineDeleted` | `{name}` | Supprimé : {name} |
+| `oldInstalls.lineKept` | `{name}` | Gardé : {name} |
+| `oldInstalls.lineStillThere` | `{name}` | {name} est toujours installé. Si son désinstalleur est encore ouvert, termine-le puis relance l’analyse. |
+| `oldInstalls.lineUninstalled` | `{name}` | {name} désinstallé. |
+| `oldInstalls.pointsTo` | `{path}` | Ouvre {path} |
+| `oldInstalls.removeN` | `{n}` | Retirer {n} élément(s)… |
+| `oldInstalls.summary` | `{done}` `{failed}` `{skipped}` | {done} retiré(s), {failed} en échec, {skipped} gardé(s). |
+| `oldInstalls.uninstalling` | `{name}` | Désinstallation de {name}… Réponds au désinstalleur s’il pose une question. |
 
 ### onboarding
 

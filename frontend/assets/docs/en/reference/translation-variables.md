@@ -28,8 +28,8 @@ when a translation and the code disagree. It cannot go out of date.
 | `{err}` | an error message |
 | `{s}` | seconds, or a short word the code picks |
 | `{id}` | an identifier |
-| `{e}` | an error message |
 | `{size}` | a size, already formatted (KB, MB…) |
+| `{e}` | an error message |
 | `{label}` | a short title |
 | `{path}` | a file or folder path |
 | `{profile}` | a profile name |
@@ -73,7 +73,7 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 
 ## Every key with variables
 
-957 keys, grouped by their first segment. The text is the English one, shortened.
+973 keys, grouped by their first segment. The text is the English one, shortened.
 
 ### activity
 
@@ -644,6 +644,27 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | Key | Variables | Text |
 |---|---|---|
 | `nudge.waiting.many` | `{n}` | {n} more messages waiting |
+
+### oldInstalls
+
+| Key | Variables | Text |
+|---|---|---|
+| `oldInstalls.backingUp` | `{name}` | Backing up {name}… |
+| `oldInstalls.backupLede` | `{size}` | This folder holds the old version's data ({size}). This version already has its own copy. |
+| `oldInstalls.backupSaved` | `{path}` | Your backup: {path} |
+| `oldInstalls.confirmData` | `{size}` | This permanently deletes the folder below ({size}). It does not go to the Recycle Bin. |
+| `oldInstalls.confirmQuickTitle` | `{n}` | Delete {n} item(s)? |
+| `oldInstalls.found` | `{n}` `{size}` | {n} item(s) found, {size} in all |
+| `oldInstalls.lineBackup` | `{path}` | Backup saved: {path} |
+| `oldInstalls.lineCancelled` | `{name}` | {name}: uninstall cancelled. |
+| `oldInstalls.lineDeleted` | `{name}` | Deleted {name} |
+| `oldInstalls.lineKept` | `{name}` | Kept {name} |
+| `oldInstalls.lineStillThere` | `{name}` | {name} is still installed. If its uninstaller is still open, finish it, then scan again. |
+| `oldInstalls.lineUninstalled` | `{name}` | {name} uninstalled. |
+| `oldInstalls.pointsTo` | `{path}` | Points to {path} |
+| `oldInstalls.removeN` | `{n}` | Remove {n} selected… |
+| `oldInstalls.summary` | `{done}` `{failed}` `{skipped}` | {done} removed, {failed} failed, {skipped} kept. |
+| `oldInstalls.uninstalling` | `{name}` | Uninstalling {name}… Answer the uninstaller if it asks. |
 
 ### onboarding
 
