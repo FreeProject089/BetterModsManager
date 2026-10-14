@@ -266,15 +266,13 @@
             #app-loader[data-intro="off"] #ld-prog-track,
             #app-loader[data-intro="off"] .ld-fx { display: none; }
 
-            /* Still (reduced motion: the OS, Settings → Graphics « Reduce animations », a window
-               that starts hidden, or no GSAP): the picture without the show. Decorations and the
-               progress line, which only exist to move, are not drawn. */
+            /* Still (Settings → Graphics « Reduce animations », a window that starts hidden, or
+               no GSAP): the picture without the show. Decorations and the progress line, which
+               only exist to move, are not drawn. The Windows « Animation effects » setting is
+               not followed by the intro (see boot-loader.js), so there is no media query here. */
             #app-loader.ld-still .ld-fx,
             #app-loader.ld-still #ld-prog-track { display: none; }
-            @media (prefers-reduced-motion: reduce) {
-                #app-loader .ld-fx, #app-loader #ld-prog-track { display: none; }
-                #app-loader { transition-duration: 0.15s; }
-            }
+            #app-loader.ld-still { transition-duration: 0.15s; }
         </style>
 
         <script src="boot-loader.js"></script>
