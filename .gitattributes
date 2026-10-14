@@ -1,7 +1,5 @@
-# Text files are stored and checked out with LF line endings: several gates and
-# tests compare bytes or search for "
-}
-", and a CRLF checkout made them fail.
+# Text files are stored and checked out with LF line endings. Several gates and tests compare
+# bytes or look for a closing brace on its own line, and a checkout with CRLF made them fail.
 * text=auto eol=lf
 *.bat text eol=crlf
 *.cmd text eol=crlf
