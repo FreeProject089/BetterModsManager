@@ -12,8 +12,17 @@ BMM's own definition:
 That's the difference in one line. A modpack says *which mods*; a `.MM` list says *which
 mods, where to get them, and in what order*.
 
-<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/modlist.bmmreplay" data-page="features/modlist" data-title="Exporting and importing a .MM list"></div>
+<div class="bmm-replay" data-src="assets/docs/media/replays/modlist.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/modlist.bmmreplay" data-page="features/modlist" data-title="Exporting and importing a .MM list"></div>
 
+
+
+<!-- story:share-list -->
+![Share a mod list and an order](assets/docs/media/gifs/share-list.gif)
+
+*Share a mod list and an order. An activation order settled and kept as a named list with its share code; the mods exported as a .MM list, imported into another profile with the plan of what is new, installed, and switched on in the saved order.*
+
+<div class="bmm-replay" data-src="assets/docs/media/replays/share-list.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/share-list.bmmreplay" data-page="features/modlist" data-title="Share a mod list and an order"></div>
+<!-- /story:share-list -->
 
 ## Sharing
 

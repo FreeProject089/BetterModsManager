@@ -25,6 +25,7 @@ import { mermaidTheme, fitDiagram } from './md-mermaid.js';
 import { uiIcon } from '../ui/icons.js';
 // app.cfg `DocsReplays=false` hides every .bmmreplay embed (doc-replays.ts, APP_CFG.md).
 import { docReplaysEnabled, loadDocReplaysSetting } from './doc-replays.js';
+import { readReplayBody } from '../core/replay-body.js';
 import { invoke } from '../core/api.js';
 
 // The published mkdocs documentation site (see BMM Docs/mkdocs.yml site_url).
@@ -3937,7 +3938,7 @@ async function playClip(card: HTMLElement) {
     try {
       const res = await fetch(src);
       if (!res.ok) continue;
-      const bundle = await res.json();
+      const bundle = await readReplayBody(res);
       const events = Array.isArray(bundle) ? bundle : bundle?.events;
       if (!Array.isArray(events) || events.length < 2) continue;
       card.classList.remove('dh-clip-busy');

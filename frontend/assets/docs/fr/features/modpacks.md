@@ -6,8 +6,17 @@ Un modpack est un **lot de mods nommé, activable en un clic**. Là où un
 groupe de mods, ensemble » — et l'écran de BMM appelle l'action *Quick Apply* : un clic
 active ou désactive le pack.
 
-<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/modpacks.bmmreplay" data-page="features/modpacks" data-title="Créer et appliquer un modpack"></div>
+<div class="bmm-replay" data-src="assets/docs/media/replays/modpacks.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/modpacks.bmmreplay" data-page="features/modpacks" data-title="Créer et appliquer un modpack"></div>
 
+
+
+<!-- story:share-setup -->
+![Partager une config avec des amis](assets/docs/media/gifs/share-setup.gif)
+
+*Partager une config avec des amis. Le profil devient un modpack, le modpack est hébergé en Server Repo sur le réseau local, un ami le suit par son adresse et se synchronise.*
+
+<div class="bmm-replay" data-src="assets/docs/media/replays/share-setup.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/share-setup.bmmreplay" data-page="features/modpacks" data-title="Partager une config avec des amis"></div>
+<!-- /story:share-setup -->
 
 ## Modpack ou profil ?
 

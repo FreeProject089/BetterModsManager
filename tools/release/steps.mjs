@@ -346,7 +346,7 @@ const media = {
 };
 
 /** Media, opt-in (--gifs): the usage clips of screenshots/gif-scenes.mjs, GIF + MP4, into
- *  Release/<v>/media/gifs/ for review. Never copied to .github/ here: that is done by hand once
+ *  Release/<v>/media/gifs/, and the stories (screenshots/stories/) into media/stories/, for review. Never copied to .github/ here: that is done by hand once
  *  the owner has watched them. */
 async function gifsSubStep(ctx, mdir, outputs, notes) {
   if (!ctx.opts.gifs) return;
@@ -358,6 +358,15 @@ async function gifsSubStep(ctx, mdir, outputs, notes) {
     for (const c of r.clips.filter((x) => x.overLimit)) notes.push(`${c.name}.gif is over the size limit`);
     for (const x of r.skipped) notes.push(`gif ${x.name} skipped: ${x.why}`);
   } catch (e) { notes.push(`gifs not recorded: ${e.message}`); }
+  // The stories: BMM used end to end, one take each, cut into a GIF per step (stories.mjs).
+  const { recordStories } = await import('./screenshots/stories.mjs');
+  const sdir = join(mdir, 'stories');
+  try {
+    const r = await recordStories({ version: ctx.version, outDir: sdir, log: { info: (s) => ctx.log.info(s), warn: (s) => ctx.log.warn(s) } });
+    outputs.push(`Release/${ctx.version}/media/stories/ (${r.results.length} stories: GIF, MP4, step GIFs, .bmmreplay)`);
+    for (const c of r.results.filter((x) => x.overLimit)) notes.push(`${c.name}.gif is over the size limit`);
+    for (const x of r.skipped) notes.push(`story ${x.name} skipped: ${x.why}`);
+  } catch (e) { notes.push(`stories not recorded: ${e.message}`); }
 }
 
 // ── 8. README ────────────────────────────────────────────────────────────────────────────────

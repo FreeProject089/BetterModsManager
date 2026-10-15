@@ -7,8 +7,17 @@ The tools *around* modding — the ones you'd otherwise hunt down on five differ
 App Catalog lists companion apps and utilities, installs them for you, keeps track of the
 version you have, and launches them — without you managing downloads by hand.
 
-<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/apps.bmmreplay" data-page="features/apps" data-title="Installing an app from the catalog"></div>
+<div class="bmm-replay" data-src="assets/docs/media/replays/apps.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/apps.bmmreplay" data-page="features/apps" data-title="Installing an app from the catalog"></div>
 
+
+
+<!-- story:catalogues -->
+![Find apps and content in the catalogues](assets/docs/media/gifs/catalogues.gif)
+
+*Find apps and content in the catalogues. The App Catalog: browse and search, an app’s details, where the list comes from, and a catalogue of your own built in the Create tab.*
+
+<div class="bmm-replay" data-src="assets/docs/media/replays/catalogues.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/catalogues.bmmreplay" data-page="features/apps" data-title="Find apps and content in the catalogues"></div>
+<!-- /story:catalogues -->
 
 ## Reading a card
 

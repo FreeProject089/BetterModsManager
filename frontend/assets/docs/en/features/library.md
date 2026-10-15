@@ -5,7 +5,7 @@ The **Library** is where every mod you own lives — installed or not, from any 
 only ever learn one screen in BMM, make it this one: everything else (profiles, modpacks,
 lists) is a different way of arranging what the Library holds.
 
-<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/library.bmmreplay" data-page="features/library" data-title="Adding a mod and enabling it"></div>
+<div class="bmm-replay" data-src="assets/docs/media/replays/library.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/library.bmmreplay" data-page="features/library" data-title="Adding a mod and enabling it"></div>
 
 
 ## Adding your first mod

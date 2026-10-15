@@ -36,7 +36,8 @@ const HELP = `BMM release tool
   --no-screenshots     media: cards only
   --tasky app|br|off   media: Tasky in screenshots (default app: top-left over the window's corner, as in BMM)
   --no-tasky           media: screenshots without Tasky
-  --gifs               media: also record the usage GIFs/MP4s (gif-scenes.mjs) into media/gifs/ for review
+  --gifs               media: also record the usage GIFs/MP4s (gif-scenes.mjs) into media/gifs/ and the
+                       story clips (stories/*.mjs: GIF, step GIFs, MP4, .bmmreplay) into media/stories/
   --bench-skip-run     bench: rebuild the report from results on disk
   --bench-only rust,js,hyperfine,mem
   --gource-seconds N   gource: target length (default 75)

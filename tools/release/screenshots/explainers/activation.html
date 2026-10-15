@@ -1,0 +1,248 @@
+<!doctype html>
+<!--
+  How a mod is activated into a game folder: an animated explanation the app has no screen for,
+  recorded like the usage clips (gifs.mjs, scene « how-activation-works »). Demo data only.
+
+  What it shows is the documented rule (BMM Docs: how-it-works/profiles-activation.md and
+  conflicts.md), nothing more:
+    - deploying COPIES the mod's files into the game folder (no links); the library keeps its copy;
+    - before a GENUINE game file is overwritten its original goes to _original/ (backup folder);
+      a file another mod placed is never backed up;
+    - two mods with the same file: the one applied last in the activation order wins;
+    - disabling restores the mod below, else the original (and deletes that backup copy), else
+      deletes the file the mod added.
+  window.__explainer = { lang, version, appUrl } is set by the harness; window.__play() runs the
+  animation and resolves when it ends.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How a mod is activated</title>
+<style>
+  :root {
+    --bg: #0b0f19; --win: #121315; --panel: #181a1e; --panel-2: #1f2228; --line: #2a2e36;
+    --text: #e8eaee; --muted: #9aa1ad; --yellow: #ffcc00; --orig: #8b93a3;
+    --et: #6d8cff; --wo: #22c3a6; --danger: #f87171; --ok: #4ade80;
+    --mono: ui-monospace, "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+    --sans: "Inter", "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  html { background: radial-gradient(1200px 520px at 12% 0%, #1d2b4f 0%, rgba(29,43,79,0) 62%), radial-gradient(900px 500px at 100% 100%, #3a2410 0%, rgba(58,36,16,0) 58%), var(--bg); }
+  body { font-family: var(--sans); color: var(--text); background: transparent; }
+  #win { position: absolute; left: 48px; top: 48px; right: 18px; bottom: 18px; background: var(--win); border: 1px solid #262a31; border-radius: 14px; box-shadow: 0 24px 60px rgba(0,0,0,.55); overflow: hidden; }
+  #bar { height: 40px; display: flex; align-items: center; gap: 10px; padding: 0 18px 0 120px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+  #bar b { color: var(--text); font-weight: 600; }
+  #bar .dots { margin-left: auto; display: flex; gap: 14px; opacity: .6; }
+  #tasky { position: absolute; left: 12px; top: 12px; width: 104px; height: 104px; object-fit: contain; z-index: 30; filter: drop-shadow(0 6px 12px rgba(0,0,0,.45)); }
+  #head { padding: 22px 34px 6px 34px; }
+  #head h1 { margin: 0; font-size: 26px; letter-spacing: -.01em; }
+  #head p { margin: 6px 0 0; color: var(--muted); font-size: 14.5px; }
+  #stage { position: relative; display: grid; grid-template-columns: 1.08fr 1.08fr .9fr; gap: 26px; padding: 18px 34px 0; height: 470px; }
+  .col { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 14px 10px; display: flex; flex-direction: column; min-height: 0; }
+  .col h2 { margin: 0 0 2px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+  .col h2 .ic { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; background: var(--panel-2); color: var(--yellow); font-size: 13px; }
+  .col .path { font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin: 0 0 10px; }
+  .group { margin: 4px 0 8px; }
+  .group .gname { font-size: 12.5px; font-weight: 600; display: flex; align-items: center; gap: 8px; margin: 2px 0 6px; }
+  .sw { width: 30px; height: 17px; border-radius: 9px; background: #3a3f48; position: relative; transition: background .35s; flex: none; }
+  .sw::after { content: ""; position: absolute; left: 2px; top: 2px; width: 13px; height: 13px; border-radius: 50%; background: #cfd3da; transition: transform .35s; }
+  .sw.on { background: var(--yellow); }
+  .sw.on::after { transform: translateX(13px); background: #121315; }
+  .ord { margin-left: auto; font-size: 11px; color: var(--muted); font-weight: 500; }
+  .rows { display: flex; flex-direction: column; gap: 6px; }
+  .file { position: relative; display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; border-radius: 8px; background: var(--panel-2); border: 1px solid #2c3039; font-family: var(--mono); font-size: 12px; white-space: nowrap; transition: opacity .45s, transform .45s, border-color .35s, background .35s; }
+  .file .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--c, var(--orig)); }
+  .file .own { margin-left: auto; font-family: var(--sans); font-size: 10.5px; font-weight: 600; padding: 2px 7px; border-radius: 999px; color: #0d0f12; background: var(--c, var(--orig)); }
+  .file.glow { border-color: var(--c, var(--yellow)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c, var(--yellow)) 25%, transparent); }
+  .file.gone { opacity: 0; transform: translateX(14px); }
+  .file.hidden { display: none; }
+  .file.ghost { position: fixed; z-index: 40; pointer-events: none; transition: left .9s cubic-bezier(.4,0,.2,1), top .9s cubic-bezier(.4,0,.2,1), opacity .3s; box-shadow: 0 10px 24px rgba(0,0,0,.5); }
+  .tag { position: absolute; right: -6px; top: -11px; font-family: var(--sans); font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px; background: var(--yellow); color: #121315; opacity: 0; transform: translateY(4px); transition: opacity .3s, transform .3s; }
+  .tag.show { opacity: 1; transform: none; }
+  .tag.bad { background: var(--danger); color: #fff; }
+  .note { margin-top: auto; font-size: 11.5px; color: var(--muted); line-height: 1.45; padding-top: 8px; border-top: 1px dashed var(--line); }
+  #foot { position: absolute; left: 34px; right: 34px; bottom: 22px; display: grid; grid-template-columns: auto 1fr; gap: 18px; align-items: center; }
+  #steps { display: flex; gap: 8px; }
+  #steps span { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 13px; background: var(--panel-2); color: var(--muted); border: 1px solid var(--line); transition: all .35s; }
+  #steps span.on { background: var(--yellow); color: #121315; border-color: var(--yellow); }
+  #steps span.done { color: var(--yellow); border-color: color-mix(in srgb, var(--yellow) 45%, transparent); }
+  #cap { min-height: 74px; background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--yellow); border-radius: 10px; padding: 12px 16px; transition: opacity .3s; }
+  #cap b { display: block; font-size: 15.5px; margin-bottom: 3px; }
+  #cap span { color: var(--muted); font-size: 13.5px; line-height: 1.45; }
+  #cap.fade { opacity: 0; }
+  #legend { position: absolute; right: 34px; top: 60px; display: flex; gap: 14px; font-size: 12px; color: var(--muted); }
+  #legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+</style>
+</head>
+<body>
+<img id="tasky" alt="">
+<div id="win">
+  <div id="bar"><b>Better Mod Manager</b> · <span data-t="bar"></span><span class="dots">— ▢ ✕</span></div>
+  <div id="head"><h1 data-t="title"></h1><p data-t="sub"></p></div>
+  <div id="legend"><span><i style="background:var(--orig)"></i><span data-t="lgGame"></span></span><span><i style="background:var(--et)"></i>HD Texture Pack</span><span><i style="background:var(--wo)"></i>Dynamic Weather Overhaul</span></div>
+  <div id="stage">
+    <section class="col" id="c-mods">
+      <h2><span class="ic">▤</span><span data-t="mods"></span></h2>
+      <div class="path">D:\Modding\Northwind\mods\</div>
+      <div class="group" style="--c:var(--et)">
+        <div class="gname"><span class="sw" id="sw-et"></span>HD Texture Pack <span class="ord" id="ord-et"></span></div>
+        <div class="rows">
+          <div class="file" id="m-et-clouds" style="--c:var(--et)"><span class="dot"></span>Data/textures/sky/clouds_01.dds</div>
+          <div class="file" id="m-et-hud" style="--c:var(--et)"><span class="dot"></span>Data/ui/hud.xml</div>
+        </div>
+      </div>
+      <div class="group" style="--c:var(--wo)">
+        <div class="gname"><span class="sw" id="sw-wo"></span>Dynamic Weather Overhaul <span class="ord" id="ord-wo"></span></div>
+        <div class="rows">
+          <div class="file" id="m-wo-clouds" style="--c:var(--wo)"><span class="dot"></span>Data/textures/sky/clouds_01.dds</div>
+          <div class="file" id="m-wo-rain" style="--c:var(--wo)"><span class="dot"></span>Data/sound/rain_loop.wav</div>
+        </div>
+      </div>
+      <div class="note" data-t="modsNote"></div>
+    </section>
+    <section class="col" id="c-game">
+      <h2><span class="ic">▶</span><span data-t="game"></span></h2>
+      <div class="path">D:\Games\Northwind Saga\</div>
+      <div class="rows" id="game-rows">
+        <div class="file" id="g-exe"><span class="dot"></span>Northwind.exe<span class="own" data-t="own"></span></div>
+        <div class="file" id="g-clouds"><span class="dot"></span>Data/textures/sky/clouds_01.dds<span class="own" data-t="own"></span><span class="tag" id="tag-clouds"></span></div>
+        <div class="file" id="g-sun"><span class="dot"></span>Data/lighting/sun.ini<span class="own" data-t="own"></span></div>
+        <div class="file hidden" id="g-hud" style="--c:var(--et)"><span class="dot"></span>Data/ui/hud.xml<span class="own">HD Texture Pack</span><span class="tag" id="tag-hud"></span></div>
+        <div class="file hidden" id="g-rain" style="--c:var(--wo)"><span class="dot"></span>Data/sound/rain_loop.wav<span class="own">Dynamic Weather Overhaul</span><span class="tag" id="tag-rain"></span></div>
+      </div>
+      <div class="note" data-t="gameNote"></div>
+    </section>
+    <section class="col" id="c-bak">
+      <h2><span class="ic">⟲</span><span data-t="bak"></span></h2>
+      <div class="path">D:\Modding\Northwind\backups\_original\</div>
+      <div class="rows" id="bak-rows">
+        <div class="file hidden" id="b-clouds"><span class="dot"></span>Data/textures/sky/clouds_01.dds<span class="tag" id="tag-bak"></span></div>
+      </div>
+      <div class="note" data-t="bakNote"></div>
+    </section>
+  </div>
+  <div id="foot">
+    <div id="steps"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span></div>
+    <div id="cap"><b></b><span></span></div>
+  </div>
+</div>
+<script>
+(() => {
+  const P = window.__explainer || {};
+  const fr = String(P.lang || new URLSearchParams(location.search).get('lang') || 'en').startsWith('fr');
+  const T = fr ? {
+    bar: 'Comment un mod est activé', title: 'Activer un mod : ce qui arrive sur le disque',
+    sub: 'Copies réelles depuis la bibliothèque, sauvegarde des fichiers du jeu avant de les remplacer, et le dernier mod appliqué gagne.',
+    lgGame: 'Fichier du jeu', mods: 'Dossier des mods · bibliothèque', game: 'Dossier du jeu', bak: 'Sauvegardes · _original/', own: 'Jeu',
+    modsNote: 'La bibliothèque garde toujours son exemplaire : activer copie, ne déplace rien.',
+    gameNote: 'Ce que le jeu lit. Des fichiers ordinaires, aucun lien symbolique ni physique.',
+    bakNote: 'Un fichier du jeu y est copié une seule fois, juste avant d’être remplacé.',
+    copy: 'copie', backup: 'sauvegardé', wins: 'gagne : appliqué en dernier', restored: 'restauré', deleted: 'supprimé', below: 'mod du dessous',
+    ord: (n) => `ordre ${n}`,
+    caps: [
+      ['Avant : le jeu tel qu’installé', 'Deux mods dans la bibliothèque, désactivés. Le dossier du jeu ne contient que ses propres fichiers.'],
+      ['1 · Activer « HD Texture Pack »', 'clouds_01.dds existe déjà dans le jeu : l’original part d’abord dans _original/, puis la copie du mod le remplace. hud.xml est simplement copié.'],
+      ['2 · Activer « Dynamic Weather Overhaul » (appliqué en dernier)', 'Même fichier dans deux mods : celui appliqué en dernier gagne. Le fichier remplacé appartient à un mod, pas au jeu : pas de seconde sauvegarde.'],
+      ['3 · Désactiver « Dynamic Weather Overhaul »', 'Chaque fichier revient au mod du dessous s’il l’a, sinon à l’original, sinon il est supprimé (rain_loop.wav, que le jeu n’avait pas).'],
+      ['4 · Désactiver « HD Texture Pack »', 'Plus aucun mod ne fournit clouds_01.dds : l’original revient depuis _original/, et la copie de sauvegarde est supprimée.'],
+      ['5 · Retour au jeu d’origine', 'Le dossier du jeu est comme au départ. La bibliothèque n’a jamais bougé : réactiver recopie, c’est tout.'],
+    ],
+  } : {
+    bar: 'How a mod is activated', title: 'Enabling a mod: what happens on disk',
+    sub: 'Real copies from your library, the game’s files backed up before they are replaced, and the mod applied last wins.',
+    lgGame: 'Game file', mods: 'Mods folder · library', game: 'Game folder', bak: 'Backups · _original/', own: 'Game',
+    modsNote: 'The library always keeps its copy: enabling copies, it never moves anything.',
+    gameNote: 'What the game reads. Plain files, no symbolic or hard links.',
+    bakNote: 'A game file is copied here once, just before it is replaced.',
+    copy: 'copy', backup: 'backed up', wins: 'wins: applied last', restored: 'restored', deleted: 'deleted', below: 'mod below',
+    ord: (n) => `order ${n}`,
+    caps: [
+      ['Before: the game as installed', 'Two mods in the library, both off. The game folder holds only its own files.'],
+      ['1 · Enable « HD Texture Pack »', 'clouds_01.dds is already in the game: its original goes to _original/ first, then the mod’s copy replaces it. hud.xml is simply copied.'],
+      ['2 · Enable « Dynamic Weather Overhaul » (applied last)', 'Same file in two mods: the one applied last wins. The file it replaces belongs to a mod, not the game: no second backup.'],
+      ['3 · Disable « Dynamic Weather Overhaul »', 'Each file falls back to the mod below if it has it, else to the original, else it is deleted (rain_loop.wav, which the game never had).'],
+      ['4 · Disable « HD Texture Pack »', 'No mod ships clouds_01.dds any more: the original comes back from _original/, and that backup copy is deleted.'],
+      ['5 · Back to the game as installed', 'The game folder is as it started. The library never moved: enabling again just copies again.'],
+    ],
+  };
+  document.documentElement.lang = fr ? 'fr' : 'en';
+  document.querySelectorAll('[data-t]').forEach((n) => { const v = T[n.getAttribute('data-t')]; if (typeof v === 'string') n.textContent = v; });
+  const tasky = document.getElementById('tasky');
+  if (P.appUrl) tasky.src = P.appUrl + 'assets/Tasky_Happy.png'; else tasky.remove();
+
+  const $ = (id) => document.getElementById(id);
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const cap = $('cap');
+  async function caption(i) {
+    cap.classList.add('fade'); await wait(260);
+    cap.querySelector('b').textContent = T.caps[i][0];
+    cap.querySelector('span').textContent = T.caps[i][1];
+    cap.classList.remove('fade');
+    [...$('steps').children].forEach((s, k) => { s.className = k + 1 < i ? 'done' : k + 1 === i ? 'on' : ''; });
+  }
+  function tag(id, text, bad) { const t = $(id); t.textContent = text; t.classList.toggle('bad', !!bad); t.classList.add('show'); }
+  function untag(id) { $(id).classList.remove('show'); }
+  function setOwner(el, color, label) {
+    el.style.setProperty('--c', color);
+    el.querySelector('.own').textContent = label;
+  }
+  /** A copy flies from one row to another (the source stays where it is). */
+  async function fly(fromEl, toEl, color) {
+    const a = fromEl.getBoundingClientRect(), b = toEl.getBoundingClientRect();
+    const g = fromEl.cloneNode(true);
+    g.removeAttribute('id'); g.classList.add('ghost'); g.classList.remove('hidden', 'gone', 'glow');
+    g.querySelectorAll('.tag').forEach((x) => x.remove());
+    if (color) g.style.setProperty('--c', color);
+    Object.assign(g.style, { left: `${a.left}px`, top: `${a.top}px`, width: `${a.width}px` });
+    document.body.appendChild(g);
+    fromEl.classList.add('glow');
+    await wait(60);
+    Object.assign(g.style, { left: `${b.left}px`, top: `${b.top}px`, width: `${b.width}px` });
+    await wait(950);
+    g.style.opacity = '0';
+    fromEl.classList.remove('glow');
+    toEl.classList.add('glow');
+    setTimeout(() => { g.remove(); toEl.classList.remove('glow'); }, 700);
+  }
+  function show(el) { el.classList.remove('hidden'); el.classList.add('gone'); void el.offsetWidth; el.classList.remove('gone'); }
+  async function hide(el) { el.classList.add('gone'); await wait(480); el.classList.add('hidden'); el.classList.remove('gone'); }
+
+  window.__play = async () => {
+    const ORIG = 'var(--orig)', ET = 'var(--et)', WO = 'var(--wo)';
+    await caption(0); await wait(3400);
+
+    // 1 · enable HD Texture Pack
+    await caption(1); $('sw-et').classList.add('on'); $('ord-et').textContent = T.ord(1); await wait(1100);
+    show($('b-clouds')); await fly($('g-clouds'), $('b-clouds'), ORIG); tag('tag-bak', T.backup); await wait(700);
+    await fly($('m-et-clouds'), $('g-clouds'), ET); setOwner($('g-clouds'), ET, 'HD Texture Pack'); tag('tag-clouds', T.copy); await wait(500);
+    show($('g-hud')); await fly($('m-et-hud'), $('g-hud'), ET); tag('tag-hud', T.copy); await wait(2600);
+    untag('tag-clouds'); untag('tag-hud'); untag('tag-bak');
+
+    // 2 · enable Dynamic Weather Overhaul, applied last
+    await caption(2); $('sw-wo').classList.add('on'); $('ord-wo').textContent = T.ord(2); await wait(1100);
+    await fly($('m-wo-clouds'), $('g-clouds'), WO); setOwner($('g-clouds'), WO, 'Dynamic Weather Overhaul'); tag('tag-clouds', T.wins); await wait(500);
+    show($('g-rain')); await fly($('m-wo-rain'), $('g-rain'), WO); tag('tag-rain', T.copy); await wait(3200);
+    untag('tag-clouds'); untag('tag-rain');
+
+    // 3 · disable Dynamic Weather Overhaul: the mod below, or delete
+    await caption(3); $('sw-wo').classList.remove('on'); $('ord-wo').textContent = ''; await wait(1100);
+    await fly($('m-et-clouds'), $('g-clouds'), ET); setOwner($('g-clouds'), ET, 'HD Texture Pack'); tag('tag-clouds', `${T.restored} · ${T.below}`); await wait(700);
+    tag('tag-rain', T.deleted, true); await wait(900); await hide($('g-rain')); untag('tag-rain'); await wait(2600);
+    untag('tag-clouds');
+
+    // 4 · disable HD Texture Pack: the original comes back, its backup copy goes
+    await caption(4); $('sw-et').classList.remove('on'); $('ord-et').textContent = ''; await wait(1100);
+    await fly($('b-clouds'), $('g-clouds'), ORIG); setOwner($('g-clouds'), ORIG, T.own); tag('tag-clouds', T.restored); await wait(600);
+    tag('tag-bak', T.deleted, true); await wait(800); await hide($('b-clouds')); untag('tag-bak');
+    tag('tag-hud', T.deleted, true); await wait(900); await hide($('g-hud')); untag('tag-hud'); await wait(2400);
+    untag('tag-clouds');
+
+    // 5 · as installed
+    await caption(5); await wait(3800);
+  };
+})();
+</script>
+</body>
+</html>

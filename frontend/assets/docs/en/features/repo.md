@@ -8,7 +8,7 @@ hand stays at the version you installed, forever, silently.
 
 > Browse Server Repositories — official and partner server repositories.
 
-<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/repo.bmmreplay" data-page="features/repo" data-title="Connecting to a repo and syncing"></div>
+<div class="bmm-replay" data-src="assets/docs/media/replays/repo.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/repo.bmmreplay" data-page="features/repo" data-title="Connecting to a repo and syncing"></div>
 
 
 ## Simple by default

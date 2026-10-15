@@ -9,7 +9,7 @@ Its real job is stated on the empty screen:
 > A profile is your safety net: enable, disable and reorder mods freely, and a game update or
 > reinstall never wipes your setup again.
 
-<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/profiles.bmmreplay" data-page="features/profiles" data-title="Creating a profile and switching to it"></div>
+<div class="bmm-replay" data-src="assets/docs/media/replays/profiles.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/profiles.bmmreplay" data-page="features/profiles" data-title="Creating a profile and switching to it"></div>
 
 
 ## Why several profiles per game

@@ -6,6 +6,15 @@ pour ouvrir la **palette de commandes** — une seule barre de recherche par-des
 toutes les actions. Tape quelques lettres, déplace-toi avec <kbd>↑</kbd> / <kbd>↓</kbd>, et appuie sur
 <kbd>Entrée</kbd> pour exécuter.
 
+
+<!-- story:everyday -->
+![Les raccourcis du quotidien](assets/docs/media/gifs/everyday.gif)
+
+*Les raccourcis du quotidien. La palette de commandes trouve un mod et lance une commande, BMM Tools mesure le disque, un launch pack démarre le jeu avec ses outils, et la doc répond sans quitter l’app.*
+
+<div class="bmm-replay" data-src="assets/docs/media/replays/everyday.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/everyday.bmmreplay" data-page="features/command-palette" data-title="Les raccourcis du quotidien"></div>
+<!-- /story:everyday -->
+
 ## Ce qu'elle atteint
 
 La palette est construite à partir de l'app en direct : elle correspond toujours à ce que tu as

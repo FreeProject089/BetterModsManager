@@ -9,7 +9,7 @@ silence.
 
 > Parcourir les dépôts serveur — dépôts officiels et partenaires.
 
-<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/repo.bmmreplay" data-page="features/repo" data-title="Se connecter à un dépôt et synchroniser"></div>
+<div class="bmm-replay" data-src="assets/docs/media/replays/repo.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/repo.bmmreplay" data-page="features/repo" data-title="Se connecter à un dépôt et synchroniser"></div>
 
 
 ## Simple par défaut

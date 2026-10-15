@@ -12,6 +12,7 @@ import { toast } from '../../ui/app.js';
 import { MODAL_CLOSE_SVG } from '../../ui/modal-shell.js';
 import { raiseAboveAll } from '../../ui/layer.js';
 import { uiIcon } from '../../ui/icons.js';
+import { readReplayBody } from '../../core/replay-body.js';
 
 const ON = 'bmm_watcher_on';
 const FULL = 'bmm_watcher_full';
@@ -339,7 +340,7 @@ async function loadAndPlay(path: string): Promise<void> {
   try { 
     const url = (window as any).__TAURI__.core.convertFileSrc(path);
     const res = await fetch(url);
-    bundle = await res.json();
+    bundle = await readReplayBody(res);
   }
   catch { toast(t('watcher.badFile') || 'Fichier illisible', 'error'); return; }
   if (!Array.isArray(bundle?.events) || bundle.events.length < 2) { toast(t('watcher.empty') || 'Enregistrement vide', 'error'); return; }
@@ -351,7 +352,7 @@ async function loadAndPlay(path: string): Promise<void> {
  *  (release/update notes + the in-app Community blog). Reuses the full in-app viewer. */
 export async function playReplayFromUrl(url: string): Promise<void> {
   let bundle: any;
-  try { const res = await fetch(url); if (!res.ok) throw new Error('http'); bundle = await res.json(); }
+  try { const res = await fetch(url); if (!res.ok) throw new Error('http'); bundle = await readReplayBody(res); }
   catch { toast(t('watcher.badFile') || 'Fichier illisible', 'error'); return; }
   const events = Array.isArray(bundle) ? bundle : bundle?.events;
   if (!Array.isArray(events) || events.length < 2) { toast(t('watcher.empty') || 'Empty recording', 'error'); return; }
@@ -392,7 +393,7 @@ export async function playReplayJson(json: string): Promise<void> {
 /** Import + replay a .bmmreplay from a download URL (API / deep link). */
 export async function importReplayFromUrl(url: string): Promise<void> {
   let bundle: any;
-  try { const res = await fetch(url); bundle = await res.json(); }
+  try { const res = await fetch(url); bundle = await readReplayBody(res); }
   catch { toast(t('watcher.badFile') || 'Fichier illisible', 'error'); return; }
   if (!Array.isArray(bundle?.events) || bundle.events.length < 2) { toast(t('watcher.empty') || 'Enregistrement vide', 'error'); return; }
   await playBundle(bundle);

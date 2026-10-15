@@ -5,6 +5,15 @@ Press <kbd>Ctrl</kbd>+<kbd>K</kbd> (<kbd>Cmd</kbd>+<kbd>K</kbd> on macOS) anywhe
 **command palette** — a single search box laid over every page and every action. Type a few letters,
 move with <kbd>↑</kbd> / <kbd>↓</kbd>, and press <kbd>Enter</kbd> to run.
 
+
+<!-- story:everyday -->
+![Everyday shortcuts](assets/docs/media/gifs/everyday.gif)
+
+*Everyday shortcuts. The command palette finds a mod and runs a command, BMM Tools measures the disk, a launch pack starts the game with its tools, and the docs answer a question without leaving the app.*
+
+<div class="bmm-replay" data-src="assets/docs/media/replays/everyday.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/everyday.bmmreplay" data-page="features/command-palette" data-title="Everyday shortcuts"></div>
+<!-- /story:everyday -->
+
 ## What it can reach
 
 The palette is built from the live app, so it always matches what's actually in front of you.

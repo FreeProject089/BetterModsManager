@@ -17,8 +17,17 @@ look — then export it as a file someone else imports in one click.
     picked under the old name stays applied. The table of old and new ids is in
     [Make your own theme](doc-page:features/making-themes#renamed-in-103).
 
-<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/themes.bmmreplay" data-page="features/themes" data-title="Restyling BMM with the theme editor"></div>
+<div class="bmm-replay" data-src="assets/docs/media/replays/themes.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/themes.bmmreplay" data-page="features/themes" data-title="Restyling BMM with the theme editor"></div>
 
+
+
+<!-- story:make-it-yours -->
+![Make BMM yours](assets/docs/media/gifs/make-it-yours.gif)
+
+*Make BMM yours. A theme made in the theme editor, a navigation bar rearranged with a custom page of your own, and a string translated in the translation studio.*
+
+<div class="bmm-replay" data-src="assets/docs/media/replays/make-it-yours.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/make-it-yours.bmmreplay" data-page="features/themes" data-title="Make BMM yours"></div>
+<!-- /story:make-it-yours -->
 
 ## The mark each theme wears
 

@@ -17,8 +17,17 @@ l'allure de l'app — puis de l'exporter en un fichier que quelqu'un importe en 
     un thème choisi sous l'ancien nom reste appliqué. La table des anciens et nouveaux ids est
     dans [Créer son propre thème](doc-page:features/making-themes#renommes-en-103).
 
-<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/themes.bmmreplay" data-page="features/themes" data-title="Restyler BMM avec l'éditeur de thèmes"></div>
+<div class="bmm-replay" data-src="assets/docs/media/replays/themes.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/themes.bmmreplay" data-page="features/themes" data-title="Restyler BMM avec l'éditeur de thèmes"></div>
 
+
+
+<!-- story:make-it-yours -->
+![Personnaliser BMM](assets/docs/media/gifs/make-it-yours.gif)
+
+*Personnaliser BMM. Un thème créé dans l’éditeur de thèmes, une barre de navigation réorganisée avec une page personnalisée, et une chaîne traduite dans le studio de traduction.*
+
+<div class="bmm-replay" data-src="assets/docs/media/replays/make-it-yours.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/make-it-yours.bmmreplay" data-page="features/themes" data-title="Personnaliser BMM"></div>
+<!-- /story:make-it-yours -->
 
 ## La marque que porte chaque thème
 
