@@ -83,11 +83,31 @@ the Library, ready for another profile.
 
 The Library rewards a few gestures:
 
-- **Single-click** a card to select it and open its **detail panel** — version, author, its
-  cross-machine identity, conflicts, dependencies, an integrity check, and tags.
+- **Single-click** a card to open its **details**, a drawer that slides in from the side (see
+  [Mod details](#mod-details) below).
 - **Double-click** a card to toggle it on or off instantly.
 - **Right-click** a card *while it's activating* to cancel the operation.
 - **Drag & drop** a `.zip` or folder onto the window to add it.
+
+## Mod details
+
+Selecting a mod opens its details in a **side drawer**, so the list stays in view beside it. The
+drawer has five tabs:
+
+| Tab | What it holds |
+|---|---|
+| **Overview** | The description (Markdown works: bold, lists, links), version, author, tags, and Enable / Disable and Open folder |
+| **Details** | The fields you can edit: name, version, author, description, requirements, links (each with a type and a label) |
+| **Files** | The mod's files, with a search box |
+| **Conflicts & order** | The files it shares with other mods, who wins, and a way into the [Conflicts view](doc-page:how-it-works/conflicts) |
+| **Updates & links** | Where the mod comes from, the repo it follows, and its **Content ID** (copy it, or compute it from the files) |
+
+- **Next and previous.** The ‹ and › buttons in the header, or :kbd[↓] and :kbd[↑], move to the next
+  or previous mod of the list without closing the drawer.
+- **Close** with the X or :kbd[Esc].
+- **Unsaved changes.** If you edited the details and then move to another mod or close the drawer,
+  BMM asks **Discard your changes?** first, so a half-written description is never lost by a stray
+  click. The header shows *Unsaved changes* while there are some.
 
 ## While mods turn on or off
 

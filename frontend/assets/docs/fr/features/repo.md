@@ -44,6 +44,17 @@ marqués du nom du dépôt.
 
 ## Synchroniser les mods d'un dépôt
 
+L'onglet **Sync** tient en trois étapes, avec une bande en haut qui se remplit au fil de l'eau :
+
+1. **Colle l'adresse** du `repo.json` et récupère-le. Si la source est protégée, la ligne du mot de
+   passe et celle de la **clé privée** sont juste là (voir [Protéger un dépôt](#proteger-un-depot-mot-de-passe-ou-cle-publique)).
+2. **Choisis où vont les mods** : les dossiers jeu, mods et sauvegarde du profil, ou des dossiers de
+   ton choix.
+3. **Synchroniser.** Les options (mode de synchro, nettoyer les mods en trop, vérifier ce dépôt au
+   démarrage de BMM, suivre le dépôt pour les mises à jour) sont repliées sous le bouton.
+
+Chaque étape a un lien **En savoir plus** vers cette page.
+
 Un dépôt protégé demande son **mot de passe de téléchargement** une fois — et si tu sais
 déjà que le dépôt est protégé, ouvre la ligne *« Ce dépôt a un mot de passe de
 téléchargement »* sous le champ URL et tape-le avant Fetch, au lieu de récupérer, échouer,
@@ -177,7 +188,10 @@ mot de passe ne dure que le temps de la session.
 ## Héberger ton propre dépôt
 
 Tu peux transformer tes propres mods en un dépôt d'où d'autres synchronisent. L'onglet Host
-est séparé en deux : **produire le `repo.json`**, puis **servir les fichiers**.
+est séparé en deux : **produire le `repo.json`** (**Générer le dépôt**), puis **servir les
+fichiers** (**Servir les fichiers**). Servir a sa propre bande en quatre étapes : **choisir le
+dossier**, **vérifier le `repo.json`**, **démarrer le partage**, **envoyer l'adresse**. Chaque
+groupe a un lien **En savoir plus** vers cette page.
 
 ### Trois façons de produire le manifeste
 
@@ -717,6 +731,15 @@ une ligne.
     pas l'identité que BMM présente aux catalogues. L'une dit « laisse-moi entrer », l'autre dit
     « voici qui je suis » — et répondre à l'une en modifiant l'autre, c'est finir par présenter
     la mauvaise identité sans l'avoir jamais décidé.
+
+### Une source protégée et pas encore de clé
+
+Quand une source demande une clé privée et que ton trousseau est vide, BMM ne te laisse plus coincé.
+La ligne de la clé dit *Tu n'as pas encore de clé privée* et propose deux boutons : **En créer une**
+(BMM fabrique une clé et copie sa **ligne publique** dans le presse-papiers, prête à envoyer à qui
+gère la source) et **Ajouter…** (importer un fichier de clé que tu as déjà). La clé rejoint ton
+trousseau dans les deux cas. **Gérer les clés** (ici, et dans le panneau SSH) mène droit au
+trousseau, dans les Paramètres.
 
 ### Côté client (BMM)
 

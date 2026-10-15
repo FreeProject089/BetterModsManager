@@ -23,12 +23,34 @@ bouton **Index** au-dessus des cartes le fait revenir. BMM retient ce choix, et 
 revenir l'index pour chercher. Dans une fenêtre étroite, l'index reste la bande au-dessus des
 cartes.
 
-Toutes les cartes ont le même en-tête : leur icône sur une tuile discrète, le titre, les actions de
-la carte, et la description juste sous le titre.
+Toutes les cartes ont la même anatomie : une icône sur une tuile discrète, le titre et les actions
+de la carte, **une phrase** sous le titre qui dit à quoi sert la carte, puis les réglages en
+**lignes** (un libellé et son contrôle), un pied de carte pour les boutons qui appliquent ou
+exportent et, quand quelque chose est irréversible, une **zone de danger** en bas. Un petit lien
+**En savoir plus** sur une carte ouvre la page de cette documentation qui l'explique, à la bonne
+section.
+
+Les cartes sont rangées par ce que tu utilises le plus, groupe par groupe :
+
+| Groupe | Cartes, dans l'ordre |
+|---|---|
+| **Apparence** | Thèmes, Langue, Interface et notifications, Graphismes et affichage, Raccourcis clavier |
+| **Bibliothèque** | Analyse et mises à jour des mods, Tags, Index de catalogues, Intégrité (SHA) |
+| **Automatisation** | Launch Packs, Planification et automatisation |
+| **Performances** | Stockage, Benchmark |
+| **Comptes et services** | Identité & API, Token GitHub, Discord Rich Presence |
+| **Confidentialité et sécurité** | Confidentialité et télémétrie, IA optionnelle, Sécurité (confiance des plugins), Sécurité |
+| **Application** | Mise à jour automatique, Sauvegarde et restauration, Anciennes installations, Retours, Rapports de crash, Enregistreur de session, Debug |
+
+**Modifier la disposition** (à côté de la recherche) te laisse arranger la page : fais glisser une
+carte, ou appuie sur :kbd[Alt+Haut] / :kbd[Alt+Bas], pour la déplacer dans son groupe, et utilise
+l'œil pour la masquer de la page (la recherche la trouve toujours). **Terminé** quitte le mode ;
+**Partager la disposition** copie un code ou un lien `bmm://` à importer sur un autre PC, et
+**Réinitialiser** rend l'ordre par défaut.
 
 ## Des panneaux dans leur propre fenêtre
 
-L'**éditeur de thème**, le **bac à sable des traductions** et le **débogueur de tâches** peuvent
+L'**éditeur de thème**, le **studio de traduction** et le **débogueur de tâches** peuvent
 quitter la fenêtre de BMM : appuie sur **Ouvrir dans sa propre fenêtre** dans leur en-tête, ou fais
 glisser l'en-tête au-delà du bord de la fenêtre de BMM et lâche. Le panneau devient une fenêtre à
 part que tu peux placer où tu veux, sur un autre écran aussi, à côté de ce sur quoi il travaille
@@ -51,7 +73,7 @@ sombre.
 ### Thèmes & Apparence
 
 Les encadrés d'explication à travers l'app — les astuces colorées — peuvent être masqués
-partout d'un coup avec **Afficher les astuces** dans la carte Tasky, une fois que tu
+partout d'un coup avec **Afficher les astuces** dans l'onglet Tasky d'Interface et notifications, une fois que tu
 connais le chemin. Les avertissements sont exempts par conception : masquer les astuces ne
 masque jamais rien de porteur.
 
@@ -158,19 +180,10 @@ BMM recharge ensuite, parce que la moitié de l'app lit son état au démarrage.
 
 Change la langue de l'interface. Les langues sont de simples fichiers JSON dans le dossier
 `Lang/` de l'app — en ajouter une ne demande **aucune recompilation**. La carte fournit tout :
-un **Guide**, un **modèle** téléchargeable, un bouton **Importer**, et le **Bac à sable de
-traduction**.
-
-La voie confortable pour traduire, c'est le **Bac à sable** :
-
-- **Créer une nouvelle langue** — donne-lui un code (`de`, `pt-br`…), amorcée au besoin depuis
-  une langue existante.
-- Traduis clé par clé avec recherche, **barre de progression**, saut « **prochaine
-  manquante** », et la référence des autres langues côte à côte.
-- Prévisualise chaque texte **en direct** (toast / infobulle / substitué dans la vraie UI), et
-  **choisis à l'écran** : clique n'importe quel texte de BMM pour sauter à sa clé.
-- Les éditions s'enregistrent dans le bac à sable (jamais l'app en direct) ; **Exporter**
-  télécharge le JSON fini — importe-le pour l'activer.
+un **Guide**, un **modèle** téléchargeable, un bouton **Importer**, et le **Studio de
+traduction**, qui a [sa propre page](doc-page:features/translation-studio) : une fenêtre flottante (qui peut aussi
+se détacher) pour traduire clé par clé, vérifier les variables, voir tes brouillons en direct dans
+toute l'app, et importer ou exporter un fichier de langue.
 
 Conserve le bloc `_info` (nom + drapeau affichés dans le sélecteur) et les groupes `_synonyms`
 (ils alimentent la recherche sémantique dans ta langue). **Le français est la base** : une clé
@@ -209,6 +222,10 @@ deux. Un choix enregistré par une ancienne version de BMM garde son sens.
   thème (un thème peut aussi le faire avec `--bmm-anim-speed: 0` ; l'un ou l'autre suffit). Les
   indicateurs de progression continuent de tourner, lentement. Ça s'applique immédiatement. Le
   réglage Windows *afficher moins d'animations* est respecté aussi.
+- **Animation de démarrage** (Classique avec Tasky, Logo ou Désactivée) : affichée pendant que BMM
+  démarre ; un clic ou une touche la passe. Elle suit **uniquement** le réglage **Réduire les
+  animations** de BMM et le style **Désactivée**, pas le réglage Windows *Effets d'animation*, et un
+  démarrage rapide joue toute l'entrée au lieu de la couper.
 - Replié en dessous : le matériel détecté par BMM (instructions du processeur, cartes graphiques,
   bus de chaque disque).
 - Si tu as défini toi-même la variable d'environnement `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`, BMM
@@ -218,6 +235,8 @@ deux. Un choix enregistré par une ancienne version de BMM garde son sens.
   abîmé veut dire Automatique.
 
 ### Identité & API
+
+Dans **Comptes et services**, et plus sous Automatisation.
 
 > Tous tes identifiants importants au même endroit. Clique sur l'icône œil pour révéler une
 > valeur.
@@ -314,6 +333,13 @@ L'icône voyage avec le tag : comme elle est stockée sous forme de simple réf�
 garde son glyphe à travers tous les partages — profil exporté, [dépôt serveur](doc-page:features/repo),
 catalogue — sans rien de plus à faire.
 
+### Interface et notifications
+
+Une seule carte à quatre onglets : **Notifications** (ci-dessous), **Tasky** (la mascotte et les
+bulles d'explication), **Son** (les sons de l'interface et leur volume) et **Barre d'outils** (les
+boutons de la barre d'outils de la Bibliothèque). Chaque onglet montre d'abord les lignes de tous
+les jours ; **Plus d'options** déplie le reste et **Moins d'options** le replie.
+
 ### Notifications
 
 Tout ce que BMM te dit arrive dans **un seul centre de notifications** (la cloche), avec un seul
@@ -352,29 +378,32 @@ garde les 200 derniers messages et rien de plus de 30 jours.
 Clavier dans le centre : :kbd[Haut] et :kbd[Bas] passent d'un message à l'autre, :kbd[Entrée]
 ouvre, :kbd[Suppr] écarte, :kbd[S] reporte d'une heure, :kbd[Échap] ferme et revient à la cloche.
 
-### Son & raccourcis clavier
+### Son
 
-Active/coupe les sons de l'interface, et consulte les raccourcis clavier auxquels BMM répond. Le
-volume est une ligne de la même table : le curseur se remplit jusqu'à son niveau, et le chiffre
-à droite est la valeur enregistrée (appliquée pendant que tu glisses, sans bouton Enregistrer).
+Active/coupe les sons de l'interface. Le volume est une ligne de la même table : le curseur se
+remplit jusqu'à son niveau, et le chiffre à droite est la valeur enregistrée (appliquée pendant que
+tu glisses, sans bouton Enregistrer).
+
+### Raccourcis clavier
+
+Une table de tous les raccourcis, avec recherche, où tu peux réassigner une commande ou ajouter ton
+propre raccourci pour une carte des Paramètres, un profil, un modpack ou une automatisation. Tout
+est dans [Palette de commandes et raccourcis](doc-page:features/command-palette#raccourcis-clavier).
 
 ### Navigation & pages personnalisées
 
-**Personnaliser la navigation** (le crayon en bas de la barre latérale) ouvre un éditeur sur
-deux colonnes quand la fenêtre est large : les éléments de la barre à gauche — glisser pour
-réordonner, renommer, masquer, ajouter un en-tête de section — et, à droite, deux cartes :
-**Ajouter un bouton personnalisé** (un onglet interne, une modale, une URL externe ou l'une de
-tes pages en bac à sable) et **Pages personnalisées** (nom, modèle de départ, HTML / CSS / JS,
-les documents de la page et les fichiers qu'elle embarque). Sur une fenêtre étroite les deux
-cartes passent sous la liste. L'ensemble voyage en code `bmm://` ou en bundle — voir la note
-sur les sauvegardes plus haut : la disposition, la source de chaque page et ses permissions
-sont trois choses séparées.
+**Personnaliser la navigation** (le crayon en bas de la barre latérale) réarrange la barre latérale et
+y ajoute tes propres boutons et pages. Elle a [sa propre page](doc-page:features/navigation). L'ensemble voyage en
+code `bmm://` ou en bundle — voir la note sur les sauvegardes plus haut : la disposition, la
+source de chaque page et ses permissions sont trois choses séparées.
 
 Importer un `.bmmnav` partagé crée ses pages **sans aucune permission** : une vérification
 liste ce que chaque page demande, rien de coché, et seul ce que tu coches est accordé — voir
 [Modèle de sécurité](doc-page:how-it-works/security#custom-pages-review).
 
 ### Enregistreur de session (local)
+
+Dans **Application**, à côté des rapports de plantage.
 
 Enregistre ce qui se passe à l'écran — tes actions plus les logs JS et Rust — pour qu'un
 problème puisse être rejoué et analysé plutôt que décrit. **Rien n'est envoyé nulle part :**
@@ -398,7 +427,11 @@ ajoute un que si tu atteins les limites.
 
 ### Tutoriel
 
-Rejoue les tutoriels interactifs de l'app à tout moment. Nouveau sur BMM ? Commence ici.
+Rejoue les tutoriels interactifs de l'app à tout moment. Nouveau sur BMM ? Commence ici. Le guide
+du tutoriel peut **se détacher dans sa propre fenêtre**, pour le garder à côté de BMM pendant que tu
+suis les étapes. Tous les tutoriels ont été réécrits pour la 1.0.3, avec de nouvelles parties :
+suivre un dépôt, conflits et ordre d'activation, notifications, créer un plugin, et Outils BMM. Le
+tutoriel des Automatisations est maintenant dans Plugins & API.
 
 ### Debug & outils développeur
 

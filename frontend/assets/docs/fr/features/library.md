@@ -89,12 +89,32 @@ l'utiliser. Le mod reste en Bibliothèque, prêt pour un autre profil.
 
 La Bibliothèque récompense quelques gestes :
 
-- **Clic simple** sur une carte pour la sélectionner et ouvrir son **panneau détail** —
-  version, auteur, identité cross-machine, conflits, dépendances, vérification d'intégrité, et
-  tags.
+- **Clic simple** sur une carte pour ouvrir ses **détails**, un tiroir qui glisse depuis le côté
+  (voir [Détails d'un mod](#details-dun-mod) ci-dessous).
 - **Double-clic** sur une carte pour l'activer ou la désactiver instantanément.
 - **Clic droit** sur une carte *pendant son activation* pour annuler l'opération.
 - **Glisser-déposer** un `.zip` ou un dossier sur la fenêtre pour l'ajouter.
+
+## Détails d'un mod
+
+Sélectionner un mod ouvre ses détails dans un **tiroir latéral** : la liste reste visible à côté. Le
+tiroir a cinq onglets :
+
+| Onglet | Ce qu'il contient |
+|---|---|
+| **Aperçu** | La description (le Markdown marche : gras, listes, liens), la version, l'auteur, les tags, et Activer / Désactiver et Ouvrir le dossier |
+| **Détails** | Les champs modifiables : nom, version, auteur, description, prérequis, liens (chacun avec un type et un libellé) |
+| **Fichiers** | Les fichiers du mod, avec une case de recherche |
+| **Conflits et ordre** | Les fichiers partagés avec d'autres mods, qui gagne, et un accès à la [vue Conflits](doc-page:how-it-works/conflicts) |
+| **Mises à jour et liens** | D'où vient le mod, le dépôt qu'il suit, et son **ID de contenu** (à copier, ou à calculer depuis les fichiers) |
+
+- **Suivant et précédent.** Les boutons ‹ et › de l'en-tête, ou :kbd[↓] et :kbd[↑], passent au mod
+  suivant ou précédent de la liste sans fermer le tiroir.
+- **Fermer** avec la croix ou :kbd[Échap].
+- **Modifications non enregistrées.** Si tu as modifié les détails puis passes à un autre mod ou fermes
+  le tiroir, BMM demande d'abord **Abandonner tes modifications ?**, pour qu'une description à
+  moitié écrite ne se perde pas sur un clic malheureux. L'en-tête affiche *Modifications non
+  enregistrées* tant qu'il y en a.
 
 ## Pendant que des mods s'activent ou se désactivent
 

@@ -20,6 +20,14 @@ look — then export it as a file someone else imports in one click.
 <div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/themes.bmmreplay" data-page="features/themes" data-title="Restyling BMM with the theme editor"></div>
 
 
+## The mark each theme wears
+
+Every theme carries a **brand mark**. The built-in ones that use the **BMM logo** are Graphite, Pure
+Black, Daylight, Indigo, Arctic, Cobalt and BMM Logo; **Charcoal** uses the **BMM badge**; the
+others (the default theme and the warmer or louder ones) keep **Tasky**. The sidebar's wordmark
+reads *Better Mod.Manager*, drawn as a vector in Bricolage Grotesque with a small BMM badge, so it
+stays sharp at any size and takes the theme's colours.
+
 ## The editor
 
 The editor is one panel in three parts: the **sections** on the left, a **preview** on the
@@ -62,6 +70,10 @@ Six sections, from the quickest change to the deepest:
     The **Tasky mascot** (the floating one *and* the spinning boot loader, replaced together),
     the **Sidebar logo** and the **App wallpaper** (an image or a video), with the wallpaper's
     fit, position, blur and opacity just below.
+
+    **Mascot or logo** chooses what BMM shows wherever it would show its mascot — the corner, the
+    start-up screen, empty pages and dialogs: **Tasky**, the **BMM logo** (the one in the app icon) or
+    the **BMM badge** (the letters BMM on a tile in your accent colour). It is saved in the theme.
 
 === "Elements"
 

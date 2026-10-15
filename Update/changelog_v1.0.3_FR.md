@@ -18,7 +18,7 @@ La 1.0.3 apporte un centre de notifications, une vue Conflits qui montre quel mo
 - Elle s'ouvre depuis le badge de conflit d'un mod dans la bibliothèque, depuis les détails du mod, ou depuis la palette de commandes (« Résoudre les conflits »).
 
 ## [NEW] Des panneaux dans leur propre fenêtre
-- L'éditeur de thème, le bac à sable de traduction et le débogueur de tâches peuvent sortir de la fenêtre de BMM : « Ouvrir dans sa propre fenêtre » dans leur en-tête, ou glisser l'en-tête au-delà du bord de la fenêtre. Placez le panneau où vous voulez, sur un autre écran aussi, à côté de ce qu'il modifie plutôt que par-dessus.
+- L'éditeur de thème, le studio de traduction et le débogueur de tâches peuvent sortir de la fenêtre de BMM : « Ouvrir dans sa propre fenêtre » dans leur en-tête, ou glisser l'en-tête au-delà du bord de la fenêtre. Placez le panneau où vous voulez, sur un autre écran aussi, à côté de ce qu'il modifie plutôt que par-dessus.
 - Le panneau continue de fonctionner, reste synchronisé avec BMM et suit le thème clair ou sombre.
 - La fenêtre de chaque panneau retient sa taille et sa place. « Remettre dans la fenêtre de BMM », ou fermer cette fenêtre, replace le panneau là où il était.
 
@@ -63,6 +63,28 @@ La 1.0.3 apporte un centre de notifications, une vue Conflits qui montre quel mo
 - **Contraste** : chaque paire qui doit rester lisible affiche son niveau WCAG ; « Corriger » choisit la couleur la plus proche qui passe, « Tout corriger » les corrige toutes.
 - Annuler et rétablir (Ctrl+Z, Ctrl+Y), Ctrl+S pour enregistrer, Enregistrer comme nouveau, et un menu Fichier pour exporter, importer, copier en JSON et le lien de partage. Un thème intégré n'est jamais écrasé.
 - Les fichiers de thème portent désormais une version de format. Les fichiers plus anciens sont mis à niveau à la lecture et réécrits seulement quand vous enregistrez ; rien de ce que vous avez créé n'est perdu.
+
+## [IMPROVED] Paramètres, raccourcis et navigation
+- **Paramètres** : toutes les cartes ont la même anatomie (une phrase d'aide, des lignes, un pied de carte, une zone de danger) et un lien « En savoir plus » vers la documentation. Les cartes sont réordonnées selon l'usage, par groupes : Identité & API passe dans Comptes et services, l'enregistreur de session dans Application. **Interface et notifications** est une carte à onglets (Notifications, Tasky, Son, Barre d'outils) avec un repli « Plus d'options ». **Modifier la disposition** permet de faire glisser ou de masquer des cartes, et la recherche trouve un réglage par ses mots.
+- **Raccourcis clavier** : une table avec recherche, un filtre « Modifiés seulement », import et export, et un « Tout réinitialiser » qui garde vos propres raccourcis. **Nouveau raccourci** lie des touches à une commande, une carte des Paramètres, un profil, un modpack ou une automatisation, partout ou sur une seule page ; les touches réservées à Windows ou à BMM sont refusées, et un conflit dit ce qui utilise déjà les touches.
+- **Personnaliser la navigation**, refaite : un aperçu de la barre latérale à faire glisser, des sections, et un « Ajouter un bouton » guidé (une page BMM, un outil BMM, un site web ou votre propre page). Vos pages partent d'un modèle avec toutes les permissions désactivées, chacune avec un niveau de risque, un aperçu en bac à sable et un sélecteur d'icônes. Le réglage rapide « Local + internet » n'active plus le presse-papiers.
+
+## [IMPROVED] Détails d'un mod, Modpacks et Dépôt Serveur
+- **Détails d'un mod** : un tiroir latéral à onglets (Aperçu, Détails, Fichiers, Conflits et ordre, Mises à jour et liens). Les flèches haut et bas, ou les boutons ‹ ›, passent au mod suivant ou précédent ; Échap le ferme, et les modifications non enregistrées demandent confirmation avant d'être abandonnées.
+- **Modpacks** : une barre d'aperçu (recherche, Actifs ou Inactifs, tri, grille ou liste), une action principale par carte avec un menu « … », une création en quatre étapes (Bases, Mods, Options, Récapitulatif), et l'import depuis un fichier, un lien ou un catalogue. « Exporter et partager » affiche les ID du pack.
+- **Dépôt Serveur** : l'onglet Sync tient en trois étapes (adresse, où vont les mods, synchroniser) et l'onglet Host en deux groupes, avec une bande de quatre étapes pour servir. Une source protégée sans clé privée propose « En créer une » ou « Ajouter… » au lieu d'une impasse, et « Gérer les clés » mène au trousseau.
+
+## [NEW] Historique des changements, Studio de traduction et notes de version
+- **L'historique des changements** est une chronologie jour par jour des mods, profils, réglages, mises à jour et dépôts, avec des filtres par type, une recherche et un Avant et Après pour chaque changement. L'annulation est proposée pour la modification d'un mod, son activation ou désactivation, et les réglages. Vous choisissez combien de temps il est gardé, et l'exportez en CSV ou JSON. Les secrets ne sont jamais stockés.
+- **Les notes de version** ont un onglet **Versions** : chaque version dans une liste avec recherche, avec les compteurs de nouveautés, d'améliorations et de corrections.
+- **Le Studio de traduction** remplace le bac à sable de traduction : une fenêtre flottante qui peut se détacher, des filtres (Manquantes, Modifiées, Identiques), des pastilles de variables avec vérifications, vos brouillons visibles en direct dans toute l'app, import et export, et une nouvelle langue en quelques clics.
+
+## [IMPROVED] Tutoriels, thèmes et intro de démarrage
+- **Le guide des tutoriels** peut se détacher dans sa propre fenêtre. Tous les tutoriels ont été réécrits, avec de nouvelles parties (suivre un dépôt, conflits et ordre d'activation, notifications, créer un plugin, Outils BMM) ; le tutoriel des Automatisations est désormais dans Plugins & API.
+- **Les thèmes** choisissent une marque : Tasky, le logo BMM ou le badge BMM (un choix « Mascotte ou logo » dans les Images de l'éditeur de thème). La plupart des thèmes intégrés utilisent le logo, Charcoal le badge. Le logotype de la barre latérale se lit « Better Mod.Manager » (Bricolage Grotesque).
+- **Les fenêtres** (Conflits, le hub d'outils, stockage, intégrité, ordre d'activation et d'autres) utilisent une seule surface, avec des sections séparées par l'espacement et un filet au lieu de cadres.
+- **L'intro de démarrage** rejoue sur tous les PC : elle ne suit que le réglage « Réduire les animations » de BMM et le style Désactivée, pas le réglage Windows « Effets d'animation », et un démarrage rapide joue toute l'entrée.
+- Onglets de **Plugins & API** : Installés, Catalogue, Créer, API (anciennement « API & Scripts »), Automatisations, Permissions.
 
 ## [VISUAL] Cartes, Paramètres et identifiants des thèmes
 - Plus de barre de couleur le long du bord gauche des cartes et des lignes, nulle part dans l'application. L'élément courant a un fond légèrement teinté, et les astuces sont des encadrés légèrement teintés.

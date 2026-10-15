@@ -52,15 +52,23 @@ bas à gauche quand l'étape le propose.
 Les points en bas sont cliquables, et **2 / 5** en haut indique où vous en êtes. Les lecteurs
 d'écran annoncent chaque étape par son numéro et son titre.
 
+## L'animation de démarrage
+
+Pendant que BMM démarre, une intro se joue : la classique avec Tasky, une courte avec le logo, ou
+aucune (**Paramètres → Graphismes et affichage → Animation de démarrage**). Un clic ou une touche la
+passe. Elle suit **uniquement** le réglage **Réduire les animations** de BMM et le style
+**Désactivée** — pas le réglage Windows *Effets d'animation*, qui la figeait sur les PC où il était
+désactivé — et un démarrage rapide joue toute l'entrée au lieu de la couper après l'impact.
+
 ## La revoir
 
 - Palette de commandes (<kbd>Ctrl</kbd>+<kbd>K</kbd>) → **Afficher les nouveautés** : les notes de
   cette version et les annonces BetterCommunity en cours, même celles déjà vues.
-- **Paramètres → Tasky & Paramètres BMM → Écran de démarrage → Afficher les nouveautés** fait de même.
+- **Paramètres → Interface et notifications → Notifications → Écran de démarrage → Afficher les nouveautés** fait de même.
 
 ## Réglages
 
-Deux interrupteurs dans **Paramètres → Tasky & Paramètres BMM**, juste sous *Notifications
+Deux interrupteurs dans **Paramètres → Interface et notifications → Notifications**, juste sous *Notifications
 BetterCommunity* :
 
 - **Écran de démarrage** — désactivé : seules les questions qui exigent une réponse s'affichent

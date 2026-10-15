@@ -42,6 +42,16 @@ repo's name.
 
 ## Syncing mods from a repo
 
+The **Sync** tab is three steps, with a strip on top that fills in as you go:
+
+1. **Paste the address** of the `repo.json` and fetch it. If the source is protected, the password
+   row and the **private key** row sit right there (see [Protecting a repo](#protecting-a-repo-password-or-a-public-key)).
+2. **Choose where mods go**: the profile's own game, mods and backup folders, or folders of your choice.
+3. **Synchronize.** The options (sync mode, clean extra mods, check this repo when BMM starts, follow
+   the repo for updates) are folded under the button.
+
+Each step has a **Learn more** link to this page.
+
 A protected repo asks for its **download password** once — and if you already know the
 repo is protected, open the *"This repo has a download password"* row under the URL field
 and type it before Fetch, instead of fetching, failing, and typing. A server with **no
@@ -169,7 +179,9 @@ password lasts for this session only.
 ## Hosting your own repo
 
 You can turn your own mods into a repo other people sync from. The Host tab is split in two:
-**producing the `repo.json`**, then **serving the files**.
+**producing the `repo.json`** (**Generate the repo**), then **serving the files** (**Serve the
+files**). Serving has its own four-step strip: **pick the folder**, **check the `repo.json`**,
+**start sharing**, **send the address**. Each group has a **Learn more** link to this page.
 
 ### Three ways to produce the manifest
 
@@ -694,6 +706,14 @@ deleting one line.
     identity BMM presents to catalogues. One is "let me in", the other is "this is who I am",
     and answering one by changing the other is how you end up presenting the wrong identity
     without ever deciding to.
+
+### A protected source and no key yet
+
+When a source asks for a private key and the keyring is empty, BMM no longer leaves you stuck. The
+key row says *You have no private key yet* and offers two buttons: **Create one** (BMM makes a key
+and copies its **public line** to the clipboard, ready to send to whoever runs the source) and
+**Add…** (import a key file you already have). The key joins your keyring either way.
+**Manage keys** (here, and in the SSH panel) goes straight to the keyring in Settings.
 
 ### On the client (BMM)
 

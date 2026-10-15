@@ -22,6 +22,53 @@ They solve different problems, and using the wrong one is the usual confusion:
 A modpack can also **mix mods from different profiles** — BMM's *multi-profile* option
 exists exactly for the pack that doesn't belong to a single setup.
 
+## The Modpacks screen
+
+The bar at the top is how you find your way around a long list of packs:
+
+- **Search** by name.
+- **Show**: *All*, *Active* or *Inactive*.
+- **Sort**: *Recently updated*, *Name*, *Most mods* or *Largest*.
+- **Layout**: *Grid* or *List*.
+
+When nothing matches, the page says so and offers **Reset filters**.
+
+Each card has **one main action**, **Activate** (or **Deactivate** while the pack is on), and a
+**…** menu (*More actions*) for the rest: edit the pack, **Export & share**, and delete. Deleting
+asks first, says it cannot be undone, and leaves the pack's mods installed.
+
+### Creating a pack
+
+**New Modpack** opens a four-step dialog, with a step bar you can click:
+
+1. **Basics** — a name, and optionally a target game and a description.
+2. **Mods** — pick the mods. They come from the current profile; choose *all profiles* to mix mods
+   from several (the multi-profile option). Search, or use the quick picks: *All* and *Enabled
+   now*. A mod already in the pack, from another profile, or not installed on this PC is marked.
+3. **Options** — dependency mode, integrity check, activation order and download sources (see
+   below). The defaults suit most packs.
+4. **Review** — the order and the sources, before BMM reads the mods' files to fingerprint them.
+   **Stop** cancels while it reads.
+
+A name and one mod are enough: **Create now** skips the remaining steps and keeps the defaults.
+Editing a pack opens the same dialog with every step reachable.
+
+### Import
+
+**Import** adds a pack someone shared with you, from one of three places:
+
+| From | What it takes |
+|---|---|
+| **A file** | A `.bmp` or `.json` on this PC |
+| **A link** | A web address (`http://` or `https://`) that serves a `.bmp` |
+| **A catalogue** | Browse the packs other people published in the catalogues you follow, and install one |
+
+### Export & share
+
+**Export & share** in the card's menu saves the pack as a `.bmp` file, and shows the **pack IDs**:
+what you need for a link, an automation, or to ask someone whether they have the pack. The BMM on the
+other PC finds the same mods by their hashes (see below).
+
 ## Options that matter when you build one
 
 Two settings on the create/export dialog change how a pack behaves — both worth a deliberate
@@ -84,7 +131,7 @@ You get the list. Nothing silently half-applies.
 ## Repair
 
 If a pack's mods go missing or get corrupted, the card says so — *Some mods are missing or
-corrupted* — and offers **Repair**. Use it before debugging the game: a pack that can't fully
+corrupted* — and offers **Repair & Apply**. Use it before debugging the game: a pack that can't fully
 apply is a far more likely explanation than the game itself.
 
 (This is also the safety net **Skip Integrity Check** turns off — another reason to leave it

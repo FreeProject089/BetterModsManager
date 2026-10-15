@@ -55,11 +55,44 @@ C'est pour ça qu'une page perso ajoutée hier est cherchable *et* assignable au
 enregistrer à la main, et pourquoi une commande ne peut jamais apparaître d'un côté et manquer de
 l'autre.
 
-## Réassigner n'importe quel raccourci
+## Raccourcis clavier
 
-Les mêmes actions vivent dans **Paramètres → Raccourcis clavier**. Clique un raccourci, appuie sur les
-touches voulues, et c'est lié ; les boutons de la ligne permettent aussi de **revenir au défaut** ou
-d'**effacer**.
+Les mêmes actions vivent dans **Paramètres → Raccourcis clavier** (une
+carte à part dans **Apparence**). C'est une **table avec recherche** : tape une commande, une touche
+ou un nom de page dans la case ; une ligne dessous dit combien il y a de raccourcis et combien sont
+modifiés ou à toi. **Modifiés seulement** ne garde que les lignes que tu as touchées (un défaut
+changé, et tes propres raccourcis).
+
+- **Réassigner.** Clique les touches d'une ligne, puis appuie sur la combinaison voulue (:kbd[Échap]
+  annule). Une ligne modifiée porte la marque *modifié* ; ses boutons **reviennent aux touches par
+  défaut** ou **retirent les touches**.
+- **Conflits.** Si une autre commande répond déjà aux mêmes touches *au même endroit*, la ligne dit
+  « Mêmes touches que … : une seule des deux s'exécute ». Deux raccourcis ne se heurtent que
+  s'ils fonctionnent au même endroit : une touche peut donc signifier une chose sur une page et une
+  autre ailleurs.
+- **Combinaisons réservées.** Les touches qui appartiennent à Windows ou à BMM sont refusées avec un
+  message ; choisis-en une autre. Le défaut d'une commande n'est jamais refusé.
+- **Importer / Exporter** enregistrent tes raccourcis dans un fichier et les rechargent, sur un autre
+  PC par exemple. Un fichier qui n'est pas un fichier de raccourcis BMM est refusé.
+- **Tout réinitialiser** remet tous les raccourcis intégrés à leurs touches par défaut, après
+  confirmation. **Tes propres raccourcis restent.**
+
+### Nouveau raccourci
+
+**Nouveau raccourci** crée un raccourci pour quelque chose qui n'en a pas, en trois étapes :
+
+1. **Action.** Cherche et choisis ce que les touches feront. Il y a cinq sortes, filtrées par
+   onglets : **Commandes** (tout ce qui est dans la palette), **Cartes des Paramètres** (ouvrir une
+   carte des Paramètres), **Profils** (passer à un profil), **Modpacks** (activer un modpack) et
+   **Automatisations** (lancer une automatisation).
+2. **Touches.** Clique la case et appuie sur la combinaison. Elle est vérifiée tout de suite : les
+   touches réservées sont refusées, et si les touches sont déjà prises, la fenêtre dit par quoi et
+   qu'**enregistrer déplace les touches ici**.
+3. **Où ça marche.** **Partout**, ou **uniquement sur** une page.
+
+Donne-lui un nom si celui par défaut ne te convient pas, puis **Enregistrer le raccourci**. Un
+raccourci perso a des boutons **Modifier** et **Supprimer** sur sa ligne. Si ce qu'il ouvre a disparu
+plus tard (un profil supprimé, par exemple), le raccourci le dit au lieu d'échouer en silence.
 
 !!! tip "Les pages perso ont aussi des raccourcis"
 

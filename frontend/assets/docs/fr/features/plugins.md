@@ -19,6 +19,22 @@ version.
 <div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/plugins.bmmreplay" data-page="features/plugins" data-title="Accorder une permission et utiliser un plugin"></div>
 
 
+## Les onglets
+
+**Plugins & API** a six onglets :
+
+| Onglet | À quoi il sert |
+|---|---|
+| **Installés** | Tes plugins, avec filtres, les permissions que chacun demande et son risque le plus haut ; activer, mettre à jour, dupliquer, retirer |
+| **Catalogue** | Les plugins des catalogues que tu suis ; en installer un demande d'abord ton accord et ne se fait jamais tout seul |
+| **Créer** | Le créateur de plugin guidé, en six étapes ([plus bas](#creer-un-plugin)) |
+| **API** | Ton token API, **Essayer un appel** (choisis un endpoint, remplis les champs, lance-le ou copie le cURL), les endpoints groupés par domaine, et les liens profonds `bmm://` |
+| **Automatisations** | Le constructeur d'automatisations : modèles, étapes de navigation et d'entretien, étapes catalogue et API locale, test à blanc et aperçu, et export en `.bmpa`, `.bmmscript` ou script. Voir [Planification et automatisation](doc-page:features/scheduler) |
+| **Permissions** | Ce que chaque plugin peut faire, le garde-fou global |
+
+L'onglet **API** s'appelait *API & Scripts* ; les automatisations qui vivaient ailleurs ont
+maintenant leur propre onglet ici.
+
 ## Ce que vous pouvez accorder à un plugin
 
 Vingt-six autorisations, en douze domaines, et chaque domaine sépare **lecture** et
@@ -256,7 +272,7 @@ même endroit, généré à partir du code :
 Les deux valent un coup d'œil même si tu n'écris jamais de plugin : c'est l'inventaire le plus
 clair de ce qu'on peut faire faire à BMM.
 
-Dans l'app, **Plugins & API → API & Scripts → Endpoints** a la même liste, **groupée par
+Dans l'app, **Plugins & API → API → Endpoints** a la même liste, **groupée par
 domaine** — mods, profils, modpacks, plugins, dépôts serveur, applications et catalogues,
 automatisation et hooks, données, clés et confidentialité, BMM lui-même — chaque groupe avec
 son compte par méthode. La recherche accepte une méthode, un chemin ou un mot ; les filtres

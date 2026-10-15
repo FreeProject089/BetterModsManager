@@ -18,7 +18,7 @@
 - Open it from a mod's conflict badge in the library, from the mod details, or from the command palette (« Resolve conflicts »).
 
 ## [NEW] Panels in their own window
-- The theme editor, the translation sandbox and the task debugger can leave BMM's window: « Open in its own window » in their header, or drag the header past the edge of the window. Put the panel anywhere, on another screen too, next to what it works on instead of over it.
+- The theme editor, the Translation studio and the task debugger can leave BMM's window: « Open in its own window » in their header, or drag the header past the edge of the window. Put the panel anywhere, on another screen too, next to what it works on instead of over it.
 - The panel keeps working and stays in step with BMM, and follows the light or dark theme.
 - Each panel's window remembers its size and place. « Back into BMM's window », or closing that window, puts the panel back where it was.
 
@@ -63,6 +63,28 @@
 - **Contrast**: each pair that must stay readable shows its WCAG grade; « Fix » picks the closest colour that passes, « Fix all » fixes them all.
 - Undo and redo (Ctrl+Z, Ctrl+Y), Ctrl+S to save, Save as new, and a File menu for export, import, copy as JSON and share link. A built-in theme is never overwritten.
 - Theme files now carry a format version. Older files are upgraded when read and only rewritten when you save; nothing you made is lost.
+
+## [IMPROVED] Settings, shortcuts and navigation
+- **Settings**: every card has the same anatomy (a one-sentence help line, rows, a footer, a danger zone) and a « Learn more » link to the documentation. The cards are reordered by use, in groups: Identity & API moved to Accounts and services, the session recorder to Application. **Interface and notifications** is one card with tabs (Notifications, Tasky, Sound, Toolbar) and a « More options » fold. **Edit layout** lets you drag or hide cards, and the search box finds a setting by its words.
+- **Keyboard shortcuts** are a searchable table with a « Changed only » filter, import and export, and a « Reset all » that keeps your own shortcuts. **New shortcut** binds keys to a command, a Settings card, a profile, a modpack or an automation, for everywhere or one page; keys kept for Windows or BMM are refused, and a clash says what already uses the keys.
+- **Customise navigation**, rebuilt: a sidebar preview you can drag, sections, and a guided « Add a button » (a BMM page, a BMM tool, a website or your own page). Your own pages start from a template with every permission off, each with a risk level, a sandboxed preview and an icon picker. The « Local + internet » quick set no longer turns the clipboard on.
+
+## [IMPROVED] Mod details, Modpacks and Server Repo
+- **Mod details** open in a side drawer with tabs (Overview, Details, Files, Conflicts & order, Updates & links). Up and down arrows, or the ‹ › buttons, move to the next or previous mod; Escape closes it, and unsaved changes ask before they are discarded.
+- **Modpacks**: an overview bar (search, Active or Inactive, sort, grid or list), one main action per card with a « … » menu, a four-step create flow (Basics, Mods, Options, Review), and Import from a file, a link or a catalogue. « Export & share » shows the pack IDs.
+- **Server Repo**: the Sync tab is three steps (address, where mods go, synchronise) and the Host tab is two groups, with a four-step strip for serving. A protected source with no private key offers « Create one » or « Add… » instead of a dead end, and « Manage keys » lands on the keyring.
+
+## [NEW] Change history, Translation studio and release notes
+- **Change history** is a day-by-day timeline of mods, profiles, settings, updates and repos, with type filters, search and a Before and After for each change. Undo is offered for edits to a mod, enabling or disabling it, and settings. You choose how long it is kept, and export it as CSV or JSON. Secrets are never stored.
+- **Release notes** have a **Versions** tab: every version in one searchable list, with counts of what is new, improved and fixed.
+- **Translation studio** replaces the translation sandbox: a floating window that can pop out, filters (Missing, Changed, Same), variable chips with checks, your drafts shown live in the whole app, import and export, and a new language in a few clicks.
+
+## [IMPROVED] Tutorials, themes and the start-up intro
+- The **tutorial guide** can pop out into its own window. Every tutorial was rewritten, with new parts (follow a repo, conflicts and activation order, notifications, create a plugin, BMM Tools); the Automations tutorial now lives in Plugins & API.
+- **Themes** choose a brand mark: Tasky, the BMM logo or the BMM badge (a « Mascot or logo » choice in the theme editor's Pictures). Most built-in themes use the logo, Charcoal the badge. The sidebar wordmark reads « Better Mod.Manager » (Bricolage Grotesque).
+- **Modals** (Conflicts, the tools hub, storage, integrity, activation order and others) use one surface, with sections set apart by spacing and a hairline instead of frames.
+- The **start-up intro** plays again on every PC: it follows only BMM's « Reduce animations » and the Off style, not the Windows « Animation effects » setting, and a fast start plays the whole entrance.
+- **Plugins & API** tabs: Installed, Catalogue, Create, API (renamed from « API & Scripts »), Automations, Permissions.
 
 ## [VISUAL] Cards, Settings and theme ids
 - No more coloured bar down the left edge of cards and rows, anywhere in the app. The current item gets a soft tinted background instead, and tips are softly tinted boxes.
