@@ -74,16 +74,15 @@
 
 /* ── Settings: how each group is delivered, do not disturb, quiet hours ─────────────── */
 .notif-prefs { display: flex; flex-direction: column; gap: 12px; width: 100%; }
-.notif-pref-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+/* One row per group, split by a hairline: the card around them is the only frame. */
+.notif-pref-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; }
 .notif-pref-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(160px, 280px);
     align-items: center; gap: 10px;
-    padding: 6px 10px;
-    border: 1px solid var(--bmm-border);
-    border-radius: var(--bmm-radius-input, 8px);
-    background: var(--bmm-s02);
+    padding: 7px 4px;
 }
+.notif-pref-row + .notif-pref-row { border-top: 1px solid var(--bmm-s06); }
 @media (max-width: 640px) { .notif-pref-row { grid-template-columns: minmax(0, 1fr); } }
 .notif-pref-name { display: flex; flex-direction: column; min-width: 0; font-size: 12.5px; font-weight: 600; color: var(--bmm-text-primary); }
 .notif-pref-hint { font-size: 11px; font-weight: 400; color: var(--bmm-text-secondary); }

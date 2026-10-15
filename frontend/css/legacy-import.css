@@ -13,16 +13,16 @@
     color: var(--text-secondary);
 }
 
+/* One surface (modal-shell.css, "Inside the body"): each setup found is a row split from the
+   next by a hairline, not a framed card. The result and the signature verdict below keep a
+   light frame: they are callouts. */
 .legacy-row {
     display: flex;
     align-items: center;
     gap: 14px;
-    padding: 12px 14px;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    background: var(--bmm-s03);
+    padding: 12px 2px;
 }
-.legacy-row + .legacy-row { margin-top: 10px; }
+.legacy-row + .legacy-row { border-top: 1px solid var(--bmm-s06); }
 
 /* min-width:0 or a long Windows path refuses to shrink and pushes the button off the card. */
 .legacy-row-info { flex: 1; min-width: 0; }

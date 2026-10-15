@@ -148,12 +148,10 @@
 #btn-refresh-repo-profiles:hover { color: var(--bmm-text-primary); }
 
 /* ── Multi-repo hub modal — three numbered sections so the fields read as steps ───── */
-.repo-hub-sec {
-    border: 1px solid var(--bmm-s08);
-    background: var(--bmm-s02);
-    border-radius: 12px;
-    padding: 14px 16px;
-}
+/* One surface (modal-shell.css, "Inside the body"): the number and the title make the step;
+   a hairline splits one step from the next, no box around each. */
+.repo-hub-sec { padding: 0; }
+.repo-hub-sec + .repo-hub-sec { padding-top: 14px; border-top: 1px solid var(--bmm-s08); }
 .repo-hub-sec-h {
     display: flex;
     align-items: center;

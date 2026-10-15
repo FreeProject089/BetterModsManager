@@ -22,7 +22,9 @@
 .fbm-kind b { font-size: 12.5px; }
 .fbm-kind small { font-size: 10.5px; color: var(--text-muted); line-height: 1.3; }
 .fbm-body { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 18px 6px; display: flex; flex-direction: column; gap: 12px; }
-.fbm-sec { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; background: var(--bmm-s02); }
+/* A section is a title over its fields, split from the next by a hairline: no box in the box. */
+.fbm-sec { padding: 0; }
+.fbm-sec + .fbm-sec { padding-top: 12px; border-top: 1px solid var(--bmm-s08); }
 .fbm-sec-title { font-size: 10.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; display: flex; align-items: baseline; gap: 8px; }
 .fbm-sec-hint { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--text-muted); }
 .fbm-lbl { display: block; font-size: 11px; font-weight: 600; color: var(--text-secondary); margin: 8px 0 4px; }
@@ -50,7 +52,7 @@
 /* Not-linked: a statement and the button that fixes it, on one row. Deliberately NOT an
    alarm colour — sending a report anonymously is a perfectly good thing to do, and painting
    it red would read as an error in a dialog somebody opened to report one. */
-.fbm-anon { display: flex; align-items: center; gap: 10px; padding: 9px 10px; margin-bottom: 10px; border-radius: 10px; background: var(--surface-2, rgba(255,255,255,0.04)); border: 1px solid var(--border, rgba(255,255,255,0.09)); }
+.fbm-anon { display: flex; align-items: center; gap: 10px; padding: 9px 10px; margin-bottom: 10px; border-radius: 10px; background: var(--bmm-s03); }
 .fbm-anon-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
 .fbm-anon-txt b { font-size: 12px; color: var(--text); }
 .fbm-anon-txt small { font-size: 11px; color: var(--text-muted); line-height: 1.45; }

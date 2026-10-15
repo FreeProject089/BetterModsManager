@@ -1,15 +1,14 @@
 /* The catalogue source list (features/catalogs/source-list.ts): App catalogue → Sources and
    Settings → Catalogue index share it. Tokens only, so every theme (light included) reads it.
-   State is said by a dot and a word, never by a coloured bar down the side of a card. */
+   State is said by a dot and a word, never by a coloured bar down the side of a card.
+   One surface (modal-shell.css, "Inside the body"): the sources are rows split by a hairline
+   with a hover tint, and the explainer is a fold, not framed boxes. */
 
 .csl { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .csl.is-busy .csl-body { opacity: .7; }
 
 .csl-explain {
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 8px 12px;
-    background: var(--bg-secondary);
+    padding: 2px 0;
     font-size: 12px;
     color: var(--text-secondary);
 }
@@ -38,18 +37,18 @@
     letter-spacing: .05em;
     color: var(--text-secondary);
 }
-.csl-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.csl-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0; }
 
 .csl-row {
     display: grid;
     grid-template-columns: 120px minmax(0, 1fr) auto;
     align-items: start;
     gap: 10px;
-    padding: 9px 10px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    background: var(--bg-secondary);
+    padding: 9px 8px;
+    border-radius: 8px;
 }
+.csl-row + .csl-row { border-top: 1px solid var(--bmm-s06); }
+.csl-row:hover { background: var(--bmm-s03); }
 .csl-row.is-off .csl-name,
 .csl-row.is-off .csl-url { opacity: .6; }
 .csl-row.is-off .csl-url { text-decoration: line-through; }

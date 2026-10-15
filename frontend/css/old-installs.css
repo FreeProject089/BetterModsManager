@@ -8,17 +8,19 @@
     color: var(--text-secondary);
 }
 
-.oi-list { display: flex; flex-direction: column; gap: 8px; }
+/* One surface (modal-shell.css, "Inside the body"): an install is a row split from the next
+   by a hairline, with a hover tint, not a framed card. */
+.oi-list { display: flex; flex-direction: column; gap: 0; }
 
 .oi-row {
     display: flex;
     align-items: flex-start;
     gap: 12px;
-    padding: 10px 12px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    background: var(--bmm-s03);
+    padding: 10px 8px;
+    border-radius: 8px;
 }
+.oi-row + .oi-row { border-top: 1px solid var(--bmm-s06); }
+.oi-row:hover { background: var(--bmm-s03); }
 .oi-row.is-off { opacity: 0.7; }
 .oi-row > input[type="checkbox"] { margin-top: 3px; flex-shrink: 0; }
 

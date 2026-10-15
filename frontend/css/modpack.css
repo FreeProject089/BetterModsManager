@@ -332,7 +332,8 @@
     flex: 1; min-width: 0; background: none; border: 0; outline: none;
     font-size: 13px; color: var(--text-primary);
 }
-.mp-del-card { padding: 14px 16px; background: var(--bmm-s03); border: 1px solid var(--bmm-border); border-radius: 12px; }
+/* The pack about to go: its icon, name and description on the body, not in a box. */
+.mp-del-card { padding: 0; }
 .mp-del-row { display: flex; align-items: center; gap: 12px; }
 .mp-del-ic {
     width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;

@@ -362,17 +362,23 @@ body.bmm-no-anim :is(.modal-overlay, .modal-generic-overlay, .modal) { animation
 @keyframes bms-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 @media (prefers-reduced-motion: reduce) { .bms-chip--live .bms-dot { animation: none; } }
 
-/* Section card + the small uppercase label that heads a field or a card. */
+/* Inside the body: ONE surface. The modal body is the only panel; a section inside it is not a
+   framed box (a box in a box in a box read as clutter). A section is spacing + a small title,
+   split from the next by at most one hairline; a list row is a hover / selected tint, never
+   its own bordered card. A frame stays only where it carries meaning, kept light: a field, a
+   code or log block, a warning / error callout, a card that is itself the thing you pick in a
+   grid. Feature stylesheets follow the same rule.
+
+   Section + the small uppercase label that heads a field or a section. `.bms-card` keeps its
+   name (TS builds it) but is a section now: no border, no fill. */
 .bms-card {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    padding: 16px 18px;
-    border: 1px solid var(--bmm-border);
-    border-radius: var(--bmm-radius-card);
-    background: var(--bmm-s02);
+    padding: 0;
     min-width: 0;
 }
+.bms-card + .bms-card { padding-top: 16px; border-top: 1px solid var(--bmm-s08); }
 .bms-card-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; min-width: 0; }
 .bms-card-title { margin: 0; font-size: 13px; font-weight: 800; color: var(--bmm-text-primary); }
 .bms-card-title small { font-size: 11.5px; font-weight: 500; color: var(--bmm-text-secondary); margin-left: 6px; }

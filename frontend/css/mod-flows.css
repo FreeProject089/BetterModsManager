@@ -10,6 +10,9 @@
    Content only: the dialog shell (header, body, footer, close) is modal-shell.css.
    Tokens only, so the light theme, BMM White and the dark themes all read; the accent is a
    fill here, accent-coloured text goes through --bms-accent-ink.
+   One surface in the dialogs (modal-shell.css, "Inside the body"): the archive preview, the
+   count tiles and the folded lists sit on the body (a tint at most, a hairline between folds).
+   Frames stay on the drop zone (dashed: drop here), the warn / error notes and the Laya offer.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ── Shared: a spinning glyph, a one-line note with an icon ──────────────── */
@@ -89,7 +92,7 @@
 .np-note--info, .np-note--warn, .np-note--error {
     padding: 7px 10px;
     border-radius: 8px;
-    border: 1px solid var(--bmm-border);
+    border: 1px solid transparent;
     background: var(--bmm-s03);
 }
 .np-note--warn { border-color: color-mix(in srgb, var(--bmm-warning) 40%, var(--bmm-border)); background: var(--bmm-warning-dim); }
@@ -180,10 +183,8 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
-    padding: 12px 14px;
-    border-radius: 12px;
-    border: 1px solid var(--bmm-border);
-    background: var(--bmm-s03);
+    padding: 12px 0 0;
+    border-top: 1px solid var(--bmm-s08);
     min-width: 0;
 }
 .am-preview-h { display: flex; align-items: center; gap: 8px; min-width: 0; }
@@ -314,40 +315,40 @@
     gap: 2px;
     padding: 10px 12px;
     border-radius: 10px;
-    border: 1px solid var(--bmm-border);
     background: var(--bmm-s03);
     min-width: 0;
 }
 .mpa-tile b { font-size: 20px; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--bmm-text-primary); }
 .mpa-tile span { font-size: 11.5px; color: var(--bmm-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mpa-tile--accent { border-color: var(--bmm-border-accent); background: var(--bmm-accent-dim); }
+.mpa-tile--accent { background: var(--bmm-accent-dim); }
 .mpa-tile--ok b { color: color-mix(in srgb, var(--bmm-success) 60%, var(--bmm-text-primary)); }
 .mpa-tile--warn { border-color: color-mix(in srgb, var(--bmm-warning) 40%, var(--bmm-border)); background: var(--bmm-warning-dim); }
 .mpa-tile--danger { border-color: color-mix(in srgb, var(--bmm-danger) 40%, var(--bmm-border)); background: var(--bmm-danger-dim); }
 
-.mpa-secs { display: flex; flex-direction: column; gap: 6px; }
-.mpa-sec { border: 1px solid var(--bmm-border); border-radius: 10px; background: var(--bmm-s02); min-width: 0; }
+.mpa-secs { display: flex; flex-direction: column; gap: 0; }
+.mpa-sec { min-width: 0; }
+.mpa-sec + .mpa-sec { border-top: 1px solid var(--bmm-s06); }
 .mpa-sec > summary {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 12px;
+    padding: 8px 6px;
+    border-radius: 8px;
     cursor: pointer;
     font-size: 12.5px;
     font-weight: 700;
     color: var(--bmm-text-primary);
     list-style: none;
 }
+.mpa-sec > summary:hover { background: var(--bmm-s04); }
 .mpa-sec > summary::-webkit-details-marker { display: none; }
 .mpa-sec > summary > svg { flex: none; color: var(--bmm-text-secondary); }
 .mpa-sec > summary .pg-count { margin-left: auto; }
 .mpa-sec--enable > summary > svg { color: var(--bms-accent-ink); }
-.mpa-sec--missing { border-color: color-mix(in srgb, var(--bmm-danger) 35%, var(--bmm-border)); }
 .mpa-sec--missing > summary > svg { color: var(--bmm-danger); }
-.mpa-sec--conflicts, .mpa-sec--integrity { border-color: color-mix(in srgb, var(--bmm-warning) 35%, var(--bmm-border)); }
 .mpa-sec--conflicts > summary > svg, .mpa-sec--integrity > summary > svg { color: var(--bmm-warning); }
 .mpa-sec--on > summary > svg { color: var(--bmm-success); }
-.mpa-sec-body { padding: 0 12px 10px; display: flex; flex-direction: column; gap: 6px; }
+.mpa-sec-body { padding: 0 6px 10px 28px; display: flex; flex-direction: column; gap: 6px; }
 .mpa-list {
     margin: 0;
     padding: 0;
