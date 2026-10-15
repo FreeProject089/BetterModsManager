@@ -959,26 +959,18 @@ export async function renderProfiles() {
           ${isActive ? (uiIcon('check', 12, { style: 'vertical-align:middle;margin-right:4px' })) + t('prof.active') : t('mod.activate')}
         </button>
         <button class="btn btn-secondary btn-sm btn-load-order" data-id="${escAttr(p.id)}" data-name="${escAttr(p.name)}" data-tasky="order.openTip" data-tasky-icon="list" aria-label="${escAttr(t('order.title'))}">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-            <path d="M11 6h9"/><path d="M11 12h9"/><path d="M11 18h9"/><path d="m3 8 3-3 3 3"/><path d="M6 5v14"/><path d="m3 16 3 3 3-3"/>
-          </svg>
+          ${uiIcon('list-ordered', 12)}
         </button>
         <button class="btn btn-secondary btn-sm btn-edit-profile" data-id="${escAttr(p.id)}" data-tasky="prof.editTip" data-tasky-icon="edit">
           ${uiIcon('edit', 12)}
         </button>
         <button class="btn btn-secondary btn-sm btn-copy-profile-id" data-id="${escAttr(p.id)}" data-name="${escAttr(p.name)}"
             data-tasky="prof.copyIdTip" data-tasky-icon="hash">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/>
-            <line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>
-          </svg>
+          ${uiIcon('copy', 12)}
         </button>
         <span class="view-actions-sep" aria-hidden="true"></span>
         <button class="btn btn-danger btn-sm btn-del-profile" data-id="${escAttr(p.id)}" data-tasky="prof.deleteTip" data-tasky-icon="trash">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-            <path d="M10 11v6"/><path d="M14 11v6"/>
-          </svg>
+          ${uiIcon('delete', 12)}
         </button>
       </div>
       </div>
@@ -1082,11 +1074,7 @@ export async function renderProfiles() {
                
                 ${actAttrs('bmmOpenStorageManager')}
               >
-                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" aria-hidden="true">
-                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                  <line x1="12" y1="9" x2="12" y2="13"/>
-                  <line x1="12" y1="17" x2="12.01" y2="17"/>
-                </svg>
+                ${uiIcon('warning', 12, { style: `color:${color}` })}
               </button>`;
         });
     })();
@@ -1786,7 +1774,7 @@ function initEditBackgroundSection(profile) {
             <div style="width:40px;height:40px;border-radius:6px;background:var(--bmm-s05);border:1px solid var(--bmm-s10);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0">
                 ${hasBg ?
         (previewPath ? `<img src="${convertFileSrc(previewPath)}?t=${Date.now()}" style="width:100%;height:100%;object-fit:cover">`
-            : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>`)
+            : `${uiIcon('check', 16, { style: 'color:var(--success)' })}`)
         : (uiIcon('image', 18, { style: 'color:var(--text-muted)' }))}
             </div>
             <div style="flex:1">

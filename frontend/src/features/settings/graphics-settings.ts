@@ -16,6 +16,7 @@ import { learnMore } from '../../core/learn-more.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { describeRenderer, gpuAdvice } from './resources-spark.js';
 import { ensureStorageCss } from './storage-modal.js';
+import { uiIcon } from '../../ui/icons.js';
 
 /** The app's toast, handed over by settings.ts: importing ui/app.ts from here would close one
  *  more import cycle (dep-graph.mjs counts them). */
@@ -87,8 +88,6 @@ function webglRenderer(): string {
     } catch { return ''; }
 }
 
-const ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>';
-
 /** Build the card into the Settings page, after the Performance & Benchmark card (card-order.ts
  *  then places it with the other "how it looks" cards). Safe to call twice. */
 export function mountGraphicsCard(): HTMLElement | null {
@@ -102,50 +101,48 @@ export function mountGraphicsCard(): HTMLElement | null {
     card.className = 'glass-card';
     card.id = CARD_ID;
     card.innerHTML = `
-        <h3 class="card-title" style="display:flex;align-items:center;gap:10px">${ICON}<span data-i18n="gfx.cardTitle">${esc(tr('gfx.cardTitle', 'Graphics & display'))}</span>${learnMore('graphics', { compact: true, className: 'lm-end' })}</h3>
-        <div class="stm stm-gfx-card">
-            <div class="stm-lead"><span data-i18n="stm.lead.graphics">${esc(tr('stm.lead.graphics', 'Which graphics card draws BMM\'s window. It only concerns the interface, never your apps or your mods.'))}</span></div>
-            <div class="stm-card">
-                <div class="stm-row">
-                    <div class="stm-grow">
-                        <label class="stm-card-title" for="stm-gfx-mode" data-i18n="stm.gfx.title">${esc(tr('stm.gfx.title', 'Graphics card for the interface'))}</label>
-                        <div class="stm-help stm-gfx-help"></div>
-                    </div>
-                    <select id="stm-gfx-mode" class="input" data-i18n-tooltip="stm.gfx.tip" data-tooltip="${escAttr(tr('stm.gfx.tip', 'Applies the next time BMM starts.'))}"></select>
+        <h3 class="card-title">${uiIcon('monitor', 16)}<span data-i18n="gfx.cardTitle">${esc(tr('gfx.cardTitle', 'Graphics & display'))}</span>${learnMore('graphics', { className: 'lm-end' })}</h3>
+        <p class="stg-help" data-i18n="stm.lead.graphics">${esc(tr('stm.lead.graphics', 'Which graphics card draws the BMM window. Your apps and mods are not affected.'))}</p>
+        <div class="set-rows stm-gfx-card">
+            <div class="set-row">
+                <div>
+                    <label class="set-row-title" for="stm-gfx-mode" data-i18n="stm.gfx.title">${esc(tr('stm.gfx.title', 'Graphics card for the interface'))}</label>
+                    <div class="set-row-desc stm-gfx-help"></div>
                 </div>
-                <div class="stm-note stm-gfx-note" role="status" hidden>
-                    <span class="stm-gfx-note-text"></span>
-                    <button type="button" class="btn btn-sm stm-gfx-restart" data-i18n="stm.gfx.restart" hidden>${esc(tr('stm.gfx.restart', 'Restart BMM now'))}</button>
+                <select id="stm-gfx-mode" class="input stg-sel" data-i18n-tooltip="stm.gfx.tip" data-tooltip="${escAttr(tr('stm.gfx.tip', 'Applies the next time BMM starts.'))}"></select>
+            </div>
+            <div class="stm-note stm-gfx-note" role="status" hidden>
+                <span class="stm-gfx-note-text"></span>
+                <button type="button" class="btn btn-sm stm-gfx-restart" data-i18n="stm.gfx.restart" hidden>${esc(tr('stm.gfx.restart', 'Restart BMM now'))}</button>
+            </div>
+            <div class="set-row">
+                <div>
+                    <div class="set-row-title" data-i18n="stm.gfx.now">${esc(tr('stm.gfx.now', 'Drawing the window right now'))}</div>
+                    <div class="set-row-desc stm-gfx-cards"></div>
                 </div>
-                <div class="stm-card-title" data-i18n="stm.gfx.now">${esc(tr('stm.gfx.now', 'Drawing the window right now'))}</div>
                 <div class="stm-gfx-renderer"></div>
-                <div class="stm-help stm-gfx-cards"></div>
-                <div class="stm-alert is-warn stm-gfx-fallback" data-i18n="stm.gfx.fallback" hidden>${esc(tr('stm.gfx.fallback', 'BMM is drawn by the processor although this PC has a graphics card and you did not turn it off. The driver may be blocked or may have crashed: updating it usually fixes this.'))}</div>
             </div>
-            <div class="stm-card">
-                <div class="stm-row">
-                    <div class="stm-grow">
-                        <label class="stm-card-title" for="gfx-reduce-anim" data-i18n="gfx.reduceAnim">${esc(tr('gfx.reduceAnim', 'Reduce animations'))}</label>
-                        <div class="stm-help" data-i18n="gfx.reduceAnimHint">${esc(tr('gfx.reduceAnimHint', 'Transitions and effects end at once, whatever the theme. Progress spinners keep turning, slowly. Applies immediately.'))}</div>
-                    </div>
-                    <label class="bmm-switch" data-i18n-tooltip="gfx.reduceAnimTip" data-tooltip="${escAttr(tr('gfx.reduceAnimTip', 'Also on by itself when Windows asks apps to show fewer animations.'))}">
-                        <input type="checkbox" id="gfx-reduce-anim"${reducesAnimations() ? ' checked' : ''}>
-                        <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
-                    </label>
+            <div class="stm-alert is-warn stm-gfx-fallback" data-i18n="stm.gfx.fallback" hidden>${esc(tr('stm.gfx.fallback', 'BMM is drawn by the processor although this PC has a graphics card and you did not turn it off. The driver may be blocked or may have crashed: updating it usually fixes this.'))}</div>
+            <div class="set-row">
+                <div>
+                    <label class="set-row-title" for="gfx-reduce-anim" data-i18n="gfx.reduceAnim">${esc(tr('gfx.reduceAnim', 'Reduce animations'))}</label>
+                    <div class="set-row-desc" data-i18n="gfx.reduceAnimHint">${esc(tr('gfx.reduceAnimHint', 'Cuts transitions and effects, whatever the theme. Applies at once.'))}</div>
                 </div>
+                <label class="bmm-switch" data-i18n-tooltip="gfx.reduceAnimTip" data-tooltip="${escAttr(tr('gfx.reduceAnimTip', 'Also on by itself when Windows asks apps to show fewer animations.'))}">
+                    <input type="checkbox" id="gfx-reduce-anim"${reducesAnimations() ? ' checked' : ''}>
+                    <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
+                </label>
             </div>
-            <div class="stm-card">
-                <div class="stm-row">
-                    <div class="stm-grow">
-                        <label class="stm-card-title" for="gfx-intro-style" data-i18n="gfx.intro">${esc(tr('gfx.intro', 'Start-up animation'))}</label>
-                        <div class="stm-help" data-i18n="gfx.introHint">${esc(tr('gfx.introHint', 'Shown while BMM starts, and gone as soon as it is ready. A click or any key skips it. With reduced animations it stays still.'))}</div>
-                    </div>
-                    <select id="gfx-intro-style" class="input">${introOptions(introStyle())}</select>
+            <div class="set-row">
+                <div>
+                    <label class="set-row-title" for="gfx-intro-style" data-i18n="gfx.intro">${esc(tr('gfx.intro', 'Start-up animation'))}</label>
+                    <div class="set-row-desc" data-i18n="gfx.introHint">${esc(tr('gfx.introHint', 'Shown while BMM starts. A click or any key skips it.'))}</div>
                 </div>
+                <select id="gfx-intro-style" class="input stg-sel">${introOptions(introStyle())}</select>
             </div>
-            <details class="stm-card stm-gfx-hw" id="hw-card">
-                <summary class="stm-card-title" data-i18n="storage.hwTitle">${esc(t('storage.hwTitle'))}</summary>
-                <div id="hw-body" class="stm-help"></div>
+            <details class="set-row set-row--stack stm-gfx-hw" id="hw-card">
+                <summary class="set-row-title" data-i18n="storage.hwTitle">${esc(t('storage.hwTitle'))}</summary>
+                <div id="hw-body" class="stm-help stg-row-body"></div>
                 <div class="stm-help" data-i18n="storage.hwNote">${esc(t('storage.hwNote'))}</div>
             </details>
         </div>`;

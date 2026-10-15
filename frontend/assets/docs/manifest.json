@@ -19,6 +19,9 @@
     "features/community",
     "features/feedback",
     "features/settings",
+    "features/navigation",
+    "features/history",
+    "features/translation-studio",
     "features/activity",
     "features/tools",
     "features/command-palette",
@@ -115,7 +118,7 @@
         "en": "Three steps. Do them in order — the second one is the one people skip, and it's the one that matters.",
         "fr": "Trois étapes. Dans l'ordre — la deuxième est celle qu'on saute, et c'est celle qui compte."
       },
-      "words": 434,
+      "words": 513,
       "diagrams": 0,
       "fr": true
     },
@@ -145,7 +148,7 @@
         "en": "The Library is where every mod you own lives — installed or not, from any source.",
         "fr": "La Bibliothèque, c'est là que vit chacun de tes mods — installé ou non, quelle que soit sa provenance."
       },
-      "words": 956,
+      "words": 1065,
       "diagrams": 0,
       "fr": true
     },
@@ -160,7 +163,7 @@
         "en": "A .MM file is your complete setup, written down — and unlike a modpack, it carries the download links, so the person receiving it doesn't need to own the mods…",
         "fr": "Un fichier .MM, c'est ta configuration complète, écrite — et contrairement à un modpack, il embarque les liens de téléchargement : la personne qui le reçoit…"
       },
-      "words": 500,
+      "words": 607,
       "diagrams": 0,
       "fr": true
     },
@@ -175,7 +178,7 @@
         "en": "A profile is a saved answer to \"which mods are on, in what order, for this game\".",
         "fr": "Un profil est une réponse enregistrée à « quels mods sont actifs, dans quel ordre, pour ce jeu »."
       },
-      "words": 830,
+      "words": 837,
       "diagrams": 0,
       "fr": true
     },
@@ -190,7 +193,7 @@
         "en": "A modpack is a named bundle of mods you can toggle in one click. Where a profile is \"my setup for this game\", a modpack is \"this group of mods, together\" —…",
         "fr": "Un modpack est un lot de mods nommé, activable en un clic. Là où un profil répond à « ma configuration pour ce jeu », un modpack répond à « ce groupe de mods,…"
       },
-      "words": 523,
+      "words": 918,
       "diagrams": 0,
       "fr": true
     },
@@ -205,7 +208,7 @@
         "en": "A Server Repo is a shared, versioned collection of mods. Two things flow through it: you sync mods from a repo into a profile, and BMM uses the repo to tell…",
         "fr": "Un Dépôt Serveur est une collection de mods partagée et versionnée. Deux flux le traversent : tu synchronises des mods depuis un dépôt vers un profil, et BMM…"
       },
-      "words": 7014,
+      "words": 7250,
       "diagrams": 1,
       "fr": true
     },
@@ -220,7 +223,7 @@
         "en": "Extend BMM with community plugins and automate actions.",
         "fr": "Étends BMM avec des plugins communautaires et automatise des actions."
       },
-      "words": 3672,
+      "words": 3829,
       "diagrams": 0,
       "fr": true
     },
@@ -235,7 +238,7 @@
         "en": "Schedule BMM actions (one-time or recurring) — activate a mod, modpack, profile… with conditions (if/else), your own scripts and external programs.",
         "fr": "Planifiez des actions BMM (ponctuelles ou récurrentes) — activer un mod, un modpack, un profil… avec conditions (si/sinon), tes propres scripts et des…"
       },
-      "words": 11129,
+      "words": 11735,
       "diagrams": 0,
       "fr": true
     },
@@ -262,10 +265,10 @@
         "fr": "BMMScript — toutes les actions, conditions et valeurs"
       },
       "summary": {
-        "en": "120 actions · 47 conditions · 65 values · 8 loop sources",
-        "fr": "120 actions · 47 conditions · 65 valeurs · 8 sources de boucle"
+        "en": "137 actions · 47 conditions · 85 values · 8 loop sources",
+        "fr": "137 actions · 47 conditions · 85 valeurs · 8 sources de boucle"
       },
-      "words": 568,
+      "words": 635,
       "diagrams": 0,
       "fr": true
     },
@@ -280,7 +283,7 @@
         "en": "Browse & install apps in one click.",
         "fr": "Parcours et installe des apps en un clic."
       },
-      "words": 2259,
+      "words": 2572,
       "diagrams": 0,
       "fr": true
     },
@@ -295,7 +298,7 @@
         "en": "Some mods are packaged wrong. The files are fine; the folders around them aren't. The Mapper fixes that without you unzipping anything by hand.",
         "fr": "Certains mods sont mal empaquetés. Les fichiers sont bons ; les dossiers autour, non. Le Mapper corrige ça sans que tu dézippes quoi que ce soit à la main."
       },
-      "words": 597,
+      "words": 687,
       "diagrams": 0,
       "fr": true
     },
@@ -310,7 +313,7 @@
         "en": "News & posts from the BetterCommunity blogs, read without leaving BMM.",
         "fr": "Actus et articles des blogs BetterCommunity, lus sans quitter BMM."
       },
-      "words": 1471,
+      "words": 1478,
       "diagrams": 0,
       "fr": true
     },
@@ -340,7 +343,52 @@
         "en": "Settings is a long page, but most of it you set once and forget. This tour starts with the handful that change how BMM feels, then walks the rest section by…",
         "fr": "Les Paramètres forment une longue page, mais la plupart se règlent une fois pour toutes."
       },
-      "words": 2984,
+      "words": 3221,
+      "diagrams": 0,
+      "fr": true
+    },
+    {
+      "path": "features/navigation",
+      "section": "features",
+      "title": {
+        "en": "Customise navigation",
+        "fr": "Personnaliser la navigation"
+      },
+      "summary": {
+        "en": "The sidebar is yours to arrange. Press the pencil at the bottom of the sidebar (or use Settings → Navigation & custom pages) to open the editor.",
+        "fr": "La barre latérale est à toi. Appuie sur le crayon en bas de la barre latérale (ou utilise Paramètres → Navigation et pages personnalisées) pour ouvrir l'éditeur."
+      },
+      "words": 591,
+      "diagrams": 0,
+      "fr": true
+    },
+    {
+      "path": "features/history",
+      "section": "features",
+      "title": {
+        "en": "Change history & release notes",
+        "fr": "Historique des changements & notes de version"
+      },
+      "summary": {
+        "en": "BMM keeps a timeline of what changed and lets you undo some of it. A second, separate view keeps the release notes of every BMM version.",
+        "fr": "BMM garde une chronologie de ce qui a changé et te laisse annuler une partie. Une seconde vue, séparée, garde les notes de version de chaque version de BMM."
+      },
+      "words": 386,
+      "diagrams": 0,
+      "fr": true
+    },
+    {
+      "path": "features/translation-studio",
+      "section": "features",
+      "title": {
+        "en": "Translation studio",
+        "fr": "Studio de traduction"
+      },
+      "summary": {
+        "en": "The Translation studio is where you translate BMM, fix a wording, or start a new language. It replaces the old translation sandbox.",
+        "fr": "Le Studio de traduction sert à traduire BMM, corriger une formulation ou démarrer une nouvelle langue. Il remplace l'ancien bac à sable de traduction."
+      },
+      "words": 602,
       "diagrams": 0,
       "fr": true
     },
@@ -385,7 +433,7 @@
         "en": "Press Ctrl+K (Cmd+K on macOS) anywhere in BMM to open the command palette — a single search box laid over every page and every action. Type a few letters,",
         "fr": "Appuie sur Ctrl+K (Cmd+K sur macOS) n'importe où dans BMM pour ouvrir la palette de commandes — une seule barre de recherche par-dessus toutes les pages et"
       },
-      "words": 775,
+      "words": 1199,
       "diagrams": 1,
       "fr": true
     },
@@ -400,7 +448,7 @@
         "en": "When BMM has something to tell you at launch, it says it in one window with Previous and Next — not in a string of dialogs that open one after the other.",
         "fr": "Quand BMM a quelque chose à vous dire au lancement, il le dit dans une seule fenêtre avec Précédent et Suivant — pas dans une série de fenêtres qui s'ouvrent…"
       },
-      "words": 671,
+      "words": 751,
       "diagrams": 0,
       "fr": true
     },
@@ -445,7 +493,7 @@
         "en": "Until you explicitly accept the consent dialog, nothing is collected at all — the tracker is a no-op.",
         "fr": "Tant que tu n'acceptes pas explicitement la boîte de consentement, rien n'est collecté du tout — le traqueur ne fait rien."
       },
-      "words": 1332,
+      "words": 1339,
       "diagrams": 3,
       "fr": true
     },
@@ -490,7 +538,7 @@
         "en": "Customise every colour, font and element of BMM. Share themes in one click. Building your own? The full token-by-token reference is Make your own theme.",
         "fr": "Personnalise chaque couleur, police et élément de BMM. Partage tes thèmes en un clic."
       },
-      "words": 1388,
+      "words": 1600,
       "diagrams": 0,
       "fr": true
     },
@@ -970,7 +1018,7 @@
         "en": "The features have their own pages. This one is about the interactions — the clicks, keys and small conveniences that aren't obvious until someone points at them.",
         "fr": "Les fonctionnalités ont leur propre page. Celle-ci parle des interactions — les clics, touches et petites commodités qu'on ne devine pas tant que quelqu'un ne…"
       },
-      "words": 506,
+      "words": 589,
       "diagrams": 0,
       "fr": true
     },
@@ -1030,7 +1078,7 @@
         "en": "Some texts in BMM contain a word between braces, such as {n} or {name}. BMM replaces it with a value when it shows the text: \"{n} new mods added\" becomes « 3…",
         "fr": "Certains textes de BMM contiennent un mot entre accolades, comme {n} ou {name}."
       },
-      "words": 339,
+      "words": 345,
       "diagrams": 0,
       "fr": true
     }

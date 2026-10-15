@@ -1,7 +1,10 @@
 /* BMM Tools hub (features/tools/tools-hub.ts links this file when it opens).
    Theme tokens only. The shell (header, body, close) is modal-shell's; these rules style the
    CONTENT. Chip and summary TEXT mixes the status colour into the text ink, never the raw
-   status colour: on a light theme --bmm-success / --bmm-warning are fills, not inks. */
+   status colour: on a light theme --bmm-success / --bmm-warning are fills, not inks.
+   One surface (modal-shell.css, "Inside the body"): the rail is split from the pane by a
+   hairline, the options and the results are sections, not framed boxes. Frames stay on the log
+   (a code block) and on the error / ok / warn callouts. */
 
 .tools-hub {
     display: grid;
@@ -19,7 +22,6 @@
     gap: 8px;
     padding: 12px 10px;
     border-right: 1px solid var(--bmm-s08);
-    background: var(--bmm-s02);
     min-height: 0;
 }
 .tools-search {
@@ -62,7 +64,6 @@
 .tools-rail-item:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: 1px; }
 .tools-rail-item.is-active {
     background: var(--bmm-accent-dim);
-    border-color: var(--bmm-border-accent);
     color: var(--bmm-text-primary);
 }
 .tools-rail-item.is-link { font-size: 12px; }
@@ -149,10 +150,8 @@
     flex-wrap: wrap;
     align-items: flex-end;
     gap: 10px 12px;
-    padding: 12px;
-    border: 1px solid var(--bmm-border);
-    border-radius: var(--bmm-radius-card);
-    background: var(--bmm-s02);
+    padding: 4px 0 14px;
+    border-bottom: 1px solid var(--bmm-s08);
 }
 .tools-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 11.5px; color: var(--bmm-text-secondary); }
 .tools-field.tools-grow { flex: 1 1 260px; }
@@ -200,15 +199,13 @@
     gap: 6px;
     padding: 26px 16px;
     text-align: center;
-    border: 1px dashed var(--bmm-border);
     border-radius: var(--bmm-radius-card);
     color: var(--bmm-text-secondary);
 }
 .tools-state-title { margin: 0; font-size: 13px; font-weight: 600; color: var(--bmm-text-primary); }
 .tools-state-sub { margin: 0; font-size: 12px; max-width: 70ch; overflow-wrap: anywhere; }
 .tools-state.is-error {
-    border-style: solid;
-    border-color: color-mix(in srgb, var(--bmm-danger) 45%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bmm-danger) 45%, transparent);
     background: var(--bmm-danger-dim);
 }
 .tools-state.is-error > svg { color: color-mix(in srgb, var(--bmm-danger) 60%, var(--bmm-text-primary)); }
@@ -251,7 +248,7 @@
 .tools-log-line.is-error { color: color-mix(in srgb, var(--bmm-danger) 60%, var(--bmm-text-primary)); }
 .tools-empty, .tools-note { margin: 0; font-size: 12px; color: var(--bmm-text-secondary); }
 .tools-form .tools-note.tools-full { flex: 1 1 100%; }
-.tools-empty { padding: 18px; text-align: center; border: 1px dashed var(--bmm-border); border-radius: var(--bmm-radius-card); }
+.tools-empty { padding: 18px; text-align: center; }
 .tools-error {
     margin: 0;
     padding: 10px 12px;
@@ -261,34 +258,35 @@
     color: color-mix(in srgb, var(--bmm-danger) 55%, var(--bmm-text-primary));
     font-size: 12px;
 }
+/* A plain summary is a sentence; ok / warn are callouts and keep a light frame. */
 .tools-summary {
     margin: 0;
-    padding: 9px 12px;
-    border: 1px solid var(--bmm-border);
+    padding: 0;
+    border: 1px solid transparent;
     border-radius: var(--bmm-radius-input);
-    background: var(--bmm-s03);
     font-size: 12.5px;
     color: var(--bmm-text-primary);
 }
+.tools-summary.is-ok, .tools-summary.is-warn { padding: 9px 12px; }
 .tools-summary.is-ok { border-color: color-mix(in srgb, var(--bmm-success) 45%, transparent); background: var(--bmm-success-dim); }
 .tools-summary.is-warn { border-color: color-mix(in srgb, var(--bmm-warning) 45%, transparent); background: var(--bmm-warning-dim); }
 .tools-h { display: flex; align-items: center; gap: 8px; margin: 8px 0 0; font-size: 12.5px; color: var(--bmm-text-primary); }
+/* A group of results: a small heading over its rows, no box around them. */
 .tools-group {
     display: flex;
     flex-direction: column;
-    border: 1px solid var(--bmm-border);
-    border-radius: var(--bmm-radius-input);
-    background: var(--bmm-s02);
-    overflow: hidden;
+    min-width: 0;
 }
+.tools-group + .tools-group { margin-top: 6px; }
 .tools-group-head {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
     gap: 8px;
-    padding: 7px 10px;
+    padding: 6px 2px;
     border-bottom: 1px solid var(--bmm-s08);
     font-size: 12px;
+    font-weight: 600;
     color: var(--bmm-text-primary);
 }
 .tools-row {
@@ -301,6 +299,8 @@
     color: var(--bmm-text-primary);
 }
 .tools-row + .tools-row { border-top: 1px solid var(--bmm-s06); }
+.tools-group .tools-row { padding-inline: 4px; }
+.tools-group .tools-row:hover { background: var(--bmm-s03); }
 .tools-row-main { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tools-muted { color: var(--bmm-text-muted); }
 .tools-path {

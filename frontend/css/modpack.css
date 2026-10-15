@@ -1,36 +1,47 @@
 /* modpack.css: the Modpacks page (features/mods/modpack-creator.ts).
  *
- * Oct 2026: tokens only. The cards and the editor were painted with white washes
- * (rgba(255,255,255,0.01..0.08)) that disappear under BMM White, a black inset that punched a
- * hole in it, and a white switch knob on a near-white track. The card actions only appeared
- * on hover, so a keyboard user never saw Edit / Export / Delete; they are always there now,
- * quieter until the card is hovered or focused. */
+ * Oct 2026 redesign. Tokens only, so BMM White and the dark themes share every rule.
+ *   1. The page: header row, the one toolbar, the cards (grid or list), the « … » menu.
+ *   2. The pack dialog (#mp-wizard, .mpw): steps band, fields, the mod picker, options, review.
+ *   3. Import / export & share (.mpx), delete, repair (.mp-rep).
+ * The dialogs themselves are css/modal-shell.css; this file only lays out what is inside them,
+ * and inside a dialog a section is spacing and a hairline, never a framed box. */
 
-/* ── Toolbar: search + how many are shown ───────────────────────────────────────────────── */
+/* ── 1. The page ────────────────────────────────────────────────────────────────────────── */
+
+/* The page header: the title keeps its width; the action row wraps under it when it must. */
+#view-modpacks > .view-header { flex-wrap: wrap; gap: 12px 16px; }
+#view-modpacks > .view-header > div:first-child { flex: 1 1 260px; min-width: 0; }
+#view-modpacks > .view-header > .view-actions { flex-wrap: wrap; }
+#modpack-header-actions { gap: 8px; }
+#modpack-header-actions .mp-create { gap: 6px; }
+#modpack-header-actions[hidden] { display: none; }
+
+/* One bar: search, filter, sort, count, layout. */
 .mp-toolbar {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px 10px;
     flex-wrap: wrap;
-    margin-bottom: 16px;
 }
 .mp-search {
-    flex: 0 1 340px;
+    flex: 0 1 320px;
     min-width: 0;
     display: flex;
     align-items: center;
     gap: 8px;
-    height: 38px;
+    height: 36px;
     padding: 0 12px;
     border-radius: 10px;
     border: 1px solid var(--bmm-border);
     background: var(--bmm-s04);
     color: var(--bmm-text-secondary);
-    transition: border-color 0.15s;
+    transition: border-color var(--bmm-transition-fast);
 }
 .mp-search:focus-within { border-color: var(--bmm-accent); }
 .mp-search > svg { flex: none; }
 .mp-search input { flex: 1; min-width: 0; border: 0; outline: none; background: none; color: var(--bmm-text-primary); font-size: 13px; }
+.mp-select { width: auto; flex: none; height: 36px; min-width: 0; }
 .mp-count {
     display: inline-flex;
     align-items: center;
@@ -44,35 +55,37 @@
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
-#modpack-header-actions .mp-create { gap: 6px; }
-#modpack-header-actions[hidden] { display: none; }
+.mp-view { flex: none; }
 
-/* ── Empty states ───────────────────────────────────────────────────────────────────────── */
-.mp-empty { padding: 56px 20px; }
-.mp-empty .empty-icon { color: var(--bmm-text-secondary); }
-.mp-empty-a { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 14px; }
+/* Empty states. */
+.mp-empty { padding: 64px 20px; }
+.mp-empty .bms-note { max-width: 420px; }
+.mp-empty-a { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 8px; }
 .mp-empty-a .btn { gap: 6px; }
-.mp-nohit { padding: 36px 20px; }
+.mp-nohit { padding: 40px 20px; }
 .mp-nohit[hidden] { display: none; }
 
-/* ── Cards ──────────────────────────────────────────────────────────────────────────────── */
+/* Cards: cover, name + state, meta, description; the foot carries the one action and « … ». */
 .modpack-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
-    gap: 14px;
+    gap: 12px;
 }
 .modpack-card {
     position: relative;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: "cover main" "foot foot";
+    grid-template-rows: 1fr auto;
+    align-items: start;
+    gap: 12px 14px;
     min-width: 0;
     padding: 16px;
     border-radius: 14px;
     border: 1px solid var(--bmm-border);
     background: var(--bmm-s02);
     cursor: pointer;
-    transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+    transition: border-color var(--bmm-transition-fast), background-color var(--bmm-transition-fast);
 }
 .modpack-card[hidden] { display: none; }
 /* No geometry change on hover: a card that moves out from under the pointer flickers. */
@@ -81,52 +94,67 @@
     border-color: color-mix(in srgb, var(--bmm-accent) 40%, var(--bmm-border));
     background: var(--bmm-s04);
 }
-.modpack-card-top { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
-.modpack-card-icon {
-    width: 38px;
-    height: 38px;
+.mp-cover {
+    grid-area: cover;
+    width: 46px;
+    height: 46px;
     flex: none;
     display: grid;
     place-items: center;
-    border-radius: 10px;
-    border: 1px solid color-mix(in srgb, var(--bmm-accent) 30%, var(--bmm-border));
+    border-radius: 12px;
+    border: 1px solid var(--bmm-border-accent);
     background: var(--bmm-accent-dim);
-    color: color-mix(in srgb, var(--bmm-accent) 70%, var(--bmm-text-primary));
+    color: var(--bms-accent-ink);
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    user-select: none;
 }
-.modpack-card-info { flex: 1; min-width: 0; }
+.mp-cover--sm { width: 38px; height: 38px; border-radius: 10px; font-size: 13px; }
+.modpack-card.is-on .mp-cover {
+    border-color: color-mix(in srgb, var(--bmm-success) 45%, var(--bmm-border));
+}
+.mp-card-main { grid-area: main; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.mp-card-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .modpack-card-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
     font-size: 15px;
     font-weight: 700;
+    line-height: 1.3;
     color: var(--bmm-text-primary);
+    text-align: left;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    margin-bottom: 6px;
+    cursor: pointer;
 }
-.modpack-card-meta { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
-.mp-chip {
+.modpack-card-title:hover { color: var(--bms-accent-ink); }
+.modpack-card-title:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: 2px; border-radius: 4px; }
+.mp-card-head .bms-chip { flex: none; }
+.mp-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    min-width: 0;
+    font-size: 12px;
+    color: var(--bmm-text-secondary);
+}
+.mp-card-meta > span { display: inline-flex; align-items: center; gap: 5px; min-width: 0; white-space: nowrap; }
+.mp-card-meta > span > svg { flex: none; }
+.mp-meta-warn {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    max-width: 100%;
-    padding: 1px 8px;
-    border-radius: 999px;
-    border: 1px solid var(--bmm-border);
-    background: var(--bmm-s04);
-    color: var(--bmm-text-secondary);
-    font-size: 11px;
-    font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.mp-chip--warn {
-    border-color: color-mix(in srgb, var(--bmm-warning) 40%, var(--bmm-border));
-    background: var(--bmm-warning-dim);
+    gap: 5px;
     color: color-mix(in srgb, var(--bmm-warning) 62%, var(--bmm-text-primary));
 }
 .modpack-card-desc {
-    margin: 0;
+    margin: 2px 0 0;
     font-size: 12.5px;
     line-height: 1.5;
     color: var(--bmm-text-secondary);
@@ -134,160 +162,237 @@
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
-    min-height: 3em;
 }
-.modpack-card-desc.is-empty { font-style: italic; opacity: 0.75; }
-.modpack-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 8px; border-top: 1px solid var(--bmm-border); }
-.modpack-card-date { font-size: 11.5px; color: var(--bmm-text-secondary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.modpack-card-actions { display: flex; gap: 2px; flex: none; opacity: 0.7; transition: opacity 0.15s; }
-.modpack-card:hover .modpack-card-actions,
-.modpack-card:focus-within .modpack-card-actions { opacity: 1; }
-.modpack-card-actions .btn { color: var(--bmm-text-secondary); }
-.modpack-card-actions .btn:hover { color: var(--bmm-text-primary); }
-.mp-danger:hover, .modpack-card-actions .mp-danger:hover { color: var(--bmm-danger); }
-.mp-apply { flex: none; padding-top: 2px; }
-
-/* ── The apply switch: a real button, tokens for track and knob ─────────────────────────── */
-.mp-switch {
-    position: relative;
-    width: 40px;
-    height: 22px;
-    flex: none;
-    padding: 0;
-    border-radius: 999px;
-    border: 1px solid var(--bmm-border-hover);
-    background: var(--bmm-s10);
-    cursor: pointer;
-    transition: background 0.2s, border-color 0.2s;
-}
-.mp-switch-knob {
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: var(--bmm-text-secondary);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
-    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), background 0.2s;
-}
-.mp-switch.active {
-    background: var(--bmm-success);
-    border-color: color-mix(in srgb, var(--bmm-success) 70%, var(--bmm-border));
-}
-.mp-switch.active .mp-switch-knob { transform: translateX(18px); background: var(--bmm-text-on-accent); }
-.mp-switch:focus-visible { outline: 2px solid color-mix(in srgb, var(--bmm-accent) 75%, transparent); outline-offset: 2px; }
-.mp-switch:disabled, .mp-switch[aria-busy="true"] { opacity: 0.5; cursor: wait; }
-@media (prefers-reduced-motion: reduce) { .mp-switch, .mp-switch-knob { transition: none; } }
-
-/* ── Editor ─────────────────────────────────────────────────────────────────────────────── */
-.mp-ed-head {
+.modpack-card-foot {
+    grid-area: foot;
     display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 12px 16px;
-    margin-bottom: 18px;
-}
-.mp-ed-titles { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.mp-crumbs { display: flex; align-items: center; gap: 6px; color: var(--bmm-text-secondary); font-size: 12px; font-weight: 600; }
-.mp-crumb {
-    display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 2px 6px;
-    margin-left: -6px;
-    border: 0;
-    border-radius: 6px;
-    background: none;
-    color: var(--bmm-text-secondary);
-    font: inherit;
-    cursor: pointer;
+    min-width: 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--bmm-border);
 }
-.mp-crumb:hover { color: var(--bmm-text-primary); background: var(--bmm-s04); }
-.mp-crumb:focus-visible { outline: 2px solid color-mix(in srgb, var(--bmm-accent) 75%, transparent); outline-offset: 1px; }
-.mp-crumb-now { color: var(--bmm-text-primary); }
-.mp-ed-title { margin: 0; font-size: 20px; font-weight: 800; color: var(--bmm-text-primary); overflow-wrap: anywhere; }
-.mp-ed-actions { display: flex; gap: 8px; flex: none; }
-.mp-ed-actions .btn { gap: 6px; min-height: 38px; }
+.modpack-card-foot > .bms-chip { flex: none; }
+.mp-apply-btn { gap: 6px; flex: none; }
+.mp-more { flex: none; color: var(--bmm-text-secondary); }
+.mp-more:hover, .mp-more[aria-expanded="true"] { color: var(--bmm-text-primary); background: var(--bmm-s06); }
 
-.modpack-editor-layout {
-    display: grid;
-    grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
-    gap: 18px;
-    align-items: start;
+/* List layout: one row per pack, the action at the end. */
+.modpack-grid.is-list { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.modpack-grid.is-list .modpack-card {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: "cover main foot";
+    grid-template-rows: auto;
+    align-items: center;
+    padding: 10px 14px;
 }
-@media (max-width: 1000px) {
-    .modpack-editor-layout { grid-template-columns: minmax(0, 1fr); }
+.modpack-grid.is-list .mp-cover { width: 38px; height: 38px; border-radius: 10px; font-size: 13px; }
+.modpack-grid.is-list .mp-card-main { gap: 3px; }
+.modpack-grid.is-list .modpack-card-desc { display: none; }
+.modpack-grid.is-list .mp-card-head { justify-content: flex-start; }
+.modpack-grid.is-list .modpack-card-title { flex: 0 1 auto; }
+.modpack-grid.is-list .modpack-card-foot { padding-top: 0; border-top: 0; gap: 10px; }
+@media (max-width: 760px) {
+    .modpack-grid.is-list .modpack-card { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "cover main" "foot foot"; }
 }
-.editor-section-card {
+
+/* The « … » menu of a card: a small popover, fixed under its button. */
+.mp-menu {
+    position: fixed;
+    z-index: 4500;
+    min-width: 200px;
+    padding: 6px;
     display: flex;
     flex-direction: column;
-    gap: 14px;
-    min-width: 0;
-    padding: 18px;
-    border-radius: 14px;
-    border: 1px solid var(--bmm-border);
-    background: var(--bmm-s02);
+    gap: 2px;
+    border-radius: 12px;
+    border: 1px solid var(--bmm-border-hover);
+    background: var(--bmm-bg-elevated);
+    box-shadow: var(--bmm-shadow-modal);
+    animation: mp-menu-in 0.12s ease-out;
 }
-.editor-section-title {
+.mp-menu-item {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 13px;
-    font-weight: 700;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
     color: var(--bmm-text-primary);
+    font: inherit;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
 }
-.editor-section-title > svg { color: var(--bmm-text-secondary); flex: none; }
-.mp-form { display: flex; flex-direction: column; gap: 14px; }
-.mp-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.mp-field > .form-label { margin: 0; }
-.mp-field textarea.form-input { resize: vertical; min-height: 84px; }
+.mp-menu-item > svg { flex: none; color: var(--bmm-text-secondary); }
+.mp-menu-item:hover, .mp-menu-item:focus-visible { background: var(--bmm-s06); outline: none; }
+.mp-menu-item:focus-visible { box-shadow: inset 0 0 0 2px var(--bmm-accent); }
+.mp-menu-item--danger, .mp-menu-item--danger > svg { color: color-mix(in srgb, var(--bmm-danger) 70%, var(--bmm-text-primary)); }
+.mp-menu-item--danger:hover, .mp-menu-item--danger:focus-visible { background: var(--bmm-danger-dim); }
+.mp-menu-sep { height: 1px; margin: 4px 6px; background: var(--bmm-border); }
+@keyframes mp-menu-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .mp-menu { animation: none; } }
+body.bmm-no-anim .mp-menu { animation: none; }
+
+/* ── 2. The pack dialog ─────────────────────────────────────────────────────────────────── */
+
+/* The steps: numbered pills joined by a hairline; the current one is the accent fill. */
+.mpw-band { padding-top: 10px; padding-bottom: 10px; }
+.mpw-steps { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; min-width: 0; }
+.mpw-steps > li { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.mpw-steps > li + li::before { content: ""; width: 18px; height: 1px; background: var(--bmm-border-hover); flex: none; }
+.mpw-step {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px 4px 4px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--bmm-text-secondary);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 700;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background var(--bmm-transition-fast), color var(--bmm-transition-fast);
+}
+.mpw-step:hover:not(:disabled) { background: var(--bmm-s06); color: var(--bmm-text-primary); }
+.mpw-step:disabled { cursor: default; opacity: 0.55; }
+.mpw-step-n {
+    width: 22px;
+    height: 22px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--bmm-s06);
+    color: var(--bmm-text-secondary);
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+}
+.mpw-step.is-done .mpw-step-n {
+    background: var(--bmm-success-dim);
+    color: color-mix(in srgb, var(--bmm-success) 62%, var(--bmm-text-primary));
+}
+.mpw-step[aria-current="step"] { background: var(--bmm-accent-dim); color: var(--bms-accent-ink); opacity: 1; }
+.mpw-step[aria-current="step"] .mpw-step-n { background: var(--bmm-accent); color: var(--bmm-text-on-accent); }
+@media (max-width: 640px) {
+    .mpw-step:not([aria-current="step"]) .mpw-step-l { display: none; }
+    .mpw-step:not([aria-current="step"]) { padding-right: 4px; }
+}
+
+.mpw .bms-field textarea.form-input { resize: vertical; min-height: 72px; }
+.mpw-2col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+@media (max-width: 640px) { .mpw-2col { grid-template-columns: minmax(0, 1fr); } }
+.mpw-foot-note { min-width: 0; }
+
+/* The mod picker: a bar that stays at the top of the body, then the rows. A row is a tint
+   when hovered or picked, never its own bordered card. */
+.mpw-pick-bar {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    margin: -20px calc(var(--bms-pad-x) * -1) 0;
+    padding: 14px var(--bms-pad-x) 12px;
+    background: var(--bmm-bg-elevated);
+    border-bottom: 1px solid var(--bmm-border);
+}
+.mpw-search { flex: 1 1 220px; }
+.mpw-quick { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.mpw-quick .btn { gap: 6px; }
+.mpw-quick-l { font-size: 12px; color: var(--bmm-text-secondary); white-space: nowrap; }
+.mpw-list { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mpw-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    padding: 8px 10px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background var(--bmm-transition-fast);
+}
+.mpw-row[hidden] { display: none; }
+.mpw-row:hover { background: var(--bmm-s04); }
+.mpw-row.is-sel { background: color-mix(in srgb, var(--bmm-accent) 10%, transparent); }
+.mpw-row.is-sel:hover { background: color-mix(in srgb, var(--bmm-accent) 15%, transparent); }
+.mpw-cb { order: -1; flex: none; width: 16px; height: 16px; margin: 0; accent-color: var(--bmm-accent); cursor: pointer; }
+.mpw-row-txt { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.mp-mod-name, .mpw-row-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--bmm-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.mpw-row-meta { display: flex; flex-wrap: wrap; gap: 0 8px; font-size: 11.5px; color: var(--bmm-text-secondary); min-width: 0; }
+.mpw-row-meta > span + span::before { content: "·"; margin-right: 8px; opacity: 0.7; }
+.mpw-row.is-ghost .mpw-row-name { color: var(--bmm-text-secondary); }
+.mpw-on { flex: none; }
+.mpw-group {
+    margin-top: 12px;
+    padding: 4px 10px;
+    font-size: 10.5px;
+    font-weight: 800;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--bmm-text-secondary);
+}
+.mpw-group[hidden], .mpw-nohit[hidden] { display: none; }
+.mpw-nohit { text-align: center; padding: 20px 0; }
+
+/* A check row (option): the checkbox and its two lines. The risky one is a warning callout. */
 .mp-opt {
     display: flex;
     align-items: flex-start;
     gap: 10px;
-    padding: 12px;
+    padding: 10px 12px;
     border-radius: 10px;
-    border: 1px solid var(--bmm-border);
-    background: var(--bmm-s03);
     cursor: pointer;
-    transition: border-color 0.15s;
+    transition: background var(--bmm-transition-fast);
 }
-.mp-opt:hover { border-color: var(--bmm-border-hover); }
+.mp-opt:hover { background: var(--bmm-s03); }
 .mp-opt input { margin-top: 2px; flex: none; accent-color: var(--bmm-accent); width: 16px; height: 16px; }
 .mp-opt-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .mp-opt-txt b { font-size: 13px; color: var(--bmm-text-primary); }
 .mp-opt-txt span { font-size: 12px; line-height: 1.45; color: var(--bmm-text-secondary); }
 .mp-opt--warn {
-    border-color: color-mix(in srgb, var(--bmm-warning) 35%, var(--bmm-border));
+    border: 1px solid color-mix(in srgb, var(--bmm-warning) 35%, var(--bmm-border));
     background: color-mix(in srgb, var(--bmm-warning) 6%, transparent);
 }
+.mp-opt--warn:hover { background: color-mix(in srgb, var(--bmm-warning) 10%, transparent); }
 .mp-opt--warn input { accent-color: var(--bmm-warning); }
 .mp-opt--warn .mp-opt-txt b { color: color-mix(in srgb, var(--bmm-warning) 60%, var(--bmm-text-primary)); }
 
-.mp-ed-mods-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
-.mp-ed-mods-h .btn { gap: 6px; }
-.mp-modlist { display: flex; flex-direction: column; gap: 8px; }
-.mp-modlist-empty { padding: 32px 16px; border: 1px dashed var(--bmm-border-hover); border-radius: 12px; }
-.mod-item-card {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    min-width: 0;
-    padding: 10px 12px;
-    border-radius: 10px;
-    border: 1px solid var(--bmm-border);
-    background: var(--bmm-s03);
-    transition: border-color 0.15s;
+/* Review: the summary, then the order and the per-mod sources. */
+.mpw-sum {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 12px 20px;
+    margin: 0;
 }
-.mod-item-card:hover, .mod-item-card:focus-within { border-color: var(--bmm-border-hover); }
-.mp-mi-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.mp-mi-main { flex: 1; min-width: 0; }
-.mp-mi-name { font-size: 13px; font-weight: 700; color: var(--bmm-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mp-mi-meta { display: flex; gap: 8px; font-size: 11.5px; color: var(--bmm-text-secondary); }
-.mp-mi-meta > span + span::before { content: "·"; margin-right: 8px; opacity: 0.6; }
-.mp-mi-more { border-top: 1px solid var(--bmm-border); padding-top: 6px; }
+.mpw-sum > div { min-width: 0; }
+.mpw-sum dt { font-size: 10.5px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; color: var(--bmm-text-secondary); }
+.mpw-sum dd { margin: 3px 0 0; font-size: 13.5px; font-weight: 600; color: var(--bmm-text-primary); overflow-wrap: anywhere; }
+.mpw-missing { color: color-mix(in srgb, var(--bmm-danger) 65%, var(--bmm-text-primary)); }
+.mpw-refs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.mpw-ref { padding: 8px 2px; min-width: 0; }
+.mpw-ref + .mpw-ref { border-top: 1px solid var(--bmm-s08); }
+.mpw-ref-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.mpw-ref-txt { display: flex; flex-direction: column; gap: 1px; flex: 1 1 auto; min-width: 0; }
+.mpw-ref-txt b { font-size: 13px; color: var(--bmm-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mpw-ref-txt span { font-size: 11.5px; color: var(--bmm-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-danger { color: var(--bmm-text-secondary); }
+.mp-danger:hover { color: color-mix(in srgb, var(--bmm-danger) 70%, var(--bmm-text-primary)); background: var(--bmm-danger-dim); }
+.mp-mi-more { margin: 4px 0 0 58px; min-width: 0; }
 .mp-mi-more-h {
     display: inline-flex;
     align-items: center;
@@ -302,55 +407,79 @@
 }
 .mp-mi-more-h::-webkit-details-marker { display: none; }
 .mp-mi-more-h:hover { color: var(--bmm-text-primary); }
-.mp-mi-more-h svg { transition: transform 0.15s; }
+.mp-mi-more-h svg { transition: transform var(--bmm-transition-fast); }
 .mp-mi-more[open] > .mp-mi-more-h svg { transform: rotate(90deg); }
-.mp-mi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 8px; }
-.mp-mi-opts { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
-.mp-mi-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 18px; }
+.mp-mi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 8px 0; }
+.mp-mi-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 18px; padding-bottom: 4px; }
 .mp-mi-check { font-size: 12.5px; color: var(--bmm-text-primary); align-items: center; }
 .mp-mi-sel { display: flex; align-items: center; gap: 8px; }
-.mp-mi-sel .form-label { margin: 0; white-space: nowrap; }
 .mp-mi-sel .form-input { width: auto; }
-.deps-list { display: flex; flex-wrap: wrap; gap: 4px; }
-.deps-list:empty { display: none; }
+@media (max-width: 640px) { .mp-mi-more { margin-left: 0; } }
 
-/* ── Modpack dialogs on the house shell (modpack-creator.ts) ──────────────────────────────
-   The mod picker and the quick-apply list share one search field in their toolbar band;
-   the delete confirmation shows the pack it is about to remove. The cards themselves are
-   css/modal-shell.css. */
-.mp-ms-search {
-    flex: 1 1 220px; min-width: 0;
-    display: flex; align-items: center; gap: 8px;
-    height: 36px; padding: 0 12px; border-radius: 10px;
-    background: var(--bmm-s04); border: 1px solid var(--bmm-border);
-    color: var(--text-secondary);
-    transition: border-color 0.15s;
-}
-.mp-ms-search:focus-within { border-color: var(--bmm-accent); }
-.mp-ms-search > svg { flex-shrink: 0; }
-.mp-ms-search input {
-    flex: 1; min-width: 0; background: none; border: 0; outline: none;
-    font-size: 13px; color: var(--text-primary);
-}
-.mp-del-card { padding: 14px 16px; background: var(--bmm-s03); border: 1px solid var(--bmm-border); border-radius: 12px; }
-.mp-del-row { display: flex; align-items: center; gap: 12px; }
-.mp-del-ic {
-    width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
-    display: grid; place-items: center;
-    background: var(--bmm-accent-dim); border: 1px solid var(--bmm-border-accent); color: var(--bms-accent-ink);
-}
-.mp-del-name { font-size: 14px; font-weight: 700; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mp-del-meta { font-size: 11px; color: var(--text-secondary); margin-top: 2px; font-weight: 600; }
-.mp-del-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.55; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--bmm-border); }
+/* Building the refs (hashing the picked mods). */
+.mpw-building { display: flex; flex-direction: column; gap: 12px; padding: 48px 8px; }
+.mpw-building-t { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; color: var(--bmm-text-secondary); min-width: 0; }
+.mpw-building-t > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* The page header: the title keeps its width; the action row wraps under it when it must. */
-#view-modpacks > .view-header { flex-wrap: wrap; gap: 12px 16px; }
-#view-modpacks > .view-header > div:first-child { flex: 1 1 260px; min-width: 0; }
-#view-modpacks > .view-header > .view-actions { flex-wrap: wrap; }
+/* ── 3. Import, export & share, delete, repair ──────────────────────────────────────────── */
 
-/* Button placement: the header row spaces like every other page head (the .view-actions
-   default of 4px reads as one fused control), and a card's Delete stands behind a divider
-   instead of touching Edit. */
-#modpack-header-actions { gap: 8px; }
-.modpack-card-actions { align-items: center; }
-.modpack-card-actions .view-actions-sep { height: 16px; margin: 0 3px; }
+/* A pack as one line: cover, name, meta. */
+.mp-line { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.mp-line-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mp-line-txt b { font-size: 14px; color: var(--bmm-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-line-txt span { font-size: 12px; color: var(--bmm-text-secondary); }
+
+/* The ways to import: each is the thing you pick, so each keeps a light frame. */
+.mpx-choices { display: flex; flex-direction: column; gap: 8px; }
+.mpx-choice {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-width: 0;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-s02);
+    color: var(--bmm-text-primary);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color var(--bmm-transition-fast), background-color var(--bmm-transition-fast);
+}
+.mpx-choice:hover, .mpx-choice.is-open { border-color: var(--bmm-border-accent); background: var(--bmm-s04); }
+.mpx-choice-ic {
+    width: 36px;
+    height: 36px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    background: var(--bmm-accent-dim);
+    color: var(--bms-accent-ink);
+}
+.mpx-choice-txt { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.mpx-choice-txt b { font-size: 13.5px; }
+.mpx-choice-txt span { font-size: 12px; color: var(--bmm-text-secondary); }
+.mpx-choice-go { flex: none; color: var(--bmm-text-secondary); }
+.mpx-link { display: flex; flex-direction: column; gap: 6px; padding: 0 2px 4px; }
+.mpx-link[hidden], .mpx-err[hidden] { display: none; }
+.mpx-err { color: color-mix(in srgb, var(--bmm-danger) 70%, var(--bmm-text-primary)); }
+.mpx-ids { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Repair: the mods to fix as rows, then the progress. */
+.mp-rep-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.mp-rep-row { display: flex; align-items: center; gap: 12px; padding: 8px 2px; min-width: 0; }
+.mp-rep-row + .mp-rep-row { border-top: 1px solid var(--bmm-s08); }
+.mp-rep-txt { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.mp-rep-txt b { font-size: 13px; color: var(--bmm-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-rep-txt span { font-size: 11.5px; color: var(--bmm-text-secondary); }
+.mp-rep-row .bms-chip { flex: none; }
+.mp-rep-progress { display: flex; flex-direction: column; gap: 8px; }
+.mp-rep-progress[hidden] { display: none; }
+.mp-rep-status { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--bmm-text-secondary); min-width: 0; }
+.mp-rep-status > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+#repair-status-pct { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--bmm-text-primary); }
+#repair-status-text.is-err { color: color-mix(in srgb, var(--bmm-danger) 70%, var(--bmm-text-primary)); }
+#repair-status-text.is-muted { color: var(--bmm-text-muted); }
+.mp-rep .modal-footer[hidden] { display: none; }

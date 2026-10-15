@@ -5,6 +5,15 @@ Press <kbd>Ctrl</kbd>+<kbd>K</kbd> (<kbd>Cmd</kbd>+<kbd>K</kbd> on macOS) anywhe
 **command palette** — a single search box laid over every page and every action. Type a few letters,
 move with <kbd>↑</kbd> / <kbd>↓</kbd>, and press <kbd>Enter</kbd> to run.
 
+
+<!-- story:everyday -->
+![Everyday shortcuts](assets/docs/media/gifs/everyday.gif)
+
+*Everyday shortcuts. The command palette finds a mod and runs a command, BMM Tools measures the disk, a launch pack starts the game with its tools, and the docs answer a question without leaving the app.*
+
+<div class="bmm-replay" data-src="assets/docs/media/replays/everyday.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/everyday.bmmreplay" data-page="features/command-palette" data-title="Everyday shortcuts"></div>
+<!-- /story:everyday -->
+
 ## What it can reach
 
 The palette is built from the live app, so it always matches what's actually in front of you.
@@ -51,10 +60,42 @@ too), but only commands get a shortcut.
 That is why a custom page you added yesterday is searchable *and* bindable today without registering
 anything by hand, and why a command can never appear in one place and be missing from the other.
 
-## Rebind any shortcut
+## Keyboard shortcuts
 
-The same actions live in **Settings → Keyboard shortcuts**. Click a shortcut, press the keys you
-want, and it's bound; the row's buttons also **reset to default** or **clear** it.
+The same actions live in **Settings → Keyboard shortcuts** (a card of
+its own in **Appearance**). It is a **searchable table**: type a command, a key or a page name in the
+search box; a line under it says how many shortcuts there are and how many are changed or yours.
+**Changed only** keeps just the rows you touched (a changed default, and your own shortcuts).
+
+- **Rebind.** Click a row's keys, then press the combination you want (:kbd[Esc] cancels). A row
+  that was changed carries a *changed* mark; its buttons **go back to the default keys** or
+  **remove the keys**.
+- **Conflicts.** If another command already answers the same keys *in the same place*, the row says
+  « Same keys as … : only one of them runs ». Two shortcuts only clash when they work in the same
+  place, so a key can mean one thing on one page and another elsewhere.
+- **Reserved combinations.** Keys that belong to Windows or to BMM itself are refused with a
+  message; pick another one. A command's own default is never refused.
+- **Import / Export** save your shortcuts to a file and load them back, on another PC for example.
+  A file that is not a BMM shortcuts file is refused.
+- **Reset all** puts every built-in shortcut back to its default keys, after a confirmation.
+  **Your own shortcuts stay.**
+
+### New shortcut
+
+**New shortcut** makes a shortcut for something that has none, in three steps:
+
+1. **Action.** Search and pick what the keys will do. There are five kinds, filtered by tabs:
+   **Commands** (everything in the palette), **Settings cards** (open a card of Settings),
+   **Profiles** (switch to a profile), **Modpacks** (activate a modpack) and **Automations** (run
+   an automation).
+2. **Keys.** Click the box and press the combination. It is checked at once: reserved keys are
+   refused, and if the keys are already used, the dialog says by what and that **saving moves the
+   keys here**.
+3. **Where it works.** **Everywhere**, or **only on** one page.
+
+Give it a name if the default one does not suit you, then **Save shortcut**. A custom shortcut has
+**Edit** and **Delete** buttons on its row. If what it opens is gone later (a deleted profile, say),
+the shortcut says so instead of failing quietly.
 
 !!! tip "Custom pages get shortcuts too"
 

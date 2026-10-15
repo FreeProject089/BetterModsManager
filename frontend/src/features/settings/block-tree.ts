@@ -93,7 +93,7 @@ export function foldersOf(nodes: TreeNode[], prefix = ''): string[] {
     return out;
 }
 
-const FOLDER_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
+const FOLDER_ICON = uiIcon('folder', 12);
 const FILE_ICON = (uiIcon('file', 12));
 const CHEV = (uiIcon('chevron-right', 12));
 

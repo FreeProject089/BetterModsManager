@@ -33,7 +33,7 @@ let toast: Notify = () => { /* not mounted yet */ };
 const S = appState.state as any;
 
 const I = {
-    list: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 6h9"/><path d="M11 12h9"/><path d="M11 18h9"/><path d="M4 6h1v4"/><path d="M4 10h2"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></svg>',
+    list: uiIcon('list-ordered', 16),
     top: (uiIcon('move-top', 12)),
     up: (uiIcon('chevron-up', 12)),
     down: (uiIcon('chevron-down', 12)),
@@ -142,9 +142,9 @@ function whereOf(btn: Element): Where {
     return c.contains('lob-top') ? 'top' : c.contains('lob-bottom') ? 'bottom' : c.contains('lob-up') ? -1 : 1;
 }
 
-/** Put the "Activation order" box at the top of a mod's detail panel (mods-details.ts). */
+/** Put the "Activation order" box in a mod's details (the Conflicts & order tab, mods-details.ts). */
 export function mountOrderSection(panel: HTMLElement, mod: any): void {
-    const body = panel.querySelector('.detail-body');
+    const body = panel.querySelector('.mdd-order-slot') || panel.querySelector('.detail-body');
     if (!body || !mod) return;
     ensureCss();
     const box = document.createElement('section');

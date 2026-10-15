@@ -527,16 +527,16 @@ const KNOWN_MODALS = [
     'modal-repo-update', 'modal-repo-browser', 'modal-repo-sync-summary',
     'modal-repo-history', 'modal-repo-verify-detail', 'modal-server',
     // i18n / feedback / crash
-    'modal-i18n-sandbox', 'modal-crash-report', 'modal-feedback',
+    'modal-crash-report', 'modal-feedback',
     // history / legal / misc
-    'modal-history', 'modal-history-detail', 'modal-license', 'modal-tos', 'modal-privacy',
+    'modal-history', 'modal-license', 'modal-tos', 'modal-privacy',
     'modal-mapper-input', 'modal-mapper-confirm', 'modal-archive-explorer', 'modal-stack',
     // scheduling / updates / perf / language / security
     'modal-scheduler', 'modal-update-notes', 'modal-advanced-perf-overlay', 'modal-lang-select',
     'modal-security-choice', 'update-available-modal', 'ptb-welcome-modal', 'modal-confirm-generic',
     'export-progress-overlay',
     // dynamically-built (descriptive keys; real id/title captured on open)
-    'theme-catalogue', 'theme-editor', 'benchmark', 'interactive-tutorial',
+    'theme-catalogue', 'theme-editor', 'translation-studio', 'benchmark', 'interactive-tutorial',
 ];
 
 // Report a FULL catalog of the app's destinations once per session — pages, tabs,

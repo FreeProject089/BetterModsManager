@@ -8,7 +8,13 @@
 
    Text is --bmm-text-secondary, never -muted: muted (#475569) measured 1.9-2.3:1 on these
    cards in the dark themes — the help lines, the disk paths, the queue states, the table
-   headers and the pill's remove button were all but invisible. */
+   headers and the pill's remove button were all but invisible.
+
+   One surface (modal-shell.css, "Inside the body"): a card here is a SECTION (title + rows,
+   split from the next by a hairline), not a framed box; the table, the disks, the folded
+   details and the preview sit on the body. Frames stay on the callouts (first-use line,
+   warnings, the recommendation), the preset cards you pick, the game picker list, and the
+   inputs. */
 
 .stm {
     --stm-accent-ink: color-mix(in srgb, var(--bmm-accent) 62%, var(--bmm-text-primary));
@@ -116,17 +122,15 @@
     display: flex;
     flex-direction: column;
     gap: var(--stm-row-gap);
-    padding: var(--stm-pad-y) var(--stm-pad-x);
-    border: 1px solid var(--bmm-border);
-    border-radius: 12px;
-    background: var(--bmm-s03);
+    padding: 0;
     min-width: 0;
 }
+.stm-card + .stm-card { padding-top: var(--stm-gap); border-top: 1px solid var(--bmm-s08); }
 .stm-card-flat { background: none; }
 .stm-card-title { margin: 0; font-size: 13.5px; font-weight: 700; line-height: 1.4; color: var(--bmm-text-primary); }
 .stm-help { margin: 0; font-size: 12px; line-height: 1.5; color: var(--bmm-text-secondary); }
-/* An empty list says so in a framed line, not a stray sentence between two cards. */
-.stm-empty { padding: 18px var(--stm-pad-x); border: 1px dashed var(--bmm-border); border-radius: 12px; text-align: center; font-size: 12.5px; color: var(--bmm-text-secondary); }
+/* An empty list says so in a centred line. */
+.stm-empty { padding: 18px var(--stm-pad-x); text-align: center; font-size: 12.5px; color: var(--bmm-text-secondary); }
 .stm-help.is-crit { color: var(--bmm-danger); }
 .stm-row { display: flex; align-items: center; gap: var(--stm-row-gap); flex-wrap: wrap; min-width: 0; }
 .stm-grow { flex: 1 1 220px; min-width: 0; }
@@ -137,10 +141,7 @@
     align-items: center;
     gap: 10px;
     flex-wrap: wrap;
-    padding: 8px 10px;
-    border-radius: 10px;
-    border: 1px solid var(--bmm-border);
-    background: var(--bmm-s04);
+    padding: 2px 0;
     font-size: 12px;
     color: var(--bmm-text-secondary);
 }
@@ -200,18 +201,18 @@
 }
 
 /* ── Folded details ("Learn more", "What it changes", the game options) ─────────────────── */
-.stm-more { border: 1px solid var(--bmm-border); border-radius: 12px; background: var(--bmm-s02); min-width: 0; }
+.stm-more { min-width: 0; }
 .stm-more > summary {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 11px var(--stm-pad-x);
+    padding: 9px 10px;
     cursor: pointer;
     list-style: none;
     font-size: 13px;
     font-weight: 600;
     color: var(--bmm-text-primary);
-    border-radius: 12px;
+    border-radius: 8px;
 }
 .stm-more > summary::-webkit-details-marker { display: none; }
 .stm-more > summary::before {
@@ -227,7 +228,7 @@
 .stm-more[open] > summary::before { transform: rotate(45deg); }
 .stm-more > summary:hover { background: var(--bmm-s04); }
 .stm-more > summary:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: -2px; }
-.stm-more-body { display: flex; flex-direction: column; gap: var(--stm-row-gap); padding: 2px var(--stm-pad-x) var(--stm-pad-y); min-width: 0; }
+.stm-more-body { display: flex; flex-direction: column; gap: var(--stm-row-gap); padding: 2px 10px 6px 24px; min-width: 0; }
 .stm-more-body p { margin: 0; }
 .stm-more-body .lm-link { align-self: flex-start; }
 
@@ -247,7 +248,7 @@
 
 /* ── Live activity ──────────────────────────────────────────────────────────────────────── */
 .stm-meters { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
-.stm-meter { border: 1px solid var(--bmm-border); border-radius: 10px; padding: 8px 10px; min-width: 0; background: var(--bmm-s03); }
+.stm-meter { border-radius: 10px; padding: 8px 10px; min-width: 0; background: var(--bmm-s03); }
 .stm-meter-head { display: flex; justify-content: space-between; gap: 6px; font-size: 11.5px; color: var(--bmm-text-secondary); }
 .stm-meter-v { font-variant-numeric: tabular-nums; color: var(--bmm-text-primary); font-weight: 600; }
 .stm-meter svg { display: block; width: 100%; height: 28px; margin-top: 4px; }
@@ -298,12 +299,10 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
-    padding: 14px var(--stm-pad-x);
-    border: 1px solid var(--bmm-border);
-    border-radius: 12px;
-    background: var(--bmm-s03);
+    padding: 4px 0 0;
     min-width: 0;
 }
+.stm-disk + .stm-disk { padding-top: 14px; border-top: 1px solid var(--bmm-s08); }
 .stm-disk-top { display: flex; align-items: center; gap: var(--stm-row-gap); flex-wrap: wrap; min-width: 0; }
 .stm-disk-name { flex: 1 1 200px; min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 14px; font-weight: 700; color: var(--bmm-text-primary); }
 .stm-disk .stm-more { border: 0; background: none; }
@@ -393,14 +392,11 @@
 .stm-legend-more > summary { padding-block: 9px; font-size: 12.5px; }
 .stm-legend-more .stm-more-body { padding-top: 4px; gap: 12px; }
 
-/* The table in one framed card, its disk filter as a toolbar band above the header row. */
+/* The table on the body, its disk filter as a toolbar line above the header row. */
 .stm-table-card {
     display: flex;
     flex-direction: column;
     min-width: 0;
-    border: 1px solid var(--bmm-border);
-    border-radius: 12px;
-    background: var(--bmm-s02);
 }
 .stm-toolbar {
     display: flex;
@@ -408,22 +404,20 @@
     gap: 8px 12px;
     flex-wrap: wrap;
     min-width: 0;
-    padding: 10px 12px 10px var(--stm-pad-x);
-    border-bottom: 1px solid var(--bmm-border);
-    background: var(--bmm-s03);
-    border-radius: 12px 12px 0 0;
+    padding: 0 0 10px;
+    border-bottom: 1px solid var(--bmm-s08);
 }
 .stm-toolbar-field { display: inline-flex; align-items: center; gap: 10px; min-width: 0; margin: 0; }
 .stm-toolbar-label { font-size: 12px; font-weight: 700; color: var(--bmm-text-secondary); }
 .stm-toolbar .res-m-disk { min-width: 150px; max-width: 220px; }
 .stm-toolbar .res-m-msg { flex: 1 1 auto; min-width: 0; text-align: right; }
 .stm-toolbar .res-m-reset { display: inline-flex; align-items: center; gap: 6px; }
-.stm-table-card .stm-table-wrap { padding: 4px 6px 8px; }
+.stm-table-card .stm-table-wrap { padding: 4px 0 0; }
 .stm-table-card .stm-table th { padding-top: 10px; padding-bottom: 10px; }
 .stm-table-card .stm-table td { padding-top: 6px; padding-bottom: 6px; }
 
 /* ── Rules per disk: the presets for this PC (storage-presets.ts) ─────────────────────────── */
-.stp { gap: 20px; padding: 18px var(--stm-pad-x) var(--stm-pad-x); }
+.stp { gap: 20px; }
 .stp .stm-card-title { font-size: 14px; }
 .stp-head { display: flex; align-items: flex-start; gap: var(--stm-row-gap) 16px; flex-wrap: wrap; }
 .stp-head-text { flex: 1 1 280px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -443,12 +437,11 @@
     gap: 7px;
     min-width: 0;
     padding: 12px 14px;
-    border: 1px solid var(--bmm-border);
     border-radius: 10px;
-    background: var(--bmm-s02);
+    background: var(--bmm-s03);
 }
-.stp-drive.is-used { background: var(--bmm-s04); }
-.stp-drive.is-low { border-color: color-mix(in srgb, var(--bmm-danger) 45%, var(--bmm-border)); }
+.stp-drive.is-used { background: var(--bmm-s05); }
+.stp-drive.is-low { background: var(--bmm-danger-dim); }
 .stp-drive-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
 .stp-drive-name { font-size: 15px; font-weight: 800; color: var(--bmm-text-primary); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stp-kind { flex-shrink: 0; font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--bmm-border); background: var(--bmm-s05); color: var(--bmm-text-secondary); white-space: nowrap; }
@@ -508,7 +501,7 @@
 .stp-badge-applied { border-color: var(--bmm-success); color: var(--bmm-text-primary); }
 
 /* The preview: a diff list, then the note and Apply on one row. */
-.stp-preview { display: flex; flex-direction: column; gap: 12px; padding: 16px; border: 1px solid var(--bmm-border); border-radius: 12px; background: var(--bmm-s02); }
+.stp-preview { display: flex; flex-direction: column; gap: 12px; padding-top: 16px; border-top: 1px solid var(--bmm-s08); }
 .stp-preview:empty { display: none; }
 .stp-preview-head { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; }
 .stp-counts { display: inline-flex; gap: 6px; flex-wrap: wrap; }
@@ -517,9 +510,9 @@
 .stp-count.is-add b { color: var(--bmm-success); }
 .stp-count.is-change b { color: var(--bmm-warning); }
 .stp-count.is-remove b { color: var(--bmm-danger); }
-.stp-diff { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; border: 1px solid var(--bmm-border); border-radius: 10px; overflow: hidden; }
+.stp-diff { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
 .stp-diff-row { display: grid; grid-template-columns: 26px minmax(120px, 200px) 1fr; gap: 10px; align-items: baseline; padding: 8px 12px 8px 8px; font-size: 12.5px; line-height: 1.5; min-width: 0; }
-.stp-diff-row + .stp-diff-row { border-top: 1px solid var(--bmm-border); }
+.stp-diff-row + .stp-diff-row { border-top: 1px solid var(--bmm-s06); }
 .stp-diff-mark { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; font-weight: 800; font-size: 13px; line-height: 1; align-self: center; background: var(--bmm-s05); color: var(--bmm-text-secondary); }
 .stp-diff-row.is-add .stp-diff-mark { background: var(--bmm-success-dim); color: var(--bmm-success); }
 .stp-diff-row.is-change .stp-diff-mark { background: var(--bmm-warning-dim); color: color-mix(in srgb, var(--bmm-warning) 62%, var(--bmm-text-primary)); }
@@ -530,9 +523,9 @@
 .stp-diff-row.is-change .stp-diff-before, .stp-diff-row.is-remove .stp-diff-before { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--bmm-text-secondary) 60%, transparent); }
 .stp-diff-arrow { color: var(--bmm-text-secondary); }
 .stp-diff-after { color: var(--bmm-text-primary); font-weight: 600; }
-.stp-preview-empty { margin: 0; padding: 12px 14px; border: 1px dashed var(--bmm-border); border-radius: 10px; font-size: 12.5px; color: var(--bmm-text-secondary); }
+.stp-preview-empty { margin: 0; padding: 4px 0; font-size: 12.5px; color: var(--bmm-text-secondary); }
 .stp-preview-empty.is-done { color: var(--bmm-text-primary); }
-.stp-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; padding-top: 12px; border-top: 1px solid var(--bmm-border); }
+.stp-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; padding-top: 12px; border-top: 1px solid var(--bmm-s08); }
 .stp-actions .stm-help { flex: 1 1 260px; }
 .stp-apply { flex-shrink: 0; min-width: 120px; justify-content: center; }
 @media (max-width: 640px) {

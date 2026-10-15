@@ -8,6 +8,7 @@ import { lucideIconUrl, phosphorIconUrl } from '../core/icon-cdn.js';
 import { t } from '../core/i18n.js';
 import { toast, openExternal } from './app.js';
 import { registerNotifAction } from './notification-center.js';
+import { recordHistory } from '../core/history-journal.js';
 let _lastUpdateInfo = null;
 import { escHtml, escAttr } from '../core/utils.js';
 import { raiseAboveAll } from './layer.js';
@@ -83,7 +84,7 @@ export async function openUpdateNotesModal() {
                 return `
                     <div class="tree-folder" style="padding-left:${paddingLeft}px">
                         <div class="tree-folder-header ${isExpanded ? 'expanded' : ''}" data-folder="${escAttr(fullPath)}" style="display:flex; align-items:center; gap:8px; padding:6px 8px; cursor:pointer; font-size:12px; color:var(--text-muted); font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transform: rotate(${isExpanded ? '90deg' : '0'}); transition: transform 0.2s;" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+                            ${uiIcon('chevron-right', 12, { style: `transform: rotate(${isExpanded ? '90deg' : '0'}); transition: transform 0.2s;` })}
                             ${escHtml(item.name)}
                         </div>
                         <div class="tree-folder-children" style="display:${isExpanded ? 'block' : 'none'}">
@@ -118,10 +119,23 @@ export async function openUpdateNotesModal() {
     const renderContent = (note) => {
         return `<div class="ptb-modal-body" style="overflow-y:auto; flex:1; padding:40px 60px;">${note ? renderMarkdown(note.content) : `<p style="color:var(--text-muted)">${t('update.none')}</p>`}</div>`;
     };
+    // Two tabs: « Versions » (ui/update-history.ts: one row per version, its notes beside it)
+    // and « Documents », the tree of every file under Update/ as it always was.
     modal.innerHTML = `
         <div class="ptb-modal-card">
             <div class="ptb-modal-header">${renderHeader()}</div>
-            <div class="ptb-modal-layout">
+            <div class="un-tabs" role="tablist">
+                <button type="button" class="un-tab" role="tab" data-un-tab="versions" aria-selected="true">${uiIcon('history', 14)}<span>${escHtml(t('update.tabVersions'))}</span></button>
+                <button type="button" class="un-tab" role="tab" data-un-tab="docs" aria-selected="false">${uiIcon('book-open', 14)}<span>${escHtml(t('update.tabDocs'))}</span></button>
+            </div>
+            <div class="un-versions" data-un-panel="versions">
+                <aside class="un-vside">
+                    <label class="un-vsearch">${uiIcon('search', 14)}<input id="un-vsearch" type="search" class="form-input" spellcheck="false" autocomplete="off" placeholder="${escAttr(t('update.searchNotes'))}" aria-label="${escAttr(t('update.searchNotes'))}"></label>
+                    <div class="un-vlist" id="un-vlist" role="listbox" aria-label="${escAttr(t('update.tabVersions'))}"></div>
+                </aside>
+                <div class="un-vnotes" id="un-vnotes"></div>
+            </div>
+            <div class="ptb-modal-layout" data-un-panel="docs" hidden>
                 ${renderSidebar()}
                 <div id="update-notes-content-target" style="flex:1; display:flex; flex-direction:column; overflow:hidden">
                     ${renderContent(defaultNote)}
@@ -130,6 +144,15 @@ export async function openUpdateNotesModal() {
         </div>
     `;
     modal.classList.add('open');
+    // Not awaited: the Documents tab is wired below whatever the Versions tab is doing.
+    void import('./update-history.js').then((m) => m.mountVersionHistory(modal, allNotes, (path) => {
+        modal.querySelector(`.ptb-sidebar-item[data-path="${CSS.escape(path)}"]`)?.click();
+    })).catch((e) => console.error(e));
+    /** A file opened from the tree (or from a link) shows in the Documents tab. */
+    const showDocs = () => {
+        modal.querySelectorAll('[data-un-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.unTab === 'docs')));
+        modal.querySelectorAll('[data-un-panel]').forEach((p) => { p.hidden = p.dataset.unPanel !== 'docs'; });
+    };
     modal.querySelector('#close-update-notes')?.addEventListener('click', () => modal.remove());
     modal.addEventListener('click', e => { if (e.target === modal)
         modal.remove(); });
@@ -193,6 +216,7 @@ export async function openUpdateNotesModal() {
         if (!item)
             return;
         e.stopPropagation();
+        showDocs();
         // Remove active from all items
         modal.querySelectorAll('.ptb-sidebar-item').forEach(i => i.classList.remove('active'));
         item.classList.add('active');
@@ -695,6 +719,12 @@ function relTime(at) {
     return t('update.daysAgo', { n: Math.round(h / 24) }) || `${Math.round(h / 24)} days ago`;
 }
 function recordCheck(result, version = '') {
+    // The History window (core/history-journal.ts) hears about a check when its answer CHANGES:
+    // background checks run every few hours, and « still up to date » forty times is noise.
+    const prev = lastCheck();
+    if (!prev || prev.result !== result || (result === 'update' && prev.version !== version)) {
+        recordHistory({ type: 'updates', action: result === 'update' ? 'update.available' : result === 'error' ? 'update.failed' : 'update.check', subject: version });
+    }
     store.set(LAST_CHECK_KEY, JSON.stringify({ at: Date.now(), result, version }));
     renderLastCheck();
 }
@@ -942,7 +972,7 @@ async function performUpdateCheck(manual = false) {
             buttons.forEach(btn => { if (btn)
                 btn.classList.add('has-update'); });
             if (statusMsg) {
-                statusMsg.innerHTML = `<span style="color:var(--success)">✓ ${t('settings.updateAvailable') || 'Update available'}: v${escHtml(info.latest_version)}</span>`;
+                statusMsg.innerHTML = `<span class="stg-status is-ok">${uiIcon('success', 14)} ${t('settings.updateAvailable') || 'Update available'}: v${escHtml(info.latest_version)}</span>`;
             }
             if (manual) {
                 showUpdateAvailableModal(info);
@@ -965,7 +995,7 @@ async function performUpdateCheck(manual = false) {
                 toast(t('settings.upToDate') || 'You are running the latest version!', 'success', 3000, '', 'Updates');
             }
             if (statusMsg) {
-                statusMsg.innerHTML = `<span style="color:var(--success)">✓ ${t('settings.upToDate') || 'Up to date'} (v${escHtml(info.current_version)})</span>`;
+                statusMsg.innerHTML = `<span class="stg-status is-ok">${uiIcon('success', 14)} ${t('settings.upToDate') || 'Up to date'} (v${escHtml(info.current_version)})</span>`;
             }
         }
     }
@@ -976,7 +1006,7 @@ async function performUpdateCheck(manual = false) {
         if (errStr.includes('NETWORK_ERROR') || errStr.includes('NO_RELEASE') || errStr.includes('RATE_LIMITED')) {
             if (statusMsg) {
                 statusMsg.innerHTML = errStr.includes('NO_RELEASE')
-                    ? `<span style="color:var(--warning)">⚠ ${t('settings.noRelease') || 'No releases yet'}</span>`
+                    ? `<span class="stg-status is-warn">${uiIcon('warning', 14)} ${t('settings.noRelease') || 'No releases yet'}</span>`
                     : `<span style="color:var(--text-muted)">— ${t('settings.updateUnavailable') || 'Unavailable'}</span>`;
             }
             if (manual) {
@@ -991,7 +1021,7 @@ async function performUpdateCheck(manual = false) {
                 toast((t('settings.updateCheckFailed') || 'Update check failed') + ': ' + err, 'error', 5000, '', 'Updates');
             }
             if (statusMsg) {
-                statusMsg.innerHTML = `<span style="color:var(--danger)">✗ ${t('settings.updateCheckFailed') || 'Check failed'}</span>`;
+                statusMsg.innerHTML = `<span class="stg-status is-bad">${uiIcon('error', 14)} ${t('settings.updateCheckFailed') || 'Check failed'}</span>`;
             }
         }
     }

@@ -91,4 +91,79 @@ export function initRepoHostFlow(): void {
     });
     document.addEventListener('langChanged', paint);
     onFolder();
+    initRepoSyncFlow();
+}
+
+// ── « Join a repo » as three steps — address → folders → sync — painted the same way ─────────
+//   address  a repo was fetched (its card is on screen);
+//   folders  BMM knows where the mods go: the chosen profiles' own folders (the hint says so),
+//            or the game and mods folders typed for a new profile;
+//   sync     the last run reached 100 %.
+// Read from the page's own state (what is shown, what is filled), so a reload, a cleared repo
+// or a profile ticked off moves the strip back with it.
+
+type SyncStep = 'address' | 'folders' | 'sync';
+const SYNC_STEPS: SyncStep[] = ['address', 'folders', 'sync'];
+
+function shown(id: string): boolean {
+    const el = document.getElementById(id);
+    return !!el && el.style.display !== 'none' && !el.hidden;
+}
+function filled(id: string): boolean {
+    return !!(document.getElementById(id) as HTMLInputElement | null)?.value?.trim();
+}
+
+function paintSync(): void {
+    const flow = document.getElementById('repo-sync-flow');
+    if (!flow) return;
+    flow.setAttribute('aria-label', t('repo.flow.syncAria'));
+    const address = shown('repo-sync-info-card');
+    const folders = address && (shown('repo-sync-paths-existing-hint')
+        || (shown('repo-sync-paths-section') && filled('repo-sync-game-path') && filled('repo-sync-mods-path')));
+    const sync = address && folders
+        && /^100\s*%$/.test(document.getElementById('repo-sync-percent')?.textContent?.trim() || '')
+        && shown('repo-sync-progress-container');
+    const done: Record<SyncStep, boolean> = { address, folders, sync };
+    const current = SYNC_STEPS.find((s) => !done[s]) || null;
+    for (const s of SYNC_STEPS) {
+        const li = flow.querySelector<HTMLElement>(`[data-flow-step="${s}"]`);
+        if (!li) continue;
+        li.classList.toggle('is-done', done[s]);
+        li.classList.toggle('is-current', s === current);
+        if (s === current) li.setAttribute('aria-current', 'step'); else li.removeAttribute('aria-current');
+    }
+    const block: Record<string, SyncStep> = { address: 'address', folders: 'folders', run: 'sync' };
+    document.querySelectorAll<HTMLElement>('#view-repo [data-sync-block]').forEach((b) => {
+        const s = block[b.dataset.syncBlock || ''];
+        if (!s) return;
+        b.classList.toggle('is-done', done[s]);
+        b.classList.toggle('is-current', s === current);
+    });
+}
+
+let _syncQueued = false;
+function queueSync(): void {
+    if (_syncQueued) return;
+    _syncQueued = true;
+    setTimeout(() => { _syncQueued = false; paintSync(); }, 0);
+}
+
+export function initRepoSyncFlow(): void {
+    const flow = document.getElementById('repo-sync-flow');
+    if (!flow || flow.dataset.flowWired) return;
+    flow.dataset.flowWired = '1';
+    // Style and text changes of the few nodes that carry the state; nothing else is watched.
+    const mo = new MutationObserver(queueSync);
+    for (const id of ['repo-sync-info-card', 'repo-sync-paths-section', 'repo-sync-paths-existing-hint', 'repo-sync-progress-container']) {
+        const el = document.getElementById(id);
+        if (el) mo.observe(el, { attributes: true, attributeFilter: ['style', 'hidden'] });
+    }
+    const pct = document.getElementById('repo-sync-percent');
+    if (pct) mo.observe(pct, { childList: true, characterData: true, subtree: true });
+    for (const id of ['repo-sync-game-path', 'repo-sync-mods-path']) {
+        document.getElementById(id)?.addEventListener('input', queueSync);
+        document.getElementById(id)?.addEventListener('change', queueSync);
+    }
+    document.addEventListener('langChanged', paintSync);
+    paintSync();
 }

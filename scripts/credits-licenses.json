@@ -1,6 +1,7 @@
 {
   "_note": "Licences gen-credits.mjs cannot read from a manifest in this repository (fonts from Google Fonts, icon data generated with --no-save, a vendored bundle without a licence banner, the Python packages of BMM Docs). Each entry names the upstream file it was read from. Everything else in the credits is read from Cargo.lock, the cargo registry, package-lock.json, laya-model.lock.json, a licence banner or a LICENSES.txt.",
   "Inter": { "license": "OFL-1.1", "from": "https://github.com/rsms/inter/blob/master/LICENSE.txt", "url": "https://rsms.me/inter/" },
+  "Bricolage Grotesque": { "license": "OFL-1.1", "from": "frontend/assets/fonts/bricolage-grotesque/OFL.txt", "url": "https://github.com/ateliertriay/bricolage" },
   "JetBrains Mono": { "license": "OFL-1.1", "from": "https://github.com/JetBrains/JetBrainsMono/blob/master/OFL.txt", "url": "https://www.jetbrains.com/lp/mono/" },
   "lucide": { "license": "ISC", "from": "https://github.com/lucide-icons/lucide/blob/main/LICENSE", "url": "https://lucide.dev/" },
   "simple-icons": { "license": "CC0-1.0", "from": "https://github.com/simple-icons/simple-icons/blob/develop/LICENSE.md", "url": "https://simpleicons.org/" },
@@ -8,6 +9,7 @@
   "svg-pan-zoom": { "license": "BSD-2-Clause", "from": "https://github.com/bumbu/svg-pan-zoom/blob/master/LICENSE", "url": "https://github.com/bumbu/svg-pan-zoom" },
   "mkdocs": { "license": "BSD-2-Clause", "from": "https://github.com/mkdocs/mkdocs/blob/master/LICENSE", "url": "https://www.mkdocs.org/" },
   "mkdocs-material": { "license": "MIT", "from": "https://github.com/squidfunk/mkdocs-material/blob/master/LICENSE", "url": "https://squidfunk.github.io/mkdocs-material/" },
+  "mkdocs-print-site-plugin": { "license": "MIT", "from": "https://github.com/timvink/mkdocs-print-site-plugin/blob/master/LICENSE", "url": "https://github.com/timvink/mkdocs-print-site-plugin" },
   "pymdown-extensions": { "license": "MIT", "from": "https://github.com/facelessuser/pymdown-extensions/blob/main/LICENSE.md", "url": "https://facelessuser.github.io/pymdown-extensions/" },
   "mkdocs-static-i18n": { "license": "MIT", "from": "https://github.com/ultrabug/mkdocs-static-i18n/blob/main/LICENSE", "url": "https://github.com/ultrabug/mkdocs-static-i18n" },
   "mkdocs-with-pdf": { "license": "MIT", "from": "https://github.com/orzih/mkdocs-with-pdf/blob/master/LICENSE", "url": "https://github.com/orzih/mkdocs-with-pdf" },

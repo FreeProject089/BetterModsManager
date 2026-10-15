@@ -30,6 +30,12 @@ Every picture below is the real app, in the browser preview with demo data, wear
 The code under each name is the theme's id, the one a `bmm://theme/apply?id=…` link, a scheduler
 task or the MCP bridge uses.
 
+**Tasky, the logo or the badge.** The playful themes (Default, Ember, Neon, Newsprint, Clay,
+Blossom) keep Tasky. The sober ones (Graphite, Pure Black, Daylight, Indigo, Arctic, Cobalt, BMM
+Logo) show the BMM logo, the one in the app icon, wherever Tasky would appear: the corner, the
+start-up screen, empty pages and dialogs. On a dark theme it sits on its pale tile, as in the icon.
+Charcoal shows the compact badge: the letters BMM on a tile in the theme's accent.
+
 > **Renamed in 1.0.3.** Six built-in ids used to name other products. They were renamed, the
 > themes themselves did not change, and the old ids keep working everywhere (your saved choice,
 > hidden presets, scheduler tasks, links, the installer, the MCP bridge):
@@ -68,7 +74,8 @@ It floats over BMM, docks to the side, or pops out into a window of its own.
    notifications, tooltips, error and success colours) shows its WCAG ratio and grade. A pair that
    fails offers **Fix**: the closest colour that passes, in the same hue (white or near-black for
    text on a button). *Fix all* does them all.
-6. **Go further if you want.** *Pictures* replaces Tasky, the sidebar logo or the wallpaper (the
+6. **Go further if you want.** *Pictures* chooses between Tasky and the BMM logo, and replaces
+   Tasky, the sidebar logo or the wallpaper with your own pictures (the
    files are embedded in the theme). *Elements* restyles one kind of element (pick it on screen
    with a right-click) or adds your own buttons and banners. *CSS* takes any CSS, for the whole
    app or one page.
@@ -124,6 +131,7 @@ uses `--bmm-text-on-accent`. Text itself uses the text tokens, so a light theme 
   "version": "1.0.0",
   "description": "One line, shown in the theme lists.",
   "mode": "dark",
+  "brand": { "mark": "tasky" },
   "vars": { "--bmm-accent": "#22c55e", "--bmm-bg-base": "#07100a" },
   "assets": {},
   "global_css": "",
@@ -138,6 +146,10 @@ uses `--bmm-text-on-accent`. Text itself uses the text tokens, so a light theme 
 - `format_version` is the version of this format. A file without it is version 1 and is migrated
   when it is read: token names written without their `--` get it, numbers become text, an invalid
   `mode` is dropped. Nothing is written back until you save.
+- `brand.mark` is `"tasky"` (the default, also when the field is missing), `"logo"` or `"badge"`:
+  what stands in for the mascot. A picture in `assets.mascot` still wins over all three. The sidebar wordmark
+  follows the theme's mode on its own; `--bmm-wordmark-better`, `--bmm-wordmark-mm` and
+  `--bmm-wordmark-highlight` (a band behind "Mod.Manager") set its inks by hand.
 - Fields BMM does not know are kept as they are, so a file made by a newer BMM or another tool
   survives a round trip through the editor.
 

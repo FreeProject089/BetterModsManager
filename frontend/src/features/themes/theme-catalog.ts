@@ -19,8 +19,10 @@ import { installTheme, activateTheme, getInstalledThemes, getActiveTheme, isLigh
 import { fetchSourceText } from '../../core/source-fetch.js';
 import { asLegacy, isV2SignedFeed, ensureFeedKeys } from '../../core/catalog-read.js';
 import { resolveEntryUrl } from '../../core/catalog-url.js';
+import { registerCatalogInstaller } from '../catalogs/catalog-actions.js';
 import { openModal } from '../../ui/modal-shell.js';
 import { uiIcon } from '../../ui/icons.js';
+import { openKeyManager } from '../../core/settings-link.js';
 
 
 const OFFICIAL_CATALOG = 'https://raw.githubusercontent.com/BetterDCS/BMM_Themes/main/catalog.json';
@@ -305,8 +307,7 @@ async function openThemeCatalogues(): Promise<void> {
             fetchCatalog(true).then(renderCatalog);
         },
         manageKeys: () => {
-            (document.getElementById('nav-settings') as HTMLElement | null)?.click();
-            setTimeout(() => document.getElementById('settings-identity-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
+            openKeyManager();
         },
     });
 }
@@ -671,6 +672,29 @@ async function doInstall(e: Entry, btn?: HTMLButtonElement): Promise<void> {
     }
     renderCatalog();
 }
+
+/**
+ * Install one catalogue theme by id, for catalog-actions.ts (a click, a scheduled task the user
+ * made, or a plugin with the permission). Installs ONLY: the theme is never applied here —
+ * applying is its own choice. `unattended` refuses a remote theme that is not https.
+ */
+export async function installCatalogTheme(id: string, unattended: boolean): Promise<{ id: string; name: string }> {
+    await fetchCatalog();
+    const entry = _catalog.find((th) => th.id === id);
+    if (!entry) throw new Error('catalog.act.notFound');
+    if (unattended && entry.download_url && !/^https:\/\//i.test(resolveEntryUrl(entry.download_url, entry._src || '') || '')) {
+        throw new Error('catalog.act.needsHttps');
+    }
+    const theme = await resolveThemeBody(entry);
+    await installTheme(theme);
+    return { id: theme.id, name: theme.name };
+}
+
+// The door scheduled tasks and plugins use (catalog-actions.ts › catalogInstall).
+registerCatalogInstaller('theme', async (id, o) => {
+    const got = await installCatalogTheme(id, o.unattended);
+    return { ok: true, installed: got.id };
+});
 
 async function refreshBuiltins(): Promise<void> {
     try { _builtins = JSON.parse(await invoke('list_builtin_themes_all') as string || '[]'); } catch {}

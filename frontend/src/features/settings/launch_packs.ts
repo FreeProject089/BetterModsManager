@@ -141,33 +141,32 @@ export async function renderLaunchPacks() {
         container.innerHTML = '';
 
         if (packs.length === 0) {
-            container.innerHTML = `<span style="color:var(--text-muted);font-size:12px;font-style:italic">${t('settings.launchPackNone')}</span>`;
+            container.innerHTML = `<p class="stg-empty-line">${t('settings.launchPackNone')}</p>`;
             return;
         }
 
         packs.forEach((pack: any) => {
             const card = document.createElement('div');
-            card.className = 'glass-card';
-            card.style.cssText = 'padding:12px; display:flex; align-items:center; gap:12px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05);';
+            card.className = 'stg-item';
             
             const iconUrl = pack.icon_path ? ((window as any).__TAURI__?.tauri?.convertFileSrc(pack.icon_path) || `asset.localhost/${pack.icon_path}`) : null;
             const iconHtml = iconUrl 
-                ? `<img src="${iconUrl}" style="width:32px; height:32px; border-radius:8px; object-fit:cover;" />`
-                : `<div style="width:32px; height:32px; background:var(--accent-dim); color:var(--accent); border-radius:8px; display:flex; align-items:center; justify-content:center;">${uiIcon('layers', 16)}</div>`;
+                ? `<img src="${iconUrl}" class="stg-item-ic" alt="" />`
+                : `<div class="stg-item-ic">${uiIcon('launch', 16)}</div>`;
 
             card.innerHTML = `
                 ${iconHtml}
-                <div style="flex:1; min-width:0;">
-                    <div style="font-size:13px; font-weight:700; color:var(--text-bright); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escHtml(pack.name)}</div>
-                    <div style="font-size:10px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${pack.executable_paths.length} ${t('settings.launchPackExes') || 'Apps'}</div>
+                <div class="stg-item-main">
+                    <div class="stg-item-name">${escHtml(pack.name)}</div>
+                    <div class="stg-item-meta">${pack.executable_paths.length} ${t('settings.launchPackExes') || 'Apps'}</div>
                     <div class="lp-card-ids">${copyIdButtons('launchpack', pack.id, { compact: true, doc: { executable_paths: pack.executable_paths || [] } })}</div>
                 </div>
-                <div style="display:flex; gap:8px;">
+                <div class="stg-item-actions">
                     <button class="btn btn-primary btn-xs btn-run-lp" data-id="${pack.id}">${t('settings.launchPackRun')}</button>
                     <button class="btn btn-ghost btn-xs btn-edit-lp" data-id="${pack.id}" data-tooltip="${t('common.edit') || 'Edit'}">${uiIcon('edit', 12)}</button>
                     <button class="btn btn-ghost btn-xs btn-exp-lp" data-id="${pack.id}" data-name="${escHtml(pack.name)}" data-tooltip="${t('common.export') || 'Export'}">${uiIcon('export', 12)}</button>
                     <button class="btn btn-ghost btn-xs btn-open-lp" data-id="${pack.id}" data-tooltip="${t('settings.launchPackOpenFolder') || 'Open folder'}">${uiIcon('open-folder', 12)}</button>
-                    <button class="btn btn-ghost btn-xs btn-del-lp" data-id="${pack.id}" style="color:var(--error);" data-tooltip="${t('common.delete') || 'Delete'}">${uiIcon('delete', 12)}</button>
+                    <button class="btn btn-ghost btn-xs btn-del-lp" data-id="${pack.id}" style="color:var(--danger);" data-tooltip="${t('common.delete') || 'Delete'}">${uiIcon('delete', 12)}</button>
                 </div>
             `;
 
@@ -336,7 +335,7 @@ function renderSelectedExes() {
         const fileName = path.split(/[\\/]/).pop();
         item.innerHTML = `
             <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" data-tooltip="${escHtml(path)}">${escHtml(fileName || path)}</span>
-            <button class="btn-del-exe" data-index="${index}" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:14px;">&times;</button>
+            <button class="btn-del-exe" data-index="${index}" aria-label="${t('common.remove') || 'Remove'}" style="display:inline-flex; background:none; border:none; color:var(--text-muted); cursor:pointer; padding:2px;">${uiIcon('close', 14)}</button>
         `;
         list.appendChild(item);
     });
@@ -385,7 +384,7 @@ async function openAppPicker() {
 // Icon cache: exe_path → data:image/png;base64,...
 const _iconCache = new Map<string, string>();
 // Generic program icon SVG (used as placeholder / fallback)
-const _genericIcon = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="2" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>`;
+const _genericIcon = `${uiIcon('monitor', 20, { style: 'color:var(--text-muted);opacity:.5' })}`;
 
 function _renderAppPickerList(apps: InstalledApp[], filter = '') {
     const tbody = document.getElementById('app-picker-list');

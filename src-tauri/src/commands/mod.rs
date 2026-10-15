@@ -3,6 +3,7 @@ pub mod format_check;
 pub mod task_output;
 pub mod sched_runs;
 pub mod sched_net;
+pub mod sched_maint;
 pub mod resources;
 pub mod resources_live;
 pub mod resources_rules;

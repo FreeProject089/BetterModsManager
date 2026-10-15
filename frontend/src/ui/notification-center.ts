@@ -20,6 +20,7 @@
 import { t, getLang } from '../core/i18n.js';
 import { escHtml, escAttr } from '../core/utils.js';
 import * as N from '../core/notif-model.js';
+import { goToSettings } from '../core/settings-link.js';
 
 export type NotifEntry = N.NotifEntry;
 export type { NotifAction } from '../core/notif-model.js';
@@ -101,11 +102,7 @@ function builtInActions(): void {
 
 /** Settings → the notification preferences, scrolled into view. */
 export function openNotifSettings(): void {
-    goToView('settings');
-    setTimeout(() => {
-        const el = document.getElementById('notif-source-list');
-        el?.closest('.set-row')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    }, 120);
+    goToSettings('notif-source-list');
 }
 
 // ── Recording ────────────────────────────────────────────────────────────────────────────

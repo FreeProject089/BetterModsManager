@@ -16,8 +16,33 @@ for a release.
     its own token, and only does what you've granted it. Review those grants in
     **Plugins → Permissions**.
 
-<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/plugins.bmmreplay" data-page="features/plugins" data-title="Granting a permission and using a plugin"></div>
+<div class="bmm-replay" data-src="assets/docs/media/replays/plugins.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/plugins.bmmreplay" data-page="features/plugins" data-title="Granting a permission and using a plugin"></div>
 
+
+
+<!-- story:build-plugin -->
+![Build a plugin with a mod list](assets/docs/media/gifs/build-plugin.gif)
+
+*Build a plugin with a mod list. Plugins & API → Create: a plugin that ships a list of mods, its permissions, the live preview, and the plugin saved on this PC.*
+
+<div class="bmm-replay" data-src="assets/docs/media/replays/build-plugin.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/build-plugin.bmmreplay" data-page="features/plugins" data-title="Build a plugin with a mod list"></div>
+<!-- /story:build-plugin -->
+
+## The tabs
+
+**Plugins & API** has six tabs:
+
+| Tab | What it is for |
+|---|---|
+| **Installed** | Your plugins, with filters, the permissions each one asks for and its highest risk; enable, update, duplicate, remove |
+| **Catalogue** | Plugins from the catalogues you follow; installing one asks first and never happens by itself |
+| **Create** | The guided, six-step plugin creator ([below](#create-a-plugin)) |
+| **API** | Your API token, **Try a call** (pick an endpoint, fill the fields, run it or copy the cURL), the endpoints grouped by area, and the `bmm://` deep links |
+| **Automations** | The automation builder: templates, navigation and upkeep steps, catalogue and local API steps, a dry run and preview, and export as `.bmpa`, `.bmmscript` or a script. See [Scheduling & automation](doc-page:features/scheduler) |
+| **Permissions** | What each plugin may do, the global backstop for them |
+
+The **API** tab used to be called *API & Scripts*; the automations that used to live elsewhere are
+now their own tab here.
 
 ## What you can grant a plugin
 
@@ -199,6 +224,10 @@ Each card has a status line: how many permissions the plugin asks for, with the 
 among them, and **vX available** when its catalogue has a newer version that was not
 installed automatically (auto-update off, or no checksum).
 
+Auto-update is **off** until you switch it on for a plugin, in its menu. A catalogue proposes a
+newer version; it never installs one on its own. An update keeps the plugin enabled or
+disabled as you left it.
+
 ## What a plugin is, on disk
 
 A plugin is a folder with a manifest. Nothing is compiled, nothing is installed into BMM — you
@@ -238,7 +267,7 @@ place, generated against the code:
 Both are worth skimming once even if you never write a plugin: they are the clearest inventory
 of what BMM can be made to do.
 
-In the app, **Plugins & API → API & Scripts → Endpoints** has the same list, **grouped by
+In the app, **Plugins & API → API → Endpoints** has the same list, **grouped by
 area** — mods, profiles, modpacks, plugins, server repos, apps and catalogues, automation and
 hooks, data, keys and privacy, BMM itself — each group with its count per method. The search
 matches a method, a path or a word; the filters show one method (`GET`, `POST`…) or only the

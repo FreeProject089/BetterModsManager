@@ -1520,7 +1520,7 @@ function toggleMiniMonitor(active) {
                 <div class="pf-mini-btns">
                     <button type="button" id="mini-startstop" class="pf-mini-btn is-stop"></button>
                     <button type="button" id="mini-back" class="pf-mini-btn" aria-label="${escB(t('bench.title') || 'Benchmark')}" data-tooltip="${escB(t('bench.title') || 'Benchmark')}">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 3h6v6M10 14L21 3M9 21H3v-6M21 21L13 13"/></svg>
+                        ${uiIcon('maximize', 16)}
                     </button>
                     <button type="button" id="mini-close" class="pf-mini-btn" aria-label="${escB(t('common.close') || 'Close')}">
                         ${uiIcon('close', 16)}

@@ -6,6 +6,7 @@ import { fetchCatalogText, asLegacy } from '../../core/catalog-read.js';
 import { sourceAccessHtml, wireSourceAccess } from '../../core/source-access.js';
 import { MODAL_CLOSE_SVG } from '../../ui/modal-shell.js';
 import { uiIcon } from '../../ui/icons.js';
+import { openKeyManager } from '../../core/settings-link.js';
 // Browsing community MODPACK catalogues.
 //
 // A modpack catalogue is the same idea as a theme catalogue: a feed listing downloadable
@@ -134,9 +135,7 @@ export async function openModpackCatalog(notify) {
     ov.addEventListener('click', (e) => { if (e.target === ov)
         close(); });
     wireSourceAccess('mpc', (m, k) => toast(m, k === 'warning' ? 'warning' : 'success'), () => {
-        document.getElementById('nav-settings')?.click();
-        setTimeout(() => document.getElementById('settings-identity-card')
-            ?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
+        openKeyManager();
     }, () => ov.querySelector('#mpc-src')?.value?.trim() || '');
     ov.querySelector('#mpc-open')?.addEventListener('click', async () => {
         const { pickFile } = await import('../../core/api.js');

@@ -3,6 +3,7 @@
   "name": "Graphite",
   "author": "BMM Team",
   "description": "Soft dark grey with an indigo accent — calm, low-contrast surfaces.",
+  "brand": { "mark": "logo" },
   "vars": {
     "--bmm-bg-base": "#1a1a1e",
     "--bmm-bg-elevated": "#232328",

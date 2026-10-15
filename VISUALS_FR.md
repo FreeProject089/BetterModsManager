@@ -18,6 +18,7 @@ comme *à venir*, son lien gardé en commentaire.
 - [Thèmes](#thèmes)
 - [Plugins et API](#plugins-et-api)
 - [Paramètres](#paramètres)
+- [Parcours : BMM utilisé pour de vrai](#parcours--bmm-utilisé-pour-de-vrai)
 
 ## Bibliothèque et profils
 
@@ -95,6 +96,31 @@ d'aperçu suit en direct), les permissions demandées, avec leur niveau de risqu
 *Clip à venir* : **Paramètres**, Ctrl+F trouve un réglage ; l'index modifie la mise en page (une
 carte masquée, une autre déplacée), puis se replie.
 <!-- ![Paramètres](.github/gifs/settings.gif) -->
+
+## Parcours : BMM utilisé pour de vrai
+
+Chaque clip suit un objectif de bout en bout, sans tutoriel à l'écran. Les mêmes prises sont des enregistrements interactifs (`.bmmreplay`) sur le [site de documentation](https://freeproject089.github.io/BMM-Docs/), dans la page de la fonctionnalité.
+
+- **Installer un nouveau jeu**: Un profil pour Northwind Saga, trois mods ajoutés depuis leurs archives, activés, le conflit qu’ils créent réglé, et les fichiers dans le dossier du jeu.
+  ![Installer un nouveau jeu](.github/gifs/new-game.gif)
+- **Partager une config avec des amis**: Le profil devient un modpack, le modpack est hébergé en Server Repo sur le réseau local, un ami le suit par son adresse et se synchronise.
+  ![Partager une config avec des amis](.github/gifs/share-setup.gif)
+- **Personnaliser BMM**: Un thème créé dans l’éditeur de thèmes, une barre de navigation réorganisée avec une page personnalisée, et une chaîne traduite dans le studio de traduction.
+  ![Personnaliser BMM](.github/gifs/make-it-yours.gif)
+- **Automatiser les corvées**: Une tâche planifiée qui vérifie les repos suivis et sauvegarde les profils chaque soir, prévisualisée avant d’être enregistrée.
+  ![Automatiser les corvées](.github/gifs/automate.gif)
+- **Créer un plugin avec une liste de mods**: Plugins & API → Créer : un plugin qui fournit une liste de mods, ses permissions, l’aperçu en direct et le plugin enregistré sur ce PC.
+  ![Créer un plugin avec une liste de mods](.github/gifs/build-plugin.gif)
+- **Écrire un tutoriel interactif**: Un tutoriel à vous pour vos amis : des étapes qui pointent l’interface, une vérification qui attend une action, l’essai, puis l’export.
+  ![Écrire un tutoriel interactif](.github/gifs/create-tutorial.gif)
+- **Réparer un mod mal empaqueté**: Un mod dont l’archive range ses fichiers un dossier trop bas : le Mapper montre où ils arriveraient, la racine est déplacée, le résultat vérifié et le mod mis à jour.
+  ![Réparer un mod mal empaqueté](.github/gifs/fix-a-mod.gif)
+- **Partager une liste de mods et un ordre**: Un ordre d’activation réglé et gardé en liste nommée avec son code de partage ; les mods exportés en liste .MM, importés dans un autre profil avec le plan de ce qui est nouveau, installés, puis activés dans l’ordre enregistré.
+  ![Partager une liste de mods et un ordre](.github/gifs/share-list.gif)
+- **Trouver des applis et du contenu dans les catalogues**: L’App Catalog : parcourir et chercher, les détails d’une appli, d’où vient la liste, et son propre catalogue construit dans l’onglet Créer.
+  ![Trouver des applis et du contenu dans les catalogues](.github/gifs/catalogues.gif)
+- **Les raccourcis du quotidien**: La palette de commandes trouve un mod et lance une commande, BMM Tools mesure le disque, un launch pack démarre le jeu avec ses outils, et la doc répond sans quitter l’app.
+  ![Les raccourcis du quotidien](.github/gifs/everyday.gif)
 
 ---
 

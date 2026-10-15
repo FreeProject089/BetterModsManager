@@ -1106,6 +1106,8 @@ fn main() {
             commands::sched_net::sched_webhook,
             commands::sched_net::sched_feed_fetch,
             commands::sched_net::task_feed_append,
+            commands::sched_maint::sched_download,
+            commands::sched_maint::sched_logs_rotate,
             commands::sandbox_gen::generate_sandbox_library,
             commands::sandbox_gen::clear_sandbox_library,
             commands::sandbox_gen::sandbox_library_info,

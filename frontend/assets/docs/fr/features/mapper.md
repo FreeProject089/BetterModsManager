@@ -6,8 +6,17 @@ Mapper corrige ça sans que tu dézippes quoi que ce soit à la main.
 
 > Réorganise la structure de ton mod pour correspondre au dossier de destination.
 
-<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/mapper.bmmreplay" data-page="features/mapper" data-title="Recartographier un mod mal packagé"></div>
+<div class="bmm-replay" data-src="assets/docs/media/replays/mapper.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/mapper.bmmreplay" data-page="features/mapper" data-title="Recartographier un mod mal packagé"></div>
 
+
+
+<!-- story:fix-a-mod -->
+![Réparer un mod mal empaqueté](assets/docs/media/gifs/fix-a-mod.gif)
+
+*Réparer un mod mal empaqueté. Un mod dont l’archive range ses fichiers un dossier trop bas : le Mapper montre où ils arriveraient, la racine est déplacée, le résultat vérifié et le mod mis à jour.*
+
+<div class="bmm-replay" data-src="assets/docs/media/replays/fix-a-mod.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/fix-a-mod.bmmreplay" data-page="features/mapper" data-title="Réparer un mod mal empaqueté"></div>
+<!-- /story:fix-a-mod -->
 
 ## Quand en as-tu besoin
 

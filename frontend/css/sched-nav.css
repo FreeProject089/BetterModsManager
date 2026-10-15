@@ -1,0 +1,162 @@
+/* Navigation steps of scheduled tasks (features/settings/sched-nav.ts), their preview bar and
+   dry run (sched-dryrun.ts), and the Automations tab of Plugins & API (scheduler.ts).
+
+   The paint layer sits inside the app frame, above dialogs, and never takes a click: only the
+   message card and the preview bar opt back in, so a ring never covers what it points at.
+   Theme tokens only — the same ring has to read on the dark themes and on BMM White. */
+
+.snav-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 2000500;
+}
+
+/* ── The ring around a target, and its caption ── */
+.snav-ring {
+    position: absolute;
+    border: 2px solid var(--bmm-accent);
+    border-radius: var(--bmm-radius-card);
+    box-shadow: 0 0 0 4px var(--bmm-accent-dim), 0 0 22px var(--bmm-accent-glow);
+    transition: left var(--bmm-transition-fast), top var(--bmm-transition-fast), width var(--bmm-transition-fast), height var(--bmm-transition-fast);
+    animation: snav-pulse 1.6s ease-in-out infinite;
+}
+.snav-ring[hidden], .snav-cap[hidden] { display: none; }
+.snav-ring--would {
+    border-style: dashed;
+    border-color: var(--bmm-warning);
+    box-shadow: 0 0 0 4px var(--bmm-warning-dim);
+}
+.snav-ring--msg { animation: none; }
+
+@keyframes snav-pulse {
+    0%, 100% { box-shadow: 0 0 0 4px var(--bmm-accent-dim), 0 0 18px var(--bmm-accent-glow); }
+    50% { box-shadow: 0 0 0 7px var(--bmm-accent-dim), 0 0 28px var(--bmm-accent-glow); }
+}
+@media (prefers-reduced-motion: reduce) { .snav-ring { animation: none; transition: none; } }
+body.bmm-no-anim .snav-ring { animation: none; transition: none; }
+
+.snav-cap {
+    position: absolute;
+    max-width: 290px;
+    padding: 6px 10px;
+    border-radius: var(--bmm-radius-chip);
+    background: var(--bmm-bg-elevated);
+    border: 1px solid var(--bmm-border-accent);
+    color: var(--bmm-text-primary);
+    font-size: 12px;
+    line-height: 1.35;
+    box-shadow: var(--bmm-shadow-card);
+}
+.snav-cap--would { border-color: var(--bmm-warning); }
+
+/* A line at the bottom of the frame, for a step with nothing on screen to point at. */
+.snav-note {
+    position: absolute;
+    left: 50%;
+    bottom: 28px;
+    transform: translateX(-50%);
+    max-width: min(560px, calc(100% - 32px));
+    padding: 8px 14px;
+    border-radius: var(--bmm-radius-chip);
+    background: var(--bmm-bg-elevated);
+    border: 1px solid var(--bmm-border-accent);
+    color: var(--bmm-text-primary);
+    font-size: 13px;
+    box-shadow: var(--bmm-shadow-card);
+}
+.snav-note--would { border-color: var(--bmm-warning); }
+
+/* ── A message card (nav.message) ── */
+.snav-card {
+    position: absolute;
+    left: 50%;
+    bottom: 40px;
+    transform: translateX(-50%);
+    width: min(340px, calc(100% - 32px));
+    padding: 14px 16px;
+    border-radius: var(--bmm-radius-card);
+    background: var(--bmm-bg-elevated);
+    border: 1px solid var(--bmm-border-accent);
+    box-shadow: var(--bmm-shadow-modal);
+    color: var(--bmm-text-primary);
+    pointer-events: auto;
+}
+.snav-card.is-anchored { transform: none; bottom: auto; }
+.snav-card-title { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+.snav-card-text { font-size: 13px; color: var(--bmm-text-secondary); white-space: pre-wrap; line-height: 1.45; }
+.snav-card-actions { display: flex; justify-content: flex-end; margin-top: 10px; }
+
+/* ── The preview bar: what is playing, and Stop ── */
+.snav-bar {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: calc(100% - 32px);
+    padding: 6px 8px 6px 14px;
+    border-radius: 999px;
+    background: var(--bmm-bg-elevated);
+    border: 1px solid var(--bmm-warning);
+    box-shadow: var(--bmm-shadow-card);
+    color: var(--bmm-text-primary);
+    font-size: 12.5px;
+    pointer-events: auto;
+}
+.snav-bar-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bmm-warning); flex: none; }
+.snav-bar-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.snav-bar-step { color: var(--bmm-text-muted); font-variant-numeric: tabular-nums; flex: none; }
+
+/* ── Dry run dialog ── */
+.sdr-lede { margin: 0 0 12px; color: var(--bmm-text-secondary); font-size: 13px; line-height: 1.5; }
+.sdr-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.sdr-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 9px;
+    border-radius: var(--bmm-radius-chip);
+    border: 1px solid var(--bmm-border);
+    font-size: 12px;
+    color: var(--bmm-text-secondary);
+}
+.sdr-chip b { color: var(--bmm-text-primary); font-variant-numeric: tabular-nums; }
+.sdr-list { display: flex; flex-direction: column; gap: 4px; }
+.sdr-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: var(--bmm-radius-input);
+    background: var(--bmm-bg-hover);
+}
+.sdr-row.is-off { opacity: 0.55; }
+.sdr-row.is-flow { background: transparent; padding-top: 4px; padding-bottom: 4px; }
+.sdr-eff {
+    min-width: 66px;
+    text-align: center;
+    padding: 2px 8px;
+    border-radius: var(--bmm-radius-badge);
+    font-size: 11px;
+    font-weight: 600;
+    border: 1px solid var(--bmm-border);
+    color: var(--bmm-text-secondary);
+}
+.sdr-eff--nav { border-color: var(--bmm-border-accent); color: var(--bmm-text-primary); background: var(--bmm-accent-dim); }
+.sdr-eff--read { border-color: var(--bmm-info); color: var(--bmm-text-primary); background: var(--bmm-info-dim); }
+.sdr-eff--change { border-color: var(--bmm-warning); color: var(--bmm-text-primary); background: var(--bmm-warning-dim); }
+.sdr-eff--delete, .sdr-eff--external, .sdr-eff--network { border-color: var(--bmm-danger); color: var(--bmm-text-primary); background: var(--bmm-danger-dim); }
+.sdr-what { min-width: 0; }
+.sdr-label { font-size: 13px; color: var(--bmm-text-primary); overflow-wrap: anywhere; }
+.sdr-detail { margin-top: 2px; font-size: 12px; color: var(--bmm-text-secondary); overflow-wrap: anywhere; }
+.sdr-detail.is-bad { color: var(--bmm-danger); }
+.sdr-detail.is-ok { color: var(--bmm-success); }
+.sdr-tags { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.sdr-tag { font-size: 11px; padding: 1px 6px; border-radius: var(--bmm-radius-badge); border: 1px solid var(--bmm-border); color: var(--bmm-text-muted); white-space: nowrap; }
+.sdr-tag--perm { border-color: var(--bmm-danger); color: var(--bmm-danger); }
+.sdr-foot-note { margin-right: auto; font-size: 12px; color: var(--bmm-text-muted); }
+

@@ -294,3 +294,38 @@ describe('usage clips (gifs)', () => {
     }
   });
 });
+
+describe('story clips (stories)', () => {
+  test('every story is well formed: unique names, EN and FR titles, steps with ids and a run', async () => {
+    const { stories } = await import('../screenshots/stories/index.mjs');
+    const { storyProblems } = await import('../screenshots/stories.mjs');
+    const names = stories.map((s) => s.name);
+    assert.equal(new Set(names).size, names.length);
+    for (const s of stories) assert.deepEqual(storyProblems(s), [], s.name);
+  });
+  test('a malformed story is reported', async () => {
+    const { storyProblems } = await import('../screenshots/stories.mjs');
+    const p = storyProblems({ name: 'Bad Name', title: { en: 'x' }, desc: { en: 'x', fr: 'x' }, steps: [{ id: 'a', title: { en: 'a', fr: 'a' } }, { id: 'a', title: { en: 'a' }, run() {} }] });
+    assert.ok(p.some((x) => /bad name/.test(x)));
+    assert.ok(p.some((x) => /title needs en and fr/.test(x)));
+    assert.ok(p.some((x) => /no run/.test(x)));
+    assert.ok(p.some((x) => /duplicate step/.test(x)));
+  });
+  test('an explainer page exists for every explainer step and has __play', async () => {
+    const { stories } = await import('../screenshots/stories/index.mjs');
+    const { EXPLAINERS } = await import('../screenshots/gifs.mjs');
+    for (const s of stories) for (const st of s.steps.filter((x) => x.explainer)) {
+      const html = readFileSync(join(EXPLAINERS, st.explainer), 'utf8');
+      assert.match(html, /window\.__play\s*=/, `${s.name}/${st.id}`);
+    }
+  });
+  test('replay images are shrunk only when they get smaller, other text is untouched', async () => {
+    const { shrinkReplayImages } = await import('../screenshots/replay.mjs');
+    const big = `data:image/png;base64,${'A'.repeat(50000)}`;
+    const fake = { evaluate: async () => 'data:image/webp;base64,BBBB' };
+    const out = await shrinkReplayImages(fake, JSON.stringify({ a: big, b: big, c: 'data:image/png;base64,AAAA', d: 'text' }));
+    assert.deepEqual(JSON.parse(out), { a: 'data:image/webp;base64,BBBB', b: 'data:image/webp;base64,BBBB', c: 'data:image/png;base64,AAAA', d: 'text' });
+    const same = await shrinkReplayImages({ evaluate: async () => big + 'x' }, JSON.stringify({ a: big }));
+    assert.equal(JSON.parse(same).a, big);
+  });
+});

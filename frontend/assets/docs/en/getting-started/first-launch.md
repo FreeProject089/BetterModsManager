@@ -3,6 +3,15 @@
 Three steps. Do them in order — the second one is the one people skip, and it's the one that
 matters.
 
+
+<!-- story:new-game -->
+![Set up a new game](assets/docs/media/gifs/new-game.gif)
+
+*Set up a new game. A profile for Northwind Saga, three mods added from their archives, switched on, the conflict they make settled, and the files in the game folder.*
+
+<div class="bmm-replay" data-src="assets/docs/media/replays/new-game.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/new-game.bmmreplay" data-page="getting-started/first-launch" data-title="Set up a new game"></div>
+<!-- /story:new-game -->
+
 ## 1. Create a profile
 
 BMM opens on an empty [Profiles](doc-page:features/profiles) screen and says:

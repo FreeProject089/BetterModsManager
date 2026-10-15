@@ -16,8 +16,33 @@ version.
     propre token, et ne fait que ce que tu lui as accordé. Relis ces autorisations dans
     **Plugins → Permissions**.
 
-<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/plugins.bmmreplay" data-page="features/plugins" data-title="Accorder une permission et utiliser un plugin"></div>
+<div class="bmm-replay" data-src="assets/docs/media/replays/plugins.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/plugins.bmmreplay" data-page="features/plugins" data-title="Accorder une permission et utiliser un plugin"></div>
 
+
+
+<!-- story:build-plugin -->
+![Créer un plugin avec une liste de mods](assets/docs/media/gifs/build-plugin.gif)
+
+*Créer un plugin avec une liste de mods. Plugins & API → Créer : un plugin qui fournit une liste de mods, ses permissions, l’aperçu en direct et le plugin enregistré sur ce PC.*
+
+<div class="bmm-replay" data-src="assets/docs/media/replays/build-plugin.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/build-plugin.bmmreplay" data-page="features/plugins" data-title="Créer un plugin avec une liste de mods"></div>
+<!-- /story:build-plugin -->
+
+## Les onglets
+
+**Plugins & API** a six onglets :
+
+| Onglet | À quoi il sert |
+|---|---|
+| **Installés** | Tes plugins, avec filtres, les permissions que chacun demande et son risque le plus haut ; activer, mettre à jour, dupliquer, retirer |
+| **Catalogue** | Les plugins des catalogues que tu suis ; en installer un demande d'abord ton accord et ne se fait jamais tout seul |
+| **Créer** | Le créateur de plugin guidé, en six étapes ([plus bas](#creer-un-plugin)) |
+| **API** | Ton token API, **Essayer un appel** (choisis un endpoint, remplis les champs, lance-le ou copie le cURL), les endpoints groupés par domaine, et les liens profonds `bmm://` |
+| **Automatisations** | Le constructeur d'automatisations : modèles, étapes de navigation et d'entretien, étapes catalogue et API locale, test à blanc et aperçu, et export en `.bmpa`, `.bmmscript` ou script. Voir [Planification et automatisation](doc-page:features/scheduler) |
+| **Permissions** | Ce que chaque plugin peut faire, le garde-fou global |
+
+L'onglet **API** s'appelait *API & Scripts* ; les automatisations qui vivaient ailleurs ont
+maintenant leur propre onglet ici.
 
 ## Ce que vous pouvez accorder à un plugin
 
@@ -210,6 +235,10 @@ Chaque carte a une ligne d'état : combien de permissions le plugin demande, ave
 plus élevé parmi elles, et **vX disponible** quand son catalogue a une version plus récente
 qui n'a pas été installée automatiquement (mise à jour auto désactivée, ou pas d'empreinte).
 
+La mise à jour auto est **désactivée** tant que tu ne l'actives pas pour un plugin, dans son
+menu. Un catalogue propose une version plus récente ; il ne l'installe jamais tout seul. Une
+mise à jour laisse le plugin activé ou désactivé comme tu l'avais laissé.
+
 ## Ce qu'est un plugin, sur le disque
 
 Un plugin est un dossier avec un manifeste. Rien n'est compilé, rien n'est installé dans BMM —
@@ -252,7 +281,7 @@ même endroit, généré à partir du code :
 Les deux valent un coup d'œil même si tu n'écris jamais de plugin : c'est l'inventaire le plus
 clair de ce qu'on peut faire faire à BMM.
 
-Dans l'app, **Plugins & API → API & Scripts → Endpoints** a la même liste, **groupée par
+Dans l'app, **Plugins & API → API → Endpoints** a la même liste, **groupée par
 domaine** — mods, profils, modpacks, plugins, dépôts serveur, applications et catalogues,
 automatisation et hooks, données, clés et confidentialité, BMM lui-même — chaque groupe avec
 son compte par méthode. La recherche accepte une méthode, un chemin ou un mot ; les filtres

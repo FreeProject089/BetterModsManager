@@ -7,13 +7,14 @@ import { invoke } from '../../core/api.js';
 import { toast, openExternal } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { escHtml, escAttr, escJs } from '../../core/utils.js';
-import { getModDetailHTML } from '../../ui/components.js';
+import { drawerHtml, drawerHeaderHtml, overviewHtml, filesHtml, linkRowHtml, DRAWER_TABS, type DrawerTab, type DrawerCtx } from './mod-drawer-view.js';
 import { sourceAccessHtml, wireSourceAccess } from '../../core/source-access.js';
-import { renderModList, updateCardState } from './mods-list.js';
+import { renderModList, updateCardState, revealMod, visibleMods } from './mods-list.js';
 import { setupDependencyInput } from './mods-actions.js';
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 import { uiIcon } from '../../ui/icons.js';
 import { modReportHtml, reportIsValid, showIntegrityModal, type ModReport } from './integrity-report.js';
+import { openKeyManager } from '../../core/settings-link.js';
 
 const S = new Proxy(appState.state, {
   get(target, prop) { return target[prop]; },
@@ -144,167 +145,373 @@ function describeOrigin(mod: any): string {
     return t('detail.originLocal');
 }
 
-export function selectMod(modId) {
-  if (S.selectedModId === modId) {
-    closeModDetail();
-    return;
-  }
-  if (S.selectedModId) {
-    const oldCard = document.querySelector(`.mod-card[data-id="${S.selectedModId}"]`);
-    if (oldCard) oldCard.classList.remove('selected');
-  }
+// ── The drawer ──────────────────────────────────────────────────────────────────
+// A mod opens in a side drawer beside the library (markup: mod-drawer-view.ts). The list stays
+// where it is and keeps its selection; ‹ › and the arrow keys move to the previous / next mod
+// of the list as it is filtered and sorted; Esc closes. Every field is one form with one
+// Save / Cancel bar, and leaving with unsaved changes asks first.
+
+let _tab: DrawerTab = (() => {
+  try { const v = localStorage.getItem('bmm_mdd_tab') as DrawerTab; return DRAWER_TABS.includes(v) ? v : 'overview'; } catch { return 'overview'; }
+})();
+let _dirty = false;
+let _wired = false;
+let _softQueued = false;
+
+function drawerEl(): HTMLElement | null { return document.getElementById('mod-detail-panel'); }
+
+/** The mods around `id` in the list as shown (filters and sort applied). */
+function neighbours(id: string): { prev: any | null; next: any | null } {
+  const list = visibleMods() as any[];
+  const i = list.findIndex((m) => m.id === id);
+  return { prev: i > 0 ? list[i - 1] : null, next: i >= 0 && i < list.length - 1 ? list[i + 1] : null };
+}
+
+function ctxFor(mod: any): DrawerCtx {
+  const n = neighbours(mod.id);
+  // A mod synced from a server repo already HAS a source; it was never among its hand-typed
+  // links. Passed apart and drawn OUTSIDE #detail-links-list: the save handler rebuilds
+  // download_links from those rows, so a derived link among them would be saved as typed.
+  return {
+    links: mod.download_links || [],
+    repoLink: mod.source_repo || mod.update_url || null,
+    origin: describeOrigin(mod),
+    hasPrev: !!n.prev,
+    hasNext: !!n.next,
+  };
+}
+
+/** Leaving the mod (another one, close, Esc) with unsaved edits asks first. */
+async function canLeave(): Promise<boolean> {
+  if (!_dirty || !drawerEl()) return true;
+  const ok = await (window as any).confirmCustom?.(t('mdd.discardTitle'), escHtml(t('mdd.discardMsg')), 'warning', { yesLabel: t('mdd.discard') });
+  if (ok) _dirty = false;
+  return !!ok;
+}
+
+function markCard(id: string | null, on: boolean): void {
+  if (!id) return;
+  document.querySelector(`.mod-card[data-id="${CSS.escape(id)}"]`)?.classList.toggle('selected', on);
+}
+
+/** Open (or move) the drawer to `modId`. A click on the mod already open closes it. */
+export async function selectMod(modId) {
+  if (S.selectedModId === modId && drawerEl()) { void requestClose(); return; }
+  await openModDetail(modId);
+}
+
+async function openModDetail(modId: string, focusCard = false): Promise<void> {
+  if (S.selectedModId !== modId && !(await canLeave())) return;
+  markCard(S.selectedModId, false);
   S.selectedModId = modId;
-  const newCard = document.querySelector(`.mod-card[data-id="${modId}"]`);
-  if (newCard) newCard.classList.add('selected');
+  markCard(modId, true);
+  if (focusCard) revealMod(modId);
   renderModDetail(modId);
   dispatchBmmAction(BMM_ACTIONS.MOD_DETAIL_OPENED, { modId });
 }
 
-export function closeModDetail() {
-  if (S.selectedModId) {
-    const oldCard = document.querySelector(`.mod-card[data-id="${S.selectedModId}"]`);
-    if (oldCard) oldCard.classList.remove('selected');
-  }
-  S.selectedModId = null;
-  const panel = document.getElementById('mod-detail-panel');
-  if (panel) panel.remove();
+async function requestClose(): Promise<void> {
+  if (await canLeave()) closeModDetail();
 }
 
-export async function renderModDetail(modId) {
-  const mod = S.allMods.find(m => m.id === modId);
-  if (!mod) return closeModDetail();
-
-  let panel = document.getElementById('mod-detail-panel');
+export function closeModDetail() {
+  const id = S.selectedModId;
+  markCard(id, false);
+  S.selectedModId = null;
+  _dirty = false;
+  const panel = drawerEl();
   if (panel) panel.remove();
+  document.querySelector('.app-shell')?.classList.remove('has-mod-drawer');
+  // Back to the card it was opened from, so the keyboard carries on in the list.
+  if (id) (document.querySelector(`.mod-card[data-id="${CSS.escape(id)}"]`) as HTMLElement | null)?.focus({ preventScroll: true });
+}
 
-  panel = document.createElement('div');
-  panel.id = 'mod-detail-panel';
-  panel.className = 'mod-detail-panel inline-panel';
-  panel.onclick = e => e.stopPropagation();
+async function stepMod(dir: -1 | 1): Promise<void> {
+  const id = S.selectedModId;
+  if (!id) return;
+  const n = neighbours(id);
+  const target = dir < 0 ? n.prev : n.next;
+  if (target) await openModDetail(target.id, true);
+}
 
-  const card = document.querySelector(`.mod-card[data-id="${mod.id}"]`);
-  if (!card) return;
-  card.appendChild(panel);
-
-  setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
-
-  // A mod synced from a server repo already HAS a source, it just was not among
-  // its "Links" — that list only ever held the download URLs someone typed in by
-  // hand, so for every repo mod the one link that mattered was the one missing.
-  //
-  // Passed separately, and rendered OUTSIDE #detail-links-list on purpose: the save
-  // handler rebuilds download_links by reading the rows in that container, so a
-  // derived link placed among them would be written back as if the user had entered
-  // it — and would then survive re-syncing from a different repo.
-  panel.innerHTML = getModDetailHTML(mod, {
-    conflicts: [],
-    links: mod.download_links || [],
-    repoLink: mod.source_repo || mod.update_url || null,
-    origin: describeOrigin(mod),
+function showTab(panel: HTMLElement, tab: DrawerTab, focus = false): void {
+  _tab = tab;
+  try { localStorage.setItem('bmm_mdd_tab', tab); } catch { /* private mode */ }
+  panel.querySelectorAll<HTMLElement>('.mdd-tab').forEach((b) => {
+    const on = b.dataset.tab === tab;
+    b.setAttribute('aria-selected', String(on));
+    b.tabIndex = on ? 0 : -1;
+    if (on && focus) b.focus();
   });
+  panel.querySelectorAll<HTMLElement>('.mdd-pane').forEach((p) => p.classList.toggle('is-active', p.dataset.pane === tab));
+  syncFoot(panel);
+}
 
-  // The protected-source block: mounted HERE, beside its listeners, because markup with no
-  // listeners looks exactly like markup nobody has clicked yet.
-  // Where this mod sits in the profile's activation order, and the moves (lib-order.ts).
-  mountOrderSection(panel, mod);
+/** The Save / Cancel bar: where editing happens, and anywhere while something is unsaved. */
+function syncFoot(panel: HTMLElement): void {
+  const foot = panel.querySelector<HTMLElement>('#mdd-foot');
+  if (!foot) return;
+  foot.hidden = !(_dirty || _tab === 'details' || _tab === 'updates');
+  foot.classList.toggle('is-dirty', _dirty);
+  (panel.querySelector('#btn-save-detail') as HTMLButtonElement).disabled = !_dirty;
+  (panel.querySelector('#btn-cancel-detail') as HTMLButtonElement).disabled = !_dirty;
+  const st = panel.querySelector('#mdd-foot-status');
+  if (st) st.textContent = t(_dirty ? 'mdd.unsaved' : 'mdd.noChanges');
+}
+function setDirty(panel: HTMLElement): void {
+  if (_dirty) return;
+  _dirty = true;
+  syncFoot(panel);
+}
 
-  const accessSlot = panel.querySelector('#detail-links-access');
-  if (accessSlot) accessSlot.innerHTML = sourceAccessHtml('mdl');
-
-  // Wired the same way as on every catalogue screen. Attached
-  // AFTER the panel is in the document: wireSourceAccess finds its controls with
-  // getElementById, and on a detached subtree it bails out and leaves a dead fold.
-  wireSourceAccess('mdl', (m, k) => toast(t(m), k === 'warning' ? 'warning' : 'success'),
-    () => {
-      (document.getElementById('nav-settings') as HTMLElement | null)?.click();
-      setTimeout(() => document.getElementById('settings-identity-card')
-        ?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
-    },
-    () => (panel.querySelector('.detail-link-url') as HTMLInputElement | null)?.value?.trim() || '');
-
-  // The derived repo link opens in the system browser. window.open is a no-op in the
-  // Tauri v2 webview, so it goes through the same open_external route every other
-  // link in the app uses — a second mechanism here is how one of them silently stops
-  // working after a migration and nobody notices for a release.
-  panel.querySelector('[data-open-url]')?.addEventListener('click', (ev) => {
-    ev.preventDefault();
-    openExternal((ev.currentTarget as HTMLElement).dataset.openUrl || '');
-  });
-
-  // Update conflicts in background
-  (async () => {
-    try {
-      const conflicts = await invoke('get_mod_conflicts', { modId: mod.id });
-      if (conflicts && conflicts.length > 0) {
-        const badgeContainer = panel.querySelector('.conflict-badge-container');
-        if (badgeContainer) badgeContainer.innerHTML = `<span class="badge badge-warning" style="font-size:10px">${t('mod.conflictsFound', { n: conflicts.length })}</span>`;
-        const listContainer = panel.querySelector('#detail-conflicts-list');
-        if (listContainer) {
-          // The whole card opens the conflict view, not the 40px badge in its corner.
-          //
-          // It looked like a card and behaved like a link hidden inside one: the only place
-          // that did anything was the INTRA tag, so the obvious gesture — click the mod you
-          // are worried about — did nothing at all. A <button> rather than a div with a
-          // handler, so it is reachable by keyboard and announced as something you can press.
-          listContainer.innerHTML = conflicts.map(c => `
-            <button type="button" class="mdc-card ${c.status === 'Active' ? 'is-active' : 'is-potential'}"
-                    ${actAttrs(c.category === 'Intra' && c.status === 'Active' ? 'openConflictsFor' : 'openGlobalConflictModal', mod.id)}
-                    data-tooltip="${escAttr(t('conflict.openFor') || 'Open the conflict view for this mod')}">
-              <span class="mdc-top">
-                <span class="tag-conflict tag-${c.category.toLowerCase()}-conflict ${c.status.toLowerCase()}">
-                   ${c.category === 'Intra' ? (uiIcon('home', 12, { style: 'margin-right:4px' })) : (uiIcon('globe', 12, { style: 'margin-right:4px' }))}
-                   ${c.category}
-                </span>
-                <span class="mdc-files">${c.file_count} f.</span>
-                ${uiIcon('chevron-right', 12, { cls: 'mdc-chev' })}
-              </span>
-              <span class="mdc-name">${escHtml(c.other_mod_name)}</span>
-              <span class="mdc-profile">${escHtml(t('mod.profilLabel'))}${escHtml(c.other_profile_name)}</span>
-            </button>
-          `).join('');
-        }
-      }
-    } catch (e) {}
-  })();
-
-  const depInput = panel.querySelector('#detail-dep-input');
-  if (depInput) {
-    depInput._currentModId = mod.id;
-    setupDependencyInput('detail-dep-input', 'detail-deps-list', 'detail-dep-suggestions', mod.dependencies || []);
+/** The read-only parts after the mod changed elsewhere (toggled, re-hashed, updated). */
+function softRefresh(): void {
+  const panel = drawerEl();
+  const mod = panel ? S.allMods.find((m) => m.id === S.selectedModId) : null;
+  if (!panel || !mod) return;
+  const ctx = ctxFor(mod);
+  const head = panel.querySelector('#mdd-head');
+  if (head) { head.innerHTML = drawerHeaderHtml(mod, ctx); wireHeader(panel, mod); }
+  if (!_dirty) {
+    const ov = panel.querySelector('#mdd-pane-overview');
+    if (ov) { ov.innerHTML = overviewHtml(mod, ctx); paintOverview(panel, mod); }
+    const files = panel.querySelector('#mdd-pane-files');
+    if (files) { files.innerHTML = filesHtml(mod); wireFiles(panel, mod); }
   }
+}
+function queueSoftRefresh(): void {
+  if (_softQueued) return;
+  _softQueued = true;
+  requestAnimationFrame(() => { _softQueued = false; softRefresh(); });
+}
 
-  panel.querySelector('#btn-close-detail-inner').onclick = closeModDetail;
-  panel.querySelector('#btn-browse-archive').onclick = () => openArchiveExplorer(mod);
+function wireOnce(): void {
+  if (_wired) return;
+  _wired = true;
+  // The list changed (a toggle, a scan, a sync): the drawer follows, without losing edits.
+  appState.subscribe('allMods', () => { if (drawerEl()) queueSoftRefresh(); });
+  // Leaving the library closes it; the library's own space is where it lives.
+  const lib = document.getElementById('view-library');
+  if (lib) new MutationObserver(() => {
+    if (!lib.classList.contains('active') && drawerEl()) { _dirty = false; closeModDetail(); }
+  }).observe(lib, { attributes: true, attributeFilter: ['class'] });
+  document.addEventListener('keydown', (e) => {
+    const panel = drawerEl();
+    if (!panel || e.defaultPrevented) return;
+    if (document.querySelector('.modal-overlay.open, .modal-overlay.active')) return;
+    const target = e.target as HTMLElement;
+    const typing = !!target.closest?.('input, textarea, select, [contenteditable="true"]');
+    if (e.key === 'Escape') {
+      if (target.closest?.('#detail-tag-picker, #detail-dep-suggestions')) return;
+      e.preventDefault();
+      if (typing) { target.blur(); return; }
+      void requestClose();
+      return;
+    }
+    if (typing || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+    // A focused card has its own arrows (lib-select.ts); the drawer answers everywhere else.
+    if (target.closest?.('.mod-card')) return;
+    if (target.closest?.('.mdd-tabs')) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      void stepMod(e.key === 'ArrowDown' ? 1 : -1);
+    }
+  });
+}
 
-  // Copy Content ID button (inside the detail panel content-id-box)
+function wireHeader(panel: HTMLElement, mod: any): void {
+  panel.querySelector('#btn-close-detail-inner')?.addEventListener('click', () => { void requestClose(); });
+  panel.querySelector('#btn-detail-prev')?.addEventListener('click', () => { void stepMod(-1); });
+  panel.querySelector('#btn-detail-next')?.addEventListener('click', () => { void stepMod(1); });
+  // Enable / disable through the card's own switch: the same path as a click on it (conflict
+  // warning, dependencies, the activity overlay), never a second way to change a mod.
+  panel.querySelector('#btn-detail-toggle')?.addEventListener('click', () => {
+    const card = revealMod(mod.id) || document.querySelector(`.mod-card[data-id="${CSS.escape(mod.id)}"]`);
+    const input = card?.querySelector<HTMLInputElement>('.mod-toggle-input');
+    if (!input || input.disabled || S.processingMods?.has?.(mod.id)) return;
+    input.checked = !input.checked;
+    input.dispatchEvent(new Event('change'));
+  });
+  panel.querySelector('#btn-detail-folder')?.addEventListener('click', () => {
+    invoke(mod.enabled ? 'open_mod_active_folder' : 'open_mod_backup_folder', { modId: mod.id })
+      .catch((e: any) => toast(String(e), 'error'));
+  });
+}
+
+/** Overview: the description through B.MD's untrusted path (it comes from a repo or an
+ *  archive), the tags and the required mods as chips. */
+function paintOverview(panel: HTMLElement, mod: any): void {
+  const host = panel.querySelector<HTMLElement>('#mdd-desc-view');
+  if (host) {
+    const desc = String(mod.description || '').trim();
+    if (!desc) {
+      host.innerHTML = `<p class="mdd-muted">${escHtml(t('mdd.noDesc'))} <button type="button" class="mdd-link" data-goto="details">${escHtml(t('mdd.addDesc'))}</button></p>`;
+    } else {
+      host.textContent = desc;
+      void Promise.all([import('../../docs/md-lite.js'), import('../../docs/md-hydrate.js')]).then(([lite, hyd]) => {
+        if (!host.isConnected) return;
+        host.innerHTML = lite.renderDocMarkdown(desc);
+        hyd.hydrateMdLite(host);
+      }).catch(() => { /* stays as plain text */ });
+    }
+  }
+  const tags = panel.querySelector<HTMLElement>('#mdd-tags-view');
+  if (tags) {
+    const chips = (mod.tags || []).map((id: string) => (S.userTags || []).find((x) => x.id === id)).filter(Boolean)
+      .map((d: any) => renderTagChip(d, { fontSize: 11, pad: '2px 8px' })).join('');
+    tags.innerHTML = chips || `<span class="mdd-muted">${escHtml(t('mdd.none'))}</span>`;
+  }
+  const deps = panel.querySelector<HTMLElement>('#mdd-deps-view');
+  if (deps) {
+    const names = (mod.dependencies || []).map((id: string) => (S.allMods || []).find((m) => m.id === id)?.name || id);
+    deps.innerHTML = names.length ? names.map((n: string) => `<span class="mdd-chip">${escHtml(n)}</span>`).join('')
+      : `<span class="mdd-muted">${escHtml(t('mdd.none'))}</span>`;
+  }
+}
+
+function wireFiles(panel: HTMLElement, mod: any): void {
+  panel.querySelector('#btn-browse-archive')?.addEventListener('click', () => openArchiveExplorer(mod));
   panel.querySelector('.btn-copy-content-id')?.addEventListener('click', async (e) => {
     e.stopPropagation();
     const contentId = (e.currentTarget as HTMLElement).dataset.contentId || '';
     if (!contentId) return;
     try {
       await navigator.clipboard.writeText(contentId);
-      toast(t('common.contentIdCopied', { id: contentId.slice(0, 16) }) || ('Content ID copied: ' + contentId.slice(0, 16) + '…'), 'success', 2000);
+      toast(t('common.contentIdCopied', { id: contentId.slice(0, 16) }), 'success', 2000);
     } catch (err) {
       toast(t('common.error') + ' : ' + err, 'error');
     }
   });
   panel.querySelector('#btn-verify-mod-integrity')?.addEventListener('click', async () => {
     try {
-      // If hashes are missing, trigger calculation first
+      // No hashes yet: start the calculation first (get_mod_integrity reports every file as
+      // "added" while there is none).
       if (!mod.file_hashes || Object.keys(mod.file_hashes).length === 0) {
-          toast(t('mods.sha.calculating'), 'info');
-          await invoke('recalculate_mod_sha', { modId: mod.id });
-          // Note: Background calculation started, report might still be empty if we call it immediately.
-          // But get_mod_integrity in Rust will report all files as "added" if no hash exists.
+        toast(t('mods.sha.calculating'), 'info');
+        await invoke('recalculate_mod_sha', { modId: mod.id });
       }
       toast(t('integrity.checking'), 'info');
       const report = await invoke('get_mod_integrity', { modId: mod.id }) as ModReport;
       showIntegrityReport(mod, report);
     } catch (err) { toast(t('common.error') + ' : ' + err, 'error'); }
   });
+}
+
+/** Draw the drawer for `modId` (or redraw it: after a save, a re-hash, a language change). */
+export async function renderModDetail(modId) {
+  const mod = S.allMods.find(m => m.id === modId);
+  if (!mod) return closeModDetail();
+  wireOnce();
+
+  // Redrawing the mod being edited would throw the edits away: the read-only parts only.
+  const existing = drawerEl();
+  if (existing && existing.dataset.modId === modId && _dirty) { softRefresh(); return; }
+  _dirty = false;
+
+  const shell = document.querySelector('.app-shell');
+  if (!shell) return;
+  let panel = existing;
+  if (!panel) {
+    panel = document.createElement('aside');
+    panel.id = 'mod-detail-panel';
+    panel.className = 'mod-detail-panel mod-drawer';
+    panel.setAttribute('aria-labelledby', 'mdd-title');
+    panel.tabIndex = -1;
+    shell.appendChild(panel);
+    shell.classList.add('has-mod-drawer');
+  }
+  panel.dataset.modId = modId;
+  const ctx = ctxFor(mod);
+  panel.innerHTML = drawerHtml(mod, ctx, _tab);
+  // The SHA listener (app.ts) and the hash deletion (settings.ts) refresh the open mod by this.
+  const body = panel.querySelector('#mod-detail-container') as any;
+  if (body) body._currentModId = mod.id;
+
+  wireHeader(panel, mod);
+  paintOverview(panel, mod);
+  wireFiles(panel, mod);
+  syncFoot(panel);
+
+  // Tabs: click, and the tablist keys.
+  panel.querySelectorAll<HTMLElement>('.mdd-tab').forEach((b) => b.addEventListener('click', () => showTab(panel!, b.dataset.tab as DrawerTab)));
+  panel.querySelector('.mdd-tabs')?.addEventListener('keydown', (e: any) => {
+    const order = DRAWER_TABS;
+    const i = order.indexOf(_tab);
+    const go = e.key === 'ArrowRight' ? order[(i + 1) % order.length] : e.key === 'ArrowLeft' ? order[(i - 1 + order.length) % order.length]
+      : e.key === 'Home' ? order[0] : e.key === 'End' ? order[order.length - 1] : null;
+    if (!go) return;
+    e.preventDefault();
+    showTab(panel!, go, true);
+  });
+  panel.addEventListener('click', (e) => {
+    const go = (e.target as HTMLElement).closest('[data-goto]') as HTMLElement | null;
+    if (go) showTab(panel!, go.dataset.goto as DrawerTab, true);
+  });
+
+  // Where this mod sits in the profile's activation order, and the moves (lib-order.ts).
+  mountOrderSection(panel, mod);
+
+  // The protected-source block: mounted HERE, beside its listeners, because markup with no
+  // listeners looks exactly like markup nobody has clicked yet.
+  const accessSlot = panel.querySelector('#detail-links-access');
+  if (accessSlot) accessSlot.innerHTML = sourceAccessHtml('mdl');
+  // Wired AFTER the panel is in the document: wireSourceAccess finds its controls with
+  // getElementById, and on a detached subtree it bails out and leaves a dead fold.
+  wireSourceAccess('mdl', (m, k) => toast(t(m), k === 'warning' ? 'warning' : 'success'),
+    () => {
+      openKeyManager();
+    },
+    () => (panel.querySelector('.detail-link-url') as HTMLInputElement | null)?.value?.trim() || '');
+
+  // The derived repo link opens in the system browser (window.open is a no-op in the webview).
+  panel.querySelector('[data-open-url]')?.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    openExternal((ev.currentTarget as HTMLElement).dataset.openUrl || '');
+  });
+
+  // Conflicts, in the background: the tab's count, and one button per conflict that opens the
+  // conflict view for this mod.
+  (async () => {
+    try {
+      const conflicts = await invoke('get_mod_conflicts', { modId: mod.id }) as any[];
+      if (!panel.isConnected || panel.dataset.modId !== mod.id || !conflicts?.length) return;
+      const badge = panel.querySelector('.conflict-badge-container');
+      if (badge) { badge.textContent = String(conflicts.length); badge.setAttribute('title', t('mod.conflictsFound', { n: String(conflicts.length) })); }
+      const listContainer = panel.querySelector('#detail-conflicts-list');
+      if (listContainer) {
+        listContainer.innerHTML = conflicts.map(c => `
+          <button type="button" class="mdc-card ${c.status === 'Active' ? 'is-active' : 'is-potential'}"
+                  ${actAttrs(c.category === 'Intra' && c.status === 'Active' ? 'openConflictsFor' : 'openGlobalConflictModal', mod.id)}
+                  data-tooltip="${escAttr(t('conflict.openFor'))}">
+            <span class="mdc-top">
+              <span class="tag-conflict tag-${String(c.category).toLowerCase()}-conflict ${String(c.status).toLowerCase()}">
+                 ${c.category === 'Intra' ? uiIcon('home', 12) : uiIcon('globe', 12)}
+                 ${escHtml(c.category)}
+              </span>
+              <span class="mdc-files">${escHtml(t('mdd.filesShort', { n: String(c.file_count) }))}</span>
+              ${uiIcon('chevron-right', 12, { cls: 'mdc-chev' })}
+            </span>
+            <span class="mdc-name">${escHtml(c.other_mod_name)}</span>
+            <span class="mdc-profile">${escHtml(t('mod.profilLabel'))}${escHtml(c.other_profile_name)}</span>
+          </button>
+        `).join('');
+      }
+    } catch (e) { /* the tab keeps « No conflicts detected » */ }
+  })();
+
+  const depInput = panel.querySelector('#detail-dep-input') as any;
+  if (depInput) {
+    depInput._currentModId = mod.id;
+    // The dependency widget keeps its own list; a pick or a removal there is an edit. Watched
+    // once it has drawn the saved list (it loads the other profiles first).
+    void setupDependencyInput('detail-dep-input', 'detail-deps-list', 'detail-dep-suggestions', mod.dependencies || []).then(() => {
+      const list = panel!.querySelector('#detail-deps-list');
+      if (list && panel!.isConnected) new MutationObserver(() => setDirty(panel!)).observe(list, { childList: true });
+    });
+  }
 
   const setupCounter = (inputId, counterId, max) => {
-    const input = panel.querySelector('#' + inputId);
+    const input = panel.querySelector('#' + inputId) as HTMLInputElement | null;
     const counter = panel.querySelector('#' + counterId);
     if (input && counter) {
       const update = () => { counter.textContent = `${input.value.length}/${max}`; };
@@ -312,70 +519,76 @@ export async function renderModDetail(modId) {
       update();
     }
   };
-
+  const descTextarea = panel.querySelector('#detail-desc') as HTMLTextAreaElement | null;
+  if (descTextarea) {
+    descTextarea.value = mod.description || '';
+    const autoResize = () => { descTextarea.style.height = 'auto'; descTextarea.style.height = Math.min(descTextarea.scrollHeight + 2, 360) + 'px'; };
+    descTextarea.addEventListener('input', autoResize);
+    setTimeout(autoResize, 0);
+  }
   setupCounter('detail-name', 'counter-name', 100);
   setupCounter('detail-author', 'counter-author', 50);
   setupCounter('detail-desc', 'counter-desc', 2000);
 
-  const descTextarea = panel.querySelector('#detail-desc');
-  if (descTextarea) {
-    descTextarea.value = mod.description || '';
-    const autoResize = () => { descTextarea.style.height = 'auto'; descTextarea.style.height = (descTextarea.scrollHeight + 2) + 'px'; };
-    descTextarea.addEventListener('input', autoResize);
-    setTimeout(autoResize, 0);
-  }
+  // Any typed change, in Details or in the links, shows the Save / Cancel bar.
+  panel.querySelector('#mdd-pane-details')?.addEventListener('input', (e) => {
+    if ((e.target as HTMLElement).id !== 'detail-dep-input') setDirty(panel!);   // a search, not an edit
+  });
+  panel.querySelector('#mdd-pane-updates')?.addEventListener('input', (e) => {
+    if ((e.target as HTMLElement).closest('#detail-links-list')) setDirty(panel!);
+  });
+  panel.querySelector('#mdd-pane-updates')?.addEventListener('change', (e) => {
+    if ((e.target as HTMLElement).closest('#detail-links-list')) setDirty(panel!);
+  });
 
-  const tagList = panel.querySelector('#detail-tags-list');
+  const tagList = panel.querySelector('#detail-tags-list') as HTMLElement;
   let modTags = [...(mod.tags || [])];
-
   const renderTagsUI = () => {
     tagList.innerHTML = '';
     modTags.forEach(tid => {
-      const tDef = S.userTags.find(t => t.id === tid);
+      const tDef = S.userTags.find(x => x.id === tid);
       if (!tDef) return;
-      const chip = document.createElement('div');
-      chip.style.cssText = 'display:flex;align-items:center;gap:4px';
+      const chip = document.createElement('span');
+      chip.className = 'mdd-tag';
       chip.innerHTML = renderTagChip(tDef, { fontSize: 11, pad: '2px 8px' })
-        + `<button data-id="${tid}" data-tasky="mod.removeTagTip" data-tasky-icon="trash" style="background:none;border:none;color:${tDef.color};cursor:pointer;padding:0">&times;</button>`;
-      chip.querySelector('button').onclick = async () => { 
+        + `<button type="button" class="mdd-tag-x" data-tasky="mod.removeTagTip" data-tasky-icon="trash" aria-label="${escAttr(t('mod.removeTagTip'))}">${uiIcon('close', 12)}</button>`;
+      (chip.querySelector('button') as HTMLButtonElement).onclick = async () => {
         const ok = await window.confirmCustom(
-          t('common.delete') || 'Retirer le tag',
-          (t('mod.removeTagConfirm') || 'Voulez-vous vraiment retirer le tag {name} ?').replace('{name}', `<strong>${escHtml(tDef.name)}</strong>`),
+          t('common.delete'),
+          t('mod.removeTagConfirm').replace('{name}', `<strong>${escHtml(tDef.name)}</strong>`),
           'danger'
         );
         if (ok) {
-          modTags = modTags.filter(id => id !== tid); 
-          renderTagsUI(); 
+          modTags = modTags.filter(id => id !== tid);
+          renderTagsUI();
+          setDirty(panel!);
         }
       };
       tagList.appendChild(chip);
     });
     mod._currentTags = modTags;
   };
-
   const addTag = (tid: string) => {
     if (!tid || modTags.includes(tid)) return;
     if (modTags.length >= 3) { toast(t('mod.tagLimit'), 'warning'); return; }
     modTags.push(tid);
     renderTagsUI();
+    setDirty(panel!);
   };
-
   setupTagPicker(panel, () => modTags, addTag);
   renderTagsUI();
 
-  // "Suggest" (optional AI): reads the mod's own files — and, only if the user turned AI on
-  // and chose a provider, asks it to rank THEIR tags. Opens a list; nothing is written until
-  // the user ticks fields and clicks Apply (features/ai/ai-suggest.ts). Loaded on click.
-  const saveBtn = panel.querySelector('#btn-save-detail');
-  if (saveBtn && !panel.querySelector('#btn-ai-suggest')) {
+  // « Suggest » (optional AI): reads the mod's own files and, only if the user turned AI on and
+  // chose a provider, asks it to rank THEIR tags. Nothing is written until they tick fields
+  // and click Apply (features/ai/ai-suggest.ts). Loaded on click.
+  const aiSlot = panel.querySelector('.mdd-ai-slot');
+  if (aiSlot) {
     const aiBtn = document.createElement('button');
     aiBtn.type = 'button';
     aiBtn.id = 'btn-ai-suggest';
-    aiBtn.className = 'btn btn-ghost';
-    aiBtn.style.cssText = 'margin-top:12px;width:100%;height:34px;font-weight:600;flex-shrink:0';
+    aiBtn.className = 'btn btn-ghost btn-sm';
     aiBtn.title = t('ai.suggest.tip');
-    aiBtn.innerHTML = (uiIcon('ai', 14, { style: 'margin-right:8px' }))
-      + `<span>${escHtml(t('ai.suggest.button'))}</span>`;
+    aiBtn.innerHTML = uiIcon('ai', 14) + `<span>${escHtml(t('ai.suggest.button'))}</span>`;
     aiBtn.onclick = async () => {
       try {
         const { openAiSuggest } = await import('../ai/ai-suggest.js');
@@ -384,6 +597,7 @@ export async function renderModDetail(modId) {
           onApplied: (res) => {
             const u = res?.mod;
             if (u) Object.assign(mod, { name: u.name, version: u.version, author: u.author, description: u.description, tags: u.tags, download_links: u.download_links });
+            _dirty = false;
             appState.set('allMods', [...(S.allMods || [])]);
             const c = document.querySelector(`.mod-card[data-id="${mod.id}"]`);
             if (c) updateCardState(c, mod);
@@ -394,71 +608,54 @@ export async function renderModDetail(modId) {
         });
       } catch (err) { toast(t('common.error') + ' : ' + err, 'error'); }
     };
-    saveBtn.parentElement?.insertBefore(aiBtn, saveBtn);
+    aiSlot.appendChild(aiBtn);
   }
-  
-  panel.querySelector('#btn-save-detail').onclick = async () => {
-    const name = panel.querySelector('#detail-name').value.trim().substring(0, 100);
-    const version = panel.querySelector('#detail-version').value.trim().substring(0, 30);
-    const author = panel.querySelector('#detail-author').value.trim().substring(0, 50);
-    const description = panel.querySelector('#detail-desc').value.trim().substring(0, 2000);
-    const tags = mod._currentTags || mod.tags || [];
 
+  (panel.querySelector('#btn-cancel-detail') as HTMLButtonElement).onclick = () => { _dirty = false; renderModDetail(mod.id); };
+  (panel.querySelector('#btn-save-detail') as HTMLButtonElement).onclick = async () => {
+    const val = (sel: string) => ((panel!.querySelector(sel) as HTMLInputElement | null)?.value || '').trim();
+    const name = val('#detail-name').substring(0, 100);
+    const version = val('#detail-version').substring(0, 30);
+    const author = val('#detail-author').substring(0, 50);
+    const description = val('#detail-desc').substring(0, 2000);
+    const tags = mod._currentTags || mod.tags || [];
+    if (!name) { toast(t('mdd.nameRequired'), 'warning'); showTab(panel!, 'details'); return; }
     try {
-      const linkRows = panel.querySelectorAll('#detail-links-list > div');
       const download_links = [];
-      for (const row of linkRows) {
-        const url = row.querySelector('.detail-link-url').value.trim();
-        const linkType = row.querySelector('.detail-link-type').value;
-        const label = row.querySelector('.detail-link-label').value.trim();
+      for (const row of Array.from(panel!.querySelectorAll('#detail-links-list > .mdd-link-row'))) {
+        const url = (row.querySelector('.detail-link-url') as HTMLInputElement).value.trim();
+        const linkType = (row.querySelector('.detail-link-type') as HTMLSelectElement).value;
+        const label = (row.querySelector('.detail-link-label') as HTMLInputElement).value.trim();
         if (url) download_links.push({ url, link_type: linkType, label });
       }
-      const dependencies = panel.querySelector('#detail-dep-input')?._selectedDeps || [];
-      await invoke('update_mod_meta', { 
+      const dependencies = (panel!.querySelector('#detail-dep-input') as any)?._selectedDeps || [];
+      await invoke('update_mod_meta', {
         modId: mod.id, payload: { name, author, description, version, tags, downloadLinks: download_links, dependencies }
       });
-      toast(t('common.saved') || 'Mod sauvegardé.', 'success');
-      mod.name = name;
-      mod.version = version;
-      mod.author = author;
-      mod.description = description;
-      mod.tags = tags;
-      mod.download_links = download_links;
-      mod.dependencies = dependencies;
-
-      // Force a global state update to trigger observers and ensure UI consistency
+      toast(t('common.saved'), 'success');
+      Object.assign(mod, { name, version, author, description, tags, download_links, dependencies });
+      _dirty = false;
+      // A global state update, so every observer (and the card) follows.
       appState.set('allMods', [...(S.allMods || [])]);
-
-      // Update the card in the list immediately
       const card = document.querySelector(`.mod-card[data-id="${mod.id}"]`);
       if (card) updateCardState(card, mod);
-
       renderModList(true);
       renderModDetail(mod.id);
-    } catch (err) { toast((window.t ? window.t('common.error') : 'Error') + ' : ' + err, 'error'); }
+    } catch (err) { toast(t('common.error') + ' : ' + err, 'error'); }
   };
 
-  // Attach remove listeners to existing links
-  panel.querySelectorAll('.btn-remove-link').forEach(btn => {
-    btn.onclick = () => btn.closest('div').remove();
+  // Links: remove a row, add one.
+  panel.querySelector('#detail-links-list')?.addEventListener('click', (e) => {
+    const x = (e.target as HTMLElement).closest('.btn-remove-link');
+    if (!x) return;
+    x.closest('.mdd-link-row')?.remove();
+    setDirty(panel!);
   });
-
-  panel.querySelector('#btn-add-link').onclick = () => {
-    const list = panel.querySelector('#detail-links-list');
-    const row = document.createElement('div');
-    row.style.cssText = 'display:flex;align-items:center;gap:6px;background:rgba(0,0,0,0.2);padding:6px 8px;border-radius:8px';
-    row.innerHTML = `
-            <select class="detail-link-type input-field" style="width:100px;padding:3px;font-size:10px">
-                <option value="github">GitHub</option>
-                <option value="direct" selected>Direct</option>
-                <option value="other">Autre</option>
-            </select>
-            <input type="text" class="detail-link-url input-field" style="flex:1;padding:3px 6px;font-size:10px" placeholder="URL" />
-            <input type="text" class="detail-link-label input-field" style="width:80px;padding:3px 6px;font-size:10px" placeholder="Label" />
-            <button class="btn-remove-link" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:14px;display:flex;align-items:center">${uiIcon('close', 14)}</button>
-        `;
-    row.querySelector('.btn-remove-link').onclick = () => row.remove();
-    list.appendChild(row);
+  (panel.querySelector('#btn-add-link') as HTMLButtonElement).onclick = () => {
+    const list = panel!.querySelector('#detail-links-list')!;
+    list.insertAdjacentHTML('beforeend', linkRowHtml('', 'direct', ''));
+    (list.lastElementChild?.querySelector('.detail-link-url') as HTMLInputElement | null)?.focus();
+    setDirty(panel!);
   };
 }
 
@@ -597,7 +794,7 @@ function setupTagPicker(panel, currentTags: () => string[], addTag: (id: string)
     const newRow = document.createElement('button');
     newRow.type = 'button';
     newRow.className = 'bmm-tag-menu-row';
-    newRow.innerHTML = `<span style="font-weight:700">＋</span> <span>${escHtml(t('detail.newTag') || 'New tag…')}</span>`;
+    newRow.innerHTML = `${uiIcon('add', 14)} <span>${escHtml(t('detail.newTag') || 'New tag…')}</span>`;
     newRow.onclick = () => drawNew();
     menu.appendChild(newRow);
   };
@@ -615,7 +812,7 @@ function setupTagPicker(panel, currentTags: () => string[], addTag: (id: string)
                style="flex:1;padding:5px;font-size:11px">
         <input type="color" class="bmm-tag-color" value="#f97316"
                style="width:30px;height:26px;padding:0;border:none;background:none;cursor:pointer">
-        <button type="button" class="btn btn-sm bmm-tag-icon" style="height:26px;padding:0 8px;font-size:11px">＋</button>
+        <button type="button" class="btn btn-sm bmm-tag-icon" style="height:26px;padding:0 8px;display:inline-flex;align-items:center" aria-label="${escHtml(t('settings.tagIconTip'))}">${uiIcon('add', 14)}</button>
       </div>
       <div class="bmm-tag-new-row" style="justify-content:flex-end">
         <button type="button" class="btn btn-sm bmm-tag-cancel" style="height:24px;padding:0 8px;font-size:10px">${escHtml(t('common.cancel') || 'Cancel')}</button>
@@ -632,7 +829,7 @@ function setupTagPicker(panel, currentTags: () => string[], addTag: (id: string)
       const ref = await openIconPicker({ current: iconRef });
       if (ref === null) return;
       iconRef = ref;
-      box.querySelector('.bmm-tag-icon').innerHTML = renderPackIcon(ref, 14) || '＋';
+      box.querySelector('.bmm-tag-icon').innerHTML = renderPackIcon(ref, 14) || uiIcon('add', 14);
     };
     box.querySelector('.bmm-tag-cancel').onclick = () => draw();
     box.querySelector('.bmm-tag-save').onclick = async () => {

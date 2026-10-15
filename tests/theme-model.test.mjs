@@ -15,6 +15,7 @@ const {
   parseColor, toHex, contrastRatio, wcagGrade, fixForeground, checkContrast, resolveToken,
   generatePalette, deriveVariant, isLightTheme, rootVars, deriveChannels, textOnFill,
   ThemeHistory, TOKEN_CATALOG, TOKEN_GROUPS, BASIC_GROUPS, isInternalToken, tokenSlug,
+  BRAND_MARKS, brandMark, brandMascotSrc, brandBadgeSrc, BRAND_BADGE_PATH, BRAND_LOGO_SRC, BRAND_LOGO_TILE_SRC,
 } = M;
 
 const BUILTIN_DIR = join(ROOT, 'frontend/assets/builtin-themes');
@@ -98,6 +99,69 @@ describe('migration (v1 → v2), never losing anything', () => {
     for (const { f, th } of builtins) {
       const issues = validateTheme(migrateTheme(th).theme).filter((i) => i.level !== 'info');
       assert.deepEqual(issues, [], f);
+    }
+  });
+});
+
+describe('brand mark: Tasky or the BMM logo', () => {
+  test('no field is Tasky, as every theme was before the field existed', () => {
+    assert.deepEqual([...BRAND_MARKS], ['tasky', 'logo', 'badge']);
+    assert.equal(brandMark({ id: 'a', name: 'A' }), 'tasky');
+    assert.equal(brandMark(null), 'tasky');
+    assert.equal(brandMark({ brand: 'logo' }), 'tasky', 'a string is not the object form');
+    assert.equal(brandMascotSrc({ id: 'a', name: 'A' }), undefined);
+  });
+  test('the logo picks the tile on a dark canvas and the bare logo on a light one', () => {
+    assert.equal(brandMark({ brand: { mark: 'logo' } }), 'logo');
+    assert.equal(brandMascotSrc({ brand: { mark: 'logo' } }), BRAND_LOGO_TILE_SRC);
+    assert.equal(brandMascotSrc({ brand: { mark: 'logo' }, mode: 'light' }), BRAND_LOGO_SRC);
+    assert.equal(brandMascotSrc({ brand: { mark: 'logo' }, vars: { '--bmm-bg-base': '#f4f4f4' } }), BRAND_LOGO_SRC);
+    for (const src of [BRAND_LOGO_SRC, BRAND_LOGO_TILE_SRC]) {
+      assert.ok(readdirSync(join(ROOT, 'frontend', dirname(src))).includes(src.split('/').pop()), `${src} ships`);
+    }
+  });
+  test('the badge is the theme accent with an ink that reads on it, baked into a data: URL', () => {
+    const svg = (src) => decodeURIComponent(src.replace(/^data:image\/svg\+xml,/, ''));
+    const def = brandMascotSrc({ brand: { mark: 'badge' } });
+    assert.match(def, /^data:image\/svg\+xml,/);
+    assert.match(svg(def), /rx="7" fill="#3b82f6"/, 'default accent');
+    assert.ok(svg(def).includes(BRAND_BADGE_PATH));
+    // A pale accent with white on-accent text: the ink flips to one that reads.
+    const pale = svg(brandBadgeSrc({ vars: { '--bmm-accent': '#ffcc00', '--bmm-text-on-accent': '#ffffff' } }));
+    assert.match(pale, /fill="#ffcc00"/);
+    assert.doesNotMatch(pale, /<path fill="#ffffff"/);
+    // A value that is not a plain colour never reaches the markup.
+    const odd = svg(brandBadgeSrc({ vars: { '--bmm-accent': 'red" onload="y' } }));
+    assert.doesNotMatch(odd, /onload/);
+  });
+  test('validation: a known field, a warning for a bad value, never an error', () => {
+    const ok = validateTheme({ id: 'a', name: 'A', brand: { mark: 'logo' } });
+    assert.ok(!ok.some((i) => i.path.startsWith('brand')), 'brand is a BMM field');
+    const bad = validateTheme({ id: 'a', name: 'A', brand: { mark: 'mascot' } });
+    assert.ok(bad.some((i) => i.code === 'brandMark' && i.level === 'warning'));
+    const notObj = validateTheme({ id: 'a', name: 'A', brand: 'logo' });
+    assert.ok(notObj.some((i) => i.code === 'notObjectField' && i.path === 'brand'));
+  });
+  test('migration keeps the field as it is', () => {
+    const m = migrateTheme({ id: 'a', name: 'A', brand: { mark: 'logo', extra: 1 } });
+    assert.deepEqual(m.theme.brand, { mark: 'logo', extra: 1 });
+  });
+  test('the issue code is translated in both languages', () => {
+    for (const lang of ['en', 'fr']) {
+      const d = JSON.parse(readFileSync(join(ROOT, `frontend/Lang/${lang}.json`), 'utf8'));
+      for (const k of ['themes.ed.issue.brandMark', 'themes.ed.brandMark', 'themes.ed.brandMarkTasky', 'themes.ed.brandMarkLogo', 'themes.ed.brandMarkBadge', 'themes.ed.brandMarkHint']) {
+        assert.ok(d[k], `${lang}: ${k}`);
+      }
+    }
+  });
+  test('built-ins: sober ones wear the logo, playful ones keep Tasky', () => {
+    const mark = Object.fromEntries(builtins.map(({ th }) => [th.id, brandMark(th)]));
+    assert.equal(mark['bmm-charcoal'], 'badge');
+    for (const id of ['bmm-sombre', 'bmm-void', 'bmm-white', 'bmm-indigo', 'bmm-arctic', 'bmm-cobalt', 'bmm-logo']) {
+      assert.equal(mark[id], 'logo', id);
+    }
+    for (const id of ['bmm-default', 'bmm-orange', 'bmm-neon', 'bmm-brutal', 'bmm-clay', 'bmm-sakura']) {
+      assert.equal(mark[id], 'tasky', id);
     }
   });
 });

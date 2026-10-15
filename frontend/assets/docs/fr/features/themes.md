@@ -17,8 +17,25 @@ l'allure de l'app — puis de l'exporter en un fichier que quelqu'un importe en 
     un thème choisi sous l'ancien nom reste appliqué. La table des anciens et nouveaux ids est
     dans [Créer son propre thème](doc-page:features/making-themes#renommes-en-103).
 
-<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/themes.bmmreplay" data-page="features/themes" data-title="Restyler BMM avec l'éditeur de thèmes"></div>
+<div class="bmm-replay" data-src="assets/docs/media/replays/themes.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/themes.bmmreplay" data-page="features/themes" data-title="Restyler BMM avec l'éditeur de thèmes"></div>
 
+
+
+<!-- story:make-it-yours -->
+![Personnaliser BMM](assets/docs/media/gifs/make-it-yours.gif)
+
+*Personnaliser BMM. Un thème créé dans l’éditeur de thèmes, une barre de navigation réorganisée avec une page personnalisée, et une chaîne traduite dans le studio de traduction.*
+
+<div class="bmm-replay" data-src="assets/docs/media/replays/make-it-yours.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/make-it-yours.bmmreplay" data-page="features/themes" data-title="Personnaliser BMM"></div>
+<!-- /story:make-it-yours -->
+
+## La marque que porte chaque thème
+
+Chaque thème porte une **marque**. Parmi les thèmes intégrés, ceux qui utilisent le **logo BMM**
+sont Graphite, Pure Black, Daylight, Indigo, Arctic, Cobalt et BMM Logo ; **Charcoal** utilise le
+**badge BMM** ; les autres (le thème par défaut et les plus chauds ou plus vifs) gardent **Tasky**.
+Le logotype de la barre latérale se lit *Better Mod.Manager*, dessiné en vectoriel en Bricolage
+Grotesque avec un petit badge BMM : il reste net à toute taille et prend les couleurs du thème.
 
 ## L'éditeur
 
@@ -64,6 +81,11 @@ Six sections, du changement le plus rapide au plus profond :
     La **mascotte Tasky** (la flottante *et* le Tasky tournant de l'écran de démarrage,
     remplacés ensemble), le **logo de la sidebar** et le **fond d'écran de l'app** (image ou
     vidéo), avec juste dessous son ajustement, sa position, son flou et son opacité.
+
+    **Mascotte ou logo** choisit ce que BMM montre partout où il montrerait sa mascotte — le coin,
+    l'écran de démarrage, les pages vides et les fenêtres : **Tasky**, le **logo BMM** (celui de
+    l'icône de l'app) ou le **badge BMM** (les lettres BMM sur une tuile à la couleur d'accent). Le
+    choix est enregistré dans le thème.
 
 === "Éléments"
 

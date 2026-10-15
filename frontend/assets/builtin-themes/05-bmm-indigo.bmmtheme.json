@@ -3,6 +3,7 @@
   "name": "Indigo",
   "author": "BMM Team",
   "description": "Layered warm greys with an indigo accent and 8 px corners.",
+  "brand": { "mark": "logo" },
   "vars": {
     "--bmm-bg-base": "#313338",
     "--bmm-bg-elevated": "#2b2d31",

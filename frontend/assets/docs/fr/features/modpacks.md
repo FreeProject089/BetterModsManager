@@ -6,8 +6,17 @@ Un modpack est un **lot de mods nommé, activable en un clic**. Là où un
 groupe de mods, ensemble » — et l'écran de BMM appelle l'action *Quick Apply* : un clic
 active ou désactive le pack.
 
-<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/modpacks.bmmreplay" data-page="features/modpacks" data-title="Créer et appliquer un modpack"></div>
+<div class="bmm-replay" data-src="assets/docs/media/replays/modpacks.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/modpacks.bmmreplay" data-page="features/modpacks" data-title="Créer et appliquer un modpack"></div>
 
+
+
+<!-- story:share-setup -->
+![Partager une config avec des amis](assets/docs/media/gifs/share-setup.gif)
+
+*Partager une config avec des amis. Le profil devient un modpack, le modpack est hébergé en Server Repo sur le réseau local, un ami le suit par son adresse et se synchronise.*
+
+<div class="bmm-replay" data-src="assets/docs/media/replays/share-setup.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/share-setup.bmmreplay" data-page="features/modpacks" data-title="Partager une config avec des amis"></div>
+<!-- /story:share-setup -->
 
 ## Modpack ou profil ?
 
@@ -21,6 +30,56 @@ Ils résolvent des problèmes différents, et se tromper est la confusion habitu
 
 Un modpack peut aussi **mélanger des mods de profils différents** — l'option *multi-profil*
 existe précisément pour le pack qui n'appartient pas à une seule configuration.
+
+## L'écran des Modpacks
+
+La barre du haut sert à s'y retrouver dans une longue liste de packs :
+
+- **Recherche** par nom.
+- **Afficher** : *Tous*, *Actifs* ou *Inactifs*.
+- **Trier** : *Récemment modifiés*, *Nom*, *Plus de mods* ou *Plus gros*.
+- **Disposition** : *Grille* ou *Liste*.
+
+Quand rien ne correspond, la page le dit et propose **Réinitialiser les filtres**.
+
+Chaque carte a **une action principale**, **Activer** (ou **Désactiver** tant que le pack est actif),
+et un menu **…** (*Plus d'actions*) pour le reste : modifier le pack, **Exporter et partager**, et
+supprimer. Supprimer demande confirmation, prévient que c'est irréversible, et laisse les mods du pack
+installés.
+
+### Créer un pack
+
+**Nouveau modpack** ouvre une fenêtre en quatre étapes, avec une barre d'étapes sur laquelle tu peux
+cliquer :
+
+1. **Bases** — un nom, et au besoin un jeu cible et une description.
+2. **Mods** — choisis les mods. Ils viennent du profil courant ; choisis *tous les profils* pour en
+   mélanger plusieurs (l'option multi-profil). Cherche, ou utilise les choix rapides : *Tous* et
+   *Activés maintenant*. Un mod déjà dans le pack, venant d'un autre profil ou non installé sur ce PC
+   est signalé.
+3. **Options** — mode de dépendances, vérification d'intégrité, ordre d'activation et sources de
+   téléchargement (voir plus bas). Les valeurs par défaut conviennent à la plupart des packs.
+4. **Récapitulatif** — l'ordre et les sources, avant que BMM lise les fichiers des mods pour les
+   empreinter. **Arrêter** annule pendant la lecture.
+
+Un nom et un mod suffisent : **Créer maintenant** saute les étapes restantes et garde les valeurs par
+défaut. Modifier un pack ouvre la même fenêtre avec toutes les étapes accessibles.
+
+### Importer
+
+**Importer** ajoute un pack qu'on t'a partagé, depuis trois endroits :
+
+| Depuis | Ce qu'il faut |
+|---|---|
+| **Un fichier** | Un `.bmp` ou `.json` sur ce PC |
+| **Un lien** | Une adresse web (`http://` ou `https://`) qui sert un `.bmp` |
+| **Un catalogue** | Parcours les packs publiés par d'autres dans les catalogues que tu suis, et installes-en un |
+
+### Exporter et partager
+
+**Exporter et partager**, dans le menu de la carte, enregistre le pack en fichier `.bmp` et affiche
+les **ID du pack** : ce qu'il te faut pour un lien, une automatisation, ou pour demander à quelqu'un
+s'il a le pack. Le BMM de l'autre PC retrouve les mêmes mods grâce à leurs hash (voir plus bas).
 
 ## Les options qui comptent à la création
 

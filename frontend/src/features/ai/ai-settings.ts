@@ -20,7 +20,7 @@ const CARD_ID = 'laya-general-card';
 
 const IC = (uiIcon('ai', 20));
 /** A book: the « How AI works in BMM » link-button. */
-const DOC_IC = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>';
+const DOC_IC = uiIcon('book', 14);
 
 /**
  * The « Laya intégré » box. ONE state at a time (ai-model.ts `embState`): absent → downloading

@@ -51,15 +51,23 @@ left when the step offers it.
 The dots at the bottom are clickable, and **2 / 5** at the top says where you are. Screen readers
 announce each step by its number and title.
 
+## The start-up animation
+
+While BMM starts, an intro plays: the classic one with Tasky, a short one with the logo, or none
+(**Settings → Graphics & display → Start-up animation**). A click or any key skips it. It follows
+**only** BMM's own **Reduce animations** switch and the **Off** style — not Windows' *Animation
+effects* setting, which used to freeze it on PCs where that was turned off — and a fast start plays
+the whole entrance instead of cutting it after the impact.
+
 ## Seeing it again
 
 - Command palette (<kbd>Ctrl</kbd>+<kbd>K</kbd>) → **Show what's new**: this version's release notes
   plus BetterCommunity's current announcements, whatever you have already seen.
-- **Settings → Tasky & BMM Settings → Start-up screen → Show what's new** does the same.
+- **Settings → Interface and notifications → Notifications → Start-up screen → Show what's new** does the same.
 
 ## Settings
 
-Two switches in **Settings → Tasky & BMM Settings**, right under *BetterCommunity notifications*:
+Two switches in **Settings → Interface and notifications → Notifications**, right under *BetterCommunity notifications*:
 
 - **Start-up screen** — off: only the questions that need an answer still appear (language, terms,
   privacy policy, file access, telemetry). Release notes, announcements and reminders do not.

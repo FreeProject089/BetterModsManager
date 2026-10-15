@@ -1,4 +1,5 @@
 import { t } from './i18n.js';
+import { openKeyManager } from './settings-link.js';
 
 // "This source is protected": the password and the key, on every screen that adds a catalogue.
 //
@@ -21,30 +22,33 @@ import { t } from './i18n.js';
 export function sourceAccessHtml(p: string): string {
     return `
     <details class="src-access" id="${p}-access">
-      <summary>${t('srcacc.title')}</summary>
+      <summary data-i18n="srcacc.title">${t('srcacc.title')}</summary>
       <div class="src-access-body">
-        <label class="src-access-label" for="${p}-access-url">${t('srcacc.url')}</label>
+        <label class="src-access-label" for="${p}-access-url" data-i18n="srcacc.url">${t('srcacc.url')}</label>
         <input type="text" class="input input-sm" id="${p}-access-url" spellcheck="false"
-               placeholder="${t('srcacc.urlPh')}">
+               data-i18n-placeholder="srcacc.urlPh" placeholder="${t('srcacc.urlPh')}">
 
-        <label class="src-access-label" for="${p}-access-key">${t('srcacc.key')}</label>
+        <label class="src-access-label" for="${p}-access-key" data-i18n="srcacc.key">${t('srcacc.key')}</label>
+        <!-- The ring's state in words, painted by wireSourceAccess: « no key yet » and « this
+             build cannot read the ring » used to look the same, a greyed-out empty chooser. -->
+        <p class="src-access-state" id="${p}-access-state" data-state="loading" hidden></p>
         <div class="src-access-row">
           <select class="input input-sm" id="${p}-access-key"></select>
           <!-- A chooser with nothing in it is disabled, which is correct and a dead end: the
                only way to get a key was ssh-keygen in a terminal, which is a different skill
                from using a mod manager. Both doors are here now. -->
-          <button type="button" class="btn btn-sm" id="${p}-access-new">${t('srcacc.newKey')}</button>
-          <button type="button" class="btn btn-sm" id="${p}-access-add">${t('srcacc.addKey')}</button>
-          <button type="button" class="btn btn-sm" id="${p}-access-manage">${t('srcacc.manage')}</button>
+          <button type="button" class="btn btn-sm btn-secondary" id="${p}-access-new" data-i18n="srcacc.newKey">${t('srcacc.newKey')}</button>
+          <button type="button" class="btn btn-sm btn-secondary" id="${p}-access-add" data-i18n="srcacc.addKey">${t('srcacc.addKey')}</button>
+          <button type="button" class="btn btn-sm btn-ghost" id="${p}-access-manage" data-i18n="srcacc.manage">${t('srcacc.manage')}</button>
         </div>
-        <div class="src-access-hint">${t('srcacc.keyHint')}</div>
+        <div class="src-access-hint" data-i18n="srcacc.keyHint">${t('srcacc.keyHint')}</div>
 
-        <label class="src-access-label" for="${p}-access-pw">${t('srcacc.pw')}</label>
+        <label class="src-access-label" for="${p}-access-pw" data-i18n="srcacc.pw">${t('srcacc.pw')}</label>
         <div class="src-access-row">
           <input type="password" class="input input-sm" id="${p}-access-pw" autocomplete="new-password">
-          <button type="button" class="btn btn-sm" id="${p}-access-pw-set">${t('srcacc.pwSet')}</button>
+          <button type="button" class="btn btn-sm btn-secondary" id="${p}-access-pw-set" data-i18n="srcacc.pwSet">${t('srcacc.pwSet')}</button>
         </div>
-        <div class="src-access-hint">${t('srcacc.pwHint')}</div>
+        <div class="src-access-hint" data-i18n="srcacc.pwHint">${t('srcacc.pwHint')}</div>
       </div>
     </details>`;
 }
@@ -116,12 +120,17 @@ export function closeOwningOverlay(el: Element): void {
 export function wireSourceAccess(
     p: string,
     notify: (msg: string, kind: 'success' | 'warning') => void,
-    // Supplied by the caller rather than imported: this module lives in core/, and reaching
-    // into ui/ for navigation is a core -> ui -> core cycle the dep-graph gate counts. The
-    // screen knows how to get somewhere; this only knows that it should.
-    manageKeys: () => void,
+    // Where « Manage keys » goes. Omitted (undefined) = Settings → Identity & API, on the
+    // keyring row (core/settings-link.ts). Screens pass something else only to do more first.
+    manageKeys: (() => void) | undefined,
     seedUrl?: () => string,
 ): void {
+    // Messages reach the screen TRANSLATED. Half of this file passed i18n keys and half passed
+    // sentences, and most screens toast what they get: « srcacc.keyMade » was shown as is.
+    // A key-shaped message is translated here; a sentence goes through untouched.
+    const notifyRaw = notify;
+    notify = (msg, kind) => notifyRaw(/^[a-z][\w-]*(\.[\w-]+)+$/i.test(msg) ? t(msg) : msg, kind);
+    const goManage = manageKeys || openKeyManager;
     const urlEl = document.getElementById(`${p}-access-url`) as HTMLInputElement | null;
     const det = document.getElementById(`${p}-access`) as HTMLDetailsElement | null;
     if (!urlEl || !det) {
@@ -139,11 +148,33 @@ export function wireSourceAccess(
     }
     const urlOf = () => urlEl.value.trim();
 
+    // The ring in words, and the doors that fit it: with no key, « Create one » is THE action
+    // (primary) and the empty chooser steps aside; when the ring cannot be read, making or
+    // adding a key would fail the same way, so those two are disabled and the line says why.
+    const paintState = async (kr: typeof import('./identity-key.js')) => {
+        const state = document.getElementById(`${p}-access-state`);
+        const sel = document.getElementById(`${p}-access-key`) as HTMLSelectElement | null;
+        const mk = document.getElementById(`${p}-access-new`) as HTMLButtonElement | null;
+        const add = document.getElementById(`${p}-access-add`) as HTMLButtonElement | null;
+        let st: 'none' | 'keys' | 'broken' = 'broken';
+        try { st = (await kr.listKeyring()).keys.length ? 'keys' : 'none'; } catch { st = 'broken'; }
+        if (state) {
+            state.dataset.state = st;
+            state.hidden = st === 'keys';
+            state.textContent = st === 'none' ? t('srcacc.noKey') : st === 'broken' ? t('settings.identity.authKeyUnavailable') : '';
+        }
+        if (sel) sel.hidden = st !== 'keys';
+        mk?.classList.toggle('btn-primary', st === 'none');
+        mk?.classList.toggle('btn-secondary', st !== 'none');
+        if (mk) mk.disabled = st === 'broken';
+        if (add) add.disabled = st === 'broken';
+    };
     const paint = async () => {
         try {
             const kr = await import('./identity-key.js');
             await kr.renderKeySelect(`${p}-access-key`, urlOf,
                 (k, kind) => notify(t(k), kind), t);
+            await paintState(kr);
         } catch {
             // The import itself can fail on a partial build. Reported rather than dropped:
             // `void paint()` used to let this vanish as an unhandled rejection, leaving a fold
@@ -162,6 +193,9 @@ export function wireSourceAccess(
     // The chooser answers a question about ONE server, so a changed address needs a repaint —
     // leaving the old answer under a new address would be a confident wrong reading.
     urlEl.addEventListener('change', () => { void paint(); });
+    // The state line and the chooser's sentence are painted, not data-i18n: repainted on a
+    // language switch while the block is open.
+    document.addEventListener('langChanged', () => { if (det.isConnected && det.open) void paint(); });
 
     // The ring is edited in ONE place. Sending you there beats a second editor that could
     // disagree with the first about which keys exist.
@@ -171,7 +205,7 @@ export function wireSourceAccess(
     // that owned it belonged to the screen you just left.
     document.getElementById(`${p}-access-manage`)?.addEventListener('click', () => {
         closeOwningOverlay(det);
-        manageKeys();
+        goManage();
     });
 
     // Add a key you already have, and make one you do not. Both land on the same ring the
@@ -207,8 +241,7 @@ export function wireSourceAccess(
         const added = async (passphrase?: string) => {
             await invoke('key_auth_add', { name, path, passphrase });
             notify('srcacc.keyAdded', 'success');
-            const kr = await import('./identity-key.js');
-            await kr.refreshKeySelect(`${p}-access-key`, urlOf, t);
+            await paint();
         };
         try {
             await added();
@@ -250,8 +283,7 @@ export function wireSourceAccess(
             // leave this machine and a toast is too small to read a key out of.
             try { await navigator.clipboard.writeText(String(res?.public || '')); } catch { /* no clipboard */ }
             notify('srcacc.keyMade', 'success');
-            const kr = await import('./identity-key.js');
-            await kr.refreshKeySelect(`${p}-access-key`, urlOf, t);
+            await paint();
         } catch (e) {
             notify(String(e).split('|')[0] || 'srcacc.keyMadeFailed', 'warning');
         }

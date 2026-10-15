@@ -3,6 +3,7 @@
   "name": "Cobalt",
   "author": "BMM Team",
   "description": "Graphite dark with hairline borders, 10 px corners and a bright cobalt-blue accent.",
+  "brand": { "mark": "logo" },
   "vars": {
     "--bmm-bg-base": "#1e1e1e",
     "--bmm-bg-elevated": "#2a2a2c",

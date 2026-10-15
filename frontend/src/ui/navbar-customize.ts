@@ -1,6 +1,6 @@
-// navbar-customize.ts — Phase A of navbar customization.
-// Non-destructive enhancement of the existing `.sidebar-nav` items: reorder, hide/show,
-// and rename. State is persisted in localStorage. No third-party code execution here.
+// navbar-customize.ts — the customisable sidebar: reorder, hide, rename and group BMM's own
+// pages, add buttons of your own (a BMM page, a tool, a website, or a sandboxed page you build),
+// and the editor for all of it (Settings → Customise navigation). State is in localStorage.
 
 import { t } from '../core/i18n.js';
 import { attachHighlight, type CodeEditorHandle } from './code-editor.js';
@@ -9,7 +9,7 @@ import { initPageBroker, refreshGrants } from './custom-page-broker.js';
 import { runNavBundleImport, reviewAnswer } from './nav-bundle-import.js';
 import { openGrantReview } from './nav-grant-review.js';
 import { showConfirm } from './confirm.js';
-import { uiIcon } from './icons.js';
+import { uiIcon, isIconName, ICON_NAMES, type IconName } from './icons.js';
 
 const LS_KEY = 'bmm_navbar_config';
 
@@ -319,69 +319,109 @@ document.getElementById('year').textContent = new Date().getFullYear();`,
     },
 ];
 
+/** What each starter does, and the permissions its code asks for. Parallel to PAGE_TEMPLATES
+ *  by labelKey. The list is a SUGGESTION shown in the guided flow, never a grant: every
+ *  permission still starts off and is turned on by the user, one switch at a time. */
+const TPL_INFO: Record<string, { desc: string; caps: string[]; icon: IconName }> = {
+    'navedit.tplBlank': { desc: 'nbx.tplDesc.blank', caps: [], icon: 'file' },
+    'navedit.tplNotes': { desc: 'nbx.tplDesc.notes', caps: ['storage'], icon: 'file-text' },
+    'navedit.tplDashboard': { desc: 'nbx.tplDesc.dashboard', caps: ['read'], icon: 'activity' },
+    'navedit.tplChecklist': { desc: 'nbx.tplDesc.checklist', caps: ['storage'], icon: 'clipboard-list' },
+    'navedit.tplSystem': { desc: 'nbx.tplDesc.system', caps: ['system'], icon: 'cpu' },
+    'navedit.tplFetch': { desc: 'nbx.tplDesc.fetch', caps: ['network'], icon: 'globe' },
+    'navedit.tplClipboard': { desc: 'nbx.tplDesc.clipboard', caps: ['clipboard'], icon: 'copy' },
+    'navedit.tplMulti': { desc: 'nbx.tplDesc.multi', caps: [], icon: 'folders' },
+};
+
 interface CustomNavItem {
     id: string;                            // "custom:abc123"
     label: string;
     kind: 'view' | 'modal' | 'url' | 'page'; // internal view / modal / external URL / sandboxed custom page
     target: string;                        // viewId | modalId | https URL | pageId
-    icon?: string;                         // chosen built-in icon key (see ICONS)
+    icon?: string;                         // an icon ref (see "Icons" below)
 }
 
-// Built-in icon set for custom buttons (key → SVG inner paths).
-const ICONS: Record<string, string> = {
-    star: '<path d="M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.9L12 17.8 5.8 21l1.2-6.9-5-4.9 6.9-1z"/>',
-    link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
-    globe: '<circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z"/>',
-    grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
-    folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
-    gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
-    heart: '<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/>',
-    bolt: '<path d="M13 2L3 14h7l-1 8 10-12h-7z"/>',
-    book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
-    chart: '<path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6"/><rect x="12" y="8" width="3" height="10"/><rect x="17" y="5" width="3" height="13"/>',
-    home: '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>',
-    search: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
-    download: '<path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M5 21h14"/>',
-    upload: '<path d="M12 21V9"/><path d="M7 13l5-5 5 5"/><path d="M5 3h14"/>',
-    info: '<circle cx="12" cy="12" r="10"/><path d="M12 11v5"/><path d="M12 8h.01"/>',
-    bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>',
-    tag: '<path d="M20.6 13.4L13.4 20.6a2 2 0 0 1-2.8 0l-7.2-7.2A2 2 0 0 1 2.8 12V4.8A2 2 0 0 1 4.8 2.8H12a2 2 0 0 1 1.4.6l7.2 7.2a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.2"/>',
-    package: '<path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>',
-    terminal: '<path d="M4 5h16v14H4z"/><path d="M7 9l3 3-3 3"/><path d="M13 15h4"/>',
-    image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>',
-    play: '<path d="M6 4l14 8-14 8V4z"/>',
-    shield: '<path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5l8-3z"/>',
-    puzzle: '<path d="M10 3v3a2 2 0 1 0 4 0V3h4v4h-3a2 2 0 1 0 0 4h3v4h-4v-3a2 2 0 1 0-4 0v3H6v-4h3a2 2 0 1 0 0-4H6V3z"/>',
-    user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
-    flag: '<path d="M5 21V4"/><path d="M5 4h11l-1.5 4L16 12H5"/>',
-    wrench: '<path d="M14.7 6.3a4 4 0 0 1-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 1 5.4-5.4l-2.5 2.5-2-2 2.5-2.5z"/>',
+// ── Icons ────────────────────────────────────────────────────────────────────
+//
+// A nav icon is stored as a plain string, so it travels unchanged through the share link and
+// the .bmmnav file:
+//   ui:<name>            a glyph of BMM's own registry (ui/icons.ts): what the picker offers
+//                        first, the same set as every other button in the app
+//   lucide: si: iso: app: data:image/…
+//                        a ref from the shared icon library (ui/icon-pack.ts, « More icons »);
+//                        drawn once that library has loaded, a moment after start-up
+//   nav:<viewId>         the icon one of BMM's own pages already wears
+//   brand:<x>            older builds' Better* logos (the same pictures as app:<x>)
+//   star, link, gear…    older builds' own small set: drawn with the registry glyph of the
+//                        same meaning, so a saved navbar keeps its icons without rewriting it
+// Nothing here puts a stored string into markup: a ref is a key into a table, a data: image
+// goes in an escaped src, and the library escapes what it draws.
+
+/** Older builds' icon keys → the registry glyph that means the same. */
+const LEGACY_UI: Record<string, IconName> = {
+    star: 'star', link: 'link', globe: 'globe', grid: 'grid', folder: 'folder', gear: 'settings',
+    bolt: 'run', book: 'book', home: 'home', search: 'search', download: 'download', upload: 'upload',
+    info: 'info', bell: 'bell', tag: 'tag', package: 'package', terminal: 'terminal', image: 'image',
+    play: 'play', shield: 'shield', puzzle: 'mod', user: 'user',
+    heart: 'heart', chart: 'chart', flag: 'flag', wrench: 'wrench',
 };
-function svgWrap(inner: string): string {
-    return `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">${inner}</svg>`;
+/** The Better* logos and Tasky, full-colour bundled files. Fixed sources, never user input. */
+const LOGOS: Record<string, { src: string; label: string }> = {
+    bmm: { src: 'assets/BMm.png', label: 'BetterModsManager' },
+    bc: { src: 'assets/BC.webp', label: 'BetterCommunity' },
+    bi: { src: 'assets/bi.svg', label: 'BetterInstaller' },
+    bd: { src: 'assets/bd.png', label: 'BetterDiscord' },
+    tasky: { src: 'assets/Tasky.png', label: 'Tasky' },
+};
+
+type IconPack = typeof import('./icon-pack.js');
+let _pack: IconPack | null = null;
+let _packLoad: Promise<void> = Promise.resolve();
+const _packAsked = new Set<string>();
+const needsPack = (ref: string): boolean => /^(lucide|si|iso):/.test(ref);
+
+/** Load the shared library for refs it draws, then redraw the navbar (and an open editor).
+ *  Each ref is asked for once: a name the library does not have stays on the fallback
+ *  instead of asking again on every redraw. */
+function loadPackFor(refs: string[]): void {
+    const want = refs.filter((r) => needsPack(r) && !_packAsked.has(r));
+    if (!want.length) return;
+    want.forEach((r) => _packAsked.add(r));
+    _packLoad = _packLoad
+        .then(async () => {
+            if (!_pack) _pack = await import('./icon-pack.js');
+            await _pack.ensurePacksFor(want);
+        })
+        .catch(() => { /* offline or missing: the fallback icon stays */ })
+        .then(() => {
+            renderCustomItems(load());
+            document.dispatchEvent(new CustomEvent('bmm:nav-icons-ready'));
+        });
 }
-/**
- * All icons available to custom buttons: the built-in set above PLUS every icon
- * already used by BMM's own nav items (harvested from the DOM at runtime). Each
- * entry maps a stable key → full <svg> markup. Keys: "star"… (built-ins) and
- * "nav:<viewId>" (BMM's own icons). The chosen *key* is what we persist.
- */
-function iconRegistry(): Record<string, string> {
-    const reg: Record<string, string> = {};
-    for (const k of Object.keys(ICONS)) reg[k] = svgWrap(ICONS[k]);
-    // Better* project marks — full-colour brand logos, rendered as <img> (not a currentColor
-    // SVG). Src is a fixed bundled asset, never user input. Sized by .nav-custom-img /
-    // .nbe-icon-opt img (both 18px). Lets a nav item wear a Better* logo out of the box.
-    reg['brand:bmm'] = '<img class="nav-custom-img" src="assets/BMm.png" alt="BMM">';
-    reg['brand:bc'] = '<img class="nav-custom-img" src="assets/BC.webp" alt="BetterCommunity">';
-    reg['brand:bi'] = '<img class="nav-custom-img" src="assets/bi.svg" alt="BetterInstaller">';
-    reg['brand:bd'] = '<img class="nav-custom-img" src="assets/bd.png" alt="BetterDiscord">';
-    for (const el of items()) {
-        if (!el.dataset.view) continue;                       // built-in views only
-        const ic = el.querySelector('.nav-icon');
-        if (ic && ic.innerHTML.trim()) reg['nav:' + el.dataset.view] = ic.innerHTML;
+
+/** Markup for an icon ref, or '' when it names nothing drawable (yet). */
+function iconHtml(ref: string | undefined, size: 16 | 18 | 20 | 24 = 18): string {
+    const r = String(ref || '');
+    if (!r) return '';
+    if (r.startsWith('data:image/')) return `<img class="nav-custom-img" src="${escAttr(r)}" alt="">`;
+    if (r.startsWith('ui:')) { const n = r.slice(3); return isIconName(n) ? uiIcon(n, size) : ''; }
+    if (r.startsWith('app:') || r.startsWith('brand:')) {
+        const logo = LOGOS[r.slice(r.indexOf(':') + 1)];
+        return logo ? `<img class="nav-custom-img" src="${escAttr(logo.src)}" alt="">` : '';
     }
-    return reg;
+    if (r.startsWith('nav:')) {
+        const el = items().find((e) => e.dataset.view === r.slice(4));
+        return el?.querySelector('.nav-icon')?.innerHTML.trim() || '';
+    }
+    if (needsPack(r)) {
+        if (_pack) { const out = _pack.renderPackIcon(r, size); if (out) return out; }
+        loadPackFor([r]);
+        return '';
+    }
+    if (LEGACY_UI[r]) return uiIcon(LEGACY_UI[r], size);
+    return '';
 }
+
 interface NavbarConfig {
     // `order` mixes item ids (built-in data-view + custom) and section dividers
     // ("group:<id>"). A section header is rendered for each "group:" entry; the items
@@ -397,8 +437,8 @@ function load(): NavbarConfig {
     try {
         const c = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
         return {
-            order: c.order || [], hidden: c.hidden || {}, labels: c.labels || {},
-            custom: c.custom || [], groups: c.groups || {},
+            order: Array.isArray(c.order) ? c.order : [], hidden: c.hidden || {}, labels: c.labels || {},
+            custom: Array.isArray(c.custom) ? c.custom : [], groups: c.groups || {},
         };
     } catch { return { order: [], hidden: {}, labels: {}, custom: [], groups: {} }; }
 }
@@ -519,13 +559,7 @@ function cssEsc(s: string): string {
     return (window.CSS && CSS.escape) ? CSS.escape(s) : String(s).replace(/["\\]/g, '\\$&');
 }
 function customIcon(item: CustomNavItem): string {
-    const ic = item.icon || '';
-    // Uploaded custom icon (a data: URI image — rendered as <img>, never injected as HTML).
-    if (ic.startsWith('data:')) return `<img class="nav-custom-img" src="${escAttr(ic)}" alt="">`;
-    const reg = iconRegistry();
-    if (ic && reg[ic]) return reg[ic];
-    const fallback = item.kind === 'url' ? ICONS.link : item.kind === 'modal' ? ICONS.grid : ICONS.folder;
-    return svgWrap(fallback);
+    return iconHtml(item.icon) || uiIcon(KIND_ICON[item.kind] || 'link', 18);
 }
 function labelEl(el: HTMLElement): HTMLElement | null { return el.querySelector('.nav-label'); }
 
@@ -636,7 +670,7 @@ function activateCustom(item: CustomNavItem): void {
             <div class="custom-url-bar">
                 <span class="custom-url-addr" data-tooltip="${escAttr(item.target)}">${escAttr(item.target)}</span>
                 <span class="custom-url-hint">${t('navedit.embedHint') || 'Some sites block embedding'}</span>
-                <button class="custom-url-open" type="button">${t('navedit.openExternal') || 'Open in browser ↗'}</button>
+                <button class="custom-url-open" type="button">${uiIcon('external', 12)} ${t('navedit.openExternal') || 'Open in browser'}</button>
             </div>
             <iframe class="custom-url-frame" referrerpolicy="no-referrer"
                 sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
@@ -737,674 +771,1070 @@ export function applyNavCodeFromLink(code: string): boolean {
     return true;
 }
 
-/** Open the customization editor (a modal). */
-export function openNavbarEditor(): void {
+// ── The editor ────────────────────────────────────────────────────────────────
+//
+// Rebuilt for 1.0.3. The old dialog was one long column: the item list, then an « add a
+// button » form, then a « custom pages » form with three code boxes and six unlabelled
+// permission ticks, all open at once, so the screen asked everything before you had chosen
+// anything. Now:
+//
+//   left   the sidebar as it will look: drag a row to move it (under a section header to
+//          group it), the eye to hide it, a click to select it
+//   right  what can be changed about the selected row, and nothing else
+//   « Add a button »  a short guided flow in the right pane: what it opens, then a name and
+//          an icon; for « My own page » also a starter, the permissions (each explained, all
+//          off) and the page running in its sandbox before anything is added
+//
+// The security properties are the same ones, in the same places: a custom page runs in
+// the bmmpage:// sandbox (opaque origin, its own CSP) and reaches BMM only through
+// custom-page-broker.ts; every permission starts off and is changed only by a switch the user
+// flips here; an imported .bmmnav creates new pages holding nothing and asks (nav-grant-review);
+// re-importing never adds a permission to an existing page. The saved format is unchanged.
+
+const KIND_ICON: Record<CustomNavItem['kind'], IconName> = { view: 'link', modal: 'grid', url: 'globe', page: 'file-text' };
+const KINDS: CustomNavItem['kind'][] = ['view', 'modal', 'url', 'page'];
+/** Every permission a page can be given, in the order shown, with how much it exposes. */
+const CAPS: Array<{ cap: string; risk: 'low' | 'mid' | 'high' }> = [
+    { cap: 'storage', risk: 'low' },
+    { cap: 'notifications', risk: 'low' },
+    { cap: 'read', risk: 'low' },
+    { cap: 'system', risk: 'mid' },
+    { cap: 'clipboard', risk: 'high' },
+    { cap: 'network', risk: 'high' },
+];
+/** One-click sets. The clipboard and system info are never in one: each is its own switch. */
+const PRESETS: Record<string, string[]> = {
+    none: [],
+    local: ['storage', 'notifications', 'read'],
+    online: ['storage', 'notifications', 'read', 'network'],
+};
+function capLabel(cap: string): string {
+    const k: Record<string, string> = {
+        storage: 'navedit.capStorage', notifications: 'navedit.capNotify', network: 'navedit.capNetwork',
+        read: 'navedit.capRead', clipboard: 'navedit.capClipboard', system: 'navedit.capSystem',
+    };
+    return k[cap] ? t(k[cap]) : cap;
+}
+function capRisk(cap: string): string {
+    const k: Record<string, string> = {
+        storage: 'navedit.riskStorage', notifications: 'navedit.riskNotifications', network: 'navedit.riskNetwork',
+        read: 'navedit.riskRead', clipboard: 'navedit.riskClipboard', system: 'navedit.riskSystem',
+    };
+    return k[cap] ? t(k[cap]) : '';
+}
+const RISK_KEY = { low: 'nbx.riskLow', mid: 'nbx.riskMid', high: 'nbx.riskHigh' } as const;
+
+// ── Icon picker (inline) ──────────────────────────────────────────────────────
+//
+// The registry glyphs (ui/icons.ts) by theme, BMM's own page icons and the Better* logos,
+// a search over all of them, and the icons used last. « More icons » opens the shared
+// library (2 000+ Lucide glyphs, brands, your uploads) for anything else.
+
+const ICON_CATS: Array<{ id: string; key: string; names: IconName[] }> = [
+    { id: 'places', key: 'nbx.icCat.places', names: ['home', 'grid', 'list', 'layers', 'map', 'globe', 'link', 'external', 'store', 'book', 'book-open', 'star', 'pin'] },
+    { id: 'files', key: 'nbx.icCat.files', names: ['folder', 'folders', 'open-folder', 'file', 'file-text', 'archive', 'database', 'hard-drive', 'server', 'cloud', 'package', 'box', 'download', 'upload', 'save', 'clipboard-list'] },
+    { id: 'create', key: 'nbx.icCat.create', names: ['image', 'palette', 'play', 'monitor', 'code', 'terminal', 'generate', 'pick', 'languages', 'lightbulb', 'ai'] },
+    { id: 'tools', key: 'nbx.icCat.tools', names: ['settings', 'sliders', 'run', 'launch', 'workflow', 'git-branch', 'cpu', 'network', 'activity', 'scale', 'calendar', 'clock', 'bug', 'key', 'search'] },
+    { id: 'people', key: 'nbx.icCat.people', names: ['user', 'users', 'message', 'send', 'bell', 'share', 'fingerprint'] },
+    { id: 'status', key: 'nbx.icCat.status', names: ['info', 'help', 'warning', 'success', 'shield', 'shield-check', 'lock', 'eye', 'history'] },
+    { id: 'games', key: 'nbx.icCat.games', names: ['game', 'mod', 'hexagon', 'tag'] },
+];
+/** Words people type that are not the glyph's name. */
+const ICON_WORDS: Record<string, string> = {
+    house: 'home', start: 'home', web: 'globe', internet: 'globe', site: 'globe', url: 'link', shop: 'store',
+    gear: 'settings', cog: 'settings', options: 'sliders', trash: 'delete', bin: 'delete', pen: 'edit',
+    photo: 'image', picture: 'image', video: 'play', music: 'play', chat: 'message', mail: 'send',
+    person: 'user', people: 'users', team: 'users', note: 'file-text', notes: 'file-text', doc: 'file-text',
+    puzzle: 'mod', mods: 'mod', gamepad: 'game', joystick: 'game', time: 'clock', date: 'calendar',
+    bolt: 'run', fast: 'run', rocket: 'launch', alert: 'warning', danger: 'warning', ok: 'success',
+    secure: 'shield', password: 'key', script: 'code', console: 'terminal', lang: 'languages', idea: 'lightbulb',
+};
+const RECENT_KEY = 'bmm_nav_icon_recent';
+function recentIcons(): string[] {
+    try { const v = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); return Array.isArray(v) ? v.filter((x) => typeof x === 'string').slice(0, 12) : []; }
+    catch { return []; }
+}
+function rememberIcon(ref: string): void {
+    // An uploaded image is kept by the shared library already; a data: URL is too big to repeat here.
+    if (!ref || ref.startsWith('data:')) return;
+    try { localStorage.setItem(RECENT_KEY, JSON.stringify([ref, ...recentIcons().filter((r) => r !== ref)].slice(0, 12))); } catch { /* pref only */ }
+}
+/** The icon refs of BMM's own pages, harvested from the sidebar (built-in pages only). */
+function bmmIconRefs(): string[] {
+    return items().filter((el) => el.dataset.view && el.querySelector('.nav-icon')?.innerHTML.trim()).map((el) => 'nav:' + el.dataset.view);
+}
+function iconTitle(ref: string): string {
+    if (ref.startsWith('ui:')) return ref.slice(3);
+    if (ref.startsWith('nav:')) return origLabel(ref.slice(4));
+    if (ref.startsWith('app:')) return LOGOS[ref.slice(4)]?.label || ref;
+    return ref.replace(/^[a-z]+:/, '');
+}
+
+/** Mount the picker in `host`. `onPick` gets the chosen ref. */
+function mountIconPicker(host: HTMLElement, current: string, onPick: (ref: string) => void): void {
+    let cat = 'all';
+    let query = '';
+    host.innerHTML = `
+        <div class="nbx-ipk">
+            <div class="nbx-ipk-top">
+                <label class="nbx-ipk-search">
+                    ${uiIcon('search', 14)}
+                    <input type="search" class="nbx-ipk-q" placeholder="${escAttr(t('nbx.icSearch'))}" aria-label="${escAttr(t('nbx.icSearch'))}" autocomplete="off" spellcheck="false">
+                </label>
+                <button type="button" class="btn btn-ghost btn-sm nbx-ipk-more">${uiIcon('grid', 14)}<span>${escAttr(t('nbx.icMore'))}</span></button>
+            </div>
+            <div class="nbx-ipk-cats" role="tablist" aria-label="${escAttr(t('nbx.icCats'))}"></div>
+            <div class="nbx-ipk-grid" role="listbox" aria-label="${escAttr(t('navedit.icon'))}"></div>
+        </div>`;
+    const q = host.querySelector('.nbx-ipk-q') as HTMLInputElement;
+    const catsEl = host.querySelector('.nbx-ipk-cats') as HTMLElement;
+    const grid = host.querySelector('.nbx-ipk-grid') as HTMLElement;
+    const cell = (ref: string) => {
+        const markup = iconHtml(ref, 20);
+        if (!markup) return '';
+        const title = iconTitle(ref);
+        return `<button type="button" class="nbx-ipk-cell${ref === current ? ' is-sel' : ''}" role="option" aria-selected="${ref === current}" data-ref="${escAttr(ref)}" aria-label="${escAttr(title)}" data-tooltip="${escAttr(title)}">${markup}</button>`;
+    };
+    const section = (label: string, refs: string[]) => {
+        const cells = refs.map(cell).filter(Boolean).join('');
+        return cells ? `<div class="nbx-ipk-sec">${escAttr(label)}</div><div class="nbx-ipk-cells">${cells}</div>` : '';
+    };
+    const logos = Object.keys(LOGOS).map((k) => 'app:' + k);
+    const renderCats = () => {
+        const recent = recentIcons();
+        const tabs = [
+            { id: 'all', label: t('nbx.icAll') },
+            ...(recent.length ? [{ id: 'recent', label: t('nbx.icRecent') }] : []),
+            ...ICON_CATS.map((c) => ({ id: c.id, label: t(c.key) })),
+            { id: 'bmm', label: t('nbx.icCat.bmm') },
+        ];
+        catsEl.innerHTML = tabs.map((c) => `<button type="button" role="tab" class="nbx-chip${c.id === cat ? ' is-on' : ''}" aria-selected="${c.id === cat}" data-cat="${c.id}">${escAttr(c.label)}</button>`).join('');
+    };
+    const render = () => {
+        renderCats();
+        const words = query.toLowerCase().split(/[\s-]+/).filter(Boolean);
+        if (words.length) {
+            // A search looks through the WHOLE registry, not just the themed lists.
+            const want = (name: string, label: string) => words.every((w) => name.includes(w) || label.includes(w) || ICON_WORDS[w] === name);
+            const hits: string[] = [];
+            for (const n of ICON_NAMES) if (want(n, '')) hits.push('ui:' + n);
+            for (const r of bmmIconRefs()) if (want(r.slice(4), iconTitle(r).toLowerCase())) hits.push(r);
+            for (const r of logos) if (want(r.slice(4), iconTitle(r).toLowerCase())) hits.push(r);
+            const html = section(t('nbx.icResults'), hits);
+            grid.innerHTML = html || `<p class="nbx-empty-line">${escAttr(t('nbx.icNone'))}</p>`;
+            return;
+        }
+        const parts: string[] = [];
+        const recent = recentIcons();
+        if ((cat === 'all' || cat === 'recent') && recent.length) parts.push(section(t('nbx.icRecent'), recent));
+        for (const c of ICON_CATS) if (cat === 'all' || cat === c.id) parts.push(section(t(c.key), c.names.map((n) => 'ui:' + n)));
+        if (cat === 'all' || cat === 'bmm') parts.push(section(t('nbx.icCat.bmm'), [...bmmIconRefs(), ...logos]));
+        grid.innerHTML = parts.join('');
+    };
+    render();
+    catsEl.addEventListener('click', (e) => {
+        const b = (e.target as HTMLElement).closest('[data-cat]') as HTMLElement | null;
+        if (!b) return;
+        cat = b.dataset.cat || 'all';
+        render();
+    });
+    let deb: ReturnType<typeof setTimeout> | undefined;
+    q.addEventListener('input', () => { clearTimeout(deb); deb = setTimeout(() => { query = q.value.trim(); render(); }, 90); });
+    const pick = (ref: string) => { current = ref; rememberIcon(ref); onPick(ref); render(); };
+    grid.addEventListener('click', (e) => {
+        const b = (e.target as HTMLElement).closest('[data-ref]') as HTMLElement | null;
+        if (b?.dataset.ref) pick(b.dataset.ref);
+    });
+    host.querySelector('.nbx-ipk-more')?.addEventListener('click', async () => {
+        try {
+            const pack = _pack || (_pack = await import('./icon-pack.js'));
+            const ref = await pack.openIconPicker({ current });
+            if (!ref) return;
+            await pack.ensurePackFor(ref).catch(() => undefined);
+            _packAsked.add(ref);
+            pick(ref);
+        } catch (err) { (window as any).toast?.(String(err), 'error'); }
+    });
+    // A library icon picked in an earlier session draws once the library is in memory.
+    const onReady = () => { if (host.isConnected) render(); else document.removeEventListener('bmm:nav-icons-ready', onReady); };
+    document.addEventListener('bmm:nav-icons-ready', onReady);
+}
+
+// ── Small pieces of markup ────────────────────────────────────────────────────
+
+function switchHtml(attrs: string, on: boolean, disabled = false): string {
+    return `<span class="nbx-switch"><input type="checkbox" role="switch" ${attrs} ${on ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span class="nbx-switch-track" aria-hidden="true"></span></span>`;
+}
+function itemName(id: string, cfg: NavbarConfig): string {
+    const c = cfg.custom.find((x) => x.id === id);
+    if (c) return c.label;
+    return cfg.labels[id] || origLabel(id);
+}
+function builtinIcon(id: string): string {
+    return items().find((e) => idOf(e) === id)?.querySelector('.nav-icon')?.innerHTML || '';
+}
+
+/** Open the customization editor (a modal). `select` preselects a row by id. */
+export function openNavbarEditor(select?: string): void {
     document.getElementById('navbar-editor-overlay')?.remove();
-    const cfg = load();
+    ensureEditorCss();
     const overlay = document.createElement('div');
     overlay.id = 'navbar-editor-overlay';
     overlay.className = 'modal-generic-overlay open';
 
-    const rowsHtml = orderedIds().map(id => {
-        if (id.startsWith('group:')) {
-            const label = cfg.groups[id]?.label || '';
-            return `
-            <div class="nbe-row nbe-row-group" data-id="${id}" draggable="false">
-                <span class="nbe-grip" data-tooltip="${t('common.dragReorder') || 'Drag to reorder'}">⠿</span>
-                <span class="nbe-section-tag">${t('navedit.section') || 'SECTION'}</span>
-                <input class="nbe-name input" value="${escAttr(label)}" placeholder="${t('navedit.sectionName') || 'Section name'}">
-                <button class="nbe-del" data-del="${id}" data-tooltip="${t('common.delete') || 'Delete'}" aria-label="${t('common.delete') || 'Delete'}">${uiIcon('delete', 14)}</button>
-            </div>`;
-        }
-        const el = items().find(e => idOf(e) === id);
-        const icon = el?.querySelector('.nav-icon')?.innerHTML || '';
-        const name = cfg.labels[id] || t(el ? (labelEl(el)?.dataset.i18nOrig || labelEl(el)?.getAttribute('data-i18n') || id) : id) || id;
-        const hidden = !!cfg.hidden[id];
-        const prot = PROTECTED.has(id);
-        const isCustom = id.startsWith('custom:');
-        return `
-        <div class="nbe-row" data-id="${id}" draggable="false">
-            <span class="nbe-grip" data-tooltip="${t('common.dragReorder') || 'Drag to reorder'}">⠿</span>
-            <span class="nbe-icon">${icon}</span>
-            <input class="nbe-name input" value="${escAttr(name)}" placeholder="${escAttr(id)}">
-            <button class="nbe-eye ${hidden ? 'is-hidden' : ''}" data-tooltip="${t('navedit.toggle') || 'Show / hide'}" ${prot ? 'disabled' : ''}>
-                ${hidden ? eyeOff() : eyeOn()}
-            </button>
-            ${isCustom ? `<button class="nbe-edit" data-edit="${id}" data-tooltip="${t('navedit.editBtn') || 'Edit'}" aria-label="${t('navedit.editBtn') || 'Edit'}">${uiIcon('edit', 14)}</button><button class="nbe-del" data-del="${id}" data-tooltip="${t('common.delete') || 'Delete'}" aria-label="${t('common.delete') || 'Delete'}">${uiIcon('delete', 14)}</button>` : ''}
-        </div>`;
-    }).join('');
-
     overlay.innerHTML = `
-        <div class="modal bms modal--xl modal--tall nbe-modal" role="dialog" aria-modal="true" aria-labelledby="nbe-title">
+        <div class="modal bms modal--xl modal--tall nbx-modal" role="dialog" aria-modal="true" aria-labelledby="nbe-title">
             <div class="modal-header">
+                <div class="bms-icon" aria-hidden="true">${uiIcon('panel-left-open', 18)}</div>
                 <div class="bms-titles">
-                    <h2 class="modal-title" id="nbe-title">${t('navedit.title') || 'Customize navigation'}</h2>
-                    <p class="bms-sub">${t('navedit.sub') || 'Drag to reorder, rename, or hide items.'}</p>
+                    <h2 class="modal-title" id="nbe-title">${escAttr(t('navedit.title'))}</h2>
+                    <p class="bms-sub">${escAttr(t('nbx.sub'))}</p>
                 </div>
-                <button type="button" class="modal-close" id="nbe-close" aria-label="${escAttr(t('common.close') || 'Close')}">${uiIcon('close', 16)}</button>
+                <button type="button" class="modal-close" id="nbe-close" aria-label="${escAttr(t('common.close'))}">${uiIcon('close', 16)}</button>
             </div>
-            <div class="modal-body">
-            <div class="nbe-scroll">
-            <div class="nbe-list" id="nbe-list">${rowsHtml}</div>
-            <button class="btn btn-ghost btn-sm nbe-add-section-btn" id="nbe-add-section">+ ${t('navedit.addSection') || 'Add a section'}</button>
-            <details class="nbe-add" ${window.innerWidth >= 860 ? 'open' : ''}>
-                <summary>+ ${t('navedit.addBtn') || 'Add a custom button'}</summary>
-                <div class="nbe-add-form">
-                    <label class="nbe-flbl">${t('navedit.label') || 'Label'}</label>
-                    <input class="input" id="nbe-add-label" placeholder="${t('navedit.label') || 'Label'}">
-                    <label class="nbe-flbl">${t('navedit.type') || 'Type'}</label>
-                    <select class="input" id="nbe-add-kind">
-                        <option value="view">${t('navedit.kindView') || 'Internal tab'}</option>
-                        <option value="modal">${t('navedit.kindModal') || 'Modal'}</option>
-                        <option value="page">${t('navedit.kindPage') || 'Custom page (sandboxed)'}</option>
-                        <option value="url">${t('navedit.kindUrl') || 'External URL (sandboxed)'}</option>
-                    </select>
-                    <label class="nbe-flbl">${t('navedit.target') || 'Opens'}</label>
-                    <div id="nbe-add-target-wrap"></div>
-                    <label class="nbe-flbl">${t('navedit.icon') || 'Icon'}</label>
-                    <div class="nbe-icon-grid" id="nbe-icon-grid">${iconGridHtml('folder')}</div>
-                    <div class="nbe-icon-upload">
-                        <label class="btn btn-xs btn-ghost">${t('navedit.uploadIcon') || 'Upload icon…'}<input type="file" id="nbe-icon-file" accept="image/png,image/jpeg,image/svg+xml,image/gif,image/webp" hidden></label>
-                        <span class="nbe-icon-preview" id="nbe-icon-preview"></span>
-                    </div>
-                    <button class="btn btn-secondary nbe-add-go" id="nbe-add-go">${t('navedit.add') || 'Add'}</button>
-                </div>
-            </details>
-            <details class="nbe-add nbe-pages">
-                <summary>${t('navedit.managePages') || 'Custom pages (sandboxed)'}</summary>
-                <div class="nbe-add-form">
-                    <p class="nbe-sub">${t('navedit.pagesHint') || 'Pages run fully isolated: no access to BMM, your data, or the network.'}</p>
-                    <div id="nbe-pages-list"></div>
-                    <label class="nbe-flbl">${t('navedit.pageName') || 'Page name'}</label>
-                    <input class="input" id="nbe-page-name" placeholder="${t('navedit.pageName') || 'Page name'}">
-                    <label class="nbe-flbl">${t('navedit.pageTemplate') || 'Start from'}</label>
-                    <select class="input" id="nbe-page-template">
-                        ${PAGE_TEMPLATES.map((tpl, i) => `<option value="${i}">${escAttr(t(tpl.labelKey) || tpl.label)}</option>`).join('')}
-                    </select>
-                    <label class="nbe-flbl">HTML</label>
-                    <textarea class="input nbe-code" id="nbe-page-html" rows="8" placeholder="<h1>Hello</h1>"></textarea>
-                    <label class="nbe-flbl">CSS</label>
-                    <textarea class="input nbe-code" id="nbe-page-css" rows="6" placeholder="body { color: white }"></textarea>
-                    <label class="nbe-flbl">JS ${`<span class="nbe-jsnote">${t('navedit.jsNote') || '(use addEventListener — inline onclick is blocked; bmm.* available)'}</span>`}</label>
-                    <textarea class="input nbe-code" id="nbe-page-js" rows="8" placeholder="document.querySelector('button')?.addEventListener('click', () =&gt; bmm.notify('hi'))"></textarea>
-                    <!-- Sub-pages. Hidden until a page is being EDITED, because a document
-                         has to belong to something: there is no folder to write into until
-                         the page itself exists. -->
-                    <div id="nbe-subpages" class="nbe-subpages" style="display:none">
-                        <label class="nbe-flbl">${t('navedit.subpages') || 'Documents in this page'}</label>
-                        <!-- ESCAPED, always. This hint once carried a literal, unclosed
-                             anchor tag (to about.html) as an example. Parsed as markup, the HTML
-                             parser kept that anchor open and re-opened a copy of it around every
-                             following input, span and button (adoption agency: "reconstruct the
-                             active formatting elements"), the whole footer included. Clicking
-                             Share / Import then followed about.html and the main window
-                             reloaded: the "BMM crashes / restarts" report. A hint is text. -->
-                        <p class="nbe-sub">${escAttr(t('navedit.subpagesHint') || 'Link between them with an ordinary relative link, e.g. href="about.html". Each one shares this page\u2019s CSS, script, permissions and storage.')}</p>
-                        <div id="nbe-subpages-list" class="nbe-subpages-list"></div>
-                        <div class="nbe-subpage-add">
-                            <input class="input" id="nbe-subpage-slug" placeholder="${t('navedit.subpageSlug') || 'file name (about)'}">
-                            <input class="input" id="nbe-subpage-title" placeholder="${t('navedit.subpageTitle') || 'Title'}">
-                            <button class="btn btn-xs" id="nbe-subpage-add">${t('common.add') || 'Add'}</button>
+            <div class="modal-body modal-body--flush nbx-body">
+                <div class="nbx-layout">
+                    <aside class="nbx-side" aria-label="${escAttr(t('nbx.sideTitle'))}">
+                        <div class="nbx-side-head">
+                            <span class="nbx-side-title">${escAttr(t('nbx.sideTitle'))}</span>
+                            <span class="nbx-side-hint">${escAttr(t('nbx.sideHint'))}</span>
                         </div>
-                    </div>
-                    <!-- The bundle's own files. Same rule as the document strip: it needs a
-                         page to belong to, so it appears only while one is being edited. -->
-                    <div id="nbe-pagefiles" class="nbe-pagefiles" style="display:none">
-                        <label class="nbe-flbl">${t('navedit.pagefiles') || 'Files in this page'}</label>
-                        <p class="nbe-sub">${t('navedit.pagefilesHint') || 'Reference them with a relative path — src="assets/logo.png". Folders are kept as they are.'}</p>
-                        <div id="nbe-pagefiles-list" class="nbe-pagefiles-list"></div>
-                        <div class="nbe-pagefile-add">
-                            <input class="input" id="nbe-pagefile-dest" placeholder="${t('navedit.pagefileDest') || 'folder (assets)'}">
-                            <button class="btn btn-xs" id="nbe-pagefile-add">${t('navedit.addFiles') || 'Add files…'}</button>
-                            <button class="btn btn-xs" id="nbe-pagedir-add">${t('navedit.addFolder') || 'Add a folder…'}</button>
+                        <div class="nbx-preview" id="nbx-list" role="listbox" aria-label="${escAttr(t('nbx.sideTitle'))}"></div>
+                        <div class="nbx-side-add">
+                            <button type="button" class="btn btn-secondary btn-sm" id="nbx-add-btn">${uiIcon('add', 14)}<span>${escAttr(t('navedit.addBtn'))}</span></button>
+                            <button type="button" class="btn btn-ghost btn-sm" id="nbe-add-section">${uiIcon('list', 14)}<span>${escAttr(t('navedit.addSection'))}</span></button>
                         </div>
-                    </div>
-                    <button class="btn btn-secondary" id="nbe-page-create">${t('navedit.createPage') || 'Create page'}</button>
+                        <div class="nbx-orphans" id="nbx-orphans" hidden></div>
+                    </aside>
+                    <section class="nbx-pane" id="nbx-pane" aria-live="polite"></section>
                 </div>
-            </details>
-            <div class="nbe-import-row" id="nbe-import-row" style="display:none">
-                <input class="input" id="nbe-import-input" placeholder="${t('cardorder.importPh') || 'Paste code or bmm:// link'}">
-                <button class="btn btn-xs btn-accent" id="nbe-import-apply">${t('common.apply') || 'Apply'}</button>
+                <div class="nbe-import-row" id="nbe-import-row" style="display:none">
+                    <input class="input" id="nbe-import-input" placeholder="${escAttr(t('cardorder.importPh'))}">
+                    <button class="btn btn-xs btn-accent" id="nbe-import-apply">${escAttr(t('common.apply'))}</button>
+                </div>
             </div>
-            </div><!-- /nbe-scroll -->
-            </div><!-- /modal-body -->
-            <!-- Share/import used to be four sibling ghost buttons ("Share", "Import",
-                 ".bmmnav", "Import .bmmnav") — nothing said WHICH share carries what, and
-                 the field feedback was exactly that confusion. One menu, and every entry
-                 explains itself with a hint line: link = layout only, file = everything.
-                 Same ids inside, so every handler below survives unchanged. -->
+            <!-- Share/import is one menu: every entry says what it carries (link = layout only,
+                 file = everything). Buttons only, never a link: an anchor here once navigated
+                 the main window (tests/navbar-editor-markup.test.mjs). -->
             <div class="modal-footer nbe-actions">
-                <button class="btn btn-ghost nbe-act" id="nbe-reset"><span class="nbe-act-ic">${svgWrap('<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>')}</span><span class="nbe-act-tx">${t('navedit.reset') || 'Reset'}</span></button>
+                <button class="btn btn-ghost nbe-act" id="nbe-reset"><span class="nbe-act-ic">${uiIcon('reset', 16)}</span><span class="nbe-act-tx">${escAttr(t('navedit.reset'))}</span></button>
                 <span class="nbe-share-menu-wrap">
-                    <button class="btn btn-ghost nbe-act" id="nbe-share-menu-btn"><span class="nbe-act-ic">${svgWrap('<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/>')}</span><span class="nbe-act-tx">${t('navedit.shareMenu') || 'Share / Import'} ▾</span></button>
-                    <span class="nbe-share-menu" id="nbe-share-menu" hidden>
-                        <button class="nbe-menu-item" id="nbe-share"><span class="nbe-mi-title">${t('navedit.shareLink') || 'Copy share link'}</span><span class="nbe-mi-hint">${t('navedit.shareLinkHint') || 'Layout & buttons only — no pages or uploaded icons'}</span></button>
-                        <button class="nbe-menu-item" id="nbe-import"><span class="nbe-mi-title">${t('navedit.importCode') || 'Paste a link / code'}</span><span class="nbe-mi-hint">${t('navedit.importCodeHint') || 'Apply a layout someone shared as a bmm:// link'}</span></button>
-                        <button class="nbe-menu-item" id="nbe-export-file"><span class="nbe-mi-title">${t('navedit.exportFile') || 'Export .bmmnav file'}</span><span class="nbe-mi-hint">${t('navedit.exportFileHint') || 'Everything: layout, custom pages, permissions, icons'}</span></button>
-                        <button class="nbe-menu-item" id="nbe-import-file"><span class="nbe-mi-title">${t('navedit.importFileNav') || 'Import .bmmnav file'}</span><span class="nbe-mi-hint">${t('navedit.importFileHint') || 'Restores a full export, pages included'}</span></button>
+                    <button class="btn btn-ghost nbe-act" id="nbe-share-menu-btn" aria-haspopup="menu"><span class="nbe-act-ic">${uiIcon('share', 16)}</span><span class="nbe-act-tx">${escAttr(t('navedit.shareMenu'))}</span>${uiIcon('chevron-down', 14)}</button>
+                    <span class="nbe-share-menu" id="nbe-share-menu" role="menu" hidden>
+                        <button class="nbe-menu-item" id="nbe-share" role="menuitem"><span class="nbe-mi-title">${escAttr(t('navedit.shareLink'))}</span><span class="nbe-mi-hint">${escAttr(t('navedit.shareLinkHint'))}</span></button>
+                        <button class="nbe-menu-item" id="nbe-import" role="menuitem"><span class="nbe-mi-title">${escAttr(t('navedit.importCode'))}</span><span class="nbe-mi-hint">${escAttr(t('navedit.importCodeHint'))}</span></button>
+                        <button class="nbe-menu-item" id="nbe-export-file" role="menuitem"><span class="nbe-mi-title">${escAttr(t('navedit.exportFile'))}</span><span class="nbe-mi-hint">${escAttr(t('navedit.exportFileHint'))}</span></button>
+                        <button class="nbe-menu-item" id="nbe-import-file" role="menuitem"><span class="nbe-mi-title">${escAttr(t('navedit.importFileNav'))}</span><span class="nbe-mi-hint">${escAttr(t('navedit.importFileHint'))}</span></button>
                     </span>
                 </span>
-                <button class="btn btn-primary nbe-act" id="nbe-done"><span class="nbe-act-ic">${svgWrap('<path d="M20 6L9 17l-5-5"/>')}</span><span class="nbe-act-tx">${t('common.done') || 'Done'}</span></button>
+                <button class="btn btn-primary nbe-act" id="nbe-done"><span class="nbe-act-ic">${uiIcon('check', 16)}</span><span class="nbe-act-tx">${escAttr(t('common.done'))}</span></button>
             </div>
         </div>`;
     (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
 
-    const list = overlay.querySelector('#nbe-list') as HTMLElement;
-    const commit = () => { save(readEditor(list)); applyNavbarConfig(); };
+    const list = overlay.querySelector('#nbx-list') as HTMLElement;
+    const pane = overlay.querySelector('#nbx-pane') as HTMLElement;
+    const orphansEl = overlay.querySelector('#nbx-orphans') as HTMLElement;
+    let sel: string | null = select && orderedIds().includes(select) ? select : null;
+    let view: 'details' | 'wizard' | 'code' = 'details';
+    /** Set while the guided flow holds a page it created and has not attached to a button yet. */
+    let draftPageId: string | null = null;
+    let codePageId: string | null = null;
 
-    // Delete a custom button OR a section divider.
-    list.querySelectorAll('.nbe-del').forEach(btn =>
-        btn.addEventListener('click', () => {
-            const id = (btn as HTMLElement).dataset.del!;
-            const c = readEditor(list);
-            if (id.startsWith('group:')) delete c.groups[id];
-            else c.custom = c.custom.filter(x => x.id !== id);
-            c.order = c.order.filter(x => x !== id);
-            save(c); applyNavbarConfig(); openNavbarEditor(); // re-render
-        }));
+    const toast = (m: string, kind = 'info') => (window as any).toast?.(m, kind);
+    const commit = (cfg: NavbarConfig) => { save(cfg); applyNavbarConfig(); };
 
-    // Add a section divider (at the top).
-    overlay.querySelector('#nbe-add-section')?.addEventListener('click', () => {
-        const c = readEditor(list);
-        const gid = 'group:' + Math.random().toString(36).slice(2, 9);
-        c.groups[gid] = { label: t('navedit.newSection') || 'New section' };
-        c.order.unshift(gid);
-        save(c); applyNavbarConfig(); openNavbarEditor();
-    });
-
-    // ── Add-button form: dynamic target + icon picker ──
-    const kindSel = overlay.querySelector('#nbe-add-kind') as HTMLSelectElement;
-    const tgtWrap = overlay.querySelector('#nbe-add-target-wrap') as HTMLElement;
-    const iconGrid = overlay.querySelector('#nbe-icon-grid') as HTMLElement;
-    let chosenIcon = 'folder';
-    let editingId: string | null = null;                   // set while editing an existing custom button
-    const addDetails = overlay.querySelector('.nbe-add') as HTMLDetailsElement;
-    const addGo = overlay.querySelector('#nbe-add-go') as HTMLButtonElement;
-    const labelInp = overlay.querySelector('#nbe-add-label') as HTMLInputElement;
-    const renderTarget = () => { tgtWrap.innerHTML = targetFieldHtml(kindSel.value); };
-    renderTarget();
-    kindSel.addEventListener('change', renderTarget);
-    const iconPreview = overlay.querySelector('#nbe-icon-preview') as HTMLElement;
-    const setIcon = (icon: string) => {
-        chosenIcon = icon;
-        const isCustom = icon.startsWith('data:');
-        iconGrid.querySelectorAll('.nbe-icon-opt').forEach(o => o.classList.toggle('sel', !isCustom && (o as HTMLElement).dataset.icon === icon));
-        iconPreview.innerHTML = isCustom ? `<img class="nav-custom-img" src="${escAttr(icon)}" alt="">` : '';
-    };
-    iconGrid.addEventListener('click', (e) => {
-        const opt = (e.target as HTMLElement).closest('.nbe-icon-opt') as HTMLElement | null;
-        if (opt) setIcon(opt.dataset.icon!);
-    });
-    // Upload a custom icon → stored as a small data: URI (FileReader, no backend).
-    (overlay.querySelector('#nbe-icon-file') as HTMLInputElement | null)?.addEventListener('change', (e) => {
-        const file = (e.target as HTMLInputElement).files?.[0];
-        if (!file) return;
-        if (file.size > 256 * 1024) { (window as any).toast?.(t('navedit.iconTooBig') || 'Icon must be under 256 KB', 'warning'); return; }
-        const reader = new FileReader();
-        reader.onload = () => { if (typeof reader.result === 'string') setIcon(reader.result); };
-        reader.readAsDataURL(file);
-    });
-
-    // Edit an existing custom button → prefill the form in "save" mode.
-    list.querySelectorAll('.nbe-edit').forEach(btn =>
-        btn.addEventListener('click', () => {
-            const id = (btn as HTMLElement).dataset.edit!;
-            const it = load().custom.find(x => x.id === id);
-            if (!it) return;
-            editingId = id;
-            addDetails.open = true;
-            labelInp.value = it.label;
-            kindSel.value = it.kind;
-            renderTarget();
-            const tgt = overlay.querySelector('#nbe-add-target') as HTMLInputElement | HTMLSelectElement | null;
-            if (tgt) tgt.value = it.target;
-            setIcon(it.icon || 'folder');
-            addGo.textContent = t('navedit.save') || 'Save changes';
-            addDetails.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }));
-
-    addGo.addEventListener('click', () => {
-        const label = labelInp.value.trim();
-        const kind = kindSel.value as CustomNavItem['kind'];
-        const target = (overlay.querySelector('#nbe-add-target') as HTMLInputElement | HTMLSelectElement)?.value.trim() || '';
-        const warn = (m: string) => (window as any).toast?.(m, 'warning');
-        if (kind === 'page' && !_pagesCache.length) { warn(t('navedit.noPages') || 'No pages yet — create one below'); return; }
-        if (!label) { warn(t('navedit.label') || 'Label'); return; }
-        if (!target) { warn(t('navedit.target') || 'Opens'); return; }
-        if (kind === 'url' && !/^https?:\/\//i.test(target)) { warn(t('navedit.urlNeedsHttp') || 'URL must start with https://'); return; }
-        const cur = readEditor(list);                       // keep current order/renames/hides
-        if (editingId) {
-            const it = cur.custom.find(x => x.id === editingId);
-            if (it) { it.label = label; it.kind = kind; it.target = target; it.icon = chosenIcon; }
-        } else {
-            cur.custom.push({ id: 'custom:' + Math.random().toString(36).slice(2, 9), label, kind, target, icon: chosenIcon });
+    // ── Left: the sidebar preview ──────────────────────────────────────────────
+    const rowHtml = (id: string, cfg: NavbarConfig): string => {
+        const isSel = id === sel;
+        if (id.startsWith('group:')) {
+            const label = cfg.groups[id]?.label || t('nbx.untitledSection');
+            return `<div class="nbx-row nbx-row-sect${isSel ? ' is-sel' : ''}" data-id="${escAttr(id)}" role="option" tabindex="0" aria-selected="${isSel}">
+                <span class="nbx-grip" aria-hidden="true">${uiIcon('grip', 14)}</span>
+                <span class="nbx-sect-label">${escAttr(label)}</span>
+            </div>`;
         }
-        save(cur); applyNavbarConfig(); openNavbarEditor();
+        const item = cfg.custom.find((c) => c.id === id);
+        const icon = item ? customIcon(item) : builtinIcon(id);
+        const prot = PROTECTED.has(id);
+        const hidden = !!cfg.hidden[id] && !prot;
+        const badge = item ? t(`nbx.badge.${item.kind}`) : '';
+        const eyeLabel = prot ? t('nbx.alwaysShown') : hidden ? t('nbx.show') : t('nbx.hide');
+        return `<div class="nbx-row${hidden ? ' is-hidden' : ''}${isSel ? ' is-sel' : ''}" data-id="${escAttr(id)}" role="option" tabindex="0" aria-selected="${isSel}">
+            <span class="nbx-grip" aria-hidden="true">${uiIcon('grip', 14)}</span>
+            <span class="nbx-ic" aria-hidden="true">${icon}</span>
+            <span class="nbx-name">${escAttr(itemName(id, cfg))}</span>
+            ${badge ? `<span class="nbx-badge">${escAttr(badge)}</span>` : ''}
+            <button type="button" class="nbx-eye" data-eye="${escAttr(id)}" aria-pressed="${!hidden}" aria-label="${escAttr(eyeLabel)}" data-tooltip="${escAttr(eyeLabel)}" ${prot ? 'disabled' : ''}>${uiIcon(hidden ? 'eye-off' : 'eye', 16)}</button>
+        </div>`;
+    };
+    const renderSide = () => {
+        const cfg = load();
+        list.innerHTML = orderedIds().map((id) => rowHtml(id, cfg)).join('');
+        void renderOrphans();
+    };
+    /** Pages that exist but no button opens: offered back, or deleted. */
+    const renderOrphans = async () => {
+        await loadPages();
+        const used = new Set(load().custom.filter((c) => c.kind === 'page').map((c) => c.target));
+        const lone = _pagesCache.filter((p) => !used.has(p.id) && p.id !== draftPageId);
+        orphansEl.hidden = !lone.length;
+        orphansEl.innerHTML = lone.length ? `
+            <div class="nbx-orphans-head">${escAttr(t('nbx.orphans'))}</div>
+            ${lone.map((p) => `<div class="nbx-orphan">
+                <span class="nbx-ic" aria-hidden="true">${uiIcon('file-text', 16)}</span>
+                <span class="nbx-name">${escAttr(p.name)}</span>
+                <button type="button" class="btn btn-ghost btn-xs" data-attach="${escAttr(p.id)}">${escAttr(t('nbx.attach'))}</button>
+                <button type="button" class="nbx-icon-btn nbx-danger" data-delpage="${escAttr(p.id)}" aria-label="${escAttr(t('nbx.deletePage'))}" data-tooltip="${escAttr(t('nbx.deletePage'))}">${uiIcon('delete', 14)}</button>
+            </div>`).join('')}` : '';
+    };
+    orphansEl.addEventListener('click', async (e) => {
+        const attach = (e.target as HTMLElement).closest('[data-attach]') as HTMLElement | null;
+        const del = (e.target as HTMLElement).closest('[data-delpage]') as HTMLElement | null;
+        if (attach) {
+            const p = _pagesCache.find((x) => x.id === attach.dataset.attach);
+            if (!p) return;
+            const cfg = load();
+            const id = 'custom:' + Math.random().toString(36).slice(2, 9);
+            cfg.custom.push({ id, label: p.name, kind: 'page', target: p.id, icon: 'ui:file-text' });
+            commit(cfg);
+            sel = id; view = 'details';
+            renderSide(); renderPane();
+        } else if (del) {
+            const p = _pagesCache.find((x) => x.id === del.dataset.delpage);
+            if (!p || !(await showConfirm(t('nbx.deletePageT'), t('nbx.deletePageD').replace('{name}', p.name)))) return;
+            try { await invoke('delete_custom_page', { id: p.id }); } catch (err) { toast(String(err), 'error'); }
+            renderSide();
+        }
     });
 
-    // ── Custom pages manager (with per-page permission toggles, default-deny) ──
-    const pagesListEl = overlay.querySelector('#nbe-pages-list') as HTMLElement;
-    let editingPageId: string | null = null;            // set while editing an existing page's source
-    const pageCreateBtn = overlay.querySelector('#nbe-page-create') as HTMLButtonElement;
-    const pageField = (id: string) => overlay.querySelector(id) as HTMLInputElement & HTMLTextAreaElement;
-    const renderPagesList = async () => {
-        if (!_pagesCache.length) {
-            pagesListEl.innerHTML = `<p class="nbe-sub">${t('navedit.noPages') || 'No pages yet — create one below'}</p>`;
+    const select_ = (id: string | null) => {
+        sel = id; view = 'details';
+        list.querySelectorAll('.nbx-row').forEach((r) => {
+            const on = (r as HTMLElement).dataset.id === id;
+            r.classList.toggle('is-sel', on);
+            r.setAttribute('aria-selected', String(on));
+        });
+        renderPane();
+    };
+    const toggleHidden = (id: string) => {
+        if (PROTECTED.has(id)) return;
+        const cfg = load();
+        if (cfg.hidden[id]) delete cfg.hidden[id]; else cfg.hidden[id] = true;
+        commit(cfg);
+        renderSide();
+        if (sel === id && view === 'details') renderPane();
+    };
+    /** Move the row `id` by `delta` places in the order. */
+    const move = (id: string, delta: number) => {
+        const cfg = load();
+        const ids = orderedIds();
+        const i = ids.indexOf(id);
+        const j = i + delta;
+        if (i < 0 || j < 0 || j >= ids.length) return;
+        [ids[i], ids[j]] = [ids[j], ids[i]];
+        cfg.order = ids;
+        commit(cfg);
+        renderSide();
+        (list.querySelector(`[data-id="${cssEsc(id)}"]`) as HTMLElement | null)?.focus();
+    };
+
+    // Drag a row (pointer events, reliable in WebView2). A press that does not move is a click.
+    let suppressClick = false;
+    list.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        const row = (e.target as HTMLElement).closest('.nbx-row') as HTMLElement | null;
+        if (!row || (e.target as HTMLElement).closest('.nbx-eye')) return;
+        const sx = e.clientX, sy = e.clientY;
+        let dragging = false;
+        const onMove = (ev: MouseEvent) => {
+            if (!dragging) {
+                if (Math.abs(ev.clientX - sx) + Math.abs(ev.clientY - sy) < 5) return;
+                dragging = true;
+                row.classList.add('is-dragging');
+                list.classList.add('is-sorting');
+                document.body.style.userSelect = 'none';
+            }
+            const rows = Array.from(list.querySelectorAll('.nbx-row')) as HTMLElement[];
+            const target = rows.find((r) => r !== row && ev.clientY < r.getBoundingClientRect().top + r.offsetHeight / 2);
+            if (target) { if (row.nextElementSibling !== target) list.insertBefore(row, target); }
+            else if (list.lastElementChild !== row) list.appendChild(row);
+        };
+        const onUp = () => {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            if (!dragging) return;
+            document.body.style.userSelect = '';
+            row.classList.remove('is-dragging');
+            list.classList.remove('is-sorting');
+            suppressClick = true;
+            setTimeout(() => { suppressClick = false; }, 0);
+            const cfg = readEditor(list);
+            commit(cfg);
+            renderSide();
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+    });
+    list.addEventListener('click', (e) => {
+        if (suppressClick) return;
+        const eye = (e.target as HTMLElement).closest('[data-eye]') as HTMLButtonElement | null;
+        if (eye) { e.stopPropagation(); if (!eye.disabled) toggleHidden(eye.dataset.eye!); return; }
+        const row = (e.target as HTMLElement).closest('.nbx-row') as HTMLElement | null;
+        if (row) select_(row.dataset.id || null);
+    });
+    list.addEventListener('keydown', (e) => {
+        const row = (e.target as HTMLElement).closest('.nbx-row') as HTMLElement | null;
+        if (!row || (e.target as HTMLElement).closest('button')) return;
+        const id = row.dataset.id!;
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select_(id); }
+        else if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && e.altKey) { e.preventDefault(); move(id, e.key === 'ArrowUp' ? -1 : 1); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); (row.previousElementSibling as HTMLElement | null)?.focus(); }
+        else if (e.key === 'ArrowDown') { e.preventDefault(); (row.nextElementSibling as HTMLElement | null)?.focus(); }
+    });
+
+    overlay.querySelector('#nbe-add-section')?.addEventListener('click', () => {
+        const cfg = load();
+        const ids = orderedIds();
+        const gid = 'group:' + Math.random().toString(36).slice(2, 9);
+        cfg.groups[gid] = { label: t('navedit.newSection') };
+        // Above the selected row, so the section starts where you are looking.
+        const at = sel ? ids.indexOf(sel) : 0;
+        ids.splice(Math.max(0, at), 0, gid);
+        cfg.order = ids;
+        commit(cfg);
+        sel = gid; view = 'details';
+        renderSide(); renderPane();
+        (pane.querySelector('#nbx-sect-name') as HTMLInputElement | null)?.select();
+    });
+    overlay.querySelector('#nbx-add-btn')?.addEventListener('click', () => startWizard());
+
+    // ── Right: the selected row ────────────────────────────────────────────────
+    const paneHead = (icon: string, title: string, chip: string, sub: string) => `
+        <header class="nbx-pane-head">
+            <span class="nbx-pane-ic" aria-hidden="true">${icon}</span>
+            <div class="nbx-pane-titles">
+                <h3 class="nbx-pane-title">${escAttr(title)}${chip ? ` <span class="nbx-badge">${escAttr(chip)}</span>` : ''}</h3>
+                ${sub ? `<p class="nbx-pane-sub">${escAttr(sub)}</p>` : ''}
+            </div>
+        </header>`;
+    const orderHtml = (id: string) => {
+        const ids = orderedIds();
+        const i = ids.indexOf(id);
+        return `<div class="nbx-field">
+            <span class="nbx-label">${escAttr(t('nbx.position'))}</span>
+            <div class="nbx-inline">
+                <button type="button" class="btn btn-ghost btn-sm" data-move="-1" ${i <= 0 ? 'disabled' : ''}>${uiIcon('move-up', 14)}<span>${escAttr(t('nbx.moveUp'))}</span></button>
+                <button type="button" class="btn btn-ghost btn-sm" data-move="1" ${i >= ids.length - 1 ? 'disabled' : ''}>${uiIcon('move-down', 14)}<span>${escAttr(t('nbx.moveDown'))}</span></button>
+                <span class="nbx-hint">${escAttr(t('nbx.moveHint'))}</span>
+            </div>
+        </div>`;
+    };
+    const visibleHtml = (id: string, cfg: NavbarConfig) => {
+        const prot = PROTECTED.has(id);
+        return `<label class="nbx-setting">
+            <span class="nbx-setting-text"><b>${escAttr(t('nbx.visible'))}</b><span>${escAttr(prot ? t('nbx.visibleProtected') : t('nbx.visibleHint'))}</span></span>
+            ${switchHtml('id="nbx-visible"', prot || !cfg.hidden[id], prot)}
+        </label>`;
+    };
+    const wireCommon = (id: string) => {
+        pane.querySelectorAll<HTMLElement>('[data-move]').forEach((b) => b.addEventListener('click', () => { move(id, parseInt(b.dataset.move!, 10)); renderPane(); }));
+        pane.querySelector('#nbx-visible')?.addEventListener('change', () => toggleHidden(id));
+    };
+
+    const renderPane = () => {
+        if (view === 'wizard') return renderWizard();
+        if (view === 'code' && codePageId) return void renderCode(codePageId);
+        const cfg = load();
+        if (!sel || !orderedIds().includes(sel)) {
+            sel = null;
+            pane.innerHTML = `<div class="nbx-empty">
+                <span class="nbx-empty-ic" aria-hidden="true">${uiIcon('panel-left-open', 32)}</span>
+                <h3>${escAttr(t('nbx.emptyTitle'))}</h3>
+                <p>${escAttr(t('nbx.emptyText'))}</p>
+                <div class="nbx-inline nbx-center">
+                    <button type="button" class="btn btn-primary btn-sm" id="nbx-empty-add">${uiIcon('add', 14)}<span>${escAttr(t('navedit.addBtn'))}</span></button>
+                </div>
+            </div>`;
+            pane.querySelector('#nbx-empty-add')?.addEventListener('click', () => startWizard());
             return;
         }
-        const rows = await Promise.all(_pagesCache.map(async p => {
-            let grants = new Set<string>();
-            let origins: string[] = [];
-            try { grants = new Set((await invoke('page_grants_get', { id: p.id })) as string[]); } catch { /* deny */ }
-            try { origins = (await invoke('page_net_origins_get', { id: p.id })) as string[]; } catch { /* none */ }
-            // How the grants were set: an imported page awaiting its review holds NOTHING (the
-            // backend enforces it) and says so; one set in the review says that too.
-            let review: { source?: string; requested?: string[]; requestedOrigins?: string[] } = {};
-            try { review = (await invoke('page_grant_review_get', { id: p.id })) as typeof review; } catch { /* none */ }
-            const reviewNote = review.source === 'import-pending'
-                ? `<div class="nbe-review-note nbe-review-pending">${escAttr(t('navedit.reviewPending'))} <button class="btn btn-xs btn-secondary" data-reviewpage="${escAttr(p.id)}">${escAttr(t('navedit.reviewBtn'))}</button></div>`
-                : review.source === 'import-review'
-                    ? `<div class="nbe-review-note">${escAttr(t('navedit.reviewedNote'))}</div>`
-                    : '';
-            const cap = (c: string, lbl: string) =>
-                `<label class="nbe-cap"><input type="checkbox" data-cap="${c}" data-pg="${escAttr(p.id)}" ${grants.has(c) ? 'checked' : ''}> ${lbl}</label>`;
-            return `<div class="nbe-page-block">
-                <div class="nbe-page-row">
-                    <span class="nbe-name">${escAttr(p.name)}</span>
-                    <button class="btn btn-xs btn-ghost nbe-editpage" data-editpage="${escAttr(p.id)}">${t('navedit.editBtn') || 'Edit'}</button>
-                    <button class="btn btn-xs btn-ghost nbe-importfile" data-importpage="${escAttr(p.id)}">${t('navedit.importFile') || 'Import file (.wasm…)'}</button>
-                    <button class="nbe-del" data-delpage="${escAttr(p.id)}" data-tooltip="${t('common.delete') || 'Delete'}" aria-label="${t('common.delete') || 'Delete'}">${uiIcon('delete', 14)}</button>
-                </div>
-                ${reviewNote}
-                <div class="nbe-presets">
-                    <span class="nbe-preset-lbl">${t('navedit.preset') || 'Preset'}:</span>
-                    <button class="btn btn-xs btn-ghost" data-preset="strict" data-pg="${escAttr(p.id)}" data-tooltip="${t('navedit.presetStrictTip') || 'Fully isolated — no permissions'}">${t('navedit.presetStrict') || 'Strict'}</button>
-                    <button class="btn btn-xs btn-ghost" data-preset="mid" data-pg="${escAttr(p.id)}" data-tooltip="${t('navedit.presetMidTip') || 'Local only: storage, notifications, app info'}">${t('navedit.presetMid') || 'Mid'}</button>
-                    <button class="btn btn-xs btn-ghost" data-preset="low" data-pg="${escAttr(p.id)}" data-tooltip="${t('navedit.presetLowTip') || 'All of Mid + internet (add origins below)'}">${t('navedit.presetLow') || 'Low'}</button>
-                </div>
-                <div class="nbe-caps">
-                    ${cap('storage', t('navedit.capStorage') || 'storage')}
-                    ${cap('notifications', t('navedit.capNotify') || 'notify')}
-                    ${cap('network', t('navedit.capNetwork') || 'internet')}
-                    ${cap('read', t('navedit.capRead') || 'app info')}
-                    ${cap('clipboard', t('navedit.capClipboard') || 'clipboard')}
-                    ${cap('system', t('navedit.capSystem') || 'system info')}
-                </div>
-                <input class="input nbe-net-origins" data-pg="${escAttr(p.id)}"
-                    placeholder="${t('navedit.netOriginsPh') || 'Allowed origins for internet, comma-separated (https://api.example.com)'}"
-                    value="${escAttr(origins.join(', '))}">
-            </div>`;
-        }));
-        pagesListEl.innerHTML = rows.join('');
-        pagesListEl.querySelectorAll('[data-delpage]').forEach(b =>
-            b.addEventListener('click', async () => {
-                try { await invoke('delete_custom_page', { id: (b as HTMLElement).dataset.delpage }); } catch { /* ignore */ }
-                await loadPages(); await renderPagesList(); if (kindSel.value === 'page') renderTarget();
-            }));
-        pagesListEl.querySelectorAll('input[data-cap]').forEach(cb =>
-            cb.addEventListener('change', async () => {
-                const el = cb as HTMLInputElement;
-                try {
-                    await invoke('page_set_grant', { id: el.dataset.pg, cap: el.dataset.cap, granted: el.checked });
-                    await refreshGrants(el.dataset.pg!);       // broker picks up the change immediately
-                } catch (err) { (window as any).toast?.(String(err), 'error'); }
-            }));
-        pagesListEl.querySelectorAll('.nbe-net-origins').forEach(inp =>
-            inp.addEventListener('change', async () => {
-                const el = inp as HTMLInputElement;
-                const list = el.value.split(',').map(s => s.trim()).filter(Boolean);
-                try { await invoke('page_set_net_origins', { id: el.dataset.pg, origins: list }); }
-                catch (err) { (window as any).toast?.(String(err), 'error'); }
-            }));
-        pagesListEl.querySelectorAll('[data-reviewpage]').forEach(b =>
-            b.addEventListener('click', async () => {
-                const id = (b as HTMLElement).dataset.reviewpage!;
-                try {
-                    const r = (await invoke('page_grant_review_get', { id })) as { requested?: string[]; requestedOrigins?: string[] };
-                    const pending = { id, name: _pagesCache.find(x => x.id === id)?.name || id, requested: r.requested || [], requestedOrigins: r.requestedOrigins || [], unknown: [] };
-                    const ans = reviewAnswer(pending, (await openGrantReview([pending])).get(id));
-                    await invoke('page_apply_reviewed_grants', { id, caps: ans.caps, origins: ans.origins });
-                    await refreshGrants(id);
-                    await renderPagesList();
-                } catch (err) { (window as any).toast?.(String(err), 'error'); }
-            }));
-        // Permission presets: one click sets all capabilities to a safe level.
-        const PRESETS: Record<string, string[]> = {
-            strict: [],
-            mid: ['storage', 'notifications', 'read'],
-            low: ['storage', 'notifications', 'read', 'network', 'clipboard'],
-        };
-        // `system` is the most powerful — never auto-granted by a preset; the user
-        // must tick it explicitly.
-        const ALL_CAPS = ['storage', 'notifications', 'read', 'network', 'clipboard', 'system'];
-        pagesListEl.querySelectorAll('[data-preset]').forEach(b =>
-            b.addEventListener('click', async () => {
-                const el = b as HTMLElement;
-                const id = el.dataset.pg!;
-                const want = new Set(PRESETS[el.dataset.preset!] || []);
-                try {
-                    for (const c of ALL_CAPS) await invoke('page_set_grant', { id, cap: c, granted: want.has(c) });
-                    await refreshGrants(id);
-                    await renderPagesList();
-                    (window as any).toast?.(`${t('navedit.preset') || 'Preset'}: ${el.dataset.preset}`, 'success');
-                } catch (err) { (window as any).toast?.(String(err), 'error'); }
-            }));
-        pagesListEl.querySelectorAll('[data-editpage]').forEach(b =>
-            b.addEventListener('click', async () => {
-                const id = (b as HTMLElement).dataset.editpage!;
-                try {
-                    const src = await invoke('get_custom_page_source', { id }) as { name: string; html: string; css: string; js: string };
-                    (overlay.querySelector('.nbe-pages') as HTMLDetailsElement).open = true;
-                    pageField('#nbe-page-name').value = src.name;
-                    pageField('#nbe-page-html').value = src.html;
-                    pageField('#nbe-page-css').value = src.css;
-                    pageField('#nbe-page-js').value = src.js;
-                    repaintCode();
-                    editingPageId = id;
-                    editingDoc = null;
-                    renderSubpages();
-                    renderPageFiles();
-                    pageCreateBtn.textContent = t('navedit.save') || 'Save changes';
-                    pageCreateBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                } catch (err) { (window as any).toast?.(String(err), 'error'); }
-            }));
-        pagesListEl.querySelectorAll('[data-importpage]').forEach(b =>
-            b.addEventListener('click', async () => {
-                const id = (b as HTMLElement).dataset.importpage!;
-                try {
-                    const path = await pickFile({ filters: [{ name: 'Page asset', extensions: ['wasm', 'js', 'mjs', 'json', 'css', 'png', 'jpg', 'jpeg', 'gif', 'svg', 'woff2', 'txt', 'csv'] }] });
-                    if (!path) return;
-                    const base = String(path).split(/[\\/]/).pop() || 'asset';
-                    const name = await invoke('import_page_file', { id, srcPath: path, destName: base });
-                    (window as any).toast?.((t('navedit.fileImported') || 'File imported') + ': ' + name, 'success');
-                } catch (err) { (window as any).toast?.(String(err), 'error'); }
-            }));
-    };
-    // Picking a template fills the three editors — but never silently over work in
-    // progress: an accidental change to the dropdown must not delete what you typed.
-    overlay.querySelector('#nbe-page-template')?.addEventListener('change', async (e) => {
-        const tpl = PAGE_TEMPLATES[parseInt((e.target as HTMLSelectElement).value, 10)] || PAGE_TEMPLATES[0];
-        const dirty = ['#nbe-page-html', '#nbe-page-css', '#nbe-page-js']
-            .some(sel => (overlay.querySelector(sel) as HTMLTextAreaElement)?.value.trim());
-        if (dirty) {
-            const ok = await (window as any).confirmCustom?.(
-                t('navedit.tplReplaceTitle') || 'Replace the current code?',
-                t('navedit.tplReplaceDesc') || 'The template overwrites the HTML, CSS and JS below.',
-                'warning');
-            if (!ok) return;
+        const id = sel;
+        if (id.startsWith('group:')) {
+            pane.innerHTML = `${paneHead(uiIcon('list', 20), t('navedit.section'), '', t('nbx.sectionHint'))}
+                <label class="nbx-field"><span class="nbx-label">${escAttr(t('navedit.sectionName'))}</span>
+                    <input class="input" id="nbx-sect-name" maxlength="40" value="${escAttr(cfg.groups[id]?.label || '')}" placeholder="${escAttr(t('navedit.sectionName'))}"></label>
+                ${orderHtml(id)}
+                <div class="nbx-danger-zone">
+                    <button type="button" class="btn btn-ghost btn-sm nbx-danger" id="nbx-del">${uiIcon('delete', 14)}<span>${escAttr(t('nbx.deleteSection'))}</span></button>
+                    <span class="nbx-hint">${escAttr(t('nbx.deleteSectionHint'))}</span>
+                </div>`;
+            const name = pane.querySelector('#nbx-sect-name') as HTMLInputElement;
+            name.addEventListener('input', () => {
+                const c = load();
+                c.groups[id] = { label: name.value.trim() };
+                commit(c);
+                const lbl = list.querySelector(`[data-id="${cssEsc(id)}"] .nbx-sect-label`);
+                if (lbl) lbl.textContent = name.value.trim() || t('nbx.untitledSection');
+            });
+            pane.querySelector('#nbx-del')?.addEventListener('click', () => {
+                const c = load();
+                delete c.groups[id];
+                c.order = orderedIds().filter((x) => x !== id);
+                commit(c);
+                sel = null; renderSide(); renderPane();
+            });
+            wireCommon(id);
+            return;
         }
-        (overlay.querySelector('#nbe-page-html') as HTMLTextAreaElement).value = tpl.html;
-        (overlay.querySelector('#nbe-page-css') as HTMLTextAreaElement).value = tpl.css;
-        (overlay.querySelector('#nbe-page-js') as HTMLTextAreaElement).value = tpl.js;
-        repaintCode();
-    });
-
-    // Syntax colours on the three code boxes. Attached AFTER the overlay is in the DOM,
-    // because the mirror copies its metrics from the live textarea — computed styles on a
-    // detached node are the browser's defaults, not this app's, and every colour would land
-    // a few pixels off the character it belongs to.
-    const hl: Record<string, CodeEditorHandle | null> = {
-        html: attachHighlight(overlay.querySelector('#nbe-page-html'), 'markup'),
-        css: attachHighlight(overlay.querySelector('#nbe-page-css'), 'css'),
-        js: attachHighlight(overlay.querySelector('#nbe-page-js'), 'javascript'),
+        const item = cfg.custom.find((c) => c.id === id);
+        if (!item) {
+            // One of BMM's own pages: rename, hide, move. Its icon and what it opens are BMM's.
+            const orig = origLabel(id);
+            const renamed = !!cfg.labels[id];
+            pane.innerHTML = `${paneHead(builtinIcon(id), itemName(id, cfg), t('nbx.builtin'), t('nbx.builtinHint'))}
+                <label class="nbx-field"><span class="nbx-label">${escAttr(t('nbx.name'))}</span>
+                    <span class="nbx-inline">
+                        <input class="input" id="nbx-name" maxlength="40" value="${escAttr(itemName(id, cfg))}" placeholder="${escAttr(orig)}">
+                        <button type="button" class="btn btn-ghost btn-sm" id="nbx-name-reset" ${renamed ? '' : 'hidden'}>${uiIcon('reset', 14)}<span>${escAttr(t('nbx.nameReset'))}</span></button>
+                    </span></label>
+                ${visibleHtml(id, cfg)}
+                ${orderHtml(id)}`;
+            const name = pane.querySelector('#nbx-name') as HTMLInputElement;
+            const resetBtn = pane.querySelector('#nbx-name-reset') as HTMLButtonElement;
+            const setName = (v: string) => {
+                const c = load();
+                if (v && v !== orig) c.labels[id] = v; else delete c.labels[id];
+                commit(c);
+                resetBtn.hidden = !c.labels[id];
+                const lbl = list.querySelector(`[data-id="${cssEsc(id)}"] .nbx-name`);
+                if (lbl) lbl.textContent = v || orig;
+                const title = pane.querySelector('.nbx-pane-title');
+                if (title?.firstChild) title.firstChild.textContent = (v || orig) + ' ';
+            };
+            name.addEventListener('input', () => setName(name.value.trim()));
+            resetBtn.addEventListener('click', () => { name.value = orig; setName(''); });
+            wireCommon(id);
+            return;
+        }
+        renderCustomPane(item, cfg);
     };
-    // Assigning to `.value` fires no `input` event, so every place that fills these boxes in
-    // code has to say so. Missing one leaves the previous document's colours behind the new
-    // text, which looks like a rendering bug and is a missing call.
-    const repaintCode = () => { hl.html?.refresh(); hl.css?.refresh(); hl.js?.refresh(); };
 
-    // A page can outgrow the highlighter. Saying so beats a reader concluding the colours
-    // broke — the editor still works, it is just a plain textarea again, which is what makes
-    // a several-thousand-line page usable at all.
-    overlay.addEventListener('bmm:highlight-limit', (e: Event) => {
-        const d = (e as CustomEvent).detail || {};
-        const ta = e.target as HTMLElement;
-        const wrap = ta.closest('.code-hl-wrap');
-        wrap?.parentElement?.querySelectorAll(':scope > .code-hl-note').forEach(n => n.remove());
-        if (!d.off || !wrap) return;
-        const note = document.createElement('div');
-        note.className = 'code-hl-note';
-        note.textContent = (t('navedit.hlOff') || 'Syntax colours are off above ~100 KB — editing stays fast.')
-            + ` (${Math.round((d.chars || 0) / 1024)} KB)`;
-        wrap.insertAdjacentElement('afterend', note);
-    });
+    // ── A custom button ────────────────────────────────────────────────────────
+    const targetField = (kind: CustomNavItem['kind'], value: string): string => {
+        if (kind === 'view') return `<select class="input" id="nbx-target">${builtinViewOptions(value)}</select>`;
+        if (kind === 'modal') return `<select class="input" id="nbx-target">${modalActionOptions(value)}</select>`;
+        if (kind === 'page') return `<select class="input" id="nbx-target">${pageOptions(value)}</select>`;
+        return `<input class="input" id="nbx-target" type="url" inputmode="url" spellcheck="false" placeholder="https://example.com" value="${escAttr(value)}">
+            <span class="nbx-hint" id="nbx-target-hint">${escAttr(t('nbx.urlHint'))}</span>`;
+    };
+    const kindCards = (current: CustomNavItem['kind'] | null, name: string) => `
+        <div class="nbx-kinds" role="radiogroup" aria-label="${escAttr(t('nbx.opens'))}">
+            ${KINDS.map((k) => `<label class="nbx-kind${k === current ? ' is-on' : ''}">
+                <input type="radio" name="${name}" value="${k}" ${k === current ? 'checked' : ''}>
+                <span class="nbx-kind-ic" aria-hidden="true">${uiIcon(KIND_ICON[k], 18)}</span>
+                <span class="nbx-kind-text"><b>${escAttr(t(`nbx.kind.${k}`))}</b><span>${escAttr(t(`nbx.kind.${k}Hint`))}</span></span>
+            </label>`).join('')}
+        </div>`;
 
-    // ── sub-pages ───────────────────────────────────────────────────────────
+    const renderCustomPane = (item: CustomNavItem, cfg: NavbarConfig) => {
+        const id = item.id;
+        pane.innerHTML = `${paneHead(customIcon(item), item.label, t(`nbx.badge.${item.kind}`), t('nbx.customHint'))}
+            <label class="nbx-field"><span class="nbx-label">${escAttr(t('nbx.name'))}</span>
+                <input class="input" id="nbx-name" maxlength="40" value="${escAttr(item.label)}"></label>
+            <div class="nbx-field">
+                <span class="nbx-label">${escAttr(t('navedit.icon'))}</span>
+                <div class="nbx-icon-row">
+                    <span class="nbx-icon-now" id="nbx-icon-now" aria-hidden="true">${customIcon(item)}</span>
+                    <button type="button" class="btn btn-ghost btn-sm" id="nbx-icon-toggle" aria-expanded="false">${escAttr(t('nbx.iconChange'))}</button>
+                </div>
+                <div id="nbx-icon-host" hidden></div>
+            </div>
+            <div class="nbx-field">
+                <span class="nbx-label">${escAttr(t('nbx.opens'))}</span>
+                ${kindCards(item.kind, 'nbx-kind')}
+            </div>
+            <label class="nbx-field" id="nbx-target-field"><span class="nbx-label">${escAttr(t(`nbx.target.${item.kind}`))}</span>
+                <span class="nbx-target-wrap" id="nbx-target-wrap">${targetField(item.kind, item.target)}</span></label>
+            <div id="nbx-page-block"></div>
+            ${visibleHtml(id, cfg)}
+            ${orderHtml(id)}
+            <div class="nbx-danger-zone">
+                <button type="button" class="btn btn-ghost btn-sm nbx-danger" id="nbx-del">${uiIcon('delete', 14)}<span>${escAttr(t('nbx.deleteButton'))}</span></button>
+                ${item.kind === 'page' ? `<span class="nbx-hint">${escAttr(t('nbx.deleteButtonPageHint'))}</span>` : ''}
+            </div>`;
+        const update = (patch: Partial<CustomNavItem>) => {
+            const c = load();
+            const it = c.custom.find((x) => x.id === id);
+            if (!it) return;
+            Object.assign(it, patch);
+            delete c.labels[id];
+            commit(c);
+            const row = list.querySelector(`[data-id="${cssEsc(id)}"]`);
+            if (row) {
+                const ic = row.querySelector('.nbx-ic'); if (ic) ic.innerHTML = customIcon(it);
+                const nm = row.querySelector('.nbx-name'); if (nm) nm.textContent = it.label;
+                const bd = row.querySelector('.nbx-badge'); if (bd) bd.textContent = t(`nbx.badge.${it.kind}`);
+            }
+            const head = pane.querySelector('.nbx-pane-ic'); if (head) head.innerHTML = customIcon(it);
+            const now = pane.querySelector('#nbx-icon-now'); if (now) now.innerHTML = customIcon(it);
+        };
+        const name = pane.querySelector('#nbx-name') as HTMLInputElement;
+        name.addEventListener('input', () => {
+            const v = name.value.trim();
+            if (!v) return;
+            update({ label: v });
+            const title = pane.querySelector('.nbx-pane-title');
+            if (title?.firstChild) title.firstChild.textContent = v + ' ';
+        });
+        const iconHost = pane.querySelector('#nbx-icon-host') as HTMLElement;
+        const iconBtn = pane.querySelector('#nbx-icon-toggle') as HTMLButtonElement;
+        iconBtn.addEventListener('click', () => {
+            const open = iconHost.hidden;
+            iconHost.hidden = !open;
+            iconBtn.setAttribute('aria-expanded', String(open));
+            if (open && !iconHost.firstChild) mountIconPicker(iconHost, item.icon || '', (ref) => update({ icon: ref }));
+        });
+        const wireTarget = () => {
+            const tgt = pane.querySelector('#nbx-target') as HTMLInputElement | HTMLSelectElement | null;
+            if (!tgt) return;
+            tgt.addEventListener('change', () => {
+                const kind = (pane.querySelector('input[name="nbx-kind"]:checked') as HTMLInputElement | null)?.value as CustomNavItem['kind'] || item.kind;
+                const v = tgt.value.trim();
+                if (kind === 'url') {
+                    const ok = /^https?:\/\/[^\s]+$/i.test(v);
+                    pane.querySelector('#nbx-target-hint')?.classList.toggle('is-bad', !ok);
+                    if (!ok) return;
+                }
+                if (!v) return;
+                update({ kind, target: v });
+                item.kind = kind; item.target = v;
+                void renderPageBlock();
+            });
+        };
+        wireTarget();
+        pane.querySelectorAll<HTMLInputElement>('input[name="nbx-kind"]').forEach((r) => r.addEventListener('change', () => {
+            const kind = r.value as CustomNavItem['kind'];
+            pane.querySelectorAll('.nbx-kind').forEach((l) => l.classList.toggle('is-on', (l.querySelector('input') as HTMLInputElement).checked));
+            const lbl = pane.querySelector('#nbx-target-field .nbx-label'); if (lbl) lbl.textContent = t(`nbx.target.${kind}`);
+            (pane.querySelector('#nbx-target-wrap') as HTMLElement).innerHTML = targetField(kind, kind === item.kind ? item.target : '');
+            wireTarget();
+            // A select already holds a valid choice: take it. A URL waits for one.
+            const tgt = pane.querySelector('#nbx-target') as HTMLInputElement | HTMLSelectElement | null;
+            if (kind !== 'url' && tgt && tgt.value) tgt.dispatchEvent(new Event('change'));
+            if (kind === 'page' && !_pagesCache.length) toast(t('nbx.noPagesYet'), 'warning');
+        }));
+        pane.querySelector('#nbx-del')?.addEventListener('click', async () => {
+            if (!(await showConfirm(t('nbx.deleteButtonT'), t('nbx.deleteButtonD').replace('{name}', item.label)))) return;
+            const c = load();
+            c.custom = c.custom.filter((x) => x.id !== id);
+            c.order = c.order.filter((x) => x !== id);
+            delete c.labels[id]; delete c.hidden[id];
+            commit(c);
+            sel = null; renderSide(); renderPane();
+        });
+        wireCommon(id);
+
+        // The page this button opens: its permissions, its code, a look at it.
+        const renderPageBlock = async () => {
+            const host = pane.querySelector('#nbx-page-block') as HTMLElement | null;
+            if (!host) return;
+            if (item.kind !== 'page' || !item.target) { host.innerHTML = ''; return; }
+            await mountPermissions(host, item.target, { intro: true });
+            const actions = document.createElement('div');
+            actions.className = 'nbx-inline nbx-page-actions';
+            actions.innerHTML = `
+                <button type="button" class="btn btn-secondary btn-sm" id="nbx-edit-code">${uiIcon('code', 14)}<span>${escAttr(t('nbx.editCode'))}</span></button>
+                <button type="button" class="btn btn-ghost btn-sm" id="nbx-preview-btn">${uiIcon('eye', 14)}<span>${escAttr(t('nbx.preview'))}</span></button>`;
+            host.prepend(actions);
+            const prevHost = document.createElement('div');
+            prevHost.className = 'nbx-preview-host';
+            prevHost.hidden = true;
+            actions.after(prevHost);
+            actions.querySelector('#nbx-edit-code')?.addEventListener('click', () => { codePageId = item.target; view = 'code'; renderPane(); });
+            actions.querySelector('#nbx-preview-btn')?.addEventListener('click', () => {
+                prevHost.hidden = !prevHost.hidden;
+                if (prevHost.hidden) prevHost.innerHTML = '';
+                else mountPreview(prevHost, item.target);
+            });
+        };
+        void renderPageBlock();
+    };
+
+    // ── Permissions (one page) ─────────────────────────────────────────────────
     //
-    // Editing a sub-page reuses the SAME html box as the index — one editor, one place to
-    // look. `editingDoc` says which document that box currently holds: null is the page's
-    // own index, a slug is one of its sub-pages. The CSS and JS boxes stay bound to the
-    // bundle, because that is what they are: shared across every document in it.
-    let editingDoc: string | null = null;
-    const subWrap = overlay.querySelector('#nbe-subpages') as HTMLElement;
-    const subList = overlay.querySelector('#nbe-subpages-list') as HTMLElement;
-
-    const renderSubpages = async () => {
-        subWrap.style.display = editingPageId ? '' : 'none';
-        if (!editingPageId) { subList.innerHTML = ''; editingDoc = null; return; }
-        let docs: { slug: string; title: string }[] = [];
-        try { docs = await invoke('list_page_docs', { id: editingPageId }) as typeof docs; } catch { docs = []; }
-        const chip = (slug: string | null, label: string) =>
-            `<button class="nbe-subpage${editingDoc === slug ? ' is-current' : ''}" data-doc="${slug === null ? '' : escAttr(slug)}">${escAttr(label)}</button>`;
-        subList.innerHTML = chip(null, t('navedit.mainDoc') || 'Main page')
-            + docs.map(d => chip(d.slug, d.title) + `<button class="nbe-subpage-del" data-deldoc="${escAttr(d.slug)}" title="${escAttr(t('common.delete') || 'Delete')}">\u00d7</button>`).join('');
-
-        subList.querySelectorAll('[data-doc]').forEach(b => b.addEventListener('click', async () => {
-            const slug = (b as HTMLElement).dataset.doc || null;
-            if (slug === editingDoc) return;
+    // A switch per permission, each with what it lets the page do and how much that exposes.
+    // Nothing here is on unless the backend says it is; an imported page waiting for its
+    // review says so and holds nothing (page_apply_reviewed_grants decides what it gets).
+    const mountPermissions = async (host: HTMLElement, pageId: string, opts: { intro?: boolean } = {}) => {
+        let grants = new Set<string>();
+        let origins: string[] = [];
+        let review: { source?: string; requested?: string[]; requestedOrigins?: string[] } = {};
+        try { grants = new Set((await invoke('page_grants_get', { id: pageId })) as string[]); } catch { /* deny */ }
+        try { origins = (await invoke('page_net_origins_get', { id: pageId })) as string[]; } catch { /* none */ }
+        try { review = (await invoke('page_grant_review_get', { id: pageId })) as typeof review; } catch { /* none */ }
+        const pending = review.source === 'import-pending';
+        host.innerHTML = `
+            <div class="nbx-perms">
+                <div class="nbx-perms-head">
+                    <span class="nbx-pane-ic nbx-pane-ic--sm" aria-hidden="true">${uiIcon('shield-check', 16)}</span>
+                    <div><b>${escAttr(t('nbx.permsTitle'))}</b>${opts.intro ? `<p>${escAttr(t('nbx.permsIntro'))}</p>` : ''}</div>
+                </div>
+                ${pending ? `<div class="nbx-note nbx-note--warn">${escAttr(t('navedit.reviewPending'))} <button type="button" class="btn btn-xs btn-secondary" id="nbx-review">${escAttr(t('navedit.reviewBtn'))}</button></div>`
+                    : review.source === 'import-review' ? `<div class="nbx-note">${escAttr(t('navedit.reviewedNote'))}</div>` : ''}
+                <div class="nbx-perm-list">
+                    ${CAPS.map(({ cap, risk }) => `<label class="nbx-perm">
+                        <span class="nbx-perm-text"><b>${escAttr(capLabel(cap))}</b><span>${escAttr(capRisk(cap))}</span></span>
+                        <span class="nbx-risk nbx-risk--${risk}">${escAttr(t(RISK_KEY[risk]))}</span>
+                        ${switchHtml(`data-cap="${cap}"`, grants.has(cap), pending)}
+                    </label>
+                    ${cap === 'network' ? `<label class="nbx-field nbx-origins" ${grants.has('network') ? '' : 'hidden'}>
+                        <span class="nbx-label">${escAttr(t('nbx.origins'))}</span>
+                        <textarea class="input" id="nbx-origins" rows="2" spellcheck="false" placeholder="https://api.example.com">${escAttr(origins.join('\n'))}</textarea>
+                        <span class="nbx-hint">${escAttr(t('nbx.originsHint'))}</span>
+                    </label>` : ''}`).join('')}
+                </div>
+                <div class="nbx-presets" ${pending ? 'hidden' : ''}>
+                    <span class="nbx-label">${escAttr(t('nbx.quickSet'))}</span>
+                    <button type="button" class="nbx-chip" data-preset="none" data-tooltip="${escAttr(t('nbx.presetNoneTip'))}">${escAttr(t('nbx.presetNone'))}</button>
+                    <button type="button" class="nbx-chip" data-preset="local" data-tooltip="${escAttr(t('nbx.presetLocalTip'))}">${escAttr(t('nbx.presetLocal'))}</button>
+                    <button type="button" class="nbx-chip" data-preset="online" data-tooltip="${escAttr(t('nbx.presetOnlineTip'))}">${escAttr(t('nbx.presetOnline'))}</button>
+                </div>
+            </div>`;
+        const setCap = async (cap: string, on: boolean) => {
+            await invoke('page_set_grant', { id: pageId, cap, granted: on });
+            await refreshGrants(pageId);      // the broker sees the change at once
+        };
+        host.querySelectorAll<HTMLInputElement>('input[data-cap]').forEach((cb) => cb.addEventListener('change', async () => {
             try {
-                // Save what is on screen before switching, or the edit is silently lost —
-                // this is a tab strip, and nobody expects a tab to discard their typing.
-                await persistCurrentDoc();
-                if (slug) {
-                    const d = await invoke('get_page_doc', { id: editingPageId, slug }) as { html: string };
-                    pageField('#nbe-page-html').value = d.html;
-                } else {
-                    const src = await invoke('get_custom_page_source', { id: editingPageId }) as { html: string };
-                    pageField('#nbe-page-html').value = src.html;
-                }
-                editingDoc = slug;
-                repaintCode();
-                renderSubpages();
-            } catch (err) { (window as any).toast?.(String(err), 'error'); }
+                await setCap(cb.dataset.cap!, cb.checked);
+                if (cb.dataset.cap === 'network') (host.querySelector('.nbx-origins') as HTMLElement).hidden = !cb.checked;
+            } catch (err) { cb.checked = !cb.checked; toast(String(err), 'error'); }
         }));
-
-        subList.querySelectorAll('[data-deldoc]').forEach(b => b.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            const slug = (b as HTMLElement).dataset.deldoc!;
-            const ok = await (window as any).confirmCustom?.(
-                (t('navedit.subpageDelT') || 'Delete this document?'),
-                (t('navedit.subpageDelD') || 'Any link pointing at it will stop working.'), 'warning');
-            if (!ok) return;
+        host.querySelector('#nbx-origins')?.addEventListener('change', async (e) => {
+            const raw = (e.target as HTMLTextAreaElement).value;
+            const list2 = raw.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
+            try { await invoke('page_set_net_origins', { id: pageId, origins: list2 }); }
+            catch (err) { toast(String(err), 'error'); }
+        });
+        host.querySelectorAll<HTMLElement>('[data-preset]').forEach((b) => b.addEventListener('click', async () => {
+            const want = new Set(PRESETS[b.dataset.preset!] || []);
             try {
-                await invoke('delete_page_doc', { id: editingPageId, slug });
-                if (editingDoc === slug) {
-                    const src = await invoke('get_custom_page_source', { id: editingPageId }) as { html: string };
-                    pageField('#nbe-page-html').value = src.html;
-                    editingDoc = null;
-                    repaintCode();
-                }
-                renderSubpages();
-            } catch (err) { (window as any).toast?.(String(err), 'error'); }
+                for (const { cap } of CAPS) await invoke('page_set_grant', { id: pageId, cap, granted: want.has(cap) });
+                await refreshGrants(pageId);
+                await mountPermissions(host, pageId, opts);
+            } catch (err) { toast(String(err), 'error'); }
         }));
-    };
-
-    /** Write whatever the HTML box currently holds back to the document it came from. */
-    const persistCurrentDoc = async () => {
-        if (!editingPageId || !editingDoc) return;   // the index is saved by the Save button
-        const cur = (await invoke('list_page_docs', { id: editingPageId }) as { slug: string; title: string }[])
-            .find(d => d.slug === editingDoc);
-        await invoke('save_page_doc', {
-            id: editingPageId, slug: editingDoc,
-            title: cur?.title || editingDoc,
-            html: pageField('#nbe-page-html').value,
+        host.querySelector('#nbx-review')?.addEventListener('click', async () => {
+            try {
+                const r = (await invoke('page_grant_review_get', { id: pageId })) as { requested?: string[]; requestedOrigins?: string[] };
+                const p = { id: pageId, name: _pagesCache.find((x) => x.id === pageId)?.name || pageId, requested: r.requested || [], requestedOrigins: r.requestedOrigins || [], unknown: [] };
+                const ans = reviewAnswer(p, (await openGrantReview([p])).get(pageId));
+                await invoke('page_apply_reviewed_grants', { id: pageId, caps: ans.caps, origins: ans.origins });
+                await refreshGrants(pageId);
+                await mountPermissions(host, pageId, opts);
+            } catch (err) { toast(String(err), 'error'); }
         });
     };
 
-    overlay.querySelector('#nbe-subpage-add')?.addEventListener('click', async () => {
-        if (!editingPageId) return;
-        const slugEl = overlay.querySelector('#nbe-subpage-slug') as HTMLInputElement;
-        const titleEl = overlay.querySelector('#nbe-subpage-title') as HTMLInputElement;
-        const slug = slugEl.value.trim();
-        if (!slug) { (window as any).toast?.(t('navedit.subpageSlug') || 'file name', 'warning'); return; }
-        try {
-            await persistCurrentDoc();
-            const title = titleEl.value.trim() || slug;
-            // A starting document rather than a blank one: the link back is the part an
-            // author only misses after they have navigated away and cannot get home.
-            await invoke('save_page_doc', {
-                id: editingPageId, slug, title,
-                html: `<p><a href="index.html">\u2190 ${escAttr(t('navedit.backToMain') || 'Back')}</a></p>\n<h1>${escAttr(title)}</h1>`,
-            });
-            slugEl.value = ''; titleEl.value = '';
-            const d = await invoke('get_page_doc', { id: editingPageId, slug }) as { html: string; slug: string };
-            pageField('#nbe-page-html').value = d.html;
-            editingDoc = d.slug;
-            repaintCode();
-            renderSubpages();
-        } catch (err) { (window as any).toast?.(String(err), 'error'); }
-    });
-
-    // ── the bundle's files ──────────────────────────────────────────────────
-    const filesWrap = overlay.querySelector('#nbe-pagefiles') as HTMLElement;
-    const filesList = overlay.querySelector('#nbe-pagefiles-list') as HTMLElement;
-    const kb = (n: number) => (n >= 1024 * 1024 ? (n / 1024 / 1024).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB');
-
-    const renderPageFiles = async () => {
-        filesWrap.style.display = editingPageId ? '' : 'none';
-        if (!editingPageId) { filesList.innerHTML = ''; return; }
-        let files: { path: string; bytes: number; reserved: boolean }[] = [];
-        try { files = await invoke('list_page_files', { id: editingPageId }) as typeof files; } catch { files = []; }
-        if (!files.length) { filesList.innerHTML = `<div class="nbe-sub">${escAttr(t('navedit.pagefilesNone') || 'Nothing but the page itself.')}</div>`; return; }
-        filesList.innerHTML = files.map(f2 => `
-            <div class="nbe-pagefile${f2.reserved ? ' is-reserved' : ''}">
-                <span class="nbe-pagefile-path" title="${escAttr(f2.path)}">${escAttr(f2.path)}</span>
-                <span class="nbe-pagefile-size">${escAttr(kb(f2.bytes))}</span>
-                ${f2.reserved
-                    ? `<span class="nbe-pagefile-lock" title="${escAttr(t('navedit.pagefileOwn') || 'Part of the page itself')}">\u25cf</span>`
-                    : `<button class="nbe-pagefile-del" data-delfile="${escAttr(f2.path)}" title="${escAttr(t('common.delete') || 'Delete')}">\u00d7</button>`}
-            </div>`).join('');
-        filesList.querySelectorAll('[data-delfile]').forEach(b => b.addEventListener('click', async () => {
-            const rel = (b as HTMLElement).dataset.delfile!;
-            const ok = await (window as any).confirmCustom?.(
-                (t('navedit.pagefileDelT') || 'Delete this file?'),
-                rel + ' \u2014 ' + (t('navedit.pagefileDelD') || 'anything referencing it stops working.'), 'warning');
-            if (!ok) return;
-            try { await invoke('delete_page_file', { id: editingPageId, rel }); renderPageFiles(); }
-            catch (err) { (window as any).toast?.(String(err), 'error'); }
-        }));
+    /** The page running in its sandbox: the same iframe attributes as its view in the app,
+     *  so what you see here is what the button will show. The broker serves it by its
+     *  data-page-id, with exactly the page's own permissions. */
+    const mountPreview = (host: HTMLElement, pageId: string) => {
+        void refreshGrants(pageId);
+        host.innerHTML = `
+            <div class="nbx-preview-bar">
+                <span class="nbx-hint">${uiIcon('lock', 14)} ${escAttr(t('nbx.previewNote'))}</span>
+                <button type="button" class="btn btn-ghost btn-xs" data-reload>${uiIcon('refresh', 14)}<span>${escAttr(t('nbx.reload'))}</span></button>
+            </div>
+            <iframe class="custom-page-frame nbx-preview-frame" referrerpolicy="no-referrer"
+                sandbox="allow-scripts allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox"
+                data-page-id="${escAttr(pageId)}" src="${escAttr(pageBundleUrl(pageId))}" title="${escAttr(t('nbx.preview'))}"></iframe>`;
+        host.querySelector('[data-reload]')?.addEventListener('click', () => {
+            const f = host.querySelector('iframe') as HTMLIFrameElement | null;
+            if (!f) return;
+            f.setAttribute('src', 'about:blank');
+            setTimeout(() => f.setAttribute('src', pageBundleUrl(pageId)), 30);
+        });
     };
 
-    overlay.querySelector('#nbe-pagefile-add')?.addEventListener('click', async () => {
-        if (!editingPageId) return;
-        const dest = (overlay.querySelector('#nbe-pagefile-dest') as HTMLInputElement).value.trim();
-        try {
-            // Several at once: adding twenty images one dialog at a time is not a workflow.
-            const paths = await pickFiles();
-            if (!paths.length) return;
-            let ok = 0; const failed: string[] = [];
-            for (const p of paths) {
-                const base = String(p).split(/[\\/]/).pop() || 'asset';
-                try { await invoke('import_page_path', { id: editingPageId, srcPath: p, destRel: dest ? `${dest}/${base}` : base }); ok++; }
-                catch (err) { failed.push(base + ': ' + String(err)); }
-            }
-            // Reported per file. A silent partial import is what sends somebody debugging
-            // their CSS for a picture that was never copied.
-            (window as any).toast?.(
-                failed.length
-                    ? `${ok} ${t('navedit.imported') || 'imported'}, ${failed.length} ${t('navedit.skipped') || 'skipped'} \u2014 ${failed[0]}`
-                    : `${ok} ${t('navedit.imported') || 'imported'}`,
-                failed.length ? 'warning' : 'success');
-            renderPageFiles();
-        } catch (err) { (window as any).toast?.(String(err), 'error'); }
-    });
+    // ── « Add a button »: the guided flow ──────────────────────────────────────
+    interface Draft { step: number; kind: CustomNavItem['kind'] | null; name: string; icon: string; target: string; tpl: number; existing: string; caps: Set<string> }
+    let wiz: Draft = { step: 0, kind: null, name: '', icon: '', target: '', tpl: 0, existing: '', caps: new Set() };
+    const stepsFor = (k: Draft['kind']): string[] => k === 'page' ? ['kind', 'details', 'start', 'perms', 'preview'] : ['kind', 'details'];
+    const startWizard = () => {
+        wiz = { step: 0, kind: null, name: '', icon: '', target: '', tpl: 0, existing: '', caps: new Set() };
+        view = 'wizard';
+        list.querySelectorAll('.nbx-row.is-sel').forEach((r) => { r.classList.remove('is-sel'); r.setAttribute('aria-selected', 'false'); });
+        renderPane();
+    };
+    const dropDraft = async () => {
+        if (!draftPageId) return;
+        const id = draftPageId;
+        draftPageId = null;
+        try { await invoke('delete_custom_page', { id }); } catch { /* already gone */ }
+    };
+    const leaveWizard = async () => {
+        await dropDraft();
+        view = 'details';
+        renderSide(); renderPane();
+    };
 
-    overlay.querySelector('#nbe-pagedir-add')?.addEventListener('click', async () => {
-        if (!editingPageId) return;
-        const dest = (overlay.querySelector('#nbe-pagefile-dest') as HTMLInputElement).value.trim();
-        try {
-            const dir = await pickFolder();
-            if (!dir) return;
-            const rep = await invoke('import_page_dir', { id: editingPageId, srcDir: dir, destRel: dest }) as { copied: string[]; skipped: string[]; bytes: number };
-            (window as any).toast?.(
-                `${rep.copied.length} ${t('navedit.imported') || 'imported'} (${kb(rep.bytes)})`
-                + (rep.skipped.length ? `, ${rep.skipped.length} ${t('navedit.skipped') || 'skipped'}` : ''),
-                rep.skipped.length ? 'warning' : 'success');
-            renderPageFiles();
-        } catch (err) { (window as any).toast?.(String(err), 'error'); }
-    });
-
-    loadPages().then(() => { renderPagesList(); if (kindSel.value === 'page') renderTarget(); });
-    overlay.querySelector('#nbe-page-create')?.addEventListener('click', async () => {
-        const name = (overlay.querySelector('#nbe-page-name') as HTMLInputElement).value.trim();
-        const html = (overlay.querySelector('#nbe-page-html') as HTMLTextAreaElement).value;
-        const css = (overlay.querySelector('#nbe-page-css') as HTMLTextAreaElement).value;
-        const js = (overlay.querySelector('#nbe-page-js') as HTMLTextAreaElement).value;
-        if (!name) { (window as any).toast?.(t('navedit.pageName') || 'Page name', 'warning'); return; }
-        try {
-            if (editingPageId && editingDoc) {
-                // The HTML box is showing a sub-page. Its markup belongs to that document;
-                // the name, CSS and JS still belong to the bundle, so both are written.
-                await persistCurrentDoc();
-                await invoke('update_custom_page', {
-                    id: editingPageId, name,
-                    html: (await invoke('get_custom_page_source', { id: editingPageId }) as { html: string }).html,
-                    css, js,
-                });
-            } else if (editingPageId) {
-                await invoke('update_custom_page', { id: editingPageId, name, html, css, js });
-                // The page view caches its bundle; drop any open view for this page so it
-                // reloads the new source next time it's opened.
-                document.querySelectorAll(`.custom-page-frame[data-page-id="${cssEsc(editingPageId)}"]`).forEach(f => (f.closest('.view') as HTMLElement | null)?.remove());
-                (window as any).toast?.(t('navedit.pageSaved') || 'Page saved', 'success');
-            } else {
-                await invoke('create_custom_page', { name, html, css, js });
-                (window as any).toast?.(t('navedit.pageCreated') || 'Page created', 'success');
-            }
-            editingPageId = null;
-            editingDoc = null;
-            renderSubpages();
-            renderPageFiles();
-            pageCreateBtn.textContent = t('navedit.createPage') || 'Create page';
-            await loadPages(); renderPagesList(); if (kindSel.value === 'page') renderTarget();
-            pageField('#nbe-page-name').value = '';
-            pageField('#nbe-page-html').value = '';
-            pageField('#nbe-page-css').value = '';
-            pageField('#nbe-page-js').value = '';
-            repaintCode();
-        } catch (e) { (window as any).toast?.(String(e), 'error'); }
-    });
-
-    // Live rename + hide.
-    list.querySelectorAll('.nbe-name').forEach(inp =>
-        inp.addEventListener('input', commit));
-    list.querySelectorAll('.nbe-eye').forEach(btn =>
-        btn.addEventListener('click', () => {
-            if ((btn as HTMLButtonElement).disabled) return;
-            const hidden = btn.classList.toggle('is-hidden');
-            btn.innerHTML = hidden ? eyeOff() : eyeOn();
-            commit();
-        }));
-    // Pointer-based reorder (reliable in WebView2).
-    list.querySelectorAll('.nbe-grip').forEach(grip =>
-        grip.addEventListener('mousedown', (e) => startRowDrag(e as MouseEvent, grip.closest('.nbe-row') as HTMLElement, list, commit)));
-
-    // The Share/Import menu: opens upward (the actions bar is the modal's bottom edge),
-    // closes on any choice or outside click.
-    {
-        const btn = overlay.querySelector('#nbe-share-menu-btn') as HTMLElement | null;
-        const menu = overlay.querySelector('#nbe-share-menu') as HTMLElement | null;
-        if (btn && menu) {
-            btn.addEventListener('click', (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; });
-            menu.addEventListener('click', () => { menu.hidden = true; });
-            overlay.addEventListener('click', () => { menu.hidden = true; });
+    const renderWizard = () => {
+        const steps = stepsFor(wiz.kind);
+        const stepId = steps[wiz.step];
+        const last = wiz.step === steps.length - 1;
+        const stepper = `<ol class="nbx-stepper" aria-label="${escAttr(t('nbx.steps'))}">
+            ${steps.map((s, i) => `<li class="${i === wiz.step ? 'is-now' : i < wiz.step ? 'is-done' : ''}"${i === wiz.step ? ' aria-current="step"' : ''}>
+                <span class="nbx-step-dot">${i < wiz.step ? uiIcon('check', 12) : String(i + 1)}</span><span class="nbx-step-name">${escAttr(t(`nbx.step.${s}`))}</span></li>`).join('')}
+        </ol>`;
+        let body = '';
+        if (stepId === 'kind') {
+            body = `<h3 class="nbx-q">${escAttr(t('nbx.qKind'))}</h3>${kindCards(wiz.kind, 'nbx-wkind')}`;
+        } else if (stepId === 'details') {
+            body = `<h3 class="nbx-q">${escAttr(t('nbx.qDetails'))}</h3>
+                <div class="nbx-wiz-preview" aria-hidden="true"><span class="nbx-ic" id="nbx-w-ic">${iconHtml(wiz.icon) || uiIcon(KIND_ICON[wiz.kind!], 18)}</span><span class="nbx-name" id="nbx-w-name">${escAttr(wiz.name || t('nbx.namePh'))}</span></div>
+                <label class="nbx-field"><span class="nbx-label">${escAttr(t('nbx.name'))}</span>
+                    <input class="input" id="nbx-w-label" maxlength="40" value="${escAttr(wiz.name)}" placeholder="${escAttr(t('nbx.namePh'))}"></label>
+                ${wiz.kind !== 'page' ? `<label class="nbx-field"><span class="nbx-label">${escAttr(t(`nbx.target.${wiz.kind}`))}</span>
+                    <span class="nbx-target-wrap">${targetField(wiz.kind!, wiz.target)}</span></label>` : ''}
+                ${wiz.kind === 'url' ? `<div class="nbx-note">${uiIcon('lock', 14)} ${escAttr(t('nbx.urlSandbox'))}</div>` : ''}
+                <div class="nbx-field"><span class="nbx-label">${escAttr(t('navedit.icon'))}</span><div id="nbx-w-icons"></div></div>`;
+        } else if (stepId === 'start') {
+            body = `<h3 class="nbx-q">${escAttr(t('nbx.qStart'))}</h3>
+                <div class="nbx-tpls" role="radiogroup" aria-label="${escAttr(t('navedit.pageTemplate'))}">
+                    ${PAGE_TEMPLATES.map((tpl, i) => {
+                        const info = TPL_INFO[tpl.labelKey] || { desc: '', caps: [], icon: 'file' as IconName };
+                        const on = !wiz.existing && wiz.tpl === i;
+                        return `<label class="nbx-tpl${on ? ' is-on' : ''}">
+                            <input type="radio" name="nbx-tpl" value="${i}" ${on ? 'checked' : ''}>
+                            <span class="nbx-kind-ic" aria-hidden="true">${uiIcon(info.icon, 18)}</span>
+                            <span class="nbx-kind-text"><b>${escAttr(t(tpl.labelKey) || tpl.label)}</b><span>${escAttr(info.desc ? t(info.desc) : '')}</span>
+                            ${info.caps.length ? `<span class="nbx-tpl-caps">${info.caps.map((c) => `<span class="nbx-badge">${escAttr(capLabel(c))}</span>`).join('')}</span>` : `<span class="nbx-tpl-caps"><span class="nbx-badge">${escAttr(t('nbx.noPerm'))}</span></span>`}</span>
+                        </label>`;
+                    }).join('')}
+                </div>
+                ${_pagesCache.filter((p) => p.id !== draftPageId).length ? `<label class="nbx-field nbx-existing"><span class="nbx-label">${escAttr(t('nbx.orExisting'))}</span>
+                    <select class="input" id="nbx-w-existing"><option value="">${escAttr(t('nbx.newPage'))}</option>${_pagesCache.filter((p) => p.id !== draftPageId).map((p) => `<option value="${escAttr(p.id)}" ${p.id === wiz.existing ? 'selected' : ''}>${escAttr(p.name)}</option>`).join('')}</select></label>` : ''}
+                <p class="nbx-hint">${escAttr(t('nbx.startHint'))}</p>`;
+        } else if (stepId === 'perms') {
+            const tpl = PAGE_TEMPLATES[wiz.tpl] || PAGE_TEMPLATES[0];
+            const uses = (TPL_INFO[tpl.labelKey]?.caps || []);
+            body = `<h3 class="nbx-q">${escAttr(t('nbx.qPerms'))}</h3>
+                <p class="nbx-lead">${escAttr(t('nbx.permsIntro'))}</p>
+                ${uses.length ? `<div class="nbx-note">${uiIcon('lightbulb', 14)} <span>${escAttr(t('nbx.tplUses').replace('{perms}', uses.map(capLabel).join(', ')))}</span>
+                    <button type="button" class="btn btn-xs btn-secondary" id="nbx-w-suggest">${escAttr(t('nbx.turnOn'))}</button></div>` : `<div class="nbx-note">${uiIcon('success', 14)} <span>${escAttr(t('nbx.tplNoPerm'))}</span></div>`}
+                <div class="nbx-perm-list">
+                    ${CAPS.map(({ cap, risk }) => `<label class="nbx-perm">
+                        <span class="nbx-perm-text"><b>${escAttr(capLabel(cap))}</b><span>${escAttr(capRisk(cap))}</span></span>
+                        <span class="nbx-risk nbx-risk--${risk}">${escAttr(t(RISK_KEY[risk]))}</span>
+                        ${switchHtml(`data-wcap="${cap}"`, wiz.caps.has(cap))}
+                    </label>`).join('')}
+                </div>
+                ${wiz.caps.has('network') ? `<p class="nbx-hint">${escAttr(t('nbx.originsLater'))}</p>` : ''}`;
+        } else if (stepId === 'preview') {
+            body = `<h3 class="nbx-q">${escAttr(t('nbx.qPreview'))}</h3>
+                <p class="nbx-lead">${escAttr(t('nbx.previewLead'))}</p>
+                <div class="nbx-preview-host" id="nbx-w-preview"><p class="nbx-hint">${escAttr(t('common.loading'))}</p></div>`;
         }
-    }
+        pane.innerHTML = `
+            <div class="nbx-wiz">
+                <div class="nbx-wiz-top">
+                    <span class="nbx-wiz-title">${uiIcon('add', 16)} ${escAttr(t('navedit.addBtn'))}</span>
+                    ${stepper}
+                </div>
+                <div class="nbx-wiz-body">${body}</div>
+                <div class="nbx-wiz-foot">
+                    <button type="button" class="btn btn-ghost btn-sm" id="nbx-w-cancel">${escAttr(t('common.cancel'))}</button>
+                    <span class="nbx-grow"></span>
+                    ${wiz.step > 0 ? `<button type="button" class="btn btn-ghost btn-sm" id="nbx-w-back">${uiIcon('chevron-left', 14)}<span>${escAttr(t('nbx.back'))}</span></button>` : ''}
+                    <button type="button" class="btn btn-primary btn-sm" id="nbx-w-next" ${stepId === 'kind' && !wiz.kind ? 'disabled' : ''}>${last ? `${uiIcon('check', 14)}<span>${escAttr(t('nbx.create'))}</span>` : `<span>${escAttr(t('nbx.next'))}</span>${uiIcon('chevron-right', 14)}`}</button>
+                </div>
+            </div>`;
 
-    // The page code editors are real editors, not form fields: Tab inserts a tab
-    // instead of leaving the textarea. Escape still exits for keyboard users.
-    overlay.querySelectorAll('.nbe-code').forEach(ta =>
-        ta.addEventListener('keydown', (e) => {
+        const next = pane.querySelector('#nbx-w-next') as HTMLButtonElement;
+        pane.querySelector('#nbx-w-cancel')?.addEventListener('click', () => void leaveWizard());
+        pane.querySelector('#nbx-w-back')?.addEventListener('click', () => { wiz.step--; renderWizard(); });
+
+        if (stepId === 'kind') {
+            pane.querySelectorAll<HTMLInputElement>('input[name="nbx-wkind"]').forEach((r) => r.addEventListener('change', () => {
+                wiz.kind = r.value as CustomNavItem['kind'];
+                wiz.target = '';
+                if (!wiz.icon || Object.values(KIND_ICON).some((n) => wiz.icon === 'ui:' + n)) wiz.icon = 'ui:' + KIND_ICON[wiz.kind];
+                renderWizard();     // the steps differ for « My own page »
+            }));
+        }
+        if (stepId === 'details') {
+            const label = pane.querySelector('#nbx-w-label') as HTMLInputElement;
+            const tgt = pane.querySelector('#nbx-target') as HTMLInputElement | HTMLSelectElement | null;
+            // A tab or a tool names the button until you type a name of your own.
+            const autoName = () => (tgt instanceof HTMLSelectElement ? tgt.options[tgt.selectedIndex]?.textContent?.trim() || '' : '');
+            const syncName = () => {
+                const own = label.value.trim();
+                const auto = autoName();
+                wiz.name = own || auto;
+                label.placeholder = auto || t('nbx.namePh');
+                (pane.querySelector('#nbx-w-name') as HTMLElement).textContent = wiz.name || t('nbx.namePh');
+            };
+            label.addEventListener('input', syncName);
+            if (tgt) {
+                const sync = () => { wiz.target = tgt.value.trim(); syncName(); };
+                tgt.addEventListener('change', sync);
+                tgt.addEventListener('input', sync);
+                if (tgt instanceof HTMLSelectElement && wiz.target) tgt.value = wiz.target;
+                sync();
+            }
+            mountIconPicker(pane.querySelector('#nbx-w-icons') as HTMLElement, wiz.icon, (ref) => {
+                wiz.icon = ref;
+                (pane.querySelector('#nbx-w-ic') as HTMLElement).innerHTML = iconHtml(ref) || uiIcon(KIND_ICON[wiz.kind!], 18);
+            });
+            label.focus();
+        }
+        if (stepId === 'start') {
+            pane.querySelectorAll<HTMLInputElement>('input[name="nbx-tpl"]').forEach((r) => r.addEventListener('change', () => {
+                wiz.tpl = parseInt(r.value, 10) || 0;
+                wiz.existing = '';
+                const ex = pane.querySelector('#nbx-w-existing') as HTMLSelectElement | null; if (ex) ex.value = '';
+                pane.querySelectorAll('.nbx-tpl').forEach((l) => l.classList.toggle('is-on', (l.querySelector('input') as HTMLInputElement).checked));
+            }));
+            pane.querySelector('#nbx-w-existing')?.addEventListener('change', (e) => {
+                wiz.existing = (e.target as HTMLSelectElement).value;
+                pane.querySelectorAll<HTMLInputElement>('input[name="nbx-tpl"]').forEach((r) => { r.checked = !wiz.existing && parseInt(r.value, 10) === wiz.tpl; });
+                pane.querySelectorAll('.nbx-tpl').forEach((l) => l.classList.toggle('is-on', (l.querySelector('input') as HTMLInputElement).checked));
+                next.innerHTML = wiz.existing ? `${uiIcon('check', 14)}<span>${escAttr(t('nbx.create'))}</span>` : `<span>${escAttr(t('nbx.next'))}</span>${uiIcon('chevron-right', 14)}`;
+            });
+        }
+        if (stepId === 'perms') {
+            pane.querySelectorAll<HTMLInputElement>('input[data-wcap]').forEach((cb) => cb.addEventListener('change', () => {
+                if (cb.checked) wiz.caps.add(cb.dataset.wcap!); else wiz.caps.delete(cb.dataset.wcap!);
+            }));
+            pane.querySelector('#nbx-w-suggest')?.addEventListener('click', () => {
+                const tpl = PAGE_TEMPLATES[wiz.tpl] || PAGE_TEMPLATES[0];
+                for (const c of TPL_INFO[tpl.labelKey]?.caps || []) wiz.caps.add(c);
+                renderWizard();
+            });
+        }
+        if (stepId === 'preview') void buildDraft();
+
+        next.addEventListener('click', async () => {
+            if (stepId === 'details') {
+                const name = wiz.name.trim();
+                if (!name) { toast(t('nbx.needName'), 'warning'); (pane.querySelector('#nbx-w-label') as HTMLInputElement)?.focus(); return; }
+                if (wiz.kind === 'url' && !/^https?:\/\/[^\s]+$/i.test(wiz.target)) {
+                    pane.querySelector('#nbx-target-hint')?.classList.add('is-bad');
+                    toast(t('navedit.urlNeedsHttp'), 'warning');
+                    return;
+                }
+                if (wiz.kind !== 'page' && !wiz.target) { toast(t('nbx.needTarget'), 'warning'); return; }
+            }
+            if (stepId === 'start' && wiz.existing) { finish(wiz.existing); return; }
+            if (last) { if (wiz.kind === 'page') { if (draftPageId) finish(draftPageId); } else finish(wiz.target); return; }
+            wiz.step++;
+            renderWizard();
+        });
+    };
+
+    /** The page exists from the preview step on, holding exactly the permissions switched on
+     *  in the step before; Cancel deletes it. Going back and forth updates the same page. */
+    const buildDraft = async () => {
+        const host = pane.querySelector('#nbx-w-preview') as HTMLElement | null;
+        const tpl = PAGE_TEMPLATES[wiz.tpl] || PAGE_TEMPLATES[0];
+        try {
+            if (draftPageId) {
+                await invoke('update_custom_page', { id: draftPageId, name: wiz.name.trim(), html: tpl.html, css: tpl.css, js: tpl.js });
+            } else {
+                const meta = await invoke('create_custom_page', { name: wiz.name.trim(), html: tpl.html, css: tpl.css, js: tpl.js }) as PageMeta;
+                draftPageId = meta.id;
+            }
+            for (const { cap } of CAPS) await invoke('page_set_grant', { id: draftPageId, cap, granted: wiz.caps.has(cap) });
+            await refreshGrants(draftPageId!);
+            if (host && host.isConnected) mountPreview(host, draftPageId!);
+        } catch (err) {
+            if (host) host.innerHTML = `<div class="nbx-note nbx-note--warn">${escAttr(String(err))}</div>`;
+            const nxt = pane.querySelector('#nbx-w-next') as HTMLButtonElement | null;
+            if (nxt) nxt.disabled = true;
+        }
+    };
+
+    const finish = (target: string) => {
+        const cfg = load();
+        const id = 'custom:' + Math.random().toString(36).slice(2, 9);
+        cfg.custom.push({ id, label: wiz.name.trim() || target, kind: wiz.kind!, target, icon: wiz.icon || 'ui:' + KIND_ICON[wiz.kind!] });
+        // A new button goes at the end of the sidebar; drag it where it belongs.
+        cfg.order = orderedIds();
+        commit(cfg);
+        if (wiz.icon) rememberIcon(wiz.icon);
+        if (target === draftPageId) draftPageId = null;     // it belongs to a button now
+        sel = id; view = 'details';
+        renderSide(); renderPane();
+        (list.querySelector(`[data-id="${cssEsc(id)}"]`) as HTMLElement | null)?.scrollIntoView({ block: 'nearest' });
+        toast(t('nbx.added').replace('{name}', wiz.name.trim() || target), 'success');
+    };
+
+    // ── A page's code ──────────────────────────────────────────────────────────
+    //
+    // HTML, CSS and JS of the page a button opens, its other documents and its files. The CSS
+    // and JS boxes belong to the whole bundle; the HTML box shows one document at a time
+    // (null = the page's own index). Saving drops any open view of the page so it reloads.
+    const renderCode = async (pageId: string) => {
+        let src: { name: string; html: string; css: string; js: string };
+        try { src = await invoke('get_custom_page_source', { id: pageId }) as typeof src; }
+        catch (err) { toast(String(err), 'error'); view = 'details'; renderPane(); return; }
+        let editingDoc: string | null = null;
+        const owner = load().custom.find((c) => c.kind === 'page' && c.target === pageId);
+        pane.innerHTML = `
+            <div class="nbx-code">
+                <div class="nbx-code-top">
+                    <button type="button" class="btn btn-ghost btn-sm" id="nbx-code-back">${uiIcon('chevron-left', 14)}<span>${escAttr(owner ? owner.label : t('nbx.back'))}</span></button>
+                    <span class="nbx-grow"></span>
+                    <button type="button" class="btn btn-ghost btn-sm" id="nbx-code-preview">${uiIcon('eye', 14)}<span>${escAttr(t('nbx.saveAndPreview'))}</span></button>
+                    <button type="button" class="btn btn-primary btn-sm" id="nbe-page-create">${uiIcon('save', 14)}<span>${escAttr(t('navedit.save'))}</span></button>
+                </div>
+                <label class="nbx-field"><span class="nbx-label">${escAttr(t('navedit.pageName'))}</span>
+                    <input class="input" id="nbe-page-name" maxlength="60" value="${escAttr(src.name)}"></label>
+                <div class="nbx-field">
+                    <span class="nbx-label">${escAttr(t('navedit.subpages'))}</span>
+                    <p class="nbx-hint">${escAttr(t('navedit.subpagesHint'))}</p>
+                    <div id="nbe-subpages-list" class="nbe-subpages-list"></div>
+                    <div class="nbe-subpage-add">
+                        <input class="input" id="nbe-subpage-slug" placeholder="${escAttr(t('navedit.subpageSlug'))}">
+                        <input class="input" id="nbe-subpage-title" placeholder="${escAttr(t('navedit.subpageTitle'))}">
+                        <button type="button" class="btn btn-xs" id="nbe-subpage-add">${escAttr(t('common.add'))}</button>
+                    </div>
+                </div>
+                <label class="nbx-field"><span class="nbx-label">HTML</span>
+                    <textarea class="input nbe-code" id="nbe-page-html" rows="9" spellcheck="false"></textarea></label>
+                <label class="nbx-field"><span class="nbx-label">CSS</span>
+                    <textarea class="input nbe-code" id="nbe-page-css" rows="6" spellcheck="false"></textarea></label>
+                <label class="nbx-field"><span class="nbx-label">JS <span class="nbx-hint">${escAttr(t('navedit.jsNote'))}</span></span>
+                    <textarea class="input nbe-code" id="nbe-page-js" rows="8" spellcheck="false"></textarea></label>
+                <div class="nbx-field">
+                    <span class="nbx-label">${escAttr(t('navedit.pagefiles'))}</span>
+                    <p class="nbx-hint">${escAttr(t('navedit.pagefilesHint'))}</p>
+                    <div id="nbe-pagefiles-list" class="nbe-pagefiles-list"></div>
+                    <div class="nbe-pagefile-add">
+                        <input class="input" id="nbe-pagefile-dest" placeholder="${escAttr(t('navedit.pagefileDest'))}">
+                        <button type="button" class="btn btn-xs" id="nbe-pagefile-add">${escAttr(t('navedit.addFiles'))}</button>
+                        <button type="button" class="btn btn-xs" id="nbe-pagedir-add">${escAttr(t('navedit.addFolder'))}</button>
+                    </div>
+                </div>
+                <div class="nbx-preview-host" id="nbx-code-prev" hidden></div>
+            </div>`;
+        const field = (sel2: string) => pane.querySelector(sel2) as HTMLInputElement & HTMLTextAreaElement;
+        field('#nbe-page-html').value = src.html;
+        field('#nbe-page-css').value = src.css;
+        field('#nbe-page-js').value = src.js;
+        // Syntax colours, attached once the boxes are in the document (the mirror copies the
+        // live box's metrics). Assigning .value fires no event, so every fill repaints.
+        const hl: Record<string, CodeEditorHandle | null> = {
+            html: attachHighlight(pane.querySelector('#nbe-page-html'), 'markup'),
+            css: attachHighlight(pane.querySelector('#nbe-page-css'), 'css'),
+            js: attachHighlight(pane.querySelector('#nbe-page-js'), 'javascript'),
+        };
+        const repaintCode = () => { hl.html?.refresh(); hl.css?.refresh(); hl.js?.refresh(); };
+        repaintCode();
+        // Tab inserts a tab in the code boxes; Escape still leaves for keyboard users.
+        pane.querySelectorAll('.nbe-code').forEach((ta) => ta.addEventListener('keydown', (e) => {
             const ev = e as KeyboardEvent;
             if (ev.key !== 'Tab') return;
             ev.preventDefault();
@@ -1414,12 +1844,194 @@ export function openNavbarEditor(): void {
             el.selectionStart = el.selectionEnd = s + 1;
         }));
 
-    overlay.querySelector('#nbe-close')?.addEventListener('click', () => overlay.remove());
-    overlay.querySelector('#nbe-done')?.addEventListener('click', () => overlay.remove());
-    overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) overlay.remove(); });
-    overlay.querySelector('#nbe-reset')?.addEventListener('click', () => {
+        const subList = pane.querySelector('#nbe-subpages-list') as HTMLElement;
+        const persistCurrentDoc = async () => {
+            if (!editingDoc) return;   // the index is saved by Save
+            const cur = (await invoke('list_page_docs', { id: pageId }) as { slug: string; title: string }[]).find((d) => d.slug === editingDoc);
+            await invoke('save_page_doc', { id: pageId, slug: editingDoc, title: cur?.title || editingDoc, html: field('#nbe-page-html').value });
+        };
+        const renderSubpages = async () => {
+            let docs: { slug: string; title: string }[] = [];
+            try { docs = await invoke('list_page_docs', { id: pageId }) as typeof docs; } catch { docs = []; }
+            const chip = (slug: string | null, label: string) =>
+                `<button type="button" class="nbe-subpage${editingDoc === slug ? ' is-current' : ''}" data-doc="${slug === null ? '' : escAttr(slug)}">${escAttr(label)}</button>`;
+            subList.innerHTML = chip(null, t('navedit.mainDoc'))
+                + docs.map((d) => chip(d.slug, d.title) + `<button type="button" class="nbe-subpage-del" data-deldoc="${escAttr(d.slug)}" aria-label="${escAttr(t('common.delete'))}">${uiIcon('close', 12)}</button>`).join('');
+        };
+        subList.addEventListener('click', async (e) => {
+            const del = (e.target as HTMLElement).closest('[data-deldoc]') as HTMLElement | null;
+            const doc = (e.target as HTMLElement).closest('[data-doc]') as HTMLElement | null;
+            try {
+                if (del) {
+                    const slug = del.dataset.deldoc!;
+                    if (!(await showConfirm(t('navedit.subpageDelT'), t('navedit.subpageDelD')))) return;
+                    await invoke('delete_page_doc', { id: pageId, slug });
+                    if (editingDoc === slug) {
+                        field('#nbe-page-html').value = (await invoke('get_custom_page_source', { id: pageId }) as { html: string }).html;
+                        editingDoc = null; repaintCode();
+                    }
+                    await renderSubpages();
+                } else if (doc) {
+                    const slug = doc.dataset.doc || null;
+                    if (slug === editingDoc) return;
+                    // Save what is on screen before switching: a tab strip must not lose typing.
+                    await persistCurrentDoc();
+                    field('#nbe-page-html').value = slug
+                        ? (await invoke('get_page_doc', { id: pageId, slug }) as { html: string }).html
+                        : (await invoke('get_custom_page_source', { id: pageId }) as { html: string }).html;
+                    editingDoc = slug; repaintCode();
+                    await renderSubpages();
+                }
+            } catch (err) { toast(String(err), 'error'); }
+        });
+        pane.querySelector('#nbe-subpage-add')?.addEventListener('click', async () => {
+            const slugEl = field('#nbe-subpage-slug');
+            const titleEl = field('#nbe-subpage-title');
+            const slug = slugEl.value.trim();
+            if (!slug) { toast(t('navedit.subpageSlug'), 'warning'); return; }
+            try {
+                await persistCurrentDoc();
+                const title = titleEl.value.trim() || slug;
+                // A starting document with the link back: the part only missed once you are lost.
+                await invoke('save_page_doc', { id: pageId, slug, title, html: `<p><a href="index.html">← ${escAttr(t('navedit.backToMain'))}</a></p>\n<h1>${escAttr(title)}</h1>` });
+                slugEl.value = ''; titleEl.value = '';
+                const d = await invoke('get_page_doc', { id: pageId, slug }) as { html: string; slug: string };
+                field('#nbe-page-html').value = d.html;
+                editingDoc = d.slug; repaintCode();
+                await renderSubpages();
+            } catch (err) { toast(String(err), 'error'); }
+        });
+
+        const filesList = pane.querySelector('#nbe-pagefiles-list') as HTMLElement;
+        const kb = (n: number) => (n >= 1024 * 1024 ? (n / 1024 / 1024).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB');
+        const renderPageFiles = async () => {
+            let files: { path: string; bytes: number; reserved: boolean }[] = [];
+            try { files = await invoke('list_page_files', { id: pageId }) as typeof files; } catch { files = []; }
+            filesList.innerHTML = files.length ? files.map((f2) => `
+                <div class="nbe-pagefile${f2.reserved ? ' is-reserved' : ''}">
+                    <span class="nbe-pagefile-path" title="${escAttr(f2.path)}">${escAttr(f2.path)}</span>
+                    <span class="nbe-pagefile-size">${escAttr(kb(f2.bytes))}</span>
+                    ${f2.reserved
+                        ? `<span class="nbe-pagefile-lock" title="${escAttr(t('navedit.pagefileOwn'))}">${uiIcon('lock', 12)}</span>`
+                        : `<button type="button" class="nbe-pagefile-del" data-delfile="${escAttr(f2.path)}" aria-label="${escAttr(t('common.delete'))}">${uiIcon('close', 12)}</button>`}
+                </div>`).join('') : `<div class="nbx-hint">${escAttr(t('navedit.pagefilesNone'))}</div>`;
+        };
+        filesList.addEventListener('click', async (e) => {
+            const b = (e.target as HTMLElement).closest('[data-delfile]') as HTMLElement | null;
+            if (!b) return;
+            const rel = b.dataset.delfile!;
+            if (!(await showConfirm(t('navedit.pagefileDelT'), rel + ' — ' + t('navedit.pagefileDelD')))) return;
+            try { await invoke('delete_page_file', { id: pageId, rel }); await renderPageFiles(); }
+            catch (err) { toast(String(err), 'error'); }
+        });
+        pane.querySelector('#nbe-pagefile-add')?.addEventListener('click', async () => {
+            const dest = field('#nbe-pagefile-dest').value.trim();
+            try {
+                const paths = await pickFiles();
+                if (!paths.length) return;
+                let ok = 0; const failed: string[] = [];
+                for (const p of paths) {
+                    const base = String(p).split(/[\\/]/).pop() || 'asset';
+                    try { await invoke('import_page_path', { id: pageId, srcPath: p, destRel: dest ? `${dest}/${base}` : base }); ok++; }
+                    catch (err) { failed.push(base + ': ' + String(err)); }
+                }
+                // Per file: a silent partial import sends somebody debugging CSS for a missing picture.
+                toast(failed.length ? `${ok} ${t('navedit.imported')}, ${failed.length} ${t('navedit.skipped')} — ${failed[0]}` : `${ok} ${t('navedit.imported')}`, failed.length ? 'warning' : 'success');
+                await renderPageFiles();
+            } catch (err) { toast(String(err), 'error'); }
+        });
+        pane.querySelector('#nbe-pagedir-add')?.addEventListener('click', async () => {
+            const dest = field('#nbe-pagefile-dest').value.trim();
+            try {
+                const dir = await pickFolder();
+                if (!dir) return;
+                const rep = await invoke('import_page_dir', { id: pageId, srcDir: dir, destRel: dest }) as { copied: string[]; skipped: string[]; bytes: number };
+                toast(`${rep.copied.length} ${t('navedit.imported')} (${kb(rep.bytes)})` + (rep.skipped.length ? `, ${rep.skipped.length} ${t('navedit.skipped')}` : ''), rep.skipped.length ? 'warning' : 'success');
+                await renderPageFiles();
+            } catch (err) { toast(String(err), 'error'); }
+        });
+
+        const savePage = async (): Promise<boolean> => {
+            const name = field('#nbe-page-name').value.trim();
+            if (!name) { toast(t('navedit.pageName'), 'warning'); return false; }
+            try {
+                const css = field('#nbe-page-css').value;
+                const js = field('#nbe-page-js').value;
+                if (editingDoc) {
+                    // The HTML box shows a sub-document: its markup goes to that document; the
+                    // name, CSS and JS still belong to the bundle.
+                    await persistCurrentDoc();
+                    const html = (await invoke('get_custom_page_source', { id: pageId }) as { html: string }).html;
+                    await invoke('update_custom_page', { id: pageId, name, html, css, js });
+                } else {
+                    await invoke('update_custom_page', { id: pageId, name, html: field('#nbe-page-html').value, css, js });
+                }
+                // An open view caches the old bundle: drop it so the next visit reloads.
+                document.querySelectorAll(`.custom-page-frame[data-page-id="${cssEsc(pageId)}"]`).forEach((f) => (f.closest('.view') as HTMLElement | null)?.remove());
+                await loadPages();
+                toast(t('navedit.pageSaved'), 'success');
+                return true;
+            } catch (err) { toast(String(err), 'error'); return false; }
+        };
+        pane.querySelector('#nbe-page-create')?.addEventListener('click', () => void savePage());
+        pane.querySelector('#nbx-code-preview')?.addEventListener('click', async () => {
+            if (!(await savePage())) return;
+            const host = pane.querySelector('#nbx-code-prev') as HTMLElement;
+            host.hidden = false;
+            mountPreview(host, pageId);
+            host.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        });
+        pane.querySelector('#nbx-code-back')?.addEventListener('click', () => { view = 'details'; codePageId = null; renderPane(); });
+        void renderSubpages();
+        void renderPageFiles();
+    };
+
+    // A page can outgrow the highlighter: say so instead of letting the colours look broken.
+    overlay.addEventListener('bmm:highlight-limit', (e: Event) => {
+        const d = (e as CustomEvent).detail || {};
+        const wrap = (e.target as HTMLElement).closest('.code-hl-wrap');
+        wrap?.parentElement?.querySelectorAll(':scope > .code-hl-note').forEach((n) => n.remove());
+        if (!d.off || !wrap) return;
+        const note = document.createElement('div');
+        note.className = 'code-hl-note';
+        note.textContent = t('navedit.hlOff') + ` (${Math.round((d.chars || 0) / 1024)} KB)`;
+        wrap.insertAdjacentElement('afterend', note);
+    });
+
+    // A library icon finishing its load redraws the rows that wear one.
+    const onIcons = () => { if (overlay.isConnected) renderSide(); else document.removeEventListener('bmm:nav-icons-ready', onIcons); };
+    document.addEventListener('bmm:nav-icons-ready', onIcons);
+
+    // The Share/Import menu: opens upward (the footer is the bottom edge), closes on a choice
+    // or a click elsewhere.
+    {
+        const btn = overlay.querySelector('#nbe-share-menu-btn') as HTMLElement | null;
+        const menu = overlay.querySelector('#nbe-share-menu') as HTMLElement | null;
+        if (btn && menu) {
+            btn.addEventListener('click', (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; btn.setAttribute('aria-expanded', String(!menu.hidden)); });
+            menu.addEventListener('click', () => { menu.hidden = true; });
+            overlay.addEventListener('click', () => { menu.hidden = true; });
+        }
+    }
+
+    const close = async () => {
+        await dropDraft();          // a page the guided flow made and nobody attached
+        overlay.remove();
+    };
+    // Escape presses the × (modal-shell's global keys), which runs close() above. An open
+    // share menu takes the first Escape for itself.
+    overlay.addEventListener('keydown', (e) => {
+        const menu = overlay.querySelector('#nbe-share-menu') as HTMLElement | null;
+        if (e.key === 'Escape' && menu && !menu.hidden) { menu.hidden = true; e.preventDefault(); }
+    });
+    overlay.querySelector('#nbe-close')?.addEventListener('click', () => void close());
+    overlay.querySelector('#nbe-done')?.addEventListener('click', () => void close());
+    overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) void close(); });
+    overlay.querySelector('#nbe-reset')?.addEventListener('click', async () => {
+        if (!(await showConfirm(t('nbx.resetT'), t('nbx.resetD')))) return;
+        await dropDraft();
         save({ ...EMPTY_CFG });
-        // restoring original labels/order + removing custom views is cleanest via a reload
+        // Original labels, order and no custom views: cleanest from a fresh start of the page.
         location.reload();
     });
 
@@ -1427,11 +2039,12 @@ export function openNavbarEditor(): void {
     overlay.querySelector('#nbe-share')?.addEventListener('click', async () => {
         const link = `bmm://settings/navbar?code=${encodeURIComponent(exportNavCode())}`;
         try { await navigator.clipboard.writeText(link); } catch { /* ignore */ }
-        (window as any).toast?.(t('navedit.copied') || 'Navigation link copied to clipboard', 'success');
+        toast(t('navedit.copied'), 'success');
     });
     const importRow = overlay.querySelector('#nbe-import-row') as HTMLElement;
     overlay.querySelector('#nbe-import')?.addEventListener('click', () => {
         importRow.style.display = importRow.style.display === 'none' ? 'flex' : 'none';
+        if (importRow.style.display === 'flex') (importRow.querySelector('input') as HTMLInputElement | null)?.focus();
     });
     // Full bundle (navbar + custom icons + custom pages) as a .bmmnav file.
     overlay.querySelector('#nbe-export-file')?.addEventListener('click', () => exportNavBundle());
@@ -1439,30 +2052,22 @@ export function openNavbarEditor(): void {
     overlay.querySelector('#nbe-import-apply')?.addEventListener('click', () => {
         const val = (overlay.querySelector('#nbe-import-input') as HTMLInputElement).value;
         const cfg = parseNavCode(val);
-        if (!cfg) { (window as any).toast?.(t('navedit.badCode') || 'Invalid navigation code', 'error'); return; }
+        if (!cfg) { toast(t('navedit.badCode'), 'error'); return; }
         save(cfg); applyNavbarConfig(); openNavbarEditor();
-        (window as any).toast?.(t('cardorder.applied') || 'Applied', 'success');
+        toast(t('cardorder.applied'), 'success');
     });
+
+    renderSide();
+    renderPane();
+    // A preselected row takes the focus; otherwise the dialog's own first stop does.
+    if (sel) (list.querySelector(`[data-id="${cssEsc(sel)}"]`) as HTMLElement | null)?.focus();
 }
 
+/** The order the preview list shows right now, with the rest of the config as saved. */
 function readEditor(list: HTMLElement): NavbarConfig {
-    const order: string[] = [];
-    const hidden: Record<string, boolean> = {};
-    const labels: Record<string, string> = {};
-    const groups: Record<string, { label: string }> = {};
-    list.querySelectorAll('.nbe-row').forEach(row => {
-        const id = (row as HTMLElement).dataset.id!;
-        order.push(id);
-        if (id.startsWith('group:')) {
-            groups[id] = { label: (row.querySelector('.nbe-name') as HTMLInputElement)?.value.trim() || '' };
-            return;
-        }
-        if (row.querySelector('.nbe-eye')?.classList.contains('is-hidden')) hidden[id] = true;
-        const name = (row.querySelector('.nbe-name') as HTMLInputElement)?.value.trim();
-        const orig = origLabel(id);
-        if (name && name !== orig) labels[id] = name;
-    });
-    return { order, hidden, labels, custom: load().custom, groups };   // custom items managed separately
+    const cfg = load();
+    cfg.order = Array.from(list.querySelectorAll<HTMLElement>('.nbx-row[data-id]')).map((r) => r.dataset.id!);
+    return cfg;
 }
 
 function orderedIds(): string[] {
@@ -1480,45 +2085,23 @@ function origLabel(id: string): string {
     return t(key) || id;
 }
 
-// ── Pointer-based row reorder ──
-function startRowDrag(ev: MouseEvent, row: HTMLElement, list: HTMLElement, onDrop: () => void): void {
-    if (ev.button !== 0) return; ev.preventDefault();
-    row.classList.add('nbe-dragging');
-    document.body.style.userSelect = 'none';
-    const onMove = (e: MouseEvent) => {
-        const rows = Array.from(list.querySelectorAll('.nbe-row')) as HTMLElement[];
-        const target = rows.find(r => {
-            const rc = r.getBoundingClientRect();
-            return e.clientY < rc.top + rc.height / 2;
-        });
-        if (target && target !== row) list.insertBefore(row, target);
-        else if (!target && rows[rows.length - 1] !== row) list.appendChild(row);
-    };
-    const onUp = () => {
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-        document.body.style.userSelect = '';
-        row.classList.remove('nbe-dragging');
-        onDrop();
-    };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
+const EDITOR_CSS_ID = 'navbar-editor-css';
+function ensureEditorCss(): void {
+    if (document.getElementById(EDITOR_CSS_ID)) return;
+    const link = document.createElement('link');
+    link.id = EDITOR_CSS_ID;
+    link.rel = 'stylesheet';
+    link.href = 'css/navbar-editor.css';
+    document.head.appendChild(link);
 }
 
-function iconGridHtml(selected: string): string {
-    const reg = iconRegistry();
-    return Object.keys(reg).map(k =>
-        `<button type="button" class="nbe-icon-opt ${k === selected ? 'sel' : ''}" data-icon="${escAttr(k)}">${reg[k]}</button>`
-    ).join('');
-}
-/** Built-in (non-custom) nav items as {id, label}, for the "Internal tab" picker. */
-function builtinViewOptions(): string {
+/** Built-in (non-custom) nav items, for the « A BMM page » picker. */
+function builtinViewOptions(selected = ''): string {
     return items()
         .filter(el => !idOf(el).startsWith('custom:') && el.dataset.view)
-        .map(el => `<option value="${el.dataset.view}">${escAttr(labelEl(el)?.textContent?.trim() || el.dataset.view!)}</option>`)
+        .map(el => `<option value="${escAttr(el.dataset.view!)}" ${el.dataset.view === selected ? 'selected' : ''}>${escAttr(labelEl(el)?.textContent?.trim() || el.dataset.view!)}</option>`)
         .join('');
 }
-/** Every dialog in the app (id^="modal-"), as {id} options — so nobody types a raw id. */
 // Curated, known-good dialog actions. Each runs the REAL opener (which sets the
 // modal up properly) instead of blindly toggling `.open` on an element that may
 // need parameters — that is what made the raw modal-id list buggy/untranslated.
@@ -1549,31 +2132,19 @@ function modalActionDefs(): ModalActionDef[] {
     ].filter(a => a.avail());
 }
 function modalActionLabel(d: ModalActionDef): string { return t('navedit.act.' + d.value) || d.def; }
-function modalActionOptions(): string {
-    return modalActionDefs().map(d => `<option value="${escAttr(d.value)}">${escAttr(modalActionLabel(d))}</option>`).join('');
+function modalActionOptions(selected = ''): string {
+    return modalActionDefs().map(d => `<option value="${escAttr(d.value)}" ${d.value === selected ? 'selected' : ''}>${escAttr(modalActionLabel(d))}</option>`).join('');
 }
 function runModalAction(value: string): boolean {
     const d = modalActionDefs().find(x => x.value === value);
     if (d) { d.run(); return true; }
     return false;
 }
-function pageOptions(): string {
-    if (!_pagesCache.length) return `<option value="" disabled selected>${t('navedit.noPages') || 'No pages yet — create one below'}</option>`;
-    return _pagesCache.map(p => `<option value="${escAttr(p.id)}">${escAttr(p.name)}</option>`).join('');
-}
-function targetFieldHtml(kind: string): string {
-    if (kind === 'view') return `<select class="input" id="nbe-add-target">${builtinViewOptions()}</select>`;
-    if (kind === 'modal') return `<select class="input" id="nbe-add-target">${modalActionOptions()}</select>`;
-    if (kind === 'page') return `<select class="input" id="nbe-add-target">${pageOptions()}</select>`;
-    return `<input class="input" id="nbe-add-target" placeholder="https://example.com">`; // url
+function pageOptions(selected = ''): string {
+    if (!_pagesCache.length) return `<option value="" disabled selected>${escAttr(t('nbx.noPagesYet'))}</option>`;
+    return _pagesCache.map(p => `<option value="${escAttr(p.id)}" ${p.id === selected ? 'selected' : ''}>${escAttr(p.name)}</option>`).join('');
 }
 
 function escAttr(s: string): string {
     return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
-}
-function eyeOn(): string {
-    return (uiIcon('eye', 16));
-}
-function eyeOff(): string {
-    return (uiIcon('eye-off', 16));
 }

@@ -12,7 +12,7 @@ import { invoke } from '../../core/api.js';
 import { toast } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { formatBytes } from '../../core/utils.js';
-import { uiIcon } from '../../ui/icons.js';
+import { uiIcon, uiIconEl } from '../../ui/icons.js';
 
 interface DiscoveredMod {
     id: string;
@@ -46,7 +46,7 @@ function modRow(m: DiscoveredMod): HTMLElement {
     el.style.cssText = 'display:flex;justify-content:space-between;gap:10px;padding:3px 0';
     const left = document.createElement('span');
     left.style.cssText = m.verified ? 'color:var(--text)' : 'color:var(--warning)';
-    left.textContent = `${m.verified ? '✓' : '⚠'} ${m.id}`;
+    left.append(uiIconEl(m.verified ? 'check' : 'warning', 12, { style: 'vertical-align:-1px;margin-right:4px' }), m.id);
     const right = document.createElement('span');
     right.style.cssText = 'color:var(--text-muted);font-family:var(--font-mono);font-size:10px';
     right.textContent = `${m.files} · ${formatBytes(m.bytes)}`;

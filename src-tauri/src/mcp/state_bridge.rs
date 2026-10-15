@@ -1488,7 +1488,7 @@ pub fn save_schedule(mut task: serde_json::Value) -> anyhow::Result<serde_json::
 }
 
 /// The permission keys a task can be granted (frontend `RISK_KEYS`, bmms.rs `allow`).
-const TASK_PERM_KEYS: [&str; 9] = ["command", "script", "deeplink", "stopProcess", "delete", "resources", "tasks", "network", "ai"];
+const TASK_PERM_KEYS: [&str; 10] = ["command", "script", "deeplink", "stopProcess", "delete", "resources", "tasks", "network", "ai", "navigate"];
 
 /// What a NEW task gets when the caller leaves it out: disabled, and an explicit `perms`
 /// object with every capability off.

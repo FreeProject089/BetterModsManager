@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    120 actions · 47 conditions · 65 values · 8 loop sources
+    137 actions · 47 conditions · 85 values · 8 loop sources
 
 > Generated from BMM's own registry, so it cannot describe a version of the app that does not exist. If an action is in the block editor, it is in this list.
 
@@ -43,6 +43,7 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `mods.exportModpack` | Writes the active profile out as a shareable modpack. | `id` · `dir` |
 | `modlist.apply` | Installs anything the list names that is not here, then turns exactly those on. | `path` · `url` · `install` · `exact` · `passphrase` · `placement` |
 | `plugin.asset` | Read one into a variable, copy it somewhere, open its folder, or run it. | `pluginId` · `path` · `mode` · `target` · `dir` · `engine` · `workingDir` · `into` |
+| `mods.verifyIntegrity` | The game folder against the active mods, or each mod against its recorded hashes. Only reads. | `scope` · `enabledOnly` · `max` · `dryRun` · `notify` · `notifyClean` |
 
 ### Repo & sharing
 
@@ -63,6 +64,10 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `repo.syncNow` | Syncs a server repo into a local profile, unattended. | `url` · `gameDir` · `modsDir` · `password` · `repoProfile` · `targetProfile` · `newProfile` · `backupDir` · `overwriteAll` · `deleteExtra` · `downloadLimit` · `keepZipped` · `into` |
 | `key.create` | Generates a keypair on the ring. A name already taken is left alone, never replaced. | `name` · `kind` · `bindUrl` |
 | `catalog.follow` | Adds a catalogue source through the app's own screens, so it appears in the following list with an origin. | `catType` · `url` · `unfollow` · `password` |
+| `repos.checkFollowed` | Reads every repo you follow; reports, asks you, or lets each repo sync as it is set to. | `mode` · `dryRun` · `only` · `notify` |
+| `catalog.updates` | Only the apps and plugins you tick. Downloads are verified by SHA-256; installs go through the catalogue’s own rules. | `mode` · `dryRun` · `items` · `notify` |
+| `repo.server` | The built-in server for a repo folder: started on a port, or stopped. Starting needs the Network permission. | `state` · `dryRun` · `dir` · `port` · `uploadLimit` · `password` · `notify` |
+| `catalog.install` | An app, plugin, theme or modpack by its id, through the catalogue’s own rules: https and SHA-256, a plugin arrives disabled, a theme is never applied. | `kind` · `id` · `onFail` · `notify` |
 
 ### Apps & launch
 
@@ -96,6 +101,7 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `resources.gameMode` | Force app mode on or off, or let detection decide | `mode` |
 | `resources.queue` | Hold or release every waiting BMM operation | `action` |
 | `perf.diskSpace` | Reads free space and records it, so a condition can act on it. | `mountPoint` |
+| `disk.report` | Measures every profile, its backups and the heaviest mods; writes disk-usage.md in the task’s folder. | `top` · `dryRun` · `write` · `file` · `notify` |
 
 ### Privacy & recorder
 
@@ -164,6 +170,9 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `wait.http` | Polls it until it answers (by status or reply content), or gives up. | `url` · `everySeconds` · `timeoutSeconds` · `status` · `bodyContains` · `stopOnTimeout` |
 | `wait.hook` | Sleeps until something posts to /api/hook with this name, or until BMM itself raises that event. | `name` · `everySeconds` · `timeoutSeconds` · `stopOnTimeout` |
 | `import.file` | Takes a file or an address and reads it as whatever BMM format it is. | `path` · `url` · `password` · `kind` · `passphrase` · `apply` · `install` · `exact` · `catType` · `restore` · `sections` |
+| `cache.clean` | Empties the cache folders you pick once they pass a size. Needs the Delete permission. | `dryRun` · `targets` · `minMb` · `notify` |
+| `logs.rotate` | Task logs past a size become .1.log; rotated copies and session reports older than N days go. Crash reports stay. | `dryRun` · `keepDays` · `maxKb` · `notify` |
+| `api.call` | Any route of BMM’s local API, picked from its reference; the answer is kept in {api.body}. Needs Fire deeplinks. | `method` · `path` · `body` · `anyStatus` |
 
 ### Laya (AI)
 
@@ -179,6 +188,19 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `ai.explain_crash` | A short written explanation. Needs a writing model. Untrusted text. | `allowRemote` · `report` · `into` |
 | `ai.triage_report` | Says if a text is a bug, an idea or a crash, and which part of BMM. | `text` · `path` · `into` |
 | `ai.status` | Is Laya on, installed, loaded? Runs no model. | — |
+
+### Navigate BMM
+
+| Action | What it does | Parameters |
+|---|---|---|
+| `nav.page` | Shows a screen of BMM, and one of its tabs. Needs no permission. | `page` · `tab` · `note` · `seconds` |
+| `nav.settingsCard` | Scrolls Settings to one card, unfolds it and lights it up. | `card` · `note` · `seconds` |
+| `nav.item` | Opens its page and points at its card, by id. | `kind` · `id` · `note` · `seconds` · `onMissing` |
+| `nav.highlight` | A named control or a selector, brought into view and ringed, with a caption. | `target` · `page` · `tab` · `note` · `seconds` · `waitSec` · `onMissing` |
+| `nav.waitFor` | Waits for a control or a selector to appear, up to a timeout. | `target` · `timeoutSec` · `onTimeout` |
+| `nav.message` | A card with a title and a text, near an element or at the bottom; can wait for OK. | `title` · `message` · `target` · `waitOk` · `okLabel` · `seconds` |
+| `nav.modal` | One of the listed dialogs (Tools, Storage, Hashing…), through its own opener. Needs Navigate and click. | `modal` |
+| `nav.click` | Only listed controls (checks, refreshes); never a delete, a consent or a field. Needs Navigate and click. | `control` |
 
 ## Conditions
 
@@ -246,7 +268,11 @@ Written by an action into the task, and readable afterwards in a comparison or a
     ` · `, ` · `,
     // Which attempt of a task-level retry this run is (1 on the first run).
     ` · `,
-    // Laya (AI): the last classification` · `ai.p` · `ai.suggestions` · `ai.abstained` · `ai.mod.tagCount` · `ai.mod.adult` · `ai.mod.adultP` · `ai.mod.applied` · `ai.mod.abstained` · `ai.lib.total` · `ai.lib.untagged` · `ai.lib.duplicates` · `ai.lib.conflicts` · `ai.lib.suggested` · `ai.lib.findings` · `ai.crash.count` · `ai.crash.unknown` · `ai.crash.groups` · `ai.crash.pending` · `ai.crash.p` · `ai.report.kindP` · `ai.report.areaP` · `ai.report.abstained` · `ai.enabled` · `ai.available` · `ai.installed` · `ai.loaded` · `ai.writer` · `ai.explain.remote` · `backup.bytes` · `order.moved` · `retry.attempts` · `valid.ok` · `valid.matched` · `valid.count` · `wait.ok` · `wait.tries` · `script.code` · `script.ok` · `import.count` · `catalog.entries` · `ssh.files` · `manifest.mods` · `manifest.added` · `manifest.removed` · `manifest.changed` · `http.status` · `map.size` · `map.hit`
+    // Laya (AI): the last classification` · `ai.p` · `ai.suggestions` · `ai.abstained` · `ai.mod.tagCount` · `ai.mod.adult` · `ai.mod.adultP` · `ai.mod.applied` · `ai.mod.abstained` · `ai.lib.total` · `ai.lib.untagged` · `ai.lib.duplicates` · `ai.lib.conflicts` · `ai.lib.suggested` · `ai.lib.findings` · `ai.crash.count` · `ai.crash.unknown` · `ai.crash.groups` · `ai.crash.pending` · `ai.crash.p` · `ai.report.kindP` · `ai.report.areaP` · `ai.report.abstained` · `ai.enabled` · `ai.available` · `ai.installed` · `ai.loaded` · `ai.writer` · `ai.explain.remote` · `backup.bytes` · `order.moved` · `retry.attempts` · `valid.ok` · `valid.matched` · `valid.count` · `wait.ok` · `wait.tries` · `script.code` · `script.ok` · `import.count` · `catalog.entries` · `ssh.files` · `manifest.mods` · `manifest.added` · `manifest.removed` · `manifest.changed` · `http.status` · `map.size` · `map.hit` · `repos.checked` · `repos.updates` · `repos.errors` · `catalog.updates` · `catalog.done` · `catalog.skipped` · `integrity.checked` · `integrity.problems` · `cache.bytes` · `cache.freed` · `logs.rotated` · `logs.deleted` · `logs.freed` · `disk.used_gb` · `disk.profiles` · `server.running` · `s single door, and the local API.
+    ` · `, ` · `, ` · `,
+    // Whether the last navigation step found what it was pointed at (1/0), for a step told to
+    // carry on when its target is missing.
+    `
 
 A value nothing has written yet reads as zero. `lasttask.ok` is 1 or 0, and only means anything after a `run`.
 

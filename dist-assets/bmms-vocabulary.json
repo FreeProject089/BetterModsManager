@@ -1015,6 +1015,180 @@
         "link",
         "max"
       ]
+    },
+    {
+      "type": "repos.checkFollowed",
+      "group": "repo",
+      "params": [
+        "mode",
+        "dryRun",
+        "only",
+        "notify"
+      ]
+    },
+    {
+      "type": "catalog.updates",
+      "group": "repo",
+      "params": [
+        "mode",
+        "dryRun",
+        "items",
+        "notify"
+      ]
+    },
+    {
+      "type": "repo.server",
+      "group": "repo",
+      "params": [
+        "state",
+        "dryRun",
+        "dir",
+        "port",
+        "uploadLimit",
+        "password",
+        "notify"
+      ]
+    },
+    {
+      "type": "mods.verifyIntegrity",
+      "group": "mods",
+      "params": [
+        "scope",
+        "enabledOnly",
+        "max",
+        "dryRun",
+        "notify",
+        "notifyClean"
+      ]
+    },
+    {
+      "type": "cache.clean",
+      "group": "system",
+      "params": [
+        "dryRun",
+        "targets",
+        "minMb",
+        "notify"
+      ]
+    },
+    {
+      "type": "logs.rotate",
+      "group": "system",
+      "params": [
+        "dryRun",
+        "keepDays",
+        "maxKb",
+        "notify"
+      ]
+    },
+    {
+      "type": "disk.report",
+      "group": "perf",
+      "params": [
+        "top",
+        "dryRun",
+        "write",
+        "file",
+        "notify"
+      ]
+    },
+    {
+      "type": "catalog.install",
+      "group": "repo",
+      "params": [
+        "kind",
+        "id",
+        "onFail",
+        "notify"
+      ]
+    },
+    {
+      "type": "api.call",
+      "group": "system",
+      "params": [
+        "method",
+        "path",
+        "body",
+        "anyStatus"
+      ]
+    },
+    {
+      "type": "nav.page",
+      "group": "nav",
+      "params": [
+        "page",
+        "tab",
+        "note",
+        "seconds"
+      ]
+    },
+    {
+      "type": "nav.settingsCard",
+      "group": "nav",
+      "params": [
+        "card",
+        "note",
+        "seconds"
+      ]
+    },
+    {
+      "type": "nav.item",
+      "group": "nav",
+      "params": [
+        "kind",
+        "id",
+        "note",
+        "seconds",
+        "onMissing"
+      ]
+    },
+    {
+      "type": "nav.highlight",
+      "group": "nav",
+      "params": [
+        "target",
+        "page",
+        "tab",
+        "note",
+        "seconds",
+        "waitSec",
+        "onMissing"
+      ]
+    },
+    {
+      "type": "nav.waitFor",
+      "group": "nav",
+      "params": [
+        "target",
+        "timeoutSec",
+        "onTimeout"
+      ]
+    },
+    {
+      "type": "nav.message",
+      "group": "nav",
+      "params": [
+        "title",
+        "message",
+        "target",
+        "waitOk",
+        "okLabel",
+        "seconds"
+      ]
+    },
+    {
+      "type": "nav.modal",
+      "group": "nav",
+      "params": [
+        "modal"
+      ]
+    },
+    {
+      "type": "nav.click",
+      "group": "nav",
+      "params": [
+        "control"
+      ]
     }
   ],
   "conditions": [
@@ -1131,7 +1305,27 @@
     "manifest.changed",
     "http.status",
     "map.size",
-    "map.hit"
+    "map.hit",
+    "repos.checked",
+    "repos.updates",
+    "repos.errors",
+    "catalog.updates",
+    "catalog.done",
+    "catalog.skipped",
+    "integrity.checked",
+    "integrity.problems",
+    "cache.bytes",
+    "cache.freed",
+    "logs.rotated",
+    "logs.deleted",
+    "logs.freed",
+    "disk.used_gb",
+    "disk.profiles",
+    "server.running",
+    "s single door, and the local API.\n    ",
+    ", ",
+    ", ",
+    ",\n    // Whether the last navigation step found what it was pointed at (1/0), for a step told to\n    // carry on when its target is missing.\n    "
   ],
   "loopSources": [
     "enabledMods",
@@ -1216,7 +1410,8 @@
     "resources",
     "tasks",
     "network",
-    "ai"
+    "ai",
+    "navigate"
   ],
   "scriptEngines": [
     "powershell",

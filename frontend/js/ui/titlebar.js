@@ -3,6 +3,7 @@
  */
 import { invoke } from '../core/api.js';
 import { playCloseSound } from './sound-engine.js';
+import { t } from '../core/i18n.js';
 let tauriWindow = null;
 export async function initTitlebar() {
     try {
@@ -38,6 +39,17 @@ export async function initTitlebar() {
                 }
                 else {
                     document.body.classList.remove('is-maximized');
+                }
+                // The glyph follows body.is-maximized (css/main.css); the name follows it here.
+                const maxBtn = document.getElementById('tb-max');
+                if (maxBtn) {
+                    const key = isMax ? 'common.restoreDown' : 'common.maximize';
+                    maxBtn.dataset.tasky = key;
+                    const label = t(key);
+                    if (label && label !== key) {
+                        maxBtn.setAttribute('aria-label', label);
+                        maxBtn.setAttribute('data-i18n-aria-auto', '');
+                    }
                 }
             };
             tauriWindow.onResized(checkMaximized);

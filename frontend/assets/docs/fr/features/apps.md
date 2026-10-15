@@ -7,8 +7,17 @@ Les outils *autour* du modding — ceux qu'il faudrait sinon dénicher sur cinq 
 L'App Catalog liste les apps compagnons et utilitaires, les installe pour toi, garde en tête
 la version que tu as, et les lance — sans que tu gères les téléchargements à la main.
 
-<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/apps.bmmreplay" data-page="features/apps" data-title="Installer une application depuis le catalogue"></div>
+<div class="bmm-replay" data-src="assets/docs/media/replays/apps.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/apps.bmmreplay" data-page="features/apps" data-title="Installer une application depuis le catalogue"></div>
 
+
+
+<!-- story:catalogues -->
+![Trouver des applis et du contenu dans les catalogues](assets/docs/media/gifs/catalogues.gif)
+
+*Trouver des applis et du contenu dans les catalogues. L’App Catalog : parcourir et chercher, les détails d’une appli, d’où vient la liste, et son propre catalogue construit dans l’onglet Créer.*
+
+<div class="bmm-replay" data-src="assets/docs/media/replays/catalogues.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/catalogues.bmmreplay" data-page="features/apps" data-title="Trouver des applis et du contenu dans les catalogues"></div>
+<!-- /story:catalogues -->
 
 ## Lire une carte
 
@@ -37,7 +46,20 @@ sûr, donc un catalogue ne peut pas exécuter de code dans BMM en écrivant une 
 |---|---|
 | **État d'installation** | Tous les états, **Installées**, **Non installées**, **Mise à jour disponible**. |
 | **Trier** | **Ordre du catalogue**, **Nom de A à Z**, **Nom de Z à A**, **Téléchargement le plus léger**. |
-| Catégorie, prix, tags | Pour affiner encore la liste. |
+| Catégorie, prix, tags | Pour affiner encore la liste. Les tags sont une liste dans la même barre, plus une rangée de pastilles. |
+
+**Sources**, dans l'en-tête de la page, dit de combien de catalogues vient la liste, et combien
+n'ont pas répondu ; un clic ouvre la liste des sources. Une carte ouvre ses détails dans un
+**tiroir** à droite, et la grille reste à côté.
+
+!!! note "Un catalogue propose, tu décides"
+
+    Rien dans un catalogue n'est téléchargé, installé, activé ou appliqué tout seul. Actualiser
+    une source, en suivre une nouvelle ou ouvrir cette page ne fait que lire ; une appli
+    s'installe quand tu appuies sur **Installer** ou **Mettre à jour**, ou quand une tâche
+    planifiée ou un plugin que **tu** as configuré le demande. Ces deux-là ne peuvent pas
+    répondre à un avertissement, alors leurs règles sont plus strictes : https uniquement, et
+    un SHA-256 publié, sinon l'installation est refusée.
 
 Quand une source est injoignable, la page le dit clairement, et les apps de toutes les autres
 sources restent listées : une source en échec ne cache plus les autres. Les sources sont mises en
@@ -232,9 +254,18 @@ document.
 
 ## Le remplir, dans un ordre
 
-**Créer** se lit en trois étapes numérotées — le nommer, y mettre des applis, le transmettre —
-et l'éditeur derrière **Ajouter une appli** en compte trois de plus, dans l'ordre où les
-réponses arrivent.
+**Créer** se fait en quatre étapes, une seule à l'écran : **Catalogue** (nom et description),
+**Entrées**, **Vérifier** et **Publier**. Le rail du haut dit où tu en es et si chaque étape est
+terminée ou demande un coup d'œil ; **Retour** et **Suivant** s'y déplacent, et rien ne te
+bloque — c'est ton document. **Vérifier** liste ce qui poserait problème chez quelqu'un
+d'autre, chaque point avec un bouton **Corriger**, et dessine chaque entrée comme la carte que
+les gens verront.
+
+L'éditeur derrière **Ajouter une appli** montre cette carte à côté du formulaire, redessinée à
+mesure que tu tapes, et signale sous le champ lui-même ce qui ne va pas encore — y compris un
+id déjà pris par une autre entrée, ou qui contient des caractères qu'un dossier
+d'installation ne peut pas porter. Il compte trois parties, dans l'ordre où les réponses
+arrivent.
 
 | | |
 |---|---|

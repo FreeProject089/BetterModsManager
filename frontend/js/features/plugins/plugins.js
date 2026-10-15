@@ -6,6 +6,7 @@ import { toast, fetchProfileIconPaths, updateSelectProfileIcon, decorateProfileO
 import { t, getLang } from '../../core/i18n.js';
 import { permDomains, scopeRisk, maxScopeRisk } from './plugin-perms.js';
 import { openFolderContent, folderFacts, humanSize } from './plugin-inspect.js';
+import { openKeyManager } from '../../core/settings-link.js';
 export { permDomains } from './plugin-perms.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { MODAL_CLOSE_SVG, bindModal } from '../../ui/modal-shell.js';
@@ -15,6 +16,7 @@ import { bundleEntryKind, resolveBundleEntry } from '../../core/catalog-bundle.j
 // build error. Checked against the exports in catalog-index.ts by hand.
 import { enabledOnly, isDisabled, setDisabled, originOf, originLabel, forgetOrigin, recordHistory, looksLikeIndex, importIndexForType, describeKinds, catalogLooksLike, readSources, STORE_KEY } from '../catalogs/catalog-index.js';
 import { writeSources } from '../catalogs/catalog-sources.js';
+import { autoUpdateAllowed } from '../catalogs/catalog-consent.js';
 /**
  * The modpack list from the LOCAL plugin API, or an empty list.
  *
@@ -72,6 +74,7 @@ import { fetchSourceText } from '../../core/source-fetch.js';
 import { apiBodyFor } from './script-request.js';
 import { learnMore } from '../../core/learn-more.js';
 import { uiIcon } from '../../ui/icons.js';
+import { registerScriptEngine, registerApiRoutes } from '../../core/script-engine.js';
 // ── SVG Icons (no unicode emoji) ───────────────────────────────────────────
 const IC = {
     paperclip: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>`,
@@ -84,11 +87,11 @@ const IC = {
     alert: `${uiIcon('warning', 14)}`,
     check: `${uiIcon('check', 14)}`,
     checkCircle: `${uiIcon('success', 16)}`,
-    play: `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>`,
+    play: `${uiIcon('play', 12, { style: 'fill:currentColor' })}`,
     eye: `${uiIcon('eye', 14)}`,
     save: `${uiIcon('save', 14)}`,
     copy: `${uiIcon('copy', 12)}`,
-    refresh: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>`,
+    refresh: `${uiIcon('refresh', 14)}`,
     upload: `${uiIcon('upload', 14)}`,
     lock: `${uiIcon('lock', 12)}`,
     x: `${uiIcon('close', 12)}`,
@@ -98,10 +101,10 @@ const IC = {
     shield: `${uiIcon('shield', 16)}`,
     list: `${uiIcon('list', 16)}`,
     terminal: `${uiIcon('terminal', 16)}`,
-    arrowUp: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`,
-    arrowDown: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>`,
+    arrowUp: `${uiIcon('move-up', 12)}`,
+    arrowDown: `${uiIcon('move-down', 12)}`,
     globe: `${uiIcon('globe', 14)}`,
-    star: `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
+    star: `${uiIcon('star', 12, { style: 'fill:currentColor' })}`,
     info: `${uiIcon('alert', 14)}`,
     exportIcon: `${uiIcon('export', 14)}`,
     settings: `${uiIcon('settings', 14)}`,
@@ -115,7 +118,6 @@ const API_SECTIONS = [
     { id: 'test', icon: 'run', key: 'plugins.api.secTest' },
     { id: 'endpoints', icon: 'list', key: 'plugins.api.secEndpoints' },
     { id: 'deeplinks', icon: 'link', key: 'plugins.api.secDeeplinks' },
-    { id: 'generator', icon: 'code', key: 'plugins.api.secGenerator' },
 ];
 let _apiSec = 'test';
 let _installedPlugins = [];
@@ -265,7 +267,7 @@ export async function initPlugins() {
     renderPluginsView();
     setupPluginTabs();
     await loadInitialData();
-    checkPluginUpdates(); // auto-update catalog plugins (per-plugin opt-out)
+    checkPluginUpdates(); // newer catalogue versions: shown always, installed only where the user switched auto-update on
     // Re-render when user switches language — but preserve the script-generator
     // actions the user already added (they must NOT reset on a language change).
     document.addEventListener('langChanged', () => {
@@ -287,10 +289,11 @@ export async function initPlugins() {
     });
 }
 /**
- * Auto-update plugins installed from the catalog. For each installed plugin that
- * has a stored catalog source and whose auto-update is not turned off, compare
- * the catalog version (matched by id) with the installed version; if it differs,
- * reinstall from the catalog download URL. Verifies both id and version.
+ * Newer catalogue versions of plugins installed from the catalogue. For each one, compare the
+ * catalogue version (matched by id) with the installed version; if it differs, the card says so.
+ * It is reinstalled ONLY when the user switched auto-update on for that plugin (opt-in): a
+ * catalogue proposes, it never installs on its own (catalog-consent.ts › autoUpdateAllowed).
+ * Verifies both id and version.
  */
 async function checkPluginUpdates() {
     // Every plugin that came from the catalogue is looked at, auto-update or not: one with
@@ -320,8 +323,8 @@ async function checkPluginUpdates() {
         if (entry.version === p.manifest.version)
             continue; // verify version differs
         _pluginUpdates.set(id, String(entry.version));
-        if (localStorage.getItem('bmm_plugin_au_' + id) === 'off')
-            continue; // auto-update disabled
+        if (!autoUpdateAllowed(localStorage.getItem('bmm_plugin_au_' + id)))
+            continue; // opt-in: only when switched on
         const url = entry.download_url || localStorage.getItem('bmm_plugin_src_' + id);
         if (!url)
             continue;
@@ -405,6 +408,7 @@ const PLUG_TABS = [
     { id: 'catalog', icon: 'globe', key: 'plugins.tabCatalog' },
     { id: 'create', icon: 'edit', key: 'plugins.tabCreate' },
     { id: 'scripts', icon: 'terminal', key: 'plugins.tabScripts' },
+    { id: 'automations', icon: 'workflow', key: 'plugins.tabAutomations' },
     { id: 'perms', icon: 'shield', key: 'plugins.tabPerms' },
 ];
 function renderPluginsView() {
@@ -517,6 +521,7 @@ function setupPluginTabs() {
         catalog: ['plugins.tooltipTabCatalog', 'globe'],
         create: ['plugins.tooltipTabCreate', 'list'],
         scripts: ['plugins.tooltipTabScripts', 'terminal'],
+        automations: ['plugins.tooltipTabAutomations', 'clock'],
         perms: ['plugins.tooltipTabPerms', 'shield'],
     };
     // Tasky hover help on the tabs, and every [data-tooltip] inside the view → Tasky instead
@@ -580,6 +585,13 @@ function renderTab(tabId) {
             break;
         case 'perms':
             renderPerms(container);
+            break;
+        // Scheduled tasks live here now (scheduler.ts mountAutomations): the list, the one
+        // builder for tasks and scripts, templates, files and catalogues.
+        case 'automations':
+            void import('../settings/scheduler.js').then((m) => { if (_tab === 'automations')
+                return m.mountAutomations(container); })
+                .catch((e) => { container.textContent = String(e); });
             break;
     }
 }
@@ -723,7 +735,7 @@ function buildPluginCard(plugin, source) {
     const hasModlist = !!(manifest.modlist?.required_mods?.length);
     const hasScripts = !!manifest.has_scripts || ((manifest.scripts?.length || 0) > 0);
     const fromCatalog = source === 'installed' && !!localStorage.getItem('bmm_plugin_src_' + manifest.id);
-    const auOn = localStorage.getItem('bmm_plugin_au_' + manifest.id) !== 'off';
+    const auOn = autoUpdateAllowed(localStorage.getItem('bmm_plugin_au_' + manifest.id));
     card.innerHTML = `
         <!-- The same anatomy as an app-catalogue tile: a tinted band with the icon centred and
              the tier/strict badges pinned in its corner, then a body. Every class the handlers
@@ -945,11 +957,12 @@ function buildPluginCard(plugin, source) {
     act('uninstall', () => handleUninstall(manifest.id, manifest.name));
     act('bundles', () => void installPluginBundles(manifest.id));
     act('au', () => {
-        const on = localStorage.getItem('bmm_plugin_au_' + manifest.id) === 'off'; // toggling to ON
+        // Opt-in: 'on' is the only stored value that lets a plugin update itself.
+        const on = !autoUpdateAllowed(localStorage.getItem('bmm_plugin_au_' + manifest.id)); // toggling to ON
         if (on)
-            localStorage.removeItem('bmm_plugin_au_' + manifest.id);
+            localStorage.setItem('bmm_plugin_au_' + manifest.id, 'on');
         else
-            localStorage.setItem('bmm_plugin_au_' + manifest.id, 'off');
+            localStorage.removeItem('bmm_plugin_au_' + manifest.id);
         // The ORIGINAL entry in the card, not the clone that was clicked — the clone is
         // thrown away when the menu closes, so styling it would look like nothing happened
         // the next time the menu opens.
@@ -1218,7 +1231,7 @@ async function renderCatalog(container) {
         await reloadCatalog();
     };
     // After the markup, not inside the Add handler — see the note in apps-catalog.ts.
-    wireSourceAccess('plug', (m, k) => toast(m, k === 'warning' ? 'warning' : 'success'), () => { document.getElementById('nav-settings')?.click(); setTimeout(() => document.getElementById('settings-identity-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250); }, () => container.querySelector('#plug-source-input')?.value?.trim() || '');
+    wireSourceAccess('plug', (m, k) => toast(m, k === 'warning' ? 'warning' : 'success'), () => { openKeyManager(); }, () => container.querySelector('#plug-source-input')?.value?.trim() || '');
     container.querySelector('#plug-source-add')?.addEventListener('click', () => {
         const inp = container.querySelector('#plug-source-input');
         addSource(inp.value);
@@ -2296,7 +2309,7 @@ async function openSmartQuickTest(m, p, rawBody) {
     }
     else if (p === '/api/mods/:id') {
         formHtml = m === 'DELETE'
-            ? modSel + `<p style="font-size:11px;color:var(--danger);margin:8px 0 0;opacity:0.8;">⚠ ${escHtml(t('plugins.qt.irreversible'))}</p>`
+            ? modSel + `<p style="font-size:11px;color:var(--danger);margin:8px 0 0;opacity:0.8;display:flex;align-items:center;gap:5px;">${uiIcon('warning', 12)} ${escHtml(t('plugins.qt.irreversible'))}</p>`
             : modSel
                 + txtInput('plug-qt-s-name', 'name', 'Nouveau nom du mod', true)
                 + txtInput('plug-qt-s-version', 'version', '1.0.0', true)
@@ -2311,7 +2324,7 @@ async function openSmartQuickTest(m, p, rawBody) {
     }
     else if (p === '/api/profiles/:id') {
         formHtml = m === 'DELETE'
-            ? profSel + `<p style="font-size:11px;color:var(--danger);margin:8px 0 0;opacity:0.8;">⚠ ${escHtml(t('plugins.qt.irreversible'))}</p>`
+            ? profSel + `<p style="font-size:11px;color:var(--danger);margin:8px 0 0;opacity:0.8;display:flex;align-items:center;gap:5px;">${uiIcon('warning', 12)} ${escHtml(t('plugins.qt.irreversible'))}</p>`
             : profSel
                 + txtInput('plug-qt-s-name', 'name', 'Nouveau nom du profil', true)
                 + txtInput('plug-qt-s-color', 'color', '#3b82f6', true)
@@ -2397,7 +2410,7 @@ async function openSmartQuickTest(m, p, rawBody) {
                 </select>
             </div>
             <p style="font-size:12px;color:var(--danger);margin:10px 0 0;padding:8px 10px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:6px;">
-                ⚠ ${t('plugins.qt.modpackDelete')}
+                ${uiIcon('warning', 12)} ${t('plugins.qt.modpackDelete')}
             </p>`;
     }
     else if (p === '/api/profiles') {
@@ -2515,7 +2528,7 @@ async function openSmartQuickTest(m, p, rawBody) {
     }
     else if (p === '/api/repo' && m === 'DELETE') {
         formHtml = txtInput('plug-qt-s-repo-url', t('plugins.qt.repoUrlToDisconnect'), 'https://monserveur.com/repo.json')
-            + `<p style="font-size:11px;color:var(--danger);margin:8px 0 0;opacity:0.8;">⚠ ${escHtml(t('plugins.qt.repoRemoved'))}</p>`;
+            + `<p style="font-size:11px;color:var(--danger);margin:8px 0 0;opacity:0.8;display:flex;align-items:center;gap:5px;">${uiIcon('warning', 12)} ${escHtml(t('plugins.qt.repoRemoved'))}</p>`;
     }
     else if (p === '/api/repo/sync') {
         const profOpts2 = _allProfiles.length
@@ -5613,8 +5626,8 @@ function renderCreate(container) {
         openNavbarEditor();
     });
     container.querySelector('#pc-other-script')?.addEventListener('click', () => {
-        _apiSec = 'generator';
-        selectPluginTab('scripts');
+        // Scripts are built where automations are: one builder, saved as a task or exported.
+        selectPluginTab('automations');
     });
     container.querySelector('#pc-open-catalog-builder')?.addEventListener('click', () => {
         openPluginCatalogBuilder(() => { });
@@ -13118,4 +13131,30 @@ async function installPluginAutomations(pluginId, runNow) {
         }
     }
 }
+// ── The automation editor's engine (core/script-engine.ts) ─────────────────────────────────
+//
+// Automations (scheduler.ts) are the one builder: a task saved in BMM, or exported as a script
+// that runs outside it. The script half is this file's generator, handed over here rather than
+// imported there (the two modules would share an import cycle). Scripts use bmm:// links where
+// they can and read the API token from the BMM_TOKEN variable: an exported file never carries
+// the token.
+registerScriptEngine({
+    formats: ['ps1', 'bat', 'py', 'js', 'vbs', 'lua', 'rb', 'php', 'go', 'java', 'cs', 'rs'],
+    generate: async (format, actions) => {
+        const acts = actions;
+        const needApi = _actionsNeedApi(acts, true);
+        if (new Set(['py', 'lua', 'js', 'rb', 'php', 'go', 'java', 'cs', 'rs']).has(format)) {
+            return genScriptLocal(format, acts, null, true, true, _exePath, needApi);
+        }
+        try {
+            return await invoke('generate_script', { req: { format, actions: acts, use_deeplink: true, token: null, launch_bmm: true, exe_path: _exePath } });
+        }
+        catch (e) {
+            toast(`${t('common.error')}: ${e}`, 'error');
+            return null;
+        }
+    },
+});
+// The local API's routes, for the editor's « Call the local API » step.
+registerApiRoutes(() => getEndpointDefs().map((e) => ({ method: e.method, path: e.path, desc: e.desc, auth: e.auth, fields: e.fields })));
 //# sourceMappingURL=plugins.js.map

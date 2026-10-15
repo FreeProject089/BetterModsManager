@@ -23,7 +23,7 @@ export const i18nSystem = {
         { id: 'T', kind: 'front', group: 'LOOKUP', icon: 'icon-text', refs: ['frontend/src/core/i18n.ts › t', 'frontend/src/core/i18n.ts › registerRuntimeTexts'] },
         { id: 'CUR', kind: 'decision', group: 'LOOKUP', refs: ['frontend/src/core/i18n.ts › t'] },
         { id: 'FRFALL', kind: 'decision', group: 'LOOKUP', refs: ['frontend/src/core/i18n.ts › t'] },
-        { id: 'SANDBOX', kind: 'ui', group: 'LOOKUP', icon: 'icon-edit', refs: ['frontend/src/features/settings/i18n-sandbox.ts › initI18nSandbox', 'frontend/src/core/i18n.ts › setSandboxOverlay'] },
+        { id: 'SANDBOX', kind: 'ui', group: 'LOOKUP', icon: 'icon-edit', refs: ['frontend/src/features/settings/translation-studio.ts › initTranslationStudio', 'frontend/src/core/i18n.ts › setSandboxOverlay'] },
         { id: 'SYN', kind: 'front', group: 'LOOKUP', icon: 'icon-search', link: 'semantic-search', refs: ['frontend/src/core/i18n.ts › getSynonyms', 'frontend/src/core/commands.ts › getSynonyms'] },
         { id: 'SWITCH', kind: 'ui', group: 'SCREEN', icon: 'icon-globe', refs: ['frontend/src/core/i18n.ts › setLang', 'frontend/src/features/settings/settings.ts › setLang'] },
         { id: 'DOM', kind: 'front', group: 'SCREEN', icon: 'icon-layout', refs: ['frontend/src/core/i18n.ts › applyTranslations'] },

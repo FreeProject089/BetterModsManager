@@ -17,8 +17,25 @@ look — then export it as a file someone else imports in one click.
     picked under the old name stays applied. The table of old and new ids is in
     [Make your own theme](doc-page:features/making-themes#renamed-in-103).
 
-<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/themes.bmmreplay" data-page="features/themes" data-title="Restyling BMM with the theme editor"></div>
+<div class="bmm-replay" data-src="assets/docs/media/replays/themes.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/themes.bmmreplay" data-page="features/themes" data-title="Restyling BMM with the theme editor"></div>
 
+
+
+<!-- story:make-it-yours -->
+![Make BMM yours](assets/docs/media/gifs/make-it-yours.gif)
+
+*Make BMM yours. A theme made in the theme editor, a navigation bar rearranged with a custom page of your own, and a string translated in the translation studio.*
+
+<div class="bmm-replay" data-src="assets/docs/media/replays/make-it-yours.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/make-it-yours.bmmreplay" data-page="features/themes" data-title="Make BMM yours"></div>
+<!-- /story:make-it-yours -->
+
+## The mark each theme wears
+
+Every theme carries a **brand mark**. The built-in ones that use the **BMM logo** are Graphite, Pure
+Black, Daylight, Indigo, Arctic, Cobalt and BMM Logo; **Charcoal** uses the **BMM badge**; the
+others (the default theme and the warmer or louder ones) keep **Tasky**. The sidebar's wordmark
+reads *Better Mod.Manager*, drawn as a vector in Bricolage Grotesque with a small BMM badge, so it
+stays sharp at any size and takes the theme's colours.
 
 ## The editor
 
@@ -62,6 +79,10 @@ Six sections, from the quickest change to the deepest:
     The **Tasky mascot** (the floating one *and* the spinning boot loader, replaced together),
     the **Sidebar logo** and the **App wallpaper** (an image or a video), with the wallpaper's
     fit, position, blur and opacity just below.
+
+    **Mascot or logo** chooses what BMM shows wherever it would show its mascot — the corner, the
+    start-up screen, empty pages and dialogs: **Tasky**, the **BMM logo** (the one in the app icon) or
+    the **BMM badge** (the letters BMM on a tile in your accent colour). It is saved in the theme.
 
 === "Elements"
 

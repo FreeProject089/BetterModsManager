@@ -52,7 +52,7 @@ export function sshSourceHtml(p: string): string {
         <label class="ssh-src-label" for="${p}-ssh-target">${esc(t('repo.sshsrc.server'))}</label>
         <div class="ssh-src-row">
           <select class="input input-sm" id="${p}-ssh-target"></select>
-          <button type="button" class="btn btn-sm" id="${p}-ssh-config">${esc(t('repo.sshsrc.configure'))}</button>
+          <button type="button" class="btn btn-sm btn-secondary" id="${p}-ssh-config">${esc(t('repo.sshsrc.configure'))}</button>
         </div>
         <div class="ssh-src-sum" id="${p}-ssh-sum"></div>
 
@@ -89,11 +89,11 @@ export function sshSourceHtml(p: string): string {
         <div class="ssh-src-row">
           <input type="text" class="input input-sm" id="${p}-ssh-key" spellcheck="false"
                  placeholder="${esc(t('repo.sshsrc.keyPh'))}">
-          <button type="button" class="btn btn-sm" id="${p}-ssh-key-pick">${esc(t('repo.ssh.browse'))}</button>
+          <button type="button" class="btn btn-sm btn-secondary" id="${p}-ssh-key-pick">${esc(t('repo.ssh.browse'))}</button>
         </div>
         <div class="ssh-src-row">
           <select class="input input-sm" id="${p}-ssh-ring"></select>
-          <button type="button" class="btn btn-sm" id="${p}-ssh-manage">${esc(t('repo.ssh.manageKeys'))}</button>
+          <button type="button" class="btn btn-sm btn-secondary" id="${p}-ssh-manage">${esc(t('repo.ssh.manageKeys'))}</button>
         </div>
         <input type="password" class="input input-sm" id="${p}-ssh-pass" autocomplete="off"
                placeholder="${esc(t('repo.sshsrc.passphrasePh'))}">

@@ -7,8 +7,17 @@ The tools *around* modding — the ones you'd otherwise hunt down on five differ
 App Catalog lists companion apps and utilities, installs them for you, keeps track of the
 version you have, and launches them — without you managing downloads by hand.
 
-<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/apps.bmmreplay" data-page="features/apps" data-title="Installing an app from the catalog"></div>
+<div class="bmm-replay" data-src="assets/docs/media/replays/apps.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/apps.bmmreplay" data-page="features/apps" data-title="Installing an app from the catalog"></div>
 
+
+
+<!-- story:catalogues -->
+![Find apps and content in the catalogues](assets/docs/media/gifs/catalogues.gif)
+
+*Find apps and content in the catalogues. The App Catalog: browse and search, an app’s details, where the list comes from, and a catalogue of your own built in the Create tab.*
+
+<div class="bmm-replay" data-src="assets/docs/media/replays/catalogues.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/catalogues.bmmreplay" data-page="features/apps" data-title="Find apps and content in the catalogues"></div>
+<!-- /story:catalogues -->
 
 ## Reading a card
 
@@ -37,7 +46,19 @@ in BMM by writing a page.
 |---|---|
 | **Install state** | Any state, **Installed**, **Not installed**, **Update available**. |
 | **Sort** | **Catalog order**, **Name A to Z**, **Name Z to A**, **Smallest download**. |
-| Category, price, tags | Narrow the list further. |
+| Category, price, tags | Narrow the list further. Tags are a list in the same bar, not a row of chips. |
+
+**Sources** in the page head says how many catalogues the list comes from, and how many did
+not answer; one click opens the list of sources. A card opens its details in a **drawer** on
+the right, so the grid stays beside it.
+
+!!! note "A catalogue proposes, you decide"
+
+    Nothing in a catalogue is downloaded, installed, enabled or applied on its own. Refreshing
+    a source, following a new one or opening this page only reads; an app installs when you
+    press **Install** or **Update**, or when a scheduled task or a plugin **you** set up asks
+    for it. Those two cannot answer a warning, so they get stricter rules instead: https only,
+    and a published SHA-256 or the install is refused.
 
 When a source cannot be reached, the page says so plainly, and the apps of every other source
 are still listed: one failing source no longer hides the others. Sources are cached and only
@@ -218,8 +239,16 @@ can both be called `setup.exe`, and the id is already unique in the document.
 
 ## Filling one in, in an order
 
-**Create** is three numbered steps — name it, put apps in it, hand it over — and the editor
-behind **Add app** is three more, in the order the answers arrive.
+**Create** is four steps, one on screen at a time: **Catalogue** (name and description),
+**Entries**, **Check** and **Publish**. The rail at the top says where you are and whether each
+step is done or needs a look; **Back** and **Next** move along it, and nothing blocks you — it
+is your document. **Check** lists what would go wrong on somebody else's machine, each with a
+**Fix** button, and draws every entry as the card people will see.
+
+The editor behind **Add app** shows that card beside the form, redrawn as you type, and marks
+the fields that are still wrong under the field itself — an id another entry already uses, or
+one with characters an install folder cannot carry, included. It has three parts, in the order
+the answers arrive.
 
 | | |
 |---|---|

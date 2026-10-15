@@ -26,6 +26,7 @@ import { initManifestOnly } from './manifest-only.js';
 import { initRemoteRefresh } from './remote-refresh.js';
 import { initDiscover } from './discover.js';
 import { fetchSourceText } from '../../core/source-fetch.js';
+import { openKeyManager } from '../../core/settings-link.js';
 // Normalise a repo URL so map lookups match regardless of trailing slash / repo.json
 /** Accept both feed shapes without caring which is which.
  *
@@ -446,9 +447,7 @@ async function openCatalogBuilder(onScreen) {
             // with no listeners — which looks exactly like one nobody has clicked yet.
             sa.wireSourceAccess('rcb', (m, k) => toast(m, k === 'warning' ? 'warning' : 'success'), () => {
                 close();
-                document.getElementById('nav-settings')?.click();
-                setTimeout(() => document.getElementById('settings-identity-card')
-                    ?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
+                openKeyManager();
             }, () => ov.querySelector('#repo-cat-b-url')?.value?.trim() || '');
         });
         ov.querySelector('#repo-cat-b-fetch')?.addEventListener('click', () => { void pull((urlEl?.value || '').trim(), follow); });
@@ -524,7 +523,7 @@ export const toggleRepoFav = (url) => {
 const repoStarBtn = (url) => {
     const fav = isRepoFav(url);
     return `<button class="repo-fav-btn${fav ? ' active' : ''}" data-fav-url="${escAttr(url)}" data-tooltip="${fav ? (t('repo.unfavorite') || 'Unfavorite') : (t('repo.favorite') || 'Favorite')}">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="${fav ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        ${uiIcon('star', 14, fav ? { style: 'fill:currentColor' } : undefined)}
     </button>`;
 };
 export const copyToClipboard = async (text, successMsg) => {
@@ -544,7 +543,7 @@ export const copyToClipboard = async (text, successMsg) => {
 // into this module's scope, and repo.ts calls showConfirm itself. tsc is told to skip this
 // file, so nothing said so — check-undefined-names did.
 import { showConfirm } from '../../ui/confirm.js';
-import { uiIcon } from '../../ui/icons.js';
+import { uiIcon, brandIcon } from '../../ui/icons.js';
 export { showConfirm };
 // --- Profile Checklist (exportable function) ---
 export const loadProfilesForExport = async (profilesListEl) => {
@@ -1277,10 +1276,7 @@ export function initRepo() {
                     return `
                         <div class="repo-history-item" style="background:var(--bmm-s03); border:1px solid var(--bmm-s06); border-radius:8px; padding:12px; display:flex; gap:12px; align-items:flex-start;">
                             <div style="width:40px; height:40px; display:flex; align-items:center; justify-content:center; background:rgba(251,146,60,0.1); border-radius:6px; flex-shrink:0;">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="color:var(--bmm-warning)" stroke-width="2" aria-hidden="true">
-                                    <circle cx="12" cy="12" r="10"></circle>
-                                    <polyline points="12 6 12 12 16 14"></polyline>
-                                </svg>
+                                ${uiIcon('clock', 20, { style: 'color:var(--bmm-warning)' })}
                             </div>
                             <div style="flex:1; min-width:0;">
                                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
@@ -1448,9 +1444,7 @@ export function initRepo() {
             void import('../../core/source-access.js').then((sa) => {
                 rbMount.innerHTML = sa.sourceAccessHtml('rb');
                 sa.wireSourceAccess('rb', (m, k) => toast(m, k === 'warning' ? 'warning' : 'success'), () => {
-                    document.getElementById('nav-settings')?.click();
-                    setTimeout(() => document.getElementById('settings-identity-card')
-                        ?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
+                    openKeyManager();
                 }, () => document.getElementById('rb-access-url')?.value?.trim() || '');
             });
         }
@@ -1665,7 +1659,7 @@ export function initRepo() {
                         <div style="flex:1;">
                             <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
                                 <span style="font-size:14px; font-weight:700; color:var(--text-primary);">${escHtml(repo.name)}</span>
-                                ${isBoosted(repo) ? `<span style="font-size:9px; font-weight:800; padding:2px 7px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; background:rgba(245,158,11,0.15); color:var(--bmm-warning); border:1px solid rgba(245,158,11,0.35); display:flex; align-items:center; gap:3px;" data-tooltip="${t('repo.boostedServer') || 'Boosted — featured on BetterCommunity'}"><svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg> Boosted</span>` : ''}
+                                ${isBoosted(repo) ? `<span style="font-size:9px; font-weight:800; padding:2px 7px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; background:rgba(245,158,11,0.15); color:var(--bmm-warning); border:1px solid rgba(245,158,11,0.35); display:flex; align-items:center; gap:3px;" data-tooltip="${t('repo.boostedServer') || 'Boosted — featured on BetterCommunity'}">${uiIcon('run', 12, { style: 'fill:currentColor' })} Boosted</span>` : ''}
                                 <span class="repo-badge" style="font-size:9px; font-weight:800; padding:2px 8px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; ${repo.category === 'official' ? 'background:rgba(16,185,129,0.15); color:var(--bmm-success);' : repo.category === 'community' ? 'background:color-mix(in srgb, var(--bmm-warning) 15%, transparent); color:var(--bmm-warning);' : 'background:rgba(59,130,246,0.15); color:var(--bmm-accent);'}">${escHtml(repo.category)}</span>${repo.claimed_category ? `<span class="repo-claim-badge" title="${escAttr((t('repo.claimHint') || 'This catalogue calls it that. BMM did not — a repo\u2019s tier comes from the list it was fetched from, not from what that list says about itself.'))}">\u26a0 ${escHtml((t('repo.claims') || 'claims “{c}”').replace('{c}', repo.claimed_category))}</span>` : ''}${repo.source_catalog ? `<span class="repo-src-tag" title="${escAttr(repo.source_catalog)}">${escHtml(originLabel(repo.source_catalog))}</span>` : ''}
                                 ${repo.hash ? `<span style="font-size:9px; font-weight:800; padding:2px 7px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; background:rgba(16,185,129,0.12); color:var(--bmm-success); border:1px solid rgba(16,185,129,0.25); display:flex; align-items:center; gap:3px;" data-tooltip="${t('repo.verifiedServer') || 'Verified server — hash validated by the BMM team'}">${uiIcon('check', 12)} Verified</span>` : ''}
                                 ${repo.whitelist_enabled === true
@@ -1685,7 +1679,7 @@ export function initRepo() {
                                      otherwise would put the entry back on the next fetch. -->
                                 <button class="repo-hide-btn" data-hide-url="${escAttr(repo.url)}"
                                         data-tooltip="${escAttr(t('repo.hideOne'))}">
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                                    ${uiIcon('eye-off', 14)}
                                 </button>
                                 <span style="font-size:10px; color:var(--text-muted);">${escHtml(repo.region || 'Unknown')}</span>
                             </div>
@@ -1722,9 +1716,7 @@ export function initRepo() {
                             ` : ''}
                             ${repo.discord_link ? `
                             <a href="${escAttr(repo.discord_link)}" target="_blank" data-tooltip="Discord" style="width:22px; height:22px; display:flex; align-items:center; justify-content:center; background:#5865F2; border-radius:5px; text-decoration:none; flex-shrink:0; transition:opacity 0.15s;" data-hover="opacity:0.8" data-hover-out="opacity:1">
-                                <svg width="13" height="10" viewBox="0 0 71 55" fill="white" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M60.1 4.9A58.5 58.5 0 0 0 45.6.7a.2.2 0 0 0-.2.1 40.8 40.8 0 0 0-1.8 3.7 54 54 0 0 0-16.2 0A37.5 37.5 0 0 0 25.6.8a.2.2 0 0 0-.2-.1 58.3 58.3 0 0 0-14.5 4.2.2.2 0 0 0-.1.1C1.6 18.5-.9 31.7.3 44.8v.1a58.7 58.7 0 0 0 17.7 9 .2.2 0 0 0 .2-.1 42 42 0 0 0 3.6-5.9.2.2 0 0 0-.1-.3 38.7 38.7 0 0 1-5.5-2.6.2.2 0 0 1 0-.4c.4-.3.7-.6 1.1-.8a.2.2 0 0 1 .2 0c11.6 5.3 24.1 5.3 35.5 0a.2.2 0 0 1 .2 0l1.1.8a.2.2 0 0 1 0 .4 36 36 0 0 1-5.5 2.6.2.2 0 0 0-.1.3 47 47 0 0 0 3.6 5.9.2.2 0 0 0 .2.1 58.5 58.5 0 0 0 17.7-9v-.1c1.5-15.3-2.5-28.4-10.7-40.1a.2.2 0 0 0-.1 0ZM23.7 37c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2c3.6 0 6.5 3.3 6.4 7.2 0 4-2.8 7.2-6.4 7.2Zm23.6 0c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2c3.6 0 6.5 3.3 6.4 7.2 0 4-2.8 7.2-6.4 7.2Z"/>
-                                </svg>
+                                ${brandIcon('discord', 14, { style: 'color:var(--bmm-text-on-accent)' })}
                             </a>
                             ` : ''}
                         </div>
@@ -2075,7 +2067,10 @@ export function initRepo() {
                     const removed = btn.dataset.removed === '1';
                     if (block)
                         block.style.opacity = removed ? '0.4' : '1';
-                    btn.textContent = removed ? (t('repo.update.removed') || 'Will remove ✓') : (t('repo.update.removeProfile') || 'Remove profile');
+                    if (removed)
+                        btn.innerHTML = `${uiIcon('check', 14)} ${escHtml(t('repo.update.removed') || 'Will remove')}`;
+                    else
+                        btn.textContent = t('repo.update.removeProfile') || 'Remove profile';
                 });
             });
             // Expand → load that profile's mods with per-mod checkboxes
@@ -2289,9 +2284,7 @@ export function initRepo() {
             void import('./ssh-source.js').then((m) => {
                 sshMount.innerHTML = m.sshSourceHtml('repo-update');
                 m.wireSshSource('repo-update', () => {
-                    document.getElementById('nav-settings')?.click();
-                    setTimeout(() => document.getElementById('settings-identity-card')
-                        ?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
+                    openKeyManager();
                 });
             });
         }
@@ -2540,10 +2533,7 @@ export function initRepo() {
                             </div>
                             <div style="display:flex; gap:8px; align-items:center; flex-shrink:0;">
                                 <button class="repo-hub-copy-btn" data-path="${escAttr(folder)}/${r.folder === '.' ? '' : escAttr(r.folder) + '/'}repo.json" data-folder="${escAttr(r.folder)}" style="padding:6px 10px;font-size:11px;background:rgba(6,182,212,0.15);color:var(--cyan);border:1px solid rgba(6,182,212,0.3);border-radius:6px;cursor:pointer;white-space:nowrap;transition:all 0.15s;" data-hover="background:rgba(6,182,212,0.25)" data-tasky="repo.hub.copyPath" data-tasky-icon="copy" data-hover-out="background:rgba(6,182,212,0.15)">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline;margin-right:4px;vertical-align:-1px;" aria-hidden="true">
-                                        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
-                                        <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
-                                    </svg>
+                                    ${uiIcon('copy', 12, { style: 'display:inline;margin-right:4px;vertical-align:-1px;' })}
                                     Copy
                                 </button>
                                 <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;">${r.profiles} prof · ${r.mods} mods · ${fmt(r.size)}</span>
@@ -2591,12 +2581,12 @@ export function initRepo() {
                 await invoke('generate_repo_hub', { hubDir, port, uploadLimit: limit, serve, adminPassword });
                 if (serve) {
                     resultEl.innerHTML = `
-                        ✓ ${t('repo.hub.done') || 'Hub server generated!'}<br>
+                        ${uiIcon('success', 14, { style: 'vertical-align:-2px;margin-right:4px' })}${t('repo.hub.done') || 'Hub server generated!'}<br>
                         <span style="color:var(--text-secondary)">${t('repo.hub.runHint') || 'Run'} <code style="background:var(--bmm-s04);padding:1px 6px;border-radius:4px;">Start-Hub.bat</code> / <code style="background:var(--bmm-s04);padding:1px 6px;border-radius:4px;">start-hub.sh</code>.<br>${t('repo.hub.dashHint') || 'Dashboard:'} <code style="background:var(--bmm-s04);padding:1px 6px;border-radius:4px;">http://&lt;ip&gt;:${port}/</code> · ${t('repo.hub.perRepo') || 'each repo has its own page'}</span>`;
                 }
                 else {
                     resultEl.innerHTML = `
-                        ✓ ${t('repo.hub.doneStatic') || 'Static directory generated!'}<br>
+                        ${uiIcon('success', 14, { style: 'vertical-align:-2px;margin-right:4px' })}${t('repo.hub.doneStatic') || 'Static directory generated!'}<br>
                         <span style="color:var(--text-secondary)">${t('repo.hub.staticHint') || 'Edit'} <code style="background:var(--bmm-s04);padding:1px 6px;border-radius:4px;">hub-repos.json</code> ${t('repo.hub.staticHint2') || 'to fill each repo URL, then host this folder anywhere (open index.html).'}</span>`;
                 }
                 resultEl.style.display = 'block';

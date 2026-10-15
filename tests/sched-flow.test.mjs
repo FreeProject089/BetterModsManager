@@ -310,7 +310,7 @@ describe('permissions: the flow flags exactly what the executor refuses', () => 
   });
 
   const gated = Object.entries(M.ACTION_PERMS);
-  const paramsFor = (type) => (type === 'plugin.asset' ? { mode: 'run' } : type === 'import.file' ? { path: 'C:/x/pack.bmmbundle' } : type === 'task.run' ? { id: 't1' } : {});
+  const paramsFor = (type) => (type === 'plugin.asset' ? { mode: 'run' } : type === 'import.file' ? { path: 'C:/x/pack.bmmbundle' } : type === 'task.run' ? { id: 't1' } : type === 'catalog.updates' ? { mode: 'install' } : {});
 
   test('adding a risky node to a task granted nothing is flagged — with the key the run would refuse', () => {
     for (const [type, rule] of gated) {

@@ -1,7 +1,9 @@
 /* The conflicts view (features/mods/conflicts-view.ts links this file when it opens).
    Theme tokens only. Status TEXT is a mix of the status colour and the text ink, never the raw
    status colour: on a light theme --bmm-success / --bmm-warning are fills, not inks.
-   No coloured left-edge bars: state is said with a chip and words. */
+   No coloured left-edge bars: state is said with a chip and words.
+   One surface: the modal body. The two columns are split by a hairline, not boxed; a row is a
+   hover / selected tint, not a framed card (modal-shell.css, "Inside the body"). */
 
 /* The shell (css/modal-shell.css) owns the body padding; the two columns sit inside it. */
 .cv { display: flex; flex-direction: column; min-height: 0; height: 100%; }
@@ -13,28 +15,29 @@
     min-height: 0;
     flex: 1;
 }
-.cv-order, .cv-pairs { min-width: 0; min-height: 0; overflow: auto; padding: 14px 18px; }
-.cv-order { border-right: 1px solid var(--bmm-s08); background: var(--bmm-s02); }
+.cv-order, .cv-pairs { min-width: 0; min-height: 0; overflow: auto; padding: 2px 0; }
+.cv-order { padding-right: 18px; border-right: 1px solid var(--bmm-s08); }
+.cv-pairs { padding-left: 20px; }
 @media (max-width: 760px) {
     .cv-grid { grid-template-columns: minmax(0, 1fr); }
-    .cv-order { border-right: 0; border-bottom: 1px solid var(--bmm-s08); max-height: 40vh; }
+    .cv-order { padding: 0 0 14px; border-right: 0; border-bottom: 1px solid var(--bmm-s08); max-height: 40vh; }
+    .cv-pairs { padding: 14px 0 0; }
 }
 
 .cv-h { margin: 0 0 4px; font-size: 12px; font-weight: 700; letter-spacing: .02em; color: var(--bmm-text-primary); }
 .cv-note { margin: 0 0 10px; font-size: 11px; line-height: 1.5; color: var(--bmm-text-secondary); }
 
 /* ── Activation order column ─────────────────────────────────────────────────────────── */
-.cv-ord-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.cv-ord-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
 .cv-ord {
     display: flex; align-items: center; gap: 8px;
-    padding: 5px 6px 5px 8px;
-    border: 1px solid var(--bmm-border);
+    padding: 5px 6px 5px 4px;
     border-radius: var(--bmm-radius-input, 6px);
-    background: var(--bmm-bg-elevated);
     font-size: 12px;
 }
+.cv-ord:hover { background: var(--bmm-s04); }
 .cv-ord.is-quiet { opacity: .62; }
-.cv-ord.is-focus { border-color: var(--bmm-border-accent); background: var(--bmm-accent-dim); }
+.cv-ord.is-focus { background: var(--bmm-accent-dim); }
 .cv-ord.is-off .cv-ord-name { text-decoration: line-through; color: var(--bmm-text-secondary); }
 .cv-ord-pos { flex: none; min-width: 20px; font-family: var(--font-mono, monospace); font-size: 10.5px; color: var(--bmm-text-secondary); text-align: right; }
 .cv-ord-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--bmm-text-primary); }
@@ -67,21 +70,17 @@
 .cv-search { flex: 0 1 240px; min-width: 140px; height: 30px; }
 .cv-focus { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--bmm-text-secondary); cursor: pointer; }
 
-.cv-pair {
-    margin-bottom: 8px;
-    border: 1px solid var(--bmm-border);
-    border-radius: var(--bmm-radius-card, 10px);
-    background: var(--bmm-bg-elevated);
-    overflow: hidden;
-}
-.cv-pair.is-open { border-color: var(--bmm-border-hover); }
+/* A pair is a stretch of the list, split from the next by one hairline. */
+.cv-pair { border-bottom: 1px solid var(--bmm-s06); padding-bottom: 4px; margin-bottom: 4px; }
+.cv-pair:last-of-type { border-bottom: 0; }
 .cv-pair-head {
     display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px;
-    width: 100%; padding: 10px 12px;
-    border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer;
+    width: 100%; padding: 9px 8px;
+    border: 0; border-radius: var(--bmm-radius-input, 6px);
+    background: transparent; color: inherit; text-align: left; cursor: pointer;
     font: inherit;
 }
-.cv-pair-head:hover { background: var(--bmm-s03); }
+.cv-pair-head:hover { background: var(--bmm-s04); }
 .cv-pair-head:focus-visible { outline: 2px solid color-mix(in srgb, var(--bmm-accent) 70%, transparent); outline-offset: -2px; }
 .cv-chev { flex: none; color: var(--bmm-text-secondary); transition: transform var(--bmm-transition-fast, .15s); }
 .cv-pair.is-open .cv-chev { transform: rotate(90deg); }
@@ -93,9 +92,9 @@
 .cv-v-a, .cv-v-b { background: var(--bmm-success-dim, var(--bmm-s04)); color: color-mix(in srgb, var(--bmm-success) 55%, var(--bmm-text-primary)); }
 .cv-v-split { background: var(--bmm-warning-dim); color: color-mix(in srgb, var(--bmm-warning) 55%, var(--bmm-text-primary)); }
 
-.cv-pair-acts { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 10px 34px; }
+.cv-pair-acts { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 8px 8px 30px; }
 
-.cv-files { border-top: 1px solid var(--bmm-s08); padding: 8px 12px 10px; background: var(--bmm-s02); }
+.cv-files { padding: 4px 8px 8px 30px; }
 .cv-batch { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 6px; }
 .cv-all { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--bmm-text-primary); cursor: pointer; }
 .cv-batch-n { font-size: 11px; color: var(--bmm-text-secondary); min-width: 1ch; }
@@ -111,6 +110,7 @@
     font-size: 11.5px;
 }
 .cv-file:last-child { border-bottom: 0; }
+.cv-file:hover { background: var(--bmm-s03); }
 .cv-file.is-pinned { background: var(--bmm-accent-dim); border-radius: var(--bmm-radius-input, 6px); }
 @media (max-width: 760px) {
     .cv-file { grid-template-columns: auto minmax(0, 1fr); }
@@ -128,7 +128,7 @@
 .cv-empty p { margin: 8px 0 0; }
 
 /* ── What applying would change ─────────────────────────────────────────────────────── */
-.cv-moves { padding: 12px 18px; border-bottom: 1px solid var(--bmm-s08); max-height: 32vh; overflow: auto; background: var(--bmm-s03); }
+.cv-moves { padding: 0 0 12px; margin-bottom: 14px; border-bottom: 1px solid var(--bmm-s08); max-height: 32vh; overflow: auto; }
 .cv-moves ul { list-style: none; margin: 6px 0 0; padding: 0; }
 .cv-moves li { display: flex; gap: 12px; justify-content: space-between; padding: 3px 0; font-size: 11.5px; border-bottom: 1px solid var(--bmm-s05); }
 .cv-moves .cv-file-path { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--bmm-text-primary); }

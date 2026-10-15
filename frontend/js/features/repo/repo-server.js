@@ -21,8 +21,8 @@ export function initRepoServer(elements) {
     // one, a wall socket on another, a colour photograph on a third — and none of them match the
     // rest of a window drawn in 2px strokes. `toast()` has taken an SVG since it was written; the
     // server notifications were the last place still passing a character.
-    const ICON_PLUG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 2v6M15 2v6M6 8h12v3a6 6 0 0 1-12 0z"/><path d="M12 17v5"/></svg>';
-    const ICON_DOWN = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 12 5 5 5-5"/><path d="M4 21h16"/></svg>';
+    const ICON_PLUG = uiIcon('plug', 14);
+    const ICON_DOWN = uiIcon('download', 14);
     const ICON_DONE = (uiIcon('check', 14));
     // ── Subscribe to server-side events ──────────────────────────────────────
     async function subscribeServerEvents() {

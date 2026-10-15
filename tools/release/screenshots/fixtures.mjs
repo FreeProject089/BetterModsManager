@@ -27,9 +27,10 @@ export function buildFixtures(base, { lang, version, frontend = null }) {
     { id: 'ai', name: 'ai', color: '#ec4899' },
   ];
   f.get_repo_server_status = { port: 8000, lan_url: 'http://192.168.1.20:8000/repo.json', public_url: null, tunnel_url: null, upnp_success: false };
+  // camelCase, as the backend serialises it (repo_follow.rs, serde rename_all) and repo-follow.ts reads it.
   f.repo_follow_list = [
     { url: 'https://mods.example.org/repo.json', name: 'Community Pack', due: false,
-      follow: { enabled: true, interval_min: 360, action: 'notify', last_check: iso(42), last_version: '3.2.0', last_updates: 2, last_error: null } },
+      follow: { enabled: true, intervalMin: 360, action: 'notify', lastCheck: iso(42), lastVersion: '3.2.0', lastUpdates: 2, lastError: null } },
   ];
   const app = (id, title, description, category, price, tags, version, extra = {}) => ({
     id, title, description, md_link: null, category, price, tags, version, requirements: 'Windows 10/11',

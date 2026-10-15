@@ -1,9 +1,24 @@
-﻿// @ts-nocheck
+// @ts-nocheck
 /**
- * modpack-creator.ts — Modpack Creator UI
- * Allows users to create, edit, and manage Modpacks stored in AppData.
- * Features: single/multi-profile, dependency modes, per-mod download links & fallbacks,
- * optional ServerRepo link, SHA-256 identification for cross-PC recognition.
+ * modpack-creator.ts — the Modpacks page.
+ *
+ * Oct 2026 redesign. The page is one list and a handful of dialogs, all on the house shell
+ * (ui/modal-shell.ts + css/modal-shell.css):
+ *
+ *   · the overview: one bar (search, filter, sort, grid/list), then a card per pack with its
+ *     cover, name, game or profile, mod count, size, state, ONE primary action (activate /
+ *     deactivate) and a « … » menu for the rest (edit, export & share, delete);
+ *   · the pack dialog (#mp-wizard): a short guided flow to create a pack — the basics (name,
+ *     whose mods, game), the mods (search, multi-select, everything from the profile or what
+ *     is on now in one click), the options (with defaults that suit most packs), a review with
+ *     the order and the per-mod sources. It can finish from any step once it has a name and a
+ *     mod. Editing a pack opens the same dialog with every step reachable;
+ *   · import (file, link, catalogue), export & share, delete, repair: one anatomy each.
+ *
+ * The contracts did not move: load_modpacks / save_modpack / delete_modpack / export_modpack /
+ * import_modpack / install_modpack_from_url / build_modpack_mod_ref / check_modpack_integrity /
+ * repair_modpack_mod, the LocalModpack format, the `bmm:modpack-focus` event (plugins and the
+ * API open the dialog through it) and the activation dialog (modpack-activate.ts).
  */
 import { invoke } from '../../core/api.js';
 import { copyIdButtons, wireCopyIds } from '../../core/copy-id.js';
@@ -12,16 +27,34 @@ import { toast, toastSaved } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 import { formatBytes, escHtml, escAttr } from '../../core/utils.js';
-import { MODAL_CLOSE_SVG, openModal } from '../../ui/modal-shell.js';
-import { raiseAboveAll } from '../../ui/layer.js';
-import { uiIcon } from '../../ui/icons.js';
-import { openModpackActivation, openModpackPicker, deactivateModpack } from './modpack-activate.js';
+import { openModal } from '../../ui/modal-shell.js';
+import { uiIcon, uiIconEl } from '../../ui/icons.js';
+import { openModpackActivation, openModpackPicker, deactivateModpack, modpackState } from './modpack-activate.js';
 
 // ── State ────────────────────────────────────────────────────────────────────
 
 let _modpacks = [];
-let _editingPack = null; // LocalModpack currently being edited
 let _allMods = [];
+let _profiles = [];
+let _activeProfileId = null;
+let _container = null;
+/** The open pack dialog, if any: { refresh(), close() }. */
+let _wiz = null;
+
+/** How the overview is shown. Sort and view are remembered per viewer (localStorage, a
+ *  convenience: the page works the same without it). */
+const PREF_KEY = 'bmm.modpacks.overview';
+const _ui = { q: '', filter: 'all', sort: 'recent', view: 'grid' };
+(function loadPrefs() {
+    try {
+        const p = JSON.parse(localStorage.getItem(PREF_KEY) || '{}');
+        if (['recent', 'name', 'mods', 'size'].includes(p.sort)) _ui.sort = p.sort;
+        if (p.view === 'grid' || p.view === 'list') _ui.view = p.view;
+    } catch { /* no storage: defaults */ }
+})();
+function _savePrefs() {
+    try { localStorage.setItem(PREF_KEY, JSON.stringify({ sort: _ui.sort, view: _ui.view })); } catch { /* no storage */ }
+}
 
 /**
  * Resolves modpack mref SHA-256 hashes to local mod IDs in a single
@@ -54,21 +87,33 @@ function _findLocalByMref(mref: any, shaIndex: Record<string, string>) {
     }
     return null;
 }
-let _profiles = [];
-let _activeProfileId = null;
-let _packMods = []; // ModpackModRef[] being assembled
-let _isAddingMods = false; // Background state for selection modal
-let _addCancelled = false; // Set when the user cancels an in-progress add
-let _currentAddingModName = ''; // Name of the mod currently being processed
-let _currentSelectionModalUpdateFn = null; // Ref to update UI from background
-let _currentSelectionModalOverlay = null; // Ref to current modal overlay for auto-close
+
+async function _loadData() {
+    try {
+        [_modpacks, _allMods, _profiles, _activeProfileId] = await Promise.all([
+            invoke('load_modpacks'),
+            invoke('get_all_mods'),
+            invoke('get_profiles'),
+            invoke('get_active_profile_id'),
+        ]);
+        _modpacks = _modpacks || [];
+        _allMods = _allMods || [];
+        _profiles = _profiles || [];
+    } catch (e) {
+        console.error('[ModpackCreator] load error', e);
+    }
+}
+
+function _rerender() {
+    if (_container && _container.isConnected) _renderModpackList(_container);
+}
 
 // ── Public init ──────────────────────────────────────────────────────────────
 
 export async function initModpackCreator(container) {
     if (!container) return;
+    _container = container;
 
-    // Bind buttons
     const btnCat = document.getElementById('btn-modpack-catalog');
     if (btnCat && !btnCat.dataset.bound) {
         btnCat.dataset.bound = 'true';
@@ -80,30 +125,10 @@ export async function initModpackCreator(container) {
     const btnImport = document.getElementById('btn-import-modpack');
     if (btnImport && !btnImport.dataset.bound) {
         btnImport.dataset.bound = 'true';
-        btnImport.addEventListener('click', async () => {
-            try {
-                await invoke('import_modpack');
-                toast(t('modpack.importSuccess') || 'Modpack importé avec succès', 'success');
-                await _loadData();
-                _renderModpackList(container);
-                window.dispatchEvent(new CustomEvent('bmm://modpacks-updated'));
-            } catch (err) {
-                if (String(err) !== 'repo.errCancel') toast(String(err), 'error');
-            }
-        });
+        btnImport.addEventListener('click', () => _openImportModal());
     }
 
-
-    // Listen for language changes
-    document.addEventListener('langChanged', () => {
-        if (_editingPack) {
-            // If editing, re-render the editor
-            _openEditor(container, _editingPack);
-        } else {
-            // If viewing list, re-render the list
-            _renderModpackList(container);
-        }
-    });
+    document.addEventListener('langChanged', () => _rerender());
 
     await _loadData();
     _renderModpackList(container);
@@ -116,12 +141,8 @@ export async function initModpackCreator(container) {
                 invoke('get_profiles'),
                 invoke('get_active_profile_id'),
             ]);
-            // If editing, refresh the mod selector in the editor
-            if (_editingPack) {
-                _refreshModSelectorInEditor();
-            } else {
-                _renderModpackList(container);
-            }
+            _wiz?.refresh();
+            _rerender();
         } catch (e) { console.error('[ModpackCreator] live-refresh error', e); }
     });
 
@@ -129,20 +150,18 @@ export async function initModpackCreator(container) {
     window.addEventListener('bmm://modpacks-updated', async () => {
         try {
             await _loadData();
-            if (!_editingPack) _renderModpackList(container);
+            _rerender();
         } catch (e) { console.error('[ModpackCreator] modpacks-updated error', e); }
     });
 
-    // Open modpack editor via event (from QT / external trigger)
+    // Open the pack dialog via event (from QT / plugins / external trigger)
     // detail: { action: 'create'|'update', modpackId?: string, prefill?: {...} }
+    // With a name (create) or always (update) it saves by itself, no human interaction.
     window.addEventListener('bmm:modpack-focus', async (e: any) => {
         const { action, modpackId, prefill } = e.detail || {};
-        try {
-            await _loadData();
-        } catch (_) {}
+        try { await _loadData(); } catch (_) {}
 
         if (action === 'create') {
-            // Build a fresh pack skeleton pre-seeded from prefill
             const freshPack = {
                 id: '', name: '', description: null, created_at: '', updated_at: '',
                 multi_profile: true, dependency_mode: 'manual', mods: [], sr_link: null, game_name: null,
@@ -164,44 +183,7 @@ export async function initModpackCreator(container) {
                     });
                 }
             }
-            // Open in "new pack" mode (pack=null → shows Create title, empty skeleton)
-            _openEditor(container, null);
-            // After editor renders, apply all prefill values + pre-seeded mods, then auto-save
-            requestAnimationFrame(() => {
-                if (prefill?.name && document.getElementById('mp-name'))
-                    (document.getElementById('mp-name') as HTMLInputElement).value = prefill.name;
-                if (prefill?.description != null && document.getElementById('mp-desc'))
-                    (document.getElementById('mp-desc') as HTMLTextAreaElement).value = prefill.description || '';
-                if (prefill?.game_name != null && document.getElementById('mp-game'))
-                    (document.getElementById('mp-game') as HTMLInputElement).value = prefill.game_name || '';
-                if (prefill?.sr_link != null && document.getElementById('mp-srlink'))
-                    (document.getElementById('mp-srlink') as HTMLInputElement).value = prefill.sr_link || '';
-                if (prefill?.dependency_mode && document.getElementById('mp-depmode'))
-                    (document.getElementById('mp-depmode') as HTMLSelectElement).value = prefill.dependency_mode;
-                if (prefill?.multi_profile != null) {
-                    const cb = document.getElementById('mp-multi') as HTMLInputElement;
-                    if (cb) { cb.checked = !!prefill.multi_profile; _editingPack.multi_profile = !!prefill.multi_profile; }
-                }
-                if (prefill?.skip_integrity_check != null) {
-                    const cb = document.getElementById('mp-skip-integrity') as HTMLInputElement;
-                    if (cb) { cb.checked = !!prefill.skip_integrity_check; _editingPack.skip_integrity_check = !!prefill.skip_integrity_check; }
-                }
-                // Populate mods list from prefill.mod_ids
-                if (freshPack.mods.length > 0) {
-                    _packMods = [...freshPack.mods];
-                    _editingPack.mods = [..._packMods];
-                    const modListEl = document.getElementById('mp-modlist');
-                    if (modListEl) _renderPackModList(modListEl);
-                }
-                // Auto-save if a name was provided (no human interaction required)
-                if (prefill?.name) {
-                    setTimeout(() => {
-                        const saveBtn = document.getElementById('editor-save') as HTMLButtonElement | null;
-                        if (saveBtn && !saveBtn.disabled) saveBtn.click();
-                    }, 150);
-                }
-            });
-
+            await _openWizard(freshPack, { isNew: true, autoSave: !!prefill?.name });
         } else if (action === 'update' && modpackId) {
             const existing = _modpacks.find(m => m.id === modpackId);
             if (!existing) {
@@ -228,71 +210,48 @@ export async function initModpackCreator(container) {
                     });
                 }
             }
-            _openEditor(container, merged);
-            // Auto-save after editor renders (no human interaction required)
-            requestAnimationFrame(() => {
-                setTimeout(() => {
-                    const saveBtn = document.getElementById('editor-save') as HTMLButtonElement | null;
-                    if (saveBtn && !saveBtn.disabled) saveBtn.click();
-                }, 150);
-            });
+            await _openWizard(merged, { autoSave: true });
         }
     });
 }
 
-/** Refreshes the mod picker list inside an open editor without closing it */
-function _refreshModSelectorInEditor() {
-    const availableContainer = document.getElementById('mp-available-mods');
-    if (!availableContainer) return;
-    const existingIds = new Set(
-        Array.from(document.querySelectorAll('#mp-selected-items [data-mod-id]'))
-            .map(el => (el as HTMLElement).dataset.modId || '')
-    );
-    // Tutorial demo mods float to the top so they're easy to find while following a tutorial.
-    const sortedMods = [..._allMods].sort((a: any, b: any) =>
-        (b.id?.startsWith('__bmm_tutorial_demo_mod_') ? 1 : 0) - (a.id?.startsWith('__bmm_tutorial_demo_mod_') ? 1 : 0));
-    availableContainer.innerHTML = sortedMods.length
-        ? sortedMods.map(m => `
-            <div class="mp-mod-item${existingIds.has(m.id) ? ' mp-mod-selected' : ''}" data-id="${escAttr(m.id)}" data-name="${escAttr(m.name || m.id)}">
-                <span class="mp-mod-name">${escHtml(m.name || m.id)}</span>
-                <button class="btn btn-xs mp-mod-add-btn" ${existingIds.has(m.id) ? 'disabled' : ''}>+</button>
-            </div>`).join('')
-        : `<div class="plug-mod-empty">Aucun mod disponible</div>`;
+// ── Facts about a pack ───────────────────────────────────────────────────────
+
+function _packSize(pack): number {
+    let n = 0;
+    for (const r of pack?.mods || []) for (const f of r?.file_manifest || []) n += Number(f?.size) || 0;
+    return n;
+}
+function _packWhere(pack): string {
+    return pack.multi_profile ? t('modpack.multiProfile') : (pack.game_name || t('modpack.general'));
+}
+/** Two letters for the cover: the first letters of the first two words, else the first two. */
+function _monogram(name): string {
+    const words = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return '?';
+    const first = (w) => Array.from(w)[0] || '';
+    const s = words.length > 1 ? first(words[0]) + first(words[1]) : Array.from(words[0]).slice(0, 2).join('');
+    return s.toUpperCase();
+}
+function _stateChip(st): string {
+    if (st === 'on') return `<span class="bms-chip bms-chip--ok"><span class="bms-dot"></span>${escHtml(t('modpack.act.stateOn'))}</span>`;
+    if (st === 'partial') return `<span class="bms-chip bms-chip--warn"><span class="bms-dot"></span>${escHtml(t('modpack.act.statePartial'))}</span>`;
+    return `<span class="bms-chip"><span class="bms-dot"></span>${escHtml(t('modpack.act.stateOff'))}</span>`;
+}
+/** The pack as a line: cover, name, meta. Used by the share and delete dialogs. */
+function _packLine(pack): string {
+    const n = pack.mods?.length || 0;
+    const size = _packSize(pack);
+    return `<div class="mp-line">
+        <span class="mp-cover mp-cover--sm" aria-hidden="true">${escHtml(_monogram(pack.name))}</span>
+        <span class="mp-line-txt"><b>${escHtml(pack.name)}</b><span>${escHtml(_packWhere(pack))} · ${escHtml(t('modpack.modsCount', { count: String(n) }))}${size ? ` · ${escHtml(formatBytes(size))}` : ''}</span></span>
+    </div>`;
 }
 
-async function _loadData() {
-    try {
-        [_modpacks, _allMods, _profiles, _activeProfileId] = await Promise.all([
-            invoke('load_modpacks'),
-            invoke('get_all_mods'),
-            invoke('get_profiles'),
-            invoke('get_active_profile_id'),
-        ]);
-    } catch (e) {
-        console.error('[ModpackCreator] load error', e);
-    }
-}
+// ── The overview ─────────────────────────────────────────────────────────────
 
-// ── List view ────────────────────────────────────────────────────────────────
-
-// ── The apply switch (list cards and the quick-apply dialog) ─────────────────────────────────
-//
-// A real <button role="switch">: it was a div with an onclick, so the keyboard could not reach
-// it and a screen reader announced nothing. `.btn-apply` and `.bmm-switch-wrap` stay on it: the
-// tutorial points at `btn-apply`, and three built-in themes style `.bmm-switch-wrap`.
-function _switchHtml(on: boolean, label: string): string {
-    return `<button type="button" role="switch" aria-checked="${on ? 'true' : 'false'}" aria-label="${escAttr(label)}"`
-        + ` class="mp-switch bmm-switch-wrap btn-apply${on ? ' active' : ''}"><span class="mp-switch-knob" aria-hidden="true"></span></button>`;
-}
-function _setSwitch(el: HTMLElement | null, on: boolean): void {
-    if (!el) return;
-    el.classList.toggle('active', on);
-    el.setAttribute('aria-checked', on ? 'true' : 'false');
-}
-
-/** The header's primary action. Lives in the view header beside Catalogues and Import, so the
- *  page has one row of actions; the id is the one the tutorial points at. */
-function _ensureCreateButton(container): void {
+/** The header's primary action, beside Catalogues and Import; the tutorial points at its id. */
+function _ensureCreateButton(): void {
     const actions = document.getElementById('modpack-header-actions');
     if (!actions) return;
     let btn = document.getElementById('modpack-create-btn') as HTMLButtonElement | null;
@@ -304,340 +263,852 @@ function _ensureCreateButton(container): void {
         actions.appendChild(btn);
     }
     btn.innerHTML = `${uiIcon('add', 16)}<span>${escHtml(t('modpack.create'))}</span>`;
-    btn.onclick = () => _openEditor(container, null);
+    btn.onclick = () => { void _openWizard(null); };
     btn.hidden = false;
-}
-function _hideHeaderActions(hide: boolean): void {
-    const actions = document.getElementById('modpack-header-actions');
-    if (actions) actions.hidden = hide;
 }
 
 function _renderModpackList(container) {
+    _container = container;
+    _closeMenu();
     container.innerHTML = '';
     container.classList.add('mp-page');
-    _editingPack = null;
-    _hideHeaderActions(false);
-    _ensureCreateButton(container);
+    _ensureCreateButton();
 
     if (_modpacks.length === 0) {
-        // The empty page says what a pack is and offers the three ways to get one.
+        // One line that says what a pack is, and the two ways to get one.
         const empty = document.createElement('div');
-        empty.className = 'empty-state mp-empty';
+        empty.className = 'bms-empty mp-empty';
         empty.innerHTML = `
-            <div class="empty-icon">${uiIcon('package', 32)}</div>
-            <p class="empty-title">${escHtml(t('modpack.noMods'))}</p>
-            <p class="empty-desc">${escHtml(t('modpack.noModsDesc'))}</p>
+            <div class="bms-empty-ic">${uiIcon('package', 24)}</div>
+            <div class="bms-empty-t">${escHtml(t('modpack.noMods'))}</div>
+            <p class="bms-note">${escHtml(t('modpack.noModsDesc'))}</p>
             <div class="mp-empty-a">
                 <button type="button" class="btn btn-primary" data-mp-go="create">${uiIcon('add', 16)}<span>${escHtml(t('modpack.create'))}</span></button>
-                <button type="button" class="btn btn-secondary" data-mp-go="catalog">${uiIcon('store', 16)}<span>${escHtml(t('modpack.cat.open'))}</span></button>
-                <button type="button" class="btn btn-secondary" data-mp-go="import">${uiIcon('import', 16)}<span>${escHtml(t('modpack.import'))}</span></button>
+                <button type="button" class="btn btn-secondary" data-mp-go="import">${uiIcon('import', 16)}<span>${escHtml(t('modpack.ui.importBtn'))}</span></button>
             </div>`;
         empty.addEventListener('click', (e) => {
             const go = (e.target as HTMLElement).closest<HTMLElement>('[data-mp-go]')?.dataset.mpGo;
-            if (go === 'create') _openEditor(container, null);
-            else if (go === 'catalog') document.getElementById('btn-modpack-catalog')?.click();
-            else if (go === 'import') document.getElementById('btn-import-modpack')?.click();
+            if (go === 'create') void _openWizard(null);
+            else if (go === 'import') _openImportModal();
         });
         container.appendChild(empty);
         return;
     }
 
-    // Toolbar: search, and how many of how many are shown.
+    // One bar: search, filter, sort, how many, grid or list.
+    const games = Array.from(new Set(_modpacks.filter(p => !p.multi_profile && p.game_name).map(p => String(p.game_name)))).sort((a, b) => a.localeCompare(b));
+    const anyMulti = _modpacks.some(p => p.multi_profile);
+    if (_ui.filter.startsWith('g:') && !games.includes(_ui.filter.slice(2))) _ui.filter = 'all';
+    if (_ui.filter === 'multi' && !anyMulti) _ui.filter = 'all';
+    const opt = (v, label) => `<option value="${escAttr(v)}"${_ui.filter === v ? ' selected' : ''}>${escHtml(label)}</option>`;
+    const sortOpt = (v, label) => `<option value="${v}"${_ui.sort === v ? ' selected' : ''}>${escHtml(label)}</option>`;
     const bar = document.createElement('div');
     bar.className = 'mp-toolbar';
     bar.innerHTML = `
         <label class="mp-search" id="mp-search-wrap">
             ${uiIcon('search', 14)}
-            <input type="search" id="modpack-search" placeholder="${escAttr(t('modpack.searchPh'))}" aria-label="${escAttr(t('modpack.searchPh'))}" spellcheck="false" autocomplete="off">
+            <input type="search" id="modpack-search" placeholder="${escAttr(t('modpack.searchPh'))}" aria-label="${escAttr(t('modpack.searchPh'))}" spellcheck="false" autocomplete="off" value="${escAttr(_ui.q)}">
         </label>
-        <span class="mp-count" id="modpack-count-badge" aria-live="polite">${escHtml(t('modpack.countAll', { n: String(_modpacks.length) }))}</span>
-    `;
+        <select id="mp-filter" class="form-input mp-select" aria-label="${escAttr(t('modpack.ui.filterLabel'))}" title="${escAttr(t('modpack.ui.filterLabel'))}">
+            ${opt('all', t('modpack.filterAll'))}
+            ${opt('on', t('modpack.ui.filterOn'))}
+            ${opt('off', t('modpack.ui.filterOff'))}
+            ${games.length > 1 || (games.length && anyMulti) ? games.map(g => opt('g:' + g, g)).join('') : ''}
+            ${anyMulti && (games.length || _modpacks.length > 1) ? opt('multi', t('modpack.multiProfile')) : ''}
+        </select>
+        <select id="mp-sort" class="form-input mp-select" aria-label="${escAttr(t('modpack.ui.sortLabel'))}" title="${escAttr(t('modpack.ui.sortLabel'))}">
+            ${sortOpt('recent', t('modpack.ui.sortRecent'))}
+            ${sortOpt('name', t('modpack.ui.sortName'))}
+            ${sortOpt('mods', t('modpack.ui.sortMods'))}
+            ${sortOpt('size', t('modpack.ui.sortSize'))}
+        </select>
+        <span class="bms-spacer"></span>
+        <span class="mp-count" id="modpack-count-badge" aria-live="polite"></span>
+        <div class="bms-seg mp-view" role="group" aria-label="${escAttr(t('modpack.ui.viewLabel'))}">
+            <button type="button" class="bms-seg-btn" data-view="grid" aria-pressed="${_ui.view === 'grid'}" title="${escAttr(t('modpack.ui.viewGrid'))}" aria-label="${escAttr(t('modpack.ui.viewGrid'))}">${uiIcon('grid', 14)}</button>
+            <button type="button" class="bms-seg-btn" data-view="list" aria-pressed="${_ui.view === 'list'}" title="${escAttr(t('modpack.ui.viewList'))}" aria-label="${escAttr(t('modpack.ui.viewList'))}">${uiIcon('list', 14)}</button>
+        </div>`;
     container.appendChild(bar);
-    const searchInput = bar.querySelector('#modpack-search') as HTMLInputElement;
-    const countBadge = bar.querySelector('#modpack-count-badge') as HTMLElement;
 
     const grid = document.createElement('div');
-    grid.className = 'modpack-grid';
-
-    const cards = [];
-
-    _modpacks.forEach(pack => {
-        const card = document.createElement('div');
-        card.className = 'modpack-card';
-
-        const modsCount = pack.mods ? pack.mods.length : 0;
-        const lastUpdate = pack.updated_at ? new Date(pack.updated_at).toLocaleDateString() : '';
-        const hasDesc = !!(pack.description && String(pack.description).trim());
-
-        const anyEnabled = pack.mods && pack.mods.length > 0 && pack.mods.some(mref => {
-            const local = _allMods.find(m => m.id === mref.mod_id || (!!mref.sha256 && m.sha256 === mref.sha256));
-            return local && local.enabled;
-        });
-        const applyLabel = anyEnabled ? (t('modpack.deactivate') || 'Désactiver le modpack') : t('modpack.apply');
-
-        card.innerHTML = `
-            <div class="modpack-card-top">
-                <div class="modpack-card-icon">${uiIcon('package', 20)}</div>
-                <div class="modpack-card-info">
-                    <div class="modpack-card-title" title="${escAttr(pack.name)}">${escHtml(pack.name)}</div>
-                    <div class="modpack-card-meta">
-                        <span class="mp-chip">${escHtml(t('modpack.modsCount', { count: modsCount }))}</span>
-                        <span class="mp-chip">${escHtml(pack.multi_profile ? t('modpack.multiProfile') : (pack.game_name || t('modpack.general')))}</span>
-                        ${pack.skip_integrity_check ? `<span class="mp-chip mp-chip--warn" title="${escAttr(t('modpack.skipIntegrityDesc'))}">${uiIcon('warning', 12)}${escHtml(t('modpack.noCheckChip'))}</span>` : ''}
-                    </div>
-                </div>
-                <div class="mp-apply" data-tasky="${escAttr(t('modpack.quickApplyDesc') || 'Cliquez pour activer ou désactiver ce pack.')}" data-tasky-icon="zap" data-tasky-literal="1">
-                    ${_switchHtml(!!anyEnabled, `${applyLabel}: ${pack.name}`)}
-                </div>
-            </div>
-            <p class="modpack-card-desc${hasDesc ? '' : ' is-empty'}">${escHtml(hasDesc ? pack.description : t('modpack.noDesc'))}</p>
-            <div class="modpack-card-ids">${copyIdButtons('modpack', pack.id, { compact: true })}</div>
-            <div class="modpack-card-foot">
-                <span class="modpack-card-date">${lastUpdate ? escHtml(t('modpack.updatedAt', { date: lastUpdate })) : ''}</span>
-                <div class="modpack-card-actions">
-                    <button type="button" class="btn btn-icon btn-ghost btn-sm btn-edit" title="${escAttr(t('modpack.edit'))}" aria-label="${escAttr(t('modpack.edit'))}">${uiIcon('edit', 16)}</button>
-                    <button type="button" class="btn btn-icon btn-ghost btn-sm btn-export" title="${escAttr(t('modpack.exportBtn'))}" aria-label="${escAttr(t('modpack.exportBtn'))}">${uiIcon('export', 16)}</button>
-                    <span class="view-actions-sep" aria-hidden="true"></span>
-                    <button type="button" class="btn btn-icon btn-ghost btn-sm btn-delete mp-danger" title="${escAttr(t('modpack.delete'))}" aria-label="${escAttr(t('modpack.delete'))}">${uiIcon('delete', 16)}</button>
-                </div>
-            </div>
-        `;
-
-        wireCopyIds(card, toast);
-        card.querySelector('.btn-edit').onclick = (e) => { e.stopPropagation(); _openEditor(container, pack); };
-        card.querySelector('.btn-apply').onclick = (e) => { e.stopPropagation(); _applyModpack(container, pack); };
-        card.querySelector('.btn-export').onclick = (e) => { e.stopPropagation(); _exportModpack(pack); };
-        card.querySelector('.btn-delete').onclick = (e) => { e.stopPropagation(); _deleteModpack(container, pack); };
-        // The card opens the editor on a click anywhere that is not a control (the copy-id
-        // chips and the buttons above stop the event themselves or are matched here).
-        card.onclick = (e) => {
-            if ((e.target as HTMLElement).closest('button, a, input, [data-copy-id]')) return;
-            _openEditor(container, pack);
-        };
-
-        grid.appendChild(card);
-        cards.push({ card, name: `${pack.name} ${pack.game_name || ''} ${pack.description || ''}`.toLowerCase() });
-    });
-
+    grid.className = `modpack-grid${_ui.view === 'list' ? ' is-list' : ''}`;
+    grid.setAttribute('role', 'list');
     container.appendChild(grid);
 
     const noHit = document.createElement('div');
-    noHit.className = 'empty-state mp-nohit';
+    noHit.className = 'bms-empty mp-nohit';
     noHit.hidden = true;
     container.appendChild(noHit);
 
-    searchInput.addEventListener('input', () => {
-        const q = searchInput.value.toLowerCase().trim();
-        let visible = 0;
-        cards.forEach(({ card, name }) => {
-            const hit = !q || name.includes(q);
-            card.hidden = !hit;
-            if (hit) visible++;
+    const search = bar.querySelector('#modpack-search') as HTMLInputElement;
+    const count = bar.querySelector('#modpack-count-badge') as HTMLElement;
+
+    const draw = () => {
+        _closeMenu();
+        const q = _ui.q.toLowerCase().trim();
+        const states = new Map(_modpacks.map(p => [p.id, modpackState(p, _allMods)]));
+        let list = _modpacks.filter(p => {
+            if (q && !`${p.name} ${p.game_name || ''} ${p.description || ''}`.toLowerCase().includes(q)) return false;
+            const st = states.get(p.id);
+            if (_ui.filter === 'on') return st !== 'off';
+            if (_ui.filter === 'off') return st === 'off';
+            if (_ui.filter === 'multi') return !!p.multi_profile;
+            if (_ui.filter.startsWith('g:')) return !p.multi_profile && String(p.game_name || '') === _ui.filter.slice(2);
+            return true;
         });
-        countBadge.textContent = q
-            ? t('modpack.countOf', { n: String(visible), total: String(cards.length) })
-            : t('modpack.countAll', { n: String(cards.length) });
-        noHit.hidden = visible > 0;
-        if (!visible) {
-            noHit.innerHTML = `<div class="empty-icon">${uiIcon('search', 24)}</div>
-                <p class="empty-title">${escHtml(t('modpack.noMatch', { q: searchInput.value.trim() }))}</p>
-                <div class="mp-empty-a"><button type="button" class="btn btn-secondary btn-sm" data-mp-clear>${escHtml(t('common.clear'))}</button></div>`;
+        const time = (p) => Date.parse(p.updated_at || p.created_at || '') || 0;
+        list = list.slice().sort((a, b) => {
+            if (_ui.sort === 'name') return String(a.name).localeCompare(String(b.name));
+            if (_ui.sort === 'mods') return (b.mods?.length || 0) - (a.mods?.length || 0);
+            if (_ui.sort === 'size') return _packSize(b) - _packSize(a);
+            return time(b) - time(a);
+        });
+        grid.innerHTML = list.map(p => _cardHtml(p, states.get(p.id))).join('');
+        const filtered = !!q || _ui.filter !== 'all';
+        count.textContent = filtered
+            ? t('modpack.countOf', { n: String(list.length), total: String(_modpacks.length) })
+            : t('modpack.countAll', { n: String(_modpacks.length) });
+        noHit.hidden = list.length > 0;
+        if (!list.length) {
+            noHit.innerHTML = `<div class="bms-empty-ic">${uiIcon('search', 20)}</div>
+                <div class="bms-empty-t">${escHtml(q ? t('modpack.noMatch', { q: _ui.q.trim() }) : t('modpack.ui.noFilterHit'))}</div>
+                <div class="mp-empty-a"><button type="button" class="btn btn-secondary btn-sm" data-mp-clear>${escHtml(t('modpack.ui.resetFilters'))}</button></div>`;
             noHit.querySelector('[data-mp-clear]')?.addEventListener('click', () => {
-                searchInput.value = '';
-                searchInput.dispatchEvent(new Event('input'));
-                searchInput.focus();
+                _ui.q = ''; _ui.filter = 'all';
+                _renderModpackList(container);
+                (document.getElementById('modpack-search') as HTMLInputElement | null)?.focus();
             });
         }
+    };
+
+    search.addEventListener('input', () => { _ui.q = search.value; draw(); });
+    bar.querySelector('#mp-filter')?.addEventListener('change', (e) => { _ui.filter = (e.target as HTMLSelectElement).value; draw(); });
+    bar.querySelector('#mp-sort')?.addEventListener('change', (e) => { _ui.sort = (e.target as HTMLSelectElement).value; _savePrefs(); draw(); });
+    bar.querySelectorAll<HTMLElement>('[data-view]').forEach(b => b.addEventListener('click', () => {
+        _ui.view = b.dataset.view === 'list' ? 'list' : 'grid';
+        _savePrefs();
+        grid.classList.toggle('is-list', _ui.view === 'list');
+        bar.querySelectorAll<HTMLElement>('[data-view]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.view === _ui.view)));
+    }));
+
+    // One listener for every card: the primary action, the menu, and "open" anywhere else.
+    grid.addEventListener('click', (e) => {
+        const target = e.target as HTMLElement;
+        const card = target.closest<HTMLElement>('.modpack-card');
+        const pack = card && _modpacks.find(p => p.id === card.dataset.id);
+        if (!pack) return;
+        const act = target.closest<HTMLElement>('[data-mp-act]')?.dataset.mpAct;
+        if (act === 'apply') { e.stopPropagation(); void _applyModpack(container, pack); return; }
+        if (act === 'more') { e.stopPropagation(); _openCardMenu(target.closest('[data-mp-act]') as HTMLElement, pack); return; }
+        if (act === 'edit' || !target.closest('button, a, input, select, [data-copy-id]')) void _openWizard(pack);
     });
+
+    draw();
 }
 
-// ── Editor ───────────────────────────────────────────────────────────────────
-
-async function _openEditor(container, pack) {
-    _editingPack = pack ? JSON.parse(JSON.stringify(pack)) : {
-        id: '', name: '', description: null, created_at: '', updated_at: '',
-        multi_profile: true, dependency_mode: 'manual', mods: [], sr_link: null, game_name: null
-    };
-    _packMods = _editingPack.mods ? [..._editingPack.mods] : [];
-
-    container.innerHTML = '';
-
-    // The editor replaces the page body, so the page header's actions (Catalogues, Import,
-    // Create) step aside: two rows of buttons acting on different things read as one.
-    _hideHeaderActions(true);
-    const header = document.createElement('div');
-    header.className = 'mp-ed-head';
-    header.innerHTML = `
-        <div class="mp-ed-titles">
-            <nav class="mp-crumbs" aria-label="${escAttr(t('modpack.title'))}">
-                <button type="button" class="mp-crumb" id="bc-home">${uiIcon('arrow-left', 14)}<span>${escHtml(t('modpack.title'))}</span></button>
-                ${uiIcon('chevron-right', 12)}
-                <span class="mp-crumb-now">${escHtml(pack ? t('modpack.edit') : t('modpack.create'))}</span>
-            </nav>
-            <h2 class="mp-ed-title">${pack ? escHtml(pack.name) : escHtml(t('modpack.newPack'))}</h2>
-        </div>
-        <div class="mp-ed-actions">
-            <button type="button" class="btn btn-secondary" id="editor-cancel">${escHtml(t('common.cancel'))}</button>
-            <button type="button" class="btn btn-primary" id="editor-save">
-                ${uiIcon('save', 16)}
-                <span>${escHtml(t('modpack.save'))}</span>
-            </button>
-        </div>
-    `;
-    container.appendChild(header);
-
-    const goBack = async () => { await _loadData(); _renderModpackList(container); };
-    header.querySelector('#bc-home').onclick = goBack;
-    header.querySelector('#editor-cancel').onclick = goBack;
-
-    // Split Layout
-    const layout = document.createElement('div');
-    layout.className = 'modpack-editor-layout';
-    container.appendChild(layout);
-
-    // LEFT: Meta
-    const leftCol = document.createElement('div');
-    leftCol.className = 'editor-section-card';
-    leftCol.innerHTML = `
-        <div class="editor-section-title">
-            ${uiIcon('file-text', 14)}
-            <span>${escHtml(t('modpack.generalInfo'))}</span>
-        </div>
-    `;
-
-    const metaForm = document.createElement('div');
-    metaForm.className = 'mp-form';
-
-    // Escaped: a modpack can be imported from a file or a deeplink, so its name/description are
-    // not always the user's own typing. A raw `"` closes the value attribute and a raw
-    // `</textarea>` closes the field — both let markup in (CWE-79).
-    metaForm.appendChild(_formField(t('modpack.name'), `<input id="mp-name" type="text" class="form-input" placeholder="${escAttr(t('modpack.namePlaceholder'))}" value="${escAttr(_editingPack.name || '')}">`));
-    metaForm.appendChild(_formField(t('modpack.description'), `<textarea id="mp-desc" class="form-input" rows="4">${escHtml(_editingPack.description || '')}</textarea>`));
-    metaForm.appendChild(_formField(t('modpack.game'), `<input id="mp-game" type="text" class="form-input" placeholder="${escAttr(t('modpack.gamePlaceholder') || 'e.g. DCS World')}" value="${escAttr(_editingPack.game_name || '')}">`));
-
-    // Two options that change what applying the pack does: a check row each, the risky one
-    // in the warning tone (classes in modpack.css).
-    const multiRow = document.createElement('label');
-    multiRow.className = 'mp-opt';
-    const multiCb = document.createElement('input');
-    multiCb.type = 'checkbox';
-    multiCb.id = 'mp-multi';
-    multiCb.checked = _editingPack.multi_profile;
-    multiCb.onchange = () => {
-        _editingPack.multi_profile = multiCb.checked;
-    };
-    const multiInfo = document.createElement('span');
-    multiInfo.className = 'mp-opt-txt';
-    multiInfo.innerHTML = `<b>${escHtml(t('modpack.multiProfile'))}</b><span>${escHtml(t('modpack.multiProfileDesc'))}</span>`;
-    multiRow.appendChild(multiCb);
-    multiRow.appendChild(multiInfo);
-    metaForm.appendChild(multiRow);
-
-    const skipRow = document.createElement('label');
-    skipRow.className = 'mp-opt mp-opt--warn';
-    const skipCb = document.createElement('input');
-    skipCb.type = 'checkbox';
-    skipCb.id = 'mp-skip-integrity';
-    skipCb.checked = _editingPack.skip_integrity_check;
-    skipCb.onchange = () => {
-        _editingPack.skip_integrity_check = skipCb.checked;
-    };
-    const skipInfo = document.createElement('span');
-    skipInfo.className = 'mp-opt-txt';
-    skipInfo.innerHTML = `<b>${escHtml(t('modpack.skipIntegrity'))}</b><span>${escHtml(t('modpack.skipIntegrityDesc'))}</span>`;
-    skipRow.appendChild(skipCb);
-    skipRow.appendChild(skipInfo);
-    metaForm.appendChild(skipRow);
-
-    metaForm.appendChild(_formField(t('modpack.depMode'), `
-        <select id="mp-depmode" class="form-input">
-            <option value="all" ${_editingPack.dependency_mode === 'all' ? 'selected' : ''}>${t('modpack.depModeAll')}</option>
-            <option value="none" ${_editingPack.dependency_mode === 'none' ? 'selected' : ''}>${t('modpack.depModeNone')}</option>
-            <option value="manual" ${_editingPack.dependency_mode === 'manual' ? 'selected' : ''}>${t('modpack.depModeManual')}</option>
-        </select>
-    `));
-
-    // Where the pack's mods go in the profile's activation order when it is applied
-    // (commands/order_share.rs). Empty = the setting "Bulk enable" in Settings.
-    const om = _editingPack.order_mode || '';
-    metaForm.appendChild(_formField(t('modpack.orderMode'), `
-        <select id="mp-ordermode" class="form-input" title="${escAttr(t('modpack.orderModeTip'))}">
-            <option value="" ${om === '' ? 'selected' : ''}>${escHtml(t('order.mode.default'))}</option>
-            <option value="top" ${om === 'top' ? 'selected' : ''}>${escHtml(t('order.mode.top'))}</option>
-            <option value="bottom" ${om === 'bottom' ? 'selected' : ''}>${escHtml(t('order.mode.bottom'))}</option>
-            <option value="keep" ${om === 'keep' ? 'selected' : ''}>${escHtml(t('order.mode.keep'))}</option>
-        </select>
-    `));
-
-    metaForm.appendChild(_formField(t('modpack.srLink'), `<input id="mp-srlink" type="text" class="form-input" placeholder="${escAttr(t('modpack.srLinkPlaceholder'))}" value="${escAttr(_editingPack.sr_link || '')}">`));
-
-    leftCol.appendChild(metaForm);
-    layout.appendChild(leftCol);
-
-    // RIGHT: Mods
-    const rightCol = document.createElement('div');
-    rightCol.className = 'editor-section-card mp-ed-mods';
-    rightCol.innerHTML = `
-        <div class="mp-ed-mods-h">
-            <div class="editor-section-title">
-                ${uiIcon('folders', 14)}
-                <span>${escHtml(t('modpack.modsManagement'))}</span>
-                <span class="mp-count" id="mp-modcount">${_packMods.length}</span>
+function _cardHtml(pack, st): string {
+    const on = st !== 'off';
+    const n = pack.mods?.length || 0;
+    const size = _packSize(pack);
+    const date = pack.updated_at ? new Date(pack.updated_at).toLocaleDateString() : '';
+    const desc = String(pack.description || '').trim();
+    const applyLabel = on ? t('modpack.deactivate') : t('modpack.ui.activate');
+    return `<article class="modpack-card${on ? ' is-on' : ''}" role="listitem" data-id="${escAttr(pack.id)}">
+        <span class="mp-cover" aria-hidden="true">${escHtml(_monogram(pack.name))}</span>
+        <div class="mp-card-main">
+            <div class="mp-card-head">
+                <button type="button" class="modpack-card-title" data-mp-act="edit" title="${escAttr(pack.name)}">${escHtml(pack.name)}</button>
             </div>
-            <button type="button" class="btn btn-secondary btn-sm" id="btn-add-mods-pack">
-                ${uiIcon('add', 14)}
-                <span>${escHtml(t('modpack.addMods'))}</span>
-            </button>
+            <div class="mp-card-meta">
+                <span>${uiIcon(pack.multi_profile ? 'users' : 'game', 12)}${escHtml(_packWhere(pack))}</span>
+                <span>${escHtml(t('modpack.modsCount', { count: String(n) }))}</span>
+                ${size ? `<span>${escHtml(formatBytes(size))}</span>` : ''}
+                ${date ? `<span title="${escAttr(t('modpack.updatedAt', { date }))}">${uiIcon('clock', 12)}${escHtml(date)}</span>` : ''}
+                ${pack.skip_integrity_check ? `<span class="mp-meta-warn" title="${escAttr(t('modpack.skipIntegrityDesc'))}">${uiIcon('warning', 12)}${escHtml(t('modpack.noCheckChip'))}</span>` : ''}
+            </div>
+            ${desc ? `<p class="modpack-card-desc">${escHtml(desc)}</p>` : ''}
         </div>
-    `;
+        <div class="modpack-card-foot">
+            ${_stateChip(st)}
+            <span class="bms-spacer"></span>
+            <button type="button" class="btn btn-sm ${on ? 'btn-secondary' : 'btn-primary'} btn-apply mp-apply-btn" data-mp-act="apply" aria-label="${escAttr(`${applyLabel}: ${pack.name}`)}"${n ? '' : ' disabled'}>${uiIcon(on ? 'power' : 'run', 14)}<span>${escHtml(applyLabel)}</span></button>
+            <button type="button" class="btn btn-icon btn-ghost btn-sm mp-more" data-mp-act="more" aria-haspopup="menu" aria-expanded="false" title="${escAttr(t('modpack.ui.more'))}" aria-label="${escAttr(`${t('modpack.ui.more')}: ${pack.name}`)}">${uiIcon('more', 16)}</button>
+        </div>
+    </article>`;
+}
 
-    const modListEl = document.createElement('div');
-    modListEl.id = 'mp-modlist';
-    modListEl.className = 'mp-modlist';
-    rightCol.appendChild(modListEl);
-    _renderPackModList(modListEl);
+// ── The « … » menu of a card ─────────────────────────────────────────────────
 
-    rightCol.querySelector('#btn-add-mods-pack').onclick = () => _openMultiSelectModal(modListEl);
+let _menu: { el: HTMLElement; btn: HTMLElement; off: () => void } | null = null;
 
-    layout.appendChild(rightCol);
+function _closeMenu(refocus = false): void {
+    if (!_menu) return;
+    const { el, btn, off } = _menu;
+    _menu = null;
+    off();
+    el.remove();
+    btn.setAttribute('aria-expanded', 'false');
+    if (refocus && btn.isConnected) btn.focus();
+}
 
-    // Save Logic
-    header.querySelector('#editor-save').onclick = async () => {
-        const name = document.getElementById('mp-name')?.value.trim();
-        if (!name) return toast(t('modpack.errNoName'), 'warning');
-        if (_packMods.length === 0) return toast(t('modpack.errNoMods'), 'warning');
+function _openCardMenu(btn: HTMLElement, pack): void {
+    const again = _menu && _menu.btn === btn;
+    _closeMenu();
+    if (again) return;
+    const el = document.createElement('div');
+    el.className = 'mp-menu';
+    el.setAttribute('role', 'menu');
+    el.innerHTML = `
+        <button type="button" role="menuitem" class="mp-menu-item" data-mi="edit">${uiIcon('edit', 14)}<span>${escHtml(t('modpack.edit'))}</span></button>
+        <button type="button" role="menuitem" class="mp-menu-item" data-mi="share">${uiIcon('share', 14)}<span>${escHtml(t('modpack.ui.share'))}</span></button>
+        <div class="mp-menu-sep" role="separator"></div>
+        <button type="button" role="menuitem" class="mp-menu-item mp-menu-item--danger" data-mi="delete">${uiIcon('delete', 14)}<span>${escHtml(t('modpack.delete'))}</span></button>`;
+    (document.getElementById('app-window-outer') || document.body).appendChild(el);
+    // The items act on a click on the menu itself (bound to it, not to the document).
+    el.addEventListener('click', (e) => {
+        const mi = (e.target as HTMLElement).closest<HTMLElement>('[data-mi]')?.dataset.mi;
+        if (!mi) return;
+        _closeMenu();
+        if (mi === 'edit') void _openWizard(pack);
+        else if (mi === 'share') _openShareModal(pack);
+        else if (mi === 'delete') void _deleteModpack(_container, pack);
+    });
 
-        const payload = {
-            ..._editingPack,
-            name,
-            description: document.getElementById('mp-desc')?.value.trim() || null,
-            game_name: document.getElementById('mp-game')?.value.trim() || null,
-            multi_profile: document.getElementById('mp-multi')?.checked || false,
-            skip_integrity_check: document.getElementById('mp-skip-integrity')?.checked || false,
-            dependency_mode: document.getElementById('mp-depmode')?.value || 'manual',
-            sr_link: document.getElementById('mp-srlink')?.value.trim() || null,
-            order_mode: (document.getElementById('mp-ordermode') as HTMLSelectElement | null)?.value || null,
-            mods: _packMods,
+    // Under the button, right-aligned; above it when there is no room below.
+    const r = btn.getBoundingClientRect();
+    const w = el.offsetWidth, h = el.offsetHeight;
+    const top = r.bottom + 6 + h > window.innerHeight - 8 ? Math.max(8, r.top - 6 - h) : r.bottom + 6;
+    el.style.top = `${Math.round(top)}px`;
+    el.style.left = `${Math.round(Math.max(8, Math.min(window.innerWidth - w - 8, r.right - w)))}px`;
+    btn.setAttribute('aria-expanded', 'true');
+
+    const items = () => [...el.querySelectorAll<HTMLElement>('.mp-menu-item')];
+    const onDown = (e: Event) => { if (!el.contains(e.target as Node) && !btn.contains(e.target as Node)) _closeMenu(); };
+    const onKey = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); _closeMenu(true); return; }
+        if (e.key === 'Tab') { _closeMenu(); return; }
+        if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') return;
+        e.preventDefault();
+        const list = items();
+        const i = list.indexOf(document.activeElement as HTMLElement);
+        const next = e.key === 'Home' ? 0 : e.key === 'End' ? list.length - 1
+            : (i + (e.key === 'ArrowDown' ? 1 : -1) + list.length) % list.length;
+        list[next]?.focus();
+    };
+    const onScroll = () => _closeMenu();
+    document.addEventListener('pointerdown', onDown, true);
+    document.addEventListener('keydown', onKey, true);
+    window.addEventListener('resize', onScroll);
+    document.addEventListener('scroll', onScroll, true);
+    _menu = {
+        el, btn, off: () => {
+            document.removeEventListener('pointerdown', onDown, true);
+            document.removeEventListener('keydown', onKey, true);
+            window.removeEventListener('resize', onScroll);
+            document.removeEventListener('scroll', onScroll, true);
+        },
+    };
+    items()[0]?.focus();
+}
+
+// ── The pack dialog: create (guided) and edit ────────────────────────────────
+
+const STEP_COUNT = 4;
+function _stepLabels(): string[] {
+    return [t('modpack.ui.stepBasics'), t('modpack.ui.stepMods'), t('modpack.ui.stepOptions'), t('modpack.ui.stepReview')];
+}
+
+/** The profile a mod lives in, by its folder (the same match the old picker made). */
+function _profileOfMod(m) {
+    return _profiles.find(p => m.mod_folder_path && p.mods_path
+        && (String(m.mod_folder_path).includes(String(p.mods_path)) || String(p.mods_path).includes(String(m.mod_folder_path)))) || null;
+}
+
+/** The mods offered for a source: one profile's (by id or by folder), or every mod. */
+function _modsOfSource(source) {
+    let list = [..._allMods];
+    if (source !== 'multi') {
+        const p = _profiles.find(x => String(x.id) === String(source));
+        if (p) {
+            const root = String(p.mods_path || '').toLowerCase();
+            list = list.filter(m => (m.profile_id && String(m.profile_id) === String(p.id))
+                || (root && String(m.mod_folder_path || '').toLowerCase().startsWith(root)));
+        }
+    }
+    // Tutorial demo mods float to the top so they're easy to find while following a tutorial.
+    const demo = (m) => (String(m.id || '').startsWith('__bmm_tutorial_demo_mod_') ? 1 : 0);
+    return list.sort((a, b) => demo(b) - demo(a));
+}
+
+function _defaultSource(pack) {
+    if (pack?.multi_profile) return 'multi';
+    const fromRef = (pack?.mods || []).map(r => r.profile_id).find(id => id && _profiles.some(p => String(p.id) === String(id)));
+    if (fromRef) return String(fromRef);
+    const active = _activeProfileId || (window as any).cachedActiveProfileId;
+    if (active && _profiles.some(p => String(p.id) === String(active))) return String(active);
+    return _profiles[0] ? String(_profiles[0].id) : 'multi';
+}
+
+/**
+ * Open the pack dialog. `pack` null = a new pack from scratch. `opts.isNew` = a new pack
+ * pre-seeded by a caller (bmm:modpack-focus). `opts.autoSave` = save at once, no human step.
+ */
+async function _openWizard(pack, opts: { isNew?: boolean; autoSave?: boolean } = {}) {
+    _closeMenu();
+    _wiz?.close();
+    const editing = !!pack && !opts.isNew;
+    const base = pack ? JSON.parse(JSON.stringify(pack)) : {
+        id: '', name: '', description: null, created_at: '', updated_at: '',
+        multi_profile: false, dependency_mode: 'manual', skip_integrity_check: false,
+        mods: [], sr_link: null, game_name: null,
+    };
+
+    // The pack's mods, keyed by the LOCAL mod they are (a pack made on another PC names its
+    // mods by that PC's ids; the hash finds them here), in the pack's order.
+    const refs = new Map();
+    const selected: string[] = [];
+    const sha = base.mods?.length ? await _resolveHashesToModIds(base.mods) : {};
+    for (const r of base.mods || []) {
+        const local = _findLocalByMref(r, sha);
+        const key = String(local ? local.id : r.mod_id);
+        if (refs.has(key)) continue;
+        refs.set(key, r);
+        selected.push(key);
+    }
+
+    const d = {
+        name: base.name || '',
+        description: base.description || '',
+        game: base.game_name || '',
+        source: _defaultSource(pack ? base : null),
+        depMode: base.dependency_mode || 'manual',
+        orderMode: base.order_mode || '',
+        skip: !!base.skip_integrity_check,
+        srLink: base.sr_link || '',
+        autoSrc: true,
+        selected,
+        refs,
+        step: 0,
+        reached: editing ? STEP_COUNT - 1 : 0,
+        q: '',
+        building: false,
+        cancelled: false,
+        saving: false,
+    };
+
+    let m = null;
+    const handle = {
+        refresh: () => { if (m && d.step === 1 && !d.building) render(); },
+        close: () => m?.close(),
+    };
+    m = openModal({
+        id: 'mp-wizard',
+        title: editing ? t('modpack.edit') : t('modpack.newPack'),
+        subtitle: editing ? base.name : t('modpack.ui.createSub'),
+        icon: uiIcon('package', 18),
+        size: 'lg',
+        tall: true,
+        className: 'mpw',
+        closeLabel: t('common.close'),
+        body: '',
+        footer: '',
+        // A click beside the dialog must not throw away a half-made pack.
+        backdropClose: false,
+        onClose: () => { d.cancelled = true; if (_wiz === handle) _wiz = null; },
+    });
+    _wiz = handle;
+
+    // The steps, as a band between the header and the body.
+    const band = document.createElement('div');
+    band.className = 'modal-toolbar mpw-band';
+    band.innerHTML = `<ol class="mpw-steps">${_stepLabels().map((label, i) => `
+        <li><button type="button" class="mpw-step" data-step="${i}"><span class="mpw-step-n">${i + 1}</span><span class="mpw-step-l">${escHtml(label)}</span></button></li>`).join('')}</ol>`;
+    m.dialog.insertBefore(band, m.body);
+    band.addEventListener('click', (e) => {
+        const b = (e.target as HTMLElement).closest<HTMLButtonElement>('.mpw-step');
+        if (b && !b.disabled) void go(Number(b.dataset.step));
+    });
+
+    const canLeave = (step) => step === 0 ? !!d.name.trim() : step === 1 ? d.selected.length > 0 : true;
+    const canFinish = () => !!d.name.trim() && d.selected.length > 0;
+    const canReach = (i) => {
+        if (editing || i <= d.reached) return true;
+        for (let s = 0; s < i; s++) if (!canLeave(s)) return false;
+        return i <= d.reached + 1;
+    };
+
+    const drawBand = () => {
+        band.querySelectorAll<HTMLButtonElement>('.mpw-step').forEach((b) => {
+            const i = Number(b.dataset.step);
+            b.classList.toggle('is-done', !editing && i < d.step);
+            if (i === d.step) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
+            b.disabled = d.building || d.saving || !canReach(i);
+        });
+    };
+
+    const footerNote = () => {
+        const parts = [];
+        if (!editing) parts.push(t('modpack.ui.stepOf', { n: String(d.step + 1), total: String(STEP_COUNT) }));
+        if (d.step === 1 || editing) parts.push(t('modpack.ui.selCount', { n: String(d.selected.length) }));
+        return parts.join(' · ');
+    };
+
+    const drawFooter = () => {
+        if (!m.footer) return;
+        if (d.building) {
+            m.footer.innerHTML = `<span class="modal-footer-note mpw-foot-note">${escHtml(t('modpack.ui.buildNote'))}</span>
+                <button type="button" class="btn btn-secondary" data-w="stop">${escHtml(t('modpack.ui.stop'))}</button>`;
+            m.footer.querySelector('[data-w="stop"]')?.addEventListener('click', () => { d.cancelled = true; });
+            return;
+        }
+        const busy = d.saving ? ' disabled' : '';
+        const finishOff = !canFinish() || d.saving ? ' disabled' : '';
+        if (editing) {
+            m.footer.innerHTML = `
+                <div class="modal-footer-start"><span class="modal-footer-note mpw-foot-note">${escHtml(footerNote())}</span></div>
+                <button type="button" class="btn btn-secondary" data-w="cancel"${busy}>${escHtml(t('common.cancel'))}</button>
+                <button type="button" class="btn btn-primary" id="editor-save" data-w="finish"${finishOff}>${uiIcon('save', 14)}<span>${escHtml(d.saving ? t('modpack.saving') : t('common.save'))}</span></button>`;
+        } else {
+            const last = d.step === STEP_COUNT - 1;
+            m.footer.innerHTML = `
+                <div class="modal-footer-start">
+                    <button type="button" class="btn btn-ghost" data-w="back"${busy}>${d.step === 0 ? escHtml(t('common.cancel')) : `${uiIcon('arrow-left', 14)}<span>${escHtml(t('common.back'))}</span>`}</button>
+                    <span class="modal-footer-note mpw-foot-note">${escHtml(footerNote())}</span>
+                </div>
+                ${last
+                    ? `<button type="button" class="btn btn-primary" id="editor-save" data-w="finish"${finishOff}>${uiIcon('check', 14)}<span>${escHtml(d.saving ? t('modpack.saving') : t('modpack.ui.createBtn'))}</span></button>`
+                    : `<button type="button" class="btn btn-secondary" id="editor-save" data-w="finish" title="${escAttr(t('modpack.ui.finishNowTip'))}"${finishOff}>${escHtml(t('modpack.ui.finishNow'))}</button>
+                       <button type="button" class="btn btn-primary" id="mp-next" data-w="next"${canLeave(d.step) && !d.saving ? '' : ' disabled'}><span>${escHtml(t('modpack.ui.next'))}</span>${uiIcon('arrow-right', 14)}</button>`}`;
+        }
+        const f = m.footer;
+        f.querySelector('[data-w="cancel"]')?.addEventListener('click', () => m.close());
+        f.querySelector('[data-w="back"]')?.addEventListener('click', () => { if (d.step === 0) m.close(); else void go(d.step - 1); });
+        f.querySelector('[data-w="next"]')?.addEventListener('click', () => void go(d.step + 1));
+        f.querySelector('[data-w="finish"]')?.addEventListener('click', () => void finish());
+    };
+
+    // ── Step bodies ──
+    const bodyBasics = () => {
+        const games = Array.from(new Set([
+            ..._profiles.map(p => p.game_name).filter(Boolean),
+            ..._modpacks.map(p => p.game_name).filter(Boolean),
+        ].map(String))).sort((a, b) => a.localeCompare(b));
+        m.body.innerHTML = `
+            <label class="bms-field">
+                <span class="bms-label">${escHtml(t('modpack.name'))}</span>
+                <input id="mp-name" type="text" class="form-input" maxlength="120" autocomplete="off" placeholder="${escAttr(t('modpack.namePlaceholder'))}" value="${escAttr(d.name)}">
+            </label>
+            <div class="mpw-2col">
+                <label class="bms-field">
+                    <span class="bms-label">${escHtml(t('modpack.ui.source'))}</span>
+                    <select id="mp-profile" class="form-input">
+                        ${_profiles.map(p => `<option value="${escAttr(String(p.id))}"${String(p.id) === d.source ? ' selected' : ''}>${escHtml(p.name || String(p.id))}${p.game_name ? ` · ${escHtml(p.game_name)}` : ''}</option>`).join('')}
+                        <option value="multi"${d.source === 'multi' ? ' selected' : ''}>${escHtml(t('modpack.ui.sourceMulti'))}</option>
+                    </select>
+                    <span class="bms-note">${escHtml(t('modpack.ui.sourceHint'))}</span>
+                </label>
+                <label class="bms-field">
+                    <span class="bms-label">${escHtml(t('modpack.game'))}</span>
+                    <input id="mp-game" type="text" class="form-input" list="mp-game-list" autocomplete="off" placeholder="${escAttr(t('modpack.gamePlaceholder'))}" value="${escAttr(d.game)}">
+                    <datalist id="mp-game-list">${games.map(g => `<option value="${escAttr(g)}"></option>`).join('')}</datalist>
+                </label>
+            </div>
+            <label class="bms-field">
+                <span class="bms-label">${escHtml(t('modpack.ui.descOptional'))}</span>
+                <textarea id="mp-desc" class="form-input" rows="3">${escHtml(d.description)}</textarea>
+            </label>`;
+        const name = m.q<HTMLInputElement>('#mp-name');
+        name?.addEventListener('input', () => { d.name = name.value; drawFooter(); drawBand(); });
+        name?.addEventListener('keydown', (e) => {
+            if ((e as KeyboardEvent).key === 'Enter' && !editing && canLeave(0)) { e.preventDefault(); void go(1); }
+        });
+        m.q<HTMLSelectElement>('#mp-profile')?.addEventListener('change', (e) => {
+            d.source = (e.target as HTMLSelectElement).value;
+            const p = _profiles.find(x => String(x.id) === d.source);
+            const game = m.q<HTMLInputElement>('#mp-game');
+            if (p?.game_name && game && !game.value.trim()) { game.value = p.game_name; d.game = p.game_name; }
+        });
+        const game = m.q<HTMLInputElement>('#mp-game');
+        game?.addEventListener('input', () => { d.game = game.value; });
+        const desc = m.q<HTMLTextAreaElement>('#mp-desc');
+        desc?.addEventListener('input', () => { d.description = desc.value; });
+        // A new pack takes its game from the profile when nobody typed one.
+        if (!editing && !d.game) {
+            const p = _profiles.find(x => String(x.id) === d.source);
+            if (p?.game_name && game) { game.value = p.game_name; d.game = p.game_name; }
+        }
+    };
+
+    const bodyMods = () => {
+        const avail = _modsOfSource(d.source);
+        const availIds = new Set(avail.map(x => String(x.id)));
+        const localIds = new Set(_allMods.map(x => String(x.id)));
+        const sel = new Set(d.selected);
+        // Picked earlier and still in the pack, but not offered here: another profile's, or
+        // not installed on this PC. They stay listed (and picked) so nothing leaves silently.
+        const others = d.selected.filter(id => !availIds.has(id));
+        const enabled = avail.filter(x => x.enabled);
+        const srcName = d.source === 'multi' ? t('modpack.ui.sourceAll') : (_profiles.find(p => String(p.id) === d.source)?.name || '');
+        // The checkbox comes last in the markup and first on screen (CSS order), so the name and
+        // its escaped data-name sit together where tests/modpack-xss.test.mjs looks for them.
+        const row = (m, extra = '') => {
+            const prof = _profileOfMod(m);
+            const deps = m.dependencies?.length || 0;
+            const on = sel.has(String(m.id));
+            return `<label class="mpw-row mp-mod-item${on ? ' is-sel' : ''}" data-id="${escAttr(String(m.id))}" data-name="${escAttr(String(m.name || m.id).toLowerCase())}">
+                <span class="mpw-row-txt"><span class="mp-mod-name">${escHtml(m.name || m.id)}</span>
+                <span class="mpw-row-meta">${m.version ? `<span>v${escHtml(m.version)}</span>` : ''}${d.source === 'multi' && prof ? `<span>${escHtml(prof.name)}</span>` : ''}${deps ? `<span>${escHtml(t('modpack.ui.deps', { n: String(deps) }))}</span>` : ''}${extra}</span></span>
+                ${m.enabled ? `<span class="bms-chip bms-chip--ok mpw-on"><span class="bms-dot"></span>${escHtml(t('modpack.act.stateOn'))}</span>` : ''}
+                <input type="checkbox" class="mpw-cb" value="${escAttr(String(m.id))}"${on ? ' checked' : ''}>
+            </label>`;
         };
+        const ghost = (id) => {
+            const local = _allMods.find(x => String(x.id) === id);
+            if (local) return row(local);
+            const r = d.refs.get(id);
+            return `<label class="mpw-row is-sel is-ghost" data-id="${escAttr(id)}" data-name="${escAttr(String(r?.mod_name || id).toLowerCase())}">
+                <span class="mpw-row-txt"><span class="mpw-row-name">${escHtml(r?.mod_name || id)}</span>
+                <span class="mpw-row-meta">${r?.mod_version ? `<span>v${escHtml(r.mod_version)}</span>` : ''}<span>${escHtml(localIds.has(id) ? t('modpack.ui.otherProfile') : t('modpack.ui.notInstalled'))}</span></span></span>
+                <input type="checkbox" class="mpw-cb" value="${escAttr(id)}" checked>
+            </label>`;
+        };
+        m.body.innerHTML = `
+            <div class="mpw-pick-bar">
+                <label class="mp-search mpw-search">${uiIcon('search', 14)}<input type="search" id="mp-pick-q" placeholder="${escAttr(t('modpack.ui.searchMods'))}" aria-label="${escAttr(t('modpack.ui.searchMods'))}" autocomplete="off" spellcheck="false" value="${escAttr(d.q)}"></label>
+                <div class="mpw-quick" role="group" aria-label="${escAttr(t('modpack.ui.quickPick', { src: srcName }))}">
+                    <span class="mpw-quick-l">${escHtml(t('modpack.ui.quickPick', { src: srcName }))}</span>
+                    <button type="button" class="btn btn-secondary btn-sm" id="mp-pick-all"${avail.length ? '' : ' disabled'}>${uiIcon('check', 14)}<span>${escHtml(t('modpack.ui.pickAll', { n: String(avail.length) }))}</span></button>
+                    <button type="button" class="btn btn-ghost btn-sm" id="mp-pick-enabled"${enabled.length ? '' : ' disabled'}>${escHtml(t('modpack.ui.pickEnabled', { n: String(enabled.length) }))}</button>
+                    <button type="button" class="btn btn-ghost btn-sm" id="mp-pick-clear"${d.selected.length ? '' : ' disabled'}>${escHtml(t('common.clear'))}</button>
+                </div>
+            </div>
+            ${avail.length || others.length ? `<div class="mpw-list" id="mp-pick-list" role="group" aria-label="${escAttr(t('modpack.ui.stepMods'))}">
+                ${avail.map(x => row(x)).join('')}
+                ${others.length ? `<div class="mpw-group">${escHtml(t('modpack.ui.alsoInPack'))}</div>${others.map(ghost).join('')}` : ''}
+            </div>
+            <p class="bms-note mpw-nohit" id="mp-pick-none" hidden>${escHtml(t('modpack.ui.noModHit'))}</p>`
+            : `<div class="bms-empty"><div class="bms-empty-ic">${uiIcon('folders', 20)}</div><div class="bms-empty-t">${escHtml(t('modpack.ui.noModsHere'))}</div><p class="bms-note">${escHtml(t('modpack.ui.noModsHereHint'))}</p></div>`}`;
 
+        const list = m.q('#mp-pick-list');
+        const filter = () => {
+            const q = d.q.toLowerCase().trim();
+            let shown = 0;
+            list?.querySelectorAll<HTMLElement>('.mpw-row').forEach((r) => {
+                const ok = !q || String(r.dataset.name || '').includes(q);
+                r.hidden = !ok;
+                if (ok) shown++;
+            });
+            list?.querySelectorAll<HTMLElement>('.mpw-group').forEach((g) => { g.hidden = !!q; });
+            const none = m.q('#mp-pick-none');
+            if (none) none.hidden = shown > 0;
+        };
+        const sync = () => {
+            const s = new Set(d.selected);
+            list?.querySelectorAll<HTMLElement>('.mpw-row').forEach((r) => {
+                const on = s.has(String(r.dataset.id));
+                r.classList.toggle('is-sel', on);
+                const cb = r.querySelector<HTMLInputElement>('.mpw-cb');
+                if (cb) cb.checked = on;
+            });
+            const clear = m.q<HTMLButtonElement>('#mp-pick-clear');
+            if (clear) clear.disabled = !d.selected.length;
+            drawFooter();
+            drawBand();
+        };
+        const add = (ids) => { for (const id of ids) if (!d.selected.includes(id)) d.selected.push(id); sync(); };
+        list?.addEventListener('change', (e) => {
+            const cb = (e.target as HTMLElement).closest<HTMLInputElement>('.mpw-cb');
+            if (!cb) return;
+            if (cb.checked) { if (!d.selected.includes(cb.value)) d.selected.push(cb.value); }
+            else d.selected = d.selected.filter(x => x !== cb.value);
+            sync();
+        });
+        m.q('#mp-pick-all')?.addEventListener('click', () => add(avail.map(x => String(x.id))));
+        m.q('#mp-pick-enabled')?.addEventListener('click', () => add(enabled.map(x => String(x.id))));
+        m.q('#mp-pick-clear')?.addEventListener('click', () => { d.selected = []; sync(); });
+        const q = m.q<HTMLInputElement>('#mp-pick-q');
+        q?.addEventListener('input', () => { d.q = q.value; filter(); });
+        filter();
+    };
+
+    const bodyOptions = () => {
+        const sel = (v, cur) => (v === cur ? ' selected' : '');
+        m.body.innerHTML = `
+            <p class="bms-note">${escHtml(t('modpack.ui.optionsNote'))}</p>
+            <section class="bms-card">
+                <h3 class="bms-card-title">${escHtml(t('modpack.ui.whenApplied'))}</h3>
+                <div class="mpw-2col">
+                    <label class="bms-field">
+                        <span class="bms-label">${escHtml(t('modpack.depMode'))}</span>
+                        <select id="mp-depmode" class="form-input">
+                            <option value="manual"${sel('manual', d.depMode)}>${escHtml(t('modpack.depModeManual'))}</option>
+                            <option value="all"${sel('all', d.depMode)}>${escHtml(t('modpack.depModeAll'))}</option>
+                            <option value="none"${sel('none', d.depMode)}>${escHtml(t('modpack.depModeNone'))}</option>
+                        </select>
+                    </label>
+                    <label class="bms-field">
+                        <span class="bms-label">${escHtml(t('modpack.orderMode'))}</span>
+                        <select id="mp-ordermode" class="form-input" title="${escAttr(t('modpack.orderModeTip'))}">
+                            <option value=""${sel('', d.orderMode)}>${escHtml(t('order.mode.default'))}</option>
+                            <option value="top"${sel('top', d.orderMode)}>${escHtml(t('order.mode.top'))}</option>
+                            <option value="bottom"${sel('bottom', d.orderMode)}>${escHtml(t('order.mode.bottom'))}</option>
+                            <option value="keep"${sel('keep', d.orderMode)}>${escHtml(t('order.mode.keep'))}</option>
+                        </select>
+                    </label>
+                </div>
+                <label class="mp-opt mp-opt--warn">
+                    <input type="checkbox" id="mp-skip-integrity"${d.skip ? ' checked' : ''}>
+                    <span class="mp-opt-txt"><b>${escHtml(t('modpack.skipIntegrity'))}</b><span>${escHtml(t('modpack.skipIntegrityDesc'))}</span></span>
+                </label>
+            </section>
+            <section class="bms-card">
+                <h3 class="bms-card-title">${escHtml(t('modpack.ui.sources'))}</h3>
+                <label class="mp-opt">
+                    <input type="checkbox" id="ms-auto-update-src"${d.autoSrc ? ' checked' : ''}>
+                    <span class="mp-opt-txt"><b>${escHtml(t('modpack.autoUpdateSrc'))}</b><span>${escHtml(t('modpack.autoUpdateSrcTip'))}</span></span>
+                </label>
+                <label class="bms-field">
+                    <span class="bms-label">${escHtml(t('modpack.srLink'))}</span>
+                    <input id="mp-srlink" type="text" class="form-input" autocomplete="off" placeholder="${escAttr(t('modpack.srLinkPlaceholder'))}" value="${escAttr(d.srLink)}">
+                </label>
+            </section>`;
+        m.q('#mp-depmode')?.addEventListener('change', (e) => { d.depMode = (e.target as HTMLSelectElement).value; });
+        m.q('#mp-ordermode')?.addEventListener('change', (e) => { d.orderMode = (e.target as HTMLSelectElement).value; });
+        m.q('#mp-skip-integrity')?.addEventListener('change', (e) => { d.skip = (e.target as HTMLInputElement).checked; });
+        m.q('#ms-auto-update-src')?.addEventListener('change', (e) => { d.autoSrc = (e.target as HTMLInputElement).checked; });
+        const sr = m.q<HTMLInputElement>('#mp-srlink');
+        sr?.addEventListener('input', () => { d.srLink = sr.value; });
+    };
+
+    const bodyReview = () => {
+        _ensureOrderCss();
+        const items = d.selected.map(id => d.refs.get(id)).filter(Boolean);
+        const size = items.reduce((n, r) => n + (r.file_manifest || []).reduce((a, f) => a + (Number(f?.size) || 0), 0), 0);
+        const src = d.source === 'multi' ? t('modpack.ui.sourceMulti') : (_profiles.find(p => String(p.id) === d.source)?.name || '');
+        const depLabel = d.depMode === 'all' ? t('modpack.depModeAll') : d.depMode === 'none' ? t('modpack.depModeNone') : t('modpack.depModeManual');
+        const orderLabel = d.orderMode === 'top' ? t('order.mode.top') : d.orderMode === 'bottom' ? t('order.mode.bottom') : d.orderMode === 'keep' ? t('order.mode.keep') : t('order.mode.default');
+        const dt = (label, value) => `<div><dt>${escHtml(label)}</dt><dd>${value}</dd></div>`;
+        m.body.innerHTML = `
+            <dl class="mpw-sum">
+                ${dt(t('modpack.name'), d.name.trim() ? escHtml(d.name.trim()) : `<span class="mpw-missing">${escHtml(t('modpack.errNoName'))}</span>`)}
+                ${dt(t('modpack.game'), escHtml(d.game.trim() || t('modpack.general')))}
+                ${dt(t('modpack.ui.source'), escHtml(src))}
+                ${dt(t('modpack.ui.stepMods'), `${escHtml(t('modpack.modsCount', { count: String(items.length) }))}${size ? ` · ${escHtml(formatBytes(size))}` : ''}`)}
+                ${dt(t('modpack.depMode'), escHtml(depLabel))}
+                ${dt(t('modpack.orderMode'), escHtml(orderLabel))}
+                ${d.skip ? dt(t('modpack.skipIntegrity'), `<span class="mp-meta-warn">${uiIcon('warning', 12)}${escHtml(t('modpack.noCheckChip'))}</span>`) : ''}
+            </dl>
+            <section class="bms-card">
+                <div class="bms-card-h"><h3 class="bms-card-title">${escHtml(t('modpack.ui.reviewOrder'))}</h3></div>
+                <p class="bms-note">${escHtml(t('modpack.orderHint'))}</p>
+                ${items.length ? `<ol class="mpw-refs" id="mp-modlist">${items.map((r, i) => _refRowHtml(r, i, items.length)).join('')}</ol>`
+                    : `<div class="bms-empty"><div class="bms-empty-t">${escHtml(t('modpack.editorNoMods'))}</div><button type="button" class="btn btn-secondary btn-sm" data-w="tomods">${escHtml(t('modpack.addMods'))}</button></div>`}
+            </section>`;
+        m.q('[data-w="tomods"]')?.addEventListener('click', () => void go(1));
+        const ol = m.q('#mp-modlist');
+        if (!ol) return;
+        const keyAt = (li) => String(d.selected.filter(id => d.refs.has(id))[Number(li.dataset.i)]);
+        ol.addEventListener('click', (e) => {
+            const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-r]');
+            const li = btn?.closest<HTMLElement>('.mpw-ref');
+            if (!btn || !li) return;
+            const i = Number(li.dataset.i);
+            const ordered = d.selected.filter(id => d.refs.has(id));
+            const act = btn.dataset.r;
+            if (act === 'remove') {
+                const key = keyAt(li);
+                d.selected = d.selected.filter(x => x !== key);
+                render();
+                return;
+            }
+            const j = act === 'up' ? i - 1 : i + 1;
+            if (j < 0 || j >= ordered.length) return;
+            [ordered[i], ordered[j]] = [ordered[j], ordered[i]];
+            // Unbuilt picks (none at this point) would keep their place at the end.
+            d.selected = [...ordered, ...d.selected.filter(id => !d.refs.has(id))];
+            render();
+            (m.body.querySelectorAll('.mpw-ref')[j]?.querySelector(act === 'up' ? '[data-r="up"]' : '[data-r="down"]') as HTMLElement | null)?.focus();
+        });
+        const edit = (e) => {
+            const el = e.target as HTMLInputElement | HTMLSelectElement;
+            const li = el.closest<HTMLElement>('.mpw-ref');
+            const field = el.dataset?.f;
+            if (!li || !field) return;
+            const r = d.refs.get(keyAt(li));
+            if (!r) return;
+            if (field === 'include_dependencies') r.include_dependencies = (el as HTMLInputElement).checked;
+            else if (field === 'fallback_type') r.fallback_type = el.value;
+            else r[field] = el.value.trim();
+        };
+        ol.addEventListener('input', edit);
+        ol.addEventListener('change', edit);
+    };
+
+    const render = () => {
+        if (!m.overlay.isConnected) return;
+        drawBand();
+        if (d.step === 0) bodyBasics();
+        else if (d.step === 1) bodyMods();
+        else if (d.step === 2) bodyOptions();
+        else bodyReview();
+        drawFooter();
+    };
+
+    /** Build the refs of the mods picked since the dialog opened (hashes, file list), with
+     *  progress in the body. False when it was stopped or the dialog closed. */
+    const ensureRefs = async () => {
+        const todo = d.selected.filter(id => !d.refs.has(id));
+        if (!todo.length) return true;
+        d.building = true;
+        d.cancelled = false;
+        drawBand();
+        drawFooter();
+        m.body.innerHTML = `<div class="mpw-building" role="status">
+            <div class="mpw-building-t">${uiIcon('loader', 16, { cls: 'np-spin' })}<span id="mpw-build-txt"></span></div>
+            <div class="bms-progress"><span id="mpw-build-bar"></span></div>
+        </div>`;
+        const txt = m.q('#mpw-build-txt');
+        const bar = m.q<HTMLElement>('#mpw-build-bar');
+        const includeDeps = d.depMode === 'all';
+        let errors = 0;
+        for (let i = 0; i < todo.length; i++) {
+            if (d.cancelled) break;
+            const id = todo[i];
+            const mod = _allMods.find(x => String(x.id) === id);
+            if (txt) txt.textContent = t('modpack.ui.building', { name: mod?.name || id, n: String(i + 1), total: String(todo.length) });
+            if (bar) bar.style.width = `${Math.round((i / todo.length) * 100)}%`;
+            if (!mod) {
+                // Not installed here: kept as a reference by id, like a pre-seeded pack.
+                d.refs.set(id, { mod_id: id, mod_name: id, mod_version: '', sha256: '', file_manifest: [] });
+                continue;
+            }
+            // If the mod is linked to a repo, optionally seed that repo as a
+            // Server Repo fallback download link so it stays updatable.
+            let fallbackLink = null, fallbackType = 'direct';
+            if (d.autoSrc) {
+                const repo = mod.source_repo || mod.update_url
+                    || (Array.isArray(mod.update_sources) && mod.update_sources[0]?.repo_url) || '';
+                if (repo) { fallbackLink = repo; fallbackType = 'sr'; }
+            }
+            try {
+                const ref = await invoke('build_modpack_mod_ref', {
+                    modId: id,
+                    profileId: _profileOfMod(mod)?.id || null,
+                    includeDependencies: includeDeps,
+                    downloadLink: null,
+                    fallbackLink,
+                    fallbackType,
+                });
+                d.refs.set(id, ref);
+            } catch (e) {
+                console.error(e);
+                errors++;
+                d.selected = d.selected.filter(x => x !== id);
+            }
+        }
+        d.building = false;
+        if (errors > 0) toast(t('modpack.addModErrors', { count: String(errors) }), 'warning');
+        if (!m.overlay.isConnected) return false;
+        if (d.cancelled) {
+            d.cancelled = false;
+            toast(t('modpack.addStopped'), 'info');
+            render();
+            return false;
+        }
+        return true;
+    };
+
+    const go = async (i) => {
+        if (i < 0 || i >= STEP_COUNT || d.building || d.saving) return;
+        if (!canReach(i)) {
+            if (!d.name.trim()) toast(t('modpack.errNoName'), 'warning');
+            else if (!d.selected.length) toast(t('modpack.errNoMods'), 'warning');
+            return;
+        }
+        if (i === STEP_COUNT - 1 && !(await ensureRefs())) return;
+        d.step = i;
+        d.reached = Math.max(d.reached, i);
+        render();
+        m.body.scrollTop = 0;
+        const first = d.step === 0 ? '#mp-name' : d.step === 1 ? '#mp-pick-q' : null;
+        if (first) setTimeout(() => m.q<HTMLElement>(first)?.focus(), 0);
+    };
+
+    const finish = async () => {
+        if (d.building || d.saving) return;
+        if (!d.name.trim()) { toast(t('modpack.errNoName'), 'warning'); await go(0); return; }
+        if (!d.selected.length) { toast(t('modpack.errNoMods'), 'warning'); await go(1); return; }
+        if (!(await ensureRefs())) return;
+        const mods = d.selected.map(id => d.refs.get(id)).filter(Boolean);
+        if (!mods.length) { toast(t('modpack.errNoMods'), 'warning'); await go(1); return; }
+        const payload = {
+            ...base,
+            name: d.name.trim(),
+            description: d.description.trim() || null,
+            game_name: d.game.trim() || null,
+            multi_profile: d.source === 'multi',
+            skip_integrity_check: d.skip,
+            dependency_mode: d.depMode || 'manual',
+            sr_link: d.srLink.trim() || null,
+            order_mode: d.orderMode || null,
+            mods,
+        };
+        d.saving = true;
+        drawBand();
+        drawFooter();
         try {
-            const btn = header.querySelector('#editor-save');
-            btn.disabled = true;
-            btn.textContent = t('modpack.saving');
             await invoke('save_modpack', { modpack: payload });
-            toast(t('modpack.savedOk') || 'Modpack sauvegardé !', 'success');
+            toast(t('modpack.savedOk'), 'success');
             dispatchBmmAction(BMM_ACTIONS.MODPACK_CREATED, { name: payload.name });
+            m.close();
             await _loadData();
-            _renderModpackList(container);
-
+            _rerender();
             // Notify other components (like Repo page)
             window.dispatchEvent(new CustomEvent('bmm://modpacks-updated'));
         } catch (err) {
             toast(String(err), 'error');
-            header.querySelector('#editor-save').disabled = false;
-            header.querySelector('#editor-save').textContent = t('modpack.save');
+            d.saving = false;
+            if (m.overlay.isConnected) render();
         }
     };
+
+    render();
+    if (d.step === 0) setTimeout(() => m.q<HTMLElement>('#mp-name')?.focus(), 0);
+    if (opts.autoSave) setTimeout(() => { void finish(); }, 150);
+}
+
+/** One row of the review: position, order buttons, name, remove, and the sources fold. */
+function _refRowHtml(r, i, total): string {
+    const open = r.download_link || r.download_fallback || r.fallback_link || r.include_dependencies;
+    return `<li class="mpw-ref" data-i="${i}">
+        <div class="mpw-ref-top">
+            <span class="mp-order-btns">
+                <button type="button" class="btn btn-icon btn-ghost" data-r="up" title="${escAttr(t('order.moveUp'))}" aria-label="${escAttr(t('order.moveUp'))}"${i === 0 ? ' disabled' : ''}>${uiIcon('chevron-up', 12)}</button>
+                <button type="button" class="btn btn-icon btn-ghost" data-r="down" title="${escAttr(t('order.moveDown'))}" aria-label="${escAttr(t('order.moveDown'))}"${i === total - 1 ? ' disabled' : ''}>${uiIcon('chevron-down', 12)}</button>
+            </span>
+            <span class="mp-order-pos">${i + 1}</span>
+            <span class="mpw-ref-txt"><b title="${escAttr(r.mod_name)}">${escHtml(r.mod_name)}</b>
+                <span>${r.mod_version ? `v${escHtml(r.mod_version)} · ` : ''}${escHtml(r.profile_name || t('modpack.global'))}</span></span>
+            <button type="button" class="btn btn-icon btn-ghost btn-sm mp-danger" data-r="remove" title="${escAttr(t('modpack.removeMod'))}" aria-label="${escAttr(`${t('modpack.removeMod')}: ${r.mod_name}`)}">${uiIcon('close', 14)}</button>
+        </div>
+        <details class="mp-mi-more"${open ? ' open' : ''}>
+            <summary class="mp-mi-more-h">${uiIcon('chevron-right', 12)}<span>${escHtml(t('modpack.sourcesFold'))}</span></summary>
+            <div class="mp-mi-grid">
+                <label class="bms-field"><span class="bms-label">${escHtml(t('modpack.modDownloadLink'))}</span>
+                    <input type="text" class="form-input" data-f="download_link" placeholder="https://..." value="${escAttr(r.download_link || '')}"></label>
+                <label class="bms-field"><span class="bms-label">${escHtml(t('modpack.modFallback'))}</span>
+                    <input type="text" class="form-input" data-f="download_fallback" placeholder="${escAttr(t('modpack.modFallbackPlaceholder'))}" value="${escAttr(r.download_fallback || '')}"></label>
+            </div>
+            <div class="mp-mi-row">
+                <label class="checkbox-container mp-mi-check"><input type="checkbox" data-f="include_dependencies"${r.include_dependencies ? ' checked' : ''}><span>${escHtml(t('modpack.modDeps'))}</span></label>
+                <label class="mp-mi-sel"><span class="bms-label">${escHtml(t('modpack.modFallbackType'))}</span>
+                    <select class="form-input select-sm" data-f="fallback_type">
+                        <option value="direct"${r.fallback_type !== 'sr' ? ' selected' : ''}>${escHtml(t('modpack.fallbackDirect'))}</option>
+                        <option value="sr"${r.fallback_type === 'sr' ? ' selected' : ''}>${escHtml(t('modpack.fallbackServerRepo'))}</option>
+                    </select></label>
+            </div>
+        </details>
+    </li>`;
 }
 
 /** The order controls' styles live with the activation-order view (css/load-order.css). */
@@ -650,468 +1121,166 @@ function _ensureOrderCss() {
     document.head.appendChild(link);
 }
 
-function _renderPackModList(listEl) {
-    listEl.innerHTML = '';
-    const countEl = document.getElementById('mp-modcount');
-    if (countEl) countEl.textContent = String(_packMods.length);
-    if (_packMods.length === 0) {
-        const empty = document.createElement('div');
-        empty.className = 'empty-state mp-modlist-empty';
-        empty.innerHTML = `
-            <div class="empty-icon">${uiIcon('folders', 24)}</div>
-            <p class="empty-title">${escHtml(t('modpack.editorNoMods'))}</p>
-            <p class="empty-desc">${escHtml(t('modpack.editorNoModsHint'))}</p>
-            <div class="mp-empty-a"><button type="button" class="btn btn-primary btn-sm" data-mp-add>${uiIcon('add', 14)}<span>${escHtml(t('modpack.addMods'))}</span></button></div>
-        `;
-        empty.querySelector('[data-mp-add]')?.addEventListener('click', () => document.getElementById('btn-add-mods-pack')?.click());
-        listEl.appendChild(empty);
-        return;
-    }
+// ── Import ───────────────────────────────────────────────────────────────────
 
-    // The pack's order is its activation order: applied, these mods go on top of the
-    // profile's order in this sequence (the last one wins a file they share).
-    _ensureOrderCss();
-    const hint = document.createElement('p');
-    hint.className = 'mp-order-hint';
-    hint.textContent = t('modpack.orderHint');
-    listEl.appendChild(hint);
+function _afterImport() {
+    toast(t('modpack.importSuccess'), 'success');
+    window.dispatchEvent(new CustomEvent('bmm://modpacks-updated'));
+}
 
-    _packMods.forEach((pm, idx) => {
-        const card = document.createElement('div');
-        card.className = 'mod-item-card';
-
-        card.innerHTML = `
-            <div class="mp-mi-top">
-                <span class="mp-order-btns">
-                    <button type="button" class="btn btn-icon btn-ghost mp-up" title="${escHtml(t('order.moveUp'))}" aria-label="${escHtml(t('order.moveUp'))}" ${idx === 0 ? 'disabled' : ''}>${uiIcon('chevron-up', 12)}</button>
-                    <button type="button" class="btn btn-icon btn-ghost mp-down" title="${escHtml(t('order.moveDown'))}" aria-label="${escHtml(t('order.moveDown'))}" ${idx === _packMods.length - 1 ? 'disabled' : ''}>${uiIcon('chevron-down', 12)}</button>
-                </span>
-                <span class="mp-order-pos" title="${escHtml(t('order.position').replace('{n}', String(idx + 1)))}">${idx + 1}</span>
-                <div class="mp-mi-main">
-                    <div class="mp-mi-name" title="${escAttr(pm.mod_name)}">${escHtml(pm.mod_name)}</div>
-                    <div class="mp-mi-meta">
-                        ${pm.mod_version ? `<span>v${escHtml(pm.mod_version)}</span>` : ''}
-                        <span>${escHtml(pm.profile_name || t('modpack.global') || 'Global')}</span>
-                    </div>
+function _openImportModal() {
+    const choice = (key, icon, title, desc) => `
+        <button type="button" class="mpx-choice" data-imp="${key}">
+            <span class="mpx-choice-ic" aria-hidden="true">${uiIcon(icon, 18)}</span>
+            <span class="mpx-choice-txt"><b>${escHtml(title)}</b><span>${escHtml(desc)}</span></span>
+            ${uiIcon('chevron-right', 16, { cls: 'mpx-choice-go' })}
+        </button>`;
+    const m = openModal({
+        title: t('modpack.importTitle'),
+        subtitle: t('modpack.ui.importSub'),
+        icon: uiIcon('import', 18),
+        size: 'sm',
+        className: 'mpx',
+        closeLabel: t('common.close'),
+        body: `
+            <div class="mpx-choices">
+                ${choice('file', 'file', t('modpack.ui.fromFile'), t('modpack.ui.fromFileD'))}
+                ${choice('link', 'link', t('modpack.ui.fromLink'), t('modpack.ui.fromLinkD'))}
+                <div class="mpx-link" id="mpx-link" hidden>
+                    <input type="url" class="form-input" id="mpx-url" placeholder="https://..." aria-label="${escAttr(t('modpack.ui.fromLink'))}" autocomplete="off" spellcheck="false">
+                    <p class="bms-note mpx-err" id="mpx-err" role="alert" hidden></p>
                 </div>
-                <button type="button" class="btn btn-icon btn-ghost btn-sm btn-remove mp-danger" title="${escAttr(t('modpack.removeMod'))}" aria-label="${escAttr(t('modpack.removeMod'))}: ${escAttr(pm.mod_name)}">${uiIcon('delete', 14)}</button>
-            </div>
-
-            <details class="mp-mi-more"${pm.download_link || pm.download_fallback || pm.include_dependencies ? ' open' : ''}>
-            <summary class="mp-mi-more-h">${uiIcon('chevron-right', 12)}<span>${escHtml(t('modpack.sourcesFold'))}</span></summary>
-            <div class="mp-mi-grid">
-                <label class="mp-field">
-                    <span class="form-label">${escHtml(t('modpack.modDownloadLink'))}</span>
-                    <input type="text" class="form-input dl-input" placeholder="https://..." value="${escAttr(pm.download_link || '')}">
-                </label>
-                <label class="mp-field">
-                    <span class="form-label">${escHtml(t('modpack.modFallback'))}</span>
-                    <input type="text" class="form-input fb-input" placeholder="${escAttr(t('modpack.modFallbackPlaceholder') || 'Nexus, Drive, etc.')}" value="${escAttr(pm.download_fallback || '')}">
-                </label>
-            </div>
-
-            <div class="mp-mi-opts">
-                <div class="mp-mi-row">
-                    <label class="checkbox-container mp-mi-check">
-                        <input type="checkbox" class="deps-cb" ${pm.include_dependencies ? 'checked' : ''}>
-                        <span>${escHtml(t('modpack.modDeps'))}</span>
-                    </label>
-                    <label class="mp-mi-sel">
-                        <span class="form-label">${escHtml(t('modpack.modFallbackType'))}</span>
-                        <select class="form-input select-sm fb-type-select">
-                            <option value="direct" ${pm.fallback_type === 'direct' ? 'selected' : ''}>${t('modpack.fallbackDirect') || 'Direct Link'}</option>
-                            <option value="sr" ${pm.fallback_type === 'sr' ? 'selected' : ''}>${t('modpack.fallbackServerRepo') || 'Server Repo'}</option>
-                        </select>
-                    </label>
-                </div>
-
-                <div class="deps-list"></div>
-            </div>
-            </details>
-        `;
-
-        card.querySelector('.btn-remove').onclick = () => {
-            _packMods.splice(idx, 1);
-            _renderPackModList(listEl);
-        };
-        // Reorder: the pack's list IS the order its mods are applied in.
-        const swap = (j: number) => {
-            if (j < 0 || j >= _packMods.length) return;
-            [_packMods[idx], _packMods[j]] = [_packMods[j], _packMods[idx]];
-            _renderPackModList(listEl);
-            (listEl.querySelectorAll('.mod-item-card')[j]?.querySelector(j < idx ? '.mp-up' : '.mp-down') as HTMLElement | null)?.focus();
-        };
-        card.querySelector('.mp-up').onclick = () => swap(idx - 1);
-        card.querySelector('.mp-down').onclick = () => swap(idx + 1);
-
-        const dlIn = card.querySelector('.dl-input');
-        dlIn.oninput = () => { _packMods[idx].download_link = dlIn.value.trim(); };
-
-        const fbIn = card.querySelector('.fb-input');
-        fbIn.oninput = () => { _packMods[idx].download_fallback = fbIn.value.trim(); };
-
-        const depCb = card.querySelector('.deps-cb');
-        depCb.onchange = () => { _packMods[idx].include_dependencies = depCb.checked; };
-
-        const fbTypeSelect = card.querySelector('.fb-type-select');
-        fbTypeSelect.onchange = () => { _packMods[idx].fallback_type = fbTypeSelect.value; };
-
-        // Pre-show dependencies if mod is found locally
-        const localMod = _allMods.find(m => m.id === pm.mod_id);
-        if (localMod && localMod.dependencies && localMod.dependencies.length > 0) {
-            const dlist = card.querySelector('.deps-list');
-            localMod.dependencies.forEach(did => {
-                const tag = document.createElement('span');
-                tag.className = 'mp-chip';
-                const dmod = _allMods.find(m => m.id === did);
-                tag.textContent = dmod ? dmod.name : did;
-                dlist.appendChild(tag);
-            });
-        }
-
-        listEl.appendChild(card);
+                ${choice('catalog', 'store', t('modpack.ui.fromCat'), t('modpack.ui.fromCatD'))}
+            </div>`,
+        footer: `
+            <button type="button" class="btn btn-secondary" data-imp="close">${escHtml(t('common.cancel'))}</button>
+            <button type="button" class="btn btn-primary" id="mpx-go" hidden>${uiIcon('import', 14)}<span>${escHtml(t('modpack.ui.importBtn'))}</span></button>`,
     });
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function _formField(label, inputHtml) {
-    const wrap = document.createElement('div');
-    wrap.className = 'mp-field';
-    wrap.innerHTML = `
-        <div class="form-label">${escHtml(label)}</div>
-        ${inputHtml}
-    `;
-    return wrap;
-}
-
-function _makeIconBtn(svgHtml, bgColor, color) {
-    const btn = document.createElement('button');
-    btn.style.cssText = `
-        width:26px;height:26px;border-radius:6px;border:1px solid ${bgColor};
-        background:${bgColor};color:${color};cursor:pointer;
-        display:flex;align-items:center;justify-content:center;flex-shrink:0;
-        transition:all 0.15s;
-    `;
-    btn.innerHTML = svgHtml;
-    btn.addEventListener('mouseenter', () => btn.style.opacity = '0.8');
-    btn.addEventListener('mouseleave', () => btn.style.opacity = '1');
-    return btn;
-}
-
-function _openMultiSelectModal(listEl) {
-    // The house shell: .modal-overlay > .modal.modal--md.modal--tall, a header with the
-    // count as its subtitle, the search as a toolbar band, a scrolling list, the footer.
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay open';
-
-    const content = document.createElement('div');
-    content.className = 'modal bms modal--md modal--tall';
-    content.setAttribute('role', 'dialog');
-    content.setAttribute('aria-modal', 'true');
-
-    // Header + search band, written straight into the card; `header` stays the name the
-    // queries below use for "where the search and the count live".
-    const header = content;
-    content.innerHTML = `
-        <div class="modal-header">
-            <div class="bms-icon" aria-hidden="true">${uiIcon('folders', 18)}</div>
-            <div class="bms-titles">
-                <h2 class="modal-title">${escHtml(t('modpack.selectMods'))}</h2>
-                <p class="bms-sub" id="ms-count-label"></p>
-            </div>
-            <button type="button" class="modal-close" id="ms-close" aria-label="${escAttr(t('common.close') || 'Close')}">${MODAL_CLOSE_SVG}</button>
-        </div>
-        <div class="modal-toolbar">
-            <div class="mp-ms-search" id="ms-search-wrap">
-                ${uiIcon('search', 14)}
-                <input type="text" id="ms-search" placeholder="${escAttr(t('common.search') || 'Search…')}">
-            </div>
-        </div>
-    `;
-
-    // Body
-    const body = document.createElement('div');
-    body.className = 'modal-body';
-    body.style.cssText = 'gap:5px;';
-
-    // Filter available mods
-    // Show all mods, but mark those already in pack
-    let availableMods = [..._allMods];
-
-    // If multi-profile is OFF, only show mods from the current active profile
-    if (!_editingPack.multi_profile) {
-        const targetId = _activeProfileId || window.cachedActiveProfileId;
-        const activeProfile = _profiles.find(p => String(p.id) === String(targetId));
-        console.log('[Modpack] Active Profile detected:', activeProfile?.name, 'ID:', targetId);
-
-        if (activeProfile) {
-            availableMods = availableMods.filter(m => {
-                // Match by profile_id or by directory path (path is very reliable in BMM)
-                const matchesId = m.profile_id && String(m.profile_id) === String(activeProfile.id);
-                const matchesPath = m.mod_folder_path && m.mod_folder_path.toLowerCase().startsWith(activeProfile.mods_path.toLowerCase());
-                return matchesId || matchesPath;
-            });
-            console.log('[Modpack] Available after profile filter:', availableMods.length);
-        } else {
-            console.warn('[Modpack] No active profile found, showing all mods.');
+    const linkBox = m.q('#mpx-link');
+    const url = m.q<HTMLInputElement>('#mpx-url');
+    const err = m.q('#mpx-err');
+    const goBtn = m.q<HTMLButtonElement>('#mpx-go');
+    const showErr = (msg) => { if (err) { err.textContent = msg; err.hidden = !msg; } };
+    const fromLink = async () => {
+        const v = (url?.value || '').trim();
+        if (!/^https?:\/\/\S+$/i.test(v)) { showErr(t('modpack.ui.linkBad')); url?.focus(); return; }
+        showErr('');
+        if (goBtn) { goBtn.disabled = true; goBtn.innerHTML = `${uiIcon('loader', 14, { cls: 'np-spin' })}<span>${escHtml(t('modpack.ui.importing'))}</span>`; }
+        try {
+            await invoke('install_modpack_from_url', { downloadUrl: v });
+            m.close();
+            _afterImport();
+        } catch (e) {
+            const raw = String(e);
+            showErr(raw.startsWith('modpack.errDownload') ? t('modpack.errDownload') : raw);
+            if (goBtn) { goBtn.disabled = false; goBtn.innerHTML = `${uiIcon('import', 14)}<span>${escHtml(t('modpack.ui.importBtn'))}</span>`; }
         }
-    }
-
-    const checkboxes = [];
-    const rows = [];
-
-    if (availableMods.length === 0) {
-        body.innerHTML = `<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:60px 20px; display:flex; flex-direction:column; align-items:center; gap:12px;">
-            ${uiIcon('folders', 48, { style: 'opacity:0.3; margin-bottom: 4px;' })}
-            <span>${t('modpack.noMoreMods')}</span>
-        </div>`;
-    }
-
-    availableMods.forEach(m => {
-        const prof = _profiles.find(p => m.mod_folder_path && (m.mod_folder_path.toString().includes(p.mods_path?.toString()) || p.mods_path?.toString().includes(m.mod_folder_path?.toString())));
-        const depCount = m.dependencies ? m.dependencies.length : 0;
-        const searchLabel = (m.name + (prof ? prof.name : '')).toLowerCase();
-
-        const alreadyInPack = _packMods.some(pm => String(pm.mod_id) === String(m.id));
-
-        const row = document.createElement('label');
-        row.style.cssText = `display:flex; align-items:center; gap:14px; padding:10px 12px; border-radius:12px; cursor:pointer; transition:all 0.15s; border:1px solid transparent; background:${alreadyInPack ? 'color-mix(in srgb, var(--bmm-cyan) 8%, transparent)' : 'var(--bmm-s02)'};`;
-        if (alreadyInPack) row.style.borderColor = 'color-mix(in srgb, var(--bmm-cyan) 25%, transparent)';
-        if (_isAddingMods) {
-            row.style.pointerEvents = 'none';
-            row.style.opacity = '0.7';
-        }
-
-        row.addEventListener('mouseenter', () => {
-            if (!row.querySelector('input').checked) {
-                row.style.background = 'color-mix(in srgb, var(--bmm-cyan) 4%, transparent)';
-                row.style.borderColor = 'color-mix(in srgb, var(--bmm-cyan) 12%, transparent)';
-            }
-        });
-        row.addEventListener('mouseleave', () => {
-            if (!row.querySelector('input').checked) {
-                row.style.background = 'var(--bmm-s02)';
-                row.style.borderColor = 'transparent';
-            } else if (alreadyInPack) {
-                row.style.background = 'color-mix(in srgb, var(--bmm-cyan) 8%, transparent)';
-                row.style.borderColor = 'color-mix(in srgb, var(--bmm-cyan) 25%, transparent)';
-            }
-        });
-
-        const switchWrap = document.createElement('label');
-        switchWrap.className = 'bmm-switch';
-        switchWrap.style.cssText = 'flex-shrink:0;';
-
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.value = m.id;
-        cb.checked = alreadyInPack;
-        cb.dataset.profId = prof?.id || '';
-
-        const track = document.createElement('span');
-        track.className = 'bmm-switch-track';
-        const thumb = document.createElement('span');
-        thumb.className = 'bmm-switch-thumb';
-        track.appendChild(thumb);
-
-        switchWrap.appendChild(cb);
-        switchWrap.appendChild(track);
-
-        cb.addEventListener('change', () => {
-            row.style.background = cb.checked ? 'color-mix(in srgb, var(--bmm-cyan) 8%, transparent)' : 'var(--bmm-s02)';
-            row.style.borderColor = cb.checked ? 'color-mix(in srgb, var(--bmm-cyan) 25%, transparent)' : 'transparent';
-            updateSelCount();
-        });
-
-        const info = document.createElement('div');
-        info.style.cssText = 'flex:1; min-width:0;';
-        info.innerHTML = `
-            <div style="font-size:13px; font-weight:600; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escHtml(m.name)}</div>
-            <div style="display:flex; align-items:center; gap:5px; margin-top:3px; flex-wrap:wrap;">
-                <span style="font-size:10px; color:var(--text-muted);">v${escHtml(m.version || '?')}</span>
-                ${prof ? `<span style="font-size:9px; font-weight:700; color:var(--accent); background:color-mix(in srgb, var(--bmm-cyan) 10%, transparent); border:1px solid color-mix(in srgb, var(--bmm-cyan) 20%, transparent); border-radius:4px; padding:1px 6px;">${escHtml(prof.name)}</span>` : ''}
-                ${depCount > 0 ? `<span style="font-size:9px; color:var(--text-muted); background:var(--bmm-s05); border:1px solid var(--bmm-s06); border-radius:4px; padding:1px 6px;">&rarr; ${depCount} ${t('modpack.dependenciesShort') || 'dep.'}</span>` : ''}
-                ${alreadyInPack ? `<span style="font-size:8px; font-weight:800; color:var(--success); background:color-mix(in srgb, var(--bmm-success) 10%, transparent); padding:1px 4px; border-radius:3px; text-transform:uppercase;">${t('modpack.alreadyAdded') || 'DÉJÀ AJOUTÉ'}</span>` : ''}
-            </div>
-        `;
-
-        row.appendChild(switchWrap);
-        row.appendChild(info);
-        body.appendChild(row);
-        checkboxes.push(cb);
-        rows.push({ row, searchLabel });
-    });
-
-    // Footer
-    const footer = document.createElement('div');
-    footer.className = 'modal-footer';
-    footer.innerHTML = `
-        <div class="modal-footer-start">
-            <span class="modal-footer-note" id="ms-footer-count"></span>
-            <label class="modal-footer-note" style="cursor:pointer;" data-tooltip="${t('modpack.autoUpdateSrcTip') || 'For mods linked to a repo, set that repo as a Server Repo fallback link.'}">
-                <input type="checkbox" id="ms-auto-update-src" checked>
-                <span>${t('modpack.autoUpdateSrc') || 'Auto-add update repo as fallback'}</span>
-            </label>
-        </div>
-            <button class="btn btn-secondary" id="ms-cancel">${t('common.cancel')}</button>
-            <button class="btn btn-primary" id="ms-confirm" style="opacity:0.5; transition:opacity 0.2s;">
-                ${uiIcon('check', 14, { style: 'margin-right:6px;' })}
-                ${t('modpack.addMod')}
-            </button>
-    `;
-
-    const countLabel = header.querySelector('#ms-count-label');
-    const footerCount = footer.querySelector('#ms-footer-count');
-    const confirmBtn = footer.querySelector('#ms-confirm');
-
-    function updateSelCount() {
-        if (_isAddingMods) {
-            countLabel.textContent = _currentAddingModName ? `${t('modpack.adding')}: ${_currentAddingModName}` : t('modpack.addingInProgress');
-            footerCount.textContent = '';
-            confirmBtn.style.opacity = '0.5';
-            confirmBtn.disabled = true;
-            confirmBtn.innerHTML = `${uiIcon('loader', 14, { style: 'margin-right:8px; animation: bmm-loading-spin 1s linear infinite;' })} ${t('common.loading')}`;
-            return;
-        }
-
-        // Restore buttons if we just finished
-        confirmBtn.innerHTML = `${uiIcon('check', 14, { style: 'margin-right:6px;' })} ${t('modpack.addMod')}`;
-        footer.querySelector('#ms-cancel').disabled = false;
-        header.querySelector('#ms-close').disabled = false;
-
-        const selCount = checkboxes.filter(c => c.checked).length;
-        const total = availableMods.length;
-        countLabel.textContent = `${total} ${t('modpack.modsAvailable')}`;
-        footerCount.textContent = selCount > 0 ? `${selCount} ${t('modpack.modsSelected')}` : '';
-        confirmBtn.style.opacity = selCount === 0 ? '0.5' : '1';
-        confirmBtn.disabled = selCount === 0;
-    }
-    _currentSelectionModalUpdateFn = updateSelCount;
-    updateSelCount();
-
-    // Search
-    header.querySelector('#ms-search').addEventListener('input', (e) => {
-        const q = e.target.value.toLowerCase().trim();
-        rows.forEach(({ row, searchLabel }) => {
-            row.style.display = !q || searchLabel.includes(q) ? 'flex' : 'none';
-        });
-    });
-    const close = () => {
-        _currentSelectionModalUpdateFn = null;
-        _currentSelectionModalOverlay = null;
-        overlay.remove();
     };
-
-    // Cancel: if mods are still being added, abort the in-progress run; otherwise close.
-    const cancelOrAbort = () => {
-        if (_isAddingMods) {
-            _addCancelled = true;
-            toast(t('modpack.addCancelled') || 'Stopping — finishing the current mod…', 'info');
-            return;
-        }
-        close();
-    };
-    footer.querySelector('#ms-cancel').addEventListener('click', cancelOrAbort);
-    header.querySelector('#ms-close').addEventListener('click', cancelOrAbort);
-
-    confirmBtn.addEventListener('click', async () => {
-        const checked = checkboxes.filter(cb => cb.checked);
-        if (checked.length === 0) return;
-
-        _isAddingMods = true;
-        _addCancelled = false;
-        const autoUpdateSrc = !!(footer.querySelector('#ms-auto-update-src') as HTMLInputElement)?.checked;
-        updateSelCount(); // Show loading state in current modal
-
-        // No more prevent-close here as per user request
-
-        const depMode = document.getElementById('mp-depmode')?.value || 'manual';
-        const includeDeps = depMode === 'all';
-        let errors = 0;
-
-        // Clear current pack mods and rebuild from selection to ensure sync and uniqueness
-        // Actually, we should only add the new ones, or rebuild the whole list.
-        // The user wants uniqueness, so we filter out what's already there before pushing.
-
-        let cancelledDuringAdd = false;
-        for (const cb of checked) {
-            // Stop early if the user hit Cancel during the run.
-            if (_addCancelled) { cancelledDuringAdd = true; break; }
-            // Uniqueness check: avoid adding if already in _packMods
-            const exists = _packMods.some(pm => String(pm.mod_id) === String(cb.value));
-            if (exists) continue;
-
+    m.dialog.addEventListener('click', async (e) => {
+        const key = (e.target as HTMLElement).closest<HTMLElement>('[data-imp]')?.dataset.imp;
+        if (key === 'close') m.close();
+        else if (key === 'catalog') { m.close(); document.getElementById('btn-modpack-catalog')?.click(); }
+        else if (key === 'link') {
+            if (linkBox) linkBox.hidden = false;
+            if (goBtn) goBtn.hidden = false;
+            m.q('[data-imp="link"]')?.classList.add('is-open');
+            url?.focus();
+        } else if (key === 'file') {
+            m.close();
             try {
-                const targetMod = availableMods.find(m => String(m.id) === String(cb.value));
-                _currentAddingModName = targetMod ? targetMod.name : '';
-                if (_currentSelectionModalUpdateFn) _currentSelectionModalUpdateFn();
-
-                // If the mod is linked to a repo, optionally seed that repo as a
-                // Server Repo fallback download link so it stays updatable.
-                let fallbackLink = null, fallbackType = 'direct';
-                if (autoUpdateSrc && targetMod) {
-                    const repo = targetMod.source_repo || targetMod.update_url
-                        || (Array.isArray(targetMod.update_sources) && targetMod.update_sources[0]?.repo_url) || '';
-                    if (repo) { fallbackLink = repo; fallbackType = 'sr'; }
-                }
-
-                const ref = await invoke('build_modpack_mod_ref', {
-                    modId: cb.value,
-                    profileId: cb.dataset.profId || null,
-                    includeDependencies: includeDeps,
-                    downloadLink: null,
-                    fallbackLink,
-                    fallbackType,
-                });
-                _packMods.push(ref);
-            } catch (e) {
-                console.error(e);
-                errors++;
+                await invoke('import_modpack');
+                _afterImport();
+            } catch (er) {
+                if (String(er) !== 'repo.errCancel') toast(String(er), 'error');
             }
         }
-
-        // Remove mods that were UNCHECKED in the modal — but only when the run
-        // completed; on cancel we keep whatever was already added and don't prune.
-        if (!cancelledDuringAdd) {
-            const selectedIds = checked.map(cb => String(cb.value));
-            _packMods = _packMods.filter(pm => selectedIds.includes(String(pm.mod_id)));
-        }
-
-        if (cancelledDuringAdd) toast(t('modpack.addStopped') || 'Adding stopped', 'info');
-        if (errors > 0) toast(t('modpack.addModErrors')?.replace('{count}', String(errors)) || `${errors} mods ont échoué.`, 'warning');
-        _renderPackModList(listEl);
-
-        _isAddingMods = false;
-        _currentAddingModName = '';
-
-        if (_currentSelectionModalUpdateFn) {
-            _currentSelectionModalUpdateFn();
-        }
-        // Close the modal if it exists (even if it was reopened)
-        if (_currentSelectionModalOverlay && document.body.contains(_currentSelectionModalOverlay)) {
-            const closeBtn = _currentSelectionModalOverlay.querySelector('#ms-close') || _currentSelectionModalOverlay.querySelector('#ms-cancel');
-            if (closeBtn) closeBtn.click();
-        }
     });
-
-    content.appendChild(body);
-    content.appendChild(footer);
-    overlay.appendChild(content);
-
-    // Close on click outside (backdrop)
-    overlay.addEventListener('mousedown', (e) => {
-        if (e.target === overlay) close();
-    });
-
-    const appOuter = document.getElementById('app-window-outer') || document.body;
-    appOuter.appendChild(overlay);
-    raiseAboveAll(overlay);
-    _currentSelectionModalOverlay = overlay;
-
-    requestAnimationFrame(() => header.querySelector('#ms-search').focus());
+    goBtn?.addEventListener('click', () => void fromLink());
+    url?.addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key === 'Enter') { e.preventDefault(); void fromLink(); } });
 }
 
+// ── Export & share ───────────────────────────────────────────────────────────
+
+function _openShareModal(pack) {
+    const m = openModal({
+        title: t('modpack.ui.share'),
+        subtitle: t('modpack.ui.shareSub'),
+        icon: uiIcon('share', 18),
+        size: 'sm',
+        className: 'mpx',
+        closeLabel: t('common.close'),
+        body: `
+            ${_packLine(pack)}
+            <section class="bms-card">
+                <span class="bms-label">${escHtml(t('modpack.ui.ids'))}</span>
+                <p class="bms-note">${escHtml(t('modpack.ui.idsD'))}</p>
+                <div class="mpx-ids">${copyIdButtons('modpack', pack.id)}</div>
+            </section>`,
+        footer: `
+            <button type="button" class="btn btn-secondary" data-sh="close">${escHtml(t('common.close'))}</button>
+            <button type="button" class="btn btn-primary" data-sh="file">${uiIcon('export', 14)}<span>${escHtml(t('modpack.ui.exportFile'))}</span></button>`,
+        initialFocus: '[data-sh="file"]',
+    });
+    wireCopyIds(m.body, toast);
+    m.q('[data-sh="close"]')?.addEventListener('click', () => m.close());
+    m.q('[data-sh="file"]')?.addEventListener('click', async () => {
+        if (await _exportModpack(pack)) m.close();
+    });
+}
+
+/** True when the file was written. */
+async function _exportModpack(pack): Promise<boolean> {
+    if (!pack) return false;
+    try {
+        await invoke('export_modpack', { id: pack.id });
+        toastSaved(t('modpack.exportSuccess'));
+        return true;
+    } catch (err) {
+        if (String(err) !== 'repo.errCancel') toast(String(err), 'error');
+        return false;
+    }
+}
+
+// ── Delete ───────────────────────────────────────────────────────────────────
+
+async function _deleteModpack(container, pack) {
+    if (!pack) return;
+    if (!(await _confirmDelete(pack))) return;
+    try {
+        await invoke('delete_modpack', { id: pack.id });
+        toast(t('modpack.deletedOk'), 'success');
+        await _loadData();
+        if (container) _renderModpackList(container);
+        window.dispatchEvent(new CustomEvent('bmm://modpacks-updated'));
+    } catch (err) {
+        toast(String(err), 'error');
+    }
+}
+
+/** The question, with the pack it is about. Cancel has the focus. */
+function _confirmDelete(pack): Promise<boolean> {
+    return new Promise((resolve) => {
+        let yes = false;
+        const m = openModal({
+            title: t('modpack.ui.deleteTitle'),
+            subtitle: t('modpack.ui.deleteSub'),
+            icon: uiIcon('delete', 18),
+            tone: 'danger',
+            size: 'sm',
+            closeLabel: t('common.close'),
+            body: _packLine(pack),
+            footer: `
+                <button type="button" class="btn btn-secondary" id="dmod-cancel">${escHtml(t('common.cancel'))}</button>
+                <button type="button" class="btn btn-danger" id="dmod-confirm">${uiIcon('delete', 14)}<span>${escHtml(t('modpack.deleteConfirmBtn'))}</span></button>`,
+            initialFocus: '#dmod-cancel',
+            onClose: () => resolve(yes),
+        });
+        m.q('#dmod-cancel')?.addEventListener('click', () => m.close());
+        m.q('#dmod-confirm')?.addEventListener('click', () => { yes = true; m.close(); });
+    });
+}
+
+// ── Repair ───────────────────────────────────────────────────────────────────
 
 async function _showRepairModal(container, pack, report, onComplete) {
     // Told to whoever is listening, before the modal opens.
@@ -1138,119 +1307,65 @@ async function _showRepairModal(container, pack, report, onComplete) {
 
     const activeProfileId = _activeProfileId || window.cachedActiveProfileId;
     if (!activeProfileId) {
-        toast((window.t ? window.t('common.error') : 'No active profile'), "error");
+        toast(t('common.error'), 'error');
         return;
     }
 
-    // The house shell (.modal-overlay > .modal.modal--md): header with a warning tile, the
-    // list and the progress in the body, the actions in the footer.
-    const modalOverlay = document.createElement('div');
-    modalOverlay.className = 'modal-overlay open';
-
-    const content = document.createElement('div');
-    content.className = 'modal bms modal--md';
-    content.setAttribute('role', 'dialog');
-    content.setAttribute('aria-modal', 'true');
-
-    // Build lists
-    let modsHtml = '';
     const problematicMods = [...report.missingMods, ...report.corruptedMods];
-
     let canRepairAny = false;
 
-    problematicMods.forEach(m => {
+    const rows = problematicMods.map(m => {
         const isMissing = report.missingMods.some(x => x.mod_id === m.mod_id);
-        const statusText = isMissing ? t('modpack.repair.statusMissing') || "Manquant" : t('modpack.repair.statusCorrupted') || "Corrompu";
-        const statusColor = isMissing ? "var(--danger)" : "var(--bmm-warning)";
-        const fallbackType = m.fallback_type || "direct";
+        const fallbackType = m.fallback_type || 'direct';
+        // Corrupted => can always be repaired locally (moved files), no link needed.
+        // Missing   => needs a download link.
+        const hasLink = fallbackType === 'sr' ? !!pack.sr_link : !!(m.download_fallback || m.download_link);
+        if (hasLink || !isMissing) canRepairAny = true;
+        const source = hasLink
+            ? (fallbackType === 'sr' ? t('modpack.fallbackServerRepo') : t('modpack.repair.directLink'))
+            : !isMissing ? t('modpack.repair.localRecovery') : t('modpack.repair.linkMissing');
+        return `<li class="mp-rep-row">
+            <span class="mp-rep-txt"><b>${escHtml(m.mod_name)}</b><span>${m.mod_version ? `v${escHtml(m.mod_version)} · ` : ''}${escHtml(source)}</span></span>
+            <span class="bms-chip ${isMissing ? 'bms-chip--danger' : 'bms-chip--warn'}"><span class="bms-dot"></span>${escHtml(isMissing ? t('modpack.repair.statusMissing') : t('modpack.repair.statusCorrupted'))}</span>
+        </li>`;
+    }).join('');
 
-        // Vérification de la possibilité de réparation :
-        // - Corrompu => peut toujours être réparé localement (files déplacés), pas besoin de lien
-        // - Manquant  => nécessite un lien de téléchargement
-        const hasLink = fallbackType === "sr" ? !!pack.sr_link : !!(m.download_fallback || m.download_link);
-        const isCorrupted = !isMissing; // Corrupted = can be fixed locally (moved file)
-        if (hasLink || isCorrupted) canRepairAny = true;
-
-        const sourceLabel = hasLink
-            ? (fallbackType === "sr" ? "ServerRepo" : t('modpack.repair.directLink') || "Lien Direct")
-            : isCorrupted
-                ? `<span style="color:var(--bmm-warning); font-weight:800;">${t('modpack.repair.localRecovery') || 'Récupération Locale'}</span>`
-                : `<span style="color:var(--danger); font-weight:800;">${t('modpack.repair.linkMissing') || 'Lien Manquant'}</span>`;
-
-        modsHtml += `
-            <div style="display:flex; align-items:center; justify-content:space-between; padding:12px; background:var(--bmm-s03); border-radius:12px; border:1px solid var(--bmm-s05); margin-bottom:8px;">
-                <div style="display:flex; flex-direction:column; gap:4px;">
-                    <div style="font-size:13px; font-weight:600; color:var(--text-primary);">${escHtml(m.mod_name)}</div>
-                    <div style="font-size:10px; color:var(--text-muted);">${escHtml(m.mod_version)}</div>
-                </div>
-                <div style="text-align:right; display:flex; flex-direction:column; gap:4px;">
-                    <div style="font-size:11px; font-weight:800; color:${statusColor}; text-transform:uppercase; letter-spacing:0.5px;">${statusText}</div>
-                    <div style="font-size:10px; color:var(--text-muted); opacity:0.6;">Source: ${sourceLabel}</div>
-                </div>
-            </div>
-        `;
+    const modal = openModal({
+        title: t('modpack.repair.title'),
+        subtitle: t('modpack.repair.subtitle'),
+        icon: uiIcon('download', 18),
+        tone: 'warn',
+        size: 'md',
+        className: 'mp-rep',
+        closeLabel: t('common.close'),
+        body: `
+            <ul class="mp-rep-list">${rows}</ul>
+            <div class="mp-rep-progress" id="repair-progress-container" hidden>
+                <div class="mp-rep-status"><span id="repair-status-text">${escHtml(t('modpack.repair.preparing'))}</span><span id="repair-status-pct">0%</span></div>
+                <div class="bms-progress"><span id="repair-progress-bar"></span></div>
+            </div>`,
+        footer: `
+            <button type="button" id="repair-cancel" class="btn btn-secondary">${escHtml(t('modpack.repair.cancel'))}</button>
+            <button type="button" id="repair-start" class="btn btn-primary"${canRepairAny ? '' : ' disabled'}>${uiIcon('download', 14)}<span>${escHtml(canRepairAny ? t('modpack.repair.startBtn') : t('modpack.repair.impossible'))}</span></button>`,
     });
 
-    content.innerHTML = `
-        <div class="modal-header">
-            <div class="bms-icon bms-icon--warn" aria-hidden="true">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-            </div>
-            <div class="bms-titles">
-                <h2 class="modal-title">${t('modpack.repair.title') || 'Repair needed'}</h2>
-                <p class="bms-sub">${t('modpack.repair.subtitle') || 'Some mods are missing or corrupted.'}</p>
-            </div>
-            <button type="button" class="modal-close" id="repair-x" aria-label="${escAttr(t('common.close') || 'Close')}">${MODAL_CLOSE_SVG}</button>
-        </div>
-        <div class="modal-body" style="display:block">
-        <div class="custom-scrollbar" style="display:flex; flex-direction:column;">
-            ${modsHtml}
-        </div>
+    const startBtn = modal.q('#repair-start');
+    const progressContainer = modal.q('#repair-progress-container');
+    const statusText = modal.q('#repair-status-text');
+    const statusPct = modal.q('#repair-status-pct');
+    const progressBar = modal.q<HTMLElement>('#repair-progress-bar');
+    const actionsBlock = modal.footer;
+    const closeModal = () => modal.close();
+    const setTone = (tone: '' | 'err' | 'muted') => {
+        statusText?.classList.toggle('is-err', tone === 'err');
+        statusText?.classList.toggle('is-muted', tone === 'muted');
+    };
 
-        <div id="repair-progress-container" style="display:none; flex-direction:column; gap:8px; margin-top:16px; padding:16px; background:var(--bmm-s03); border-radius:12px; border:1px solid var(--bmm-border);">
-            <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-muted); font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">
-                <span id="repair-status-text">${t('modpack.repair.preparing') || 'Préparation...'}</span>
-                <span id="repair-status-pct" style="color:var(--bmm-warning);">0%</span>
-            </div>
-            <div style="width:100%; height:6px; background:var(--bmm-s08); border-radius:10px; overflow:hidden;">
-                <div id="repair-progress-bar" style="height:100%; background:var(--bmm-warning); width:0%; transition:width 0.3s ease; box-shadow:0 0 10px color-mix(in srgb, var(--bmm-warning) 50%, transparent);"></div>
-            </div>
-        </div>
+    modal.q('#repair-cancel')?.addEventListener('click', closeModal);
 
-        </div>
-        <div class="modal-footer" id="repair-actions">
-            <button id="repair-cancel" class="btn btn-secondary">${t('modpack.repair.cancel') || 'Cancel'}</button>
-            <button id="repair-start" class="btn btn-warning" ${!canRepairAny ? 'disabled' : ''}>
-                ${canRepairAny ? (t('modpack.repair.startBtn') || 'Réparer et Appliquer') : (t('modpack.repair.impossible') || 'Réparation Impossible')}
-            </button>
-        </div>
-    `;
-
-    modalOverlay.appendChild(content);
-
-    const appOuter = document.getElementById('app-window-outer') || document.body;
-    appOuter.appendChild(modalOverlay);
-    raiseAboveAll(modalOverlay);
-
-    const closeBtn = content.querySelector('#repair-cancel');
-    const startBtn = content.querySelector('#repair-start');
-    const progressContainer = content.querySelector('#repair-progress-container');
-    const statusText = content.querySelector('#repair-status-text');
-    const statusPct = content.querySelector('#repair-status-pct');
-    const progressBar = content.querySelector('#repair-progress-bar');
-    const actionsBlock = content.querySelector('#repair-actions');
-
-    const closeModal = () => { modalOverlay.remove(); };
-
-    closeBtn.addEventListener('click', closeModal);
-    content.querySelector('#repair-x')?.addEventListener('click', closeModal);
-    modalOverlay.addEventListener('mousedown', (e) => {
-        if (e.target === modalOverlay) closeModal();
-    });
-
-    startBtn.addEventListener('click', async () => {
-        actionsBlock.style.display = 'none';
-        progressContainer.style.display = 'flex';
+    startBtn?.addEventListener('click', async () => {
+        if (actionsBlock) actionsBlock.hidden = true;
+        if (progressContainer) progressContainer.hidden = false;
 
         let unlisten = null;
         try {
@@ -1265,25 +1380,23 @@ async function _showRepairModal(container, pack, report, onComplete) {
 
             for (let i = 0; i < problematicMods.length; i++) {
                 const mref = problematicMods[i];
-
-                const fallbackType = mref.fallback_type || "direct";
-                const hasLink = fallbackType === "sr" ? !!pack.sr_link : !!(mref.download_fallback || mref.download_link);
-
+                const fallbackType = mref.fallback_type || 'direct';
+                const hasLink = fallbackType === 'sr' ? !!pack.sr_link : !!(mref.download_fallback || mref.download_link);
                 const isMissingMref = report.missingMods.some(x => x.mod_id === mref.mod_id);
 
-                // Mods manquants sans lien : impossible à réparer, on notifie et on passe
+                // Missing mods without a link cannot be repaired: say so and move on.
                 if (!hasLink && isMissingMref) {
-                    modRepairErrors.push(t('modpack.repair.noLink', { name: mref.mod_name }) || `${mref.mod_name} : aucun lien fourni`);
-                    statusText.style.color = 'var(--text-muted)';
-                    statusText.textContent = `⚠ ${t('modpack.repair.noLinkSkipped', { name: mref.mod_name })}`;
+                    modRepairErrors.push(t('modpack.repair.noLink', { name: mref.mod_name }));
+                    setTone('muted');
+                    statusText.textContent = t('modpack.repair.noLinkSkipped', { name: mref.mod_name });
                     await new Promise(r => setTimeout(r, 1200));
-                    statusText.style.color = '';
+                    setTone('');
                     continue;
                 }
 
                 statusText.textContent = t('modpack.repair.repairing', { name: mref.mod_name });
-                statusPct.textContent = `0%`;
-                progressBar.style.width = `0%`;
+                statusPct.textContent = '0%';
+                progressBar.style.width = '0%';
 
                 try {
                     await invoke('repair_modpack_mod', {
@@ -1294,67 +1407,69 @@ async function _showRepairModal(container, pack, report, onComplete) {
                             creatorId: null
                         }
                     });
-                    statusText.textContent = `✓ ${mref.mod_name}`;
+                    statusText.replaceChildren(uiIconEl('success', 14, { style: 'vertical-align:-2px;margin-right:4px' }), mref.mod_name);
                 } catch (modErr) {
                     const errStr = String(modErr);
                     let friendlyMsg;
                     if (errStr.includes('aucun lien') || errStr.includes('None lien')) {
-                        friendlyMsg = t('modpack.repair.noLink', { name: mref.mod_name }) || `${mref.mod_name} : aucun lien de téléchargement fourni`;
+                        friendlyMsg = t('modpack.repair.noLink', { name: mref.mod_name });
                     } else if (errStr.includes('non trouvé') || errStr.includes('404')) {
-                        friendlyMsg = t('modpack.repair.notFound', { name: mref.mod_name }) || `${mref.mod_name} : fichier introuvable sur le serveur`;
+                        friendlyMsg = t('modpack.repair.notFound', { name: mref.mod_name });
                     } else if (errStr.includes('refusé') || errStr.includes('403')) {
-                        friendlyMsg = t('modpack.repair.denied', { name: mref.mod_name }) || `${mref.mod_name} : accès refusé par le serveur`;
+                        friendlyMsg = t('modpack.repair.denied', { name: mref.mod_name });
                     } else {
                         friendlyMsg = `${mref.mod_name} : ${errStr}`;
                     }
                     modRepairErrors.push(friendlyMsg);
-                    statusText.style.color = 'var(--danger)';
-                    statusText.textContent = `✗ ${friendlyMsg}`;
+                    setTone('err');
+                    statusText.replaceChildren(uiIconEl('error', 14, { style: 'vertical-align:-2px;margin-right:4px' }), friendlyMsg);
                     await new Promise(r => setTimeout(r, 1500));
-                    statusText.style.color = '';
+                    setTone('');
                 }
             }
 
             await _loadData();
 
-            statusText.textContent = t('modpack.repair.finalCheck') || 'Vérification finale...';
+            statusText.textContent = t('modpack.repair.finalCheck');
             const finalReport = await invoke('check_modpack_integrity', { modpack: pack });
 
             if (modRepairErrors.length > 0 && (finalReport.missingMods.length > 0 || finalReport.corruptedMods.length > 0)) {
-                toast(t('modpack.repair.incomplete', { errors: modRepairErrors.join('\n• ') }) || `Réparation incomplète :\n• ${modRepairErrors.join('\n• ')}`, 'warning');
+                toast(t('modpack.repair.incomplete', { errors: modRepairErrors.join('\n• ') }), 'warning');
                 closeModal();
             } else if (modRepairErrors.length > 0) {
-                toast(t('modpack.repair.partial', { errors: modRepairErrors.join('\n• ') }) || `Réparé, mais certains mods ont été ignorés :\n• ${modRepairErrors.join('\n• ')}`, 'warning');
+                toast(t('modpack.repair.partial', { errors: modRepairErrors.join('\n• ') }), 'warning');
                 closeModal();
                 onComplete();
             } else if (finalReport.missingMods.length > 0 || finalReport.corruptedMods.length > 0) {
-                toast(t('modpack.repair.unstable') || "La réparation n'a pas pu tout résoudre.", 'warning');
+                toast(t('modpack.repair.unstable'), 'warning');
                 closeModal();
                 onComplete();
             } else {
-                toast(t('modpack.repair.success') || "Réparation terminée avec succès !", 'success');
+                toast(t('modpack.repair.success'), 'success');
                 closeModal();
                 onComplete();
             }
         } catch (err) {
-            toast((window.t ? window.t('common.error') : 'Error') + ' : ' + err.toString(), 'error');
-            actionsBlock.style.display = 'flex';
+            toast(`${t('common.error')} : ${String(err)}`, 'error');
+            if (actionsBlock) actionsBlock.hidden = false;
         } finally {
             if (unlisten) unlisten();
         }
     });
 }
 
+// ── Apply ────────────────────────────────────────────────────────────────────
+
 /**
- * A pack's switch. Off → the activation dialog (what will change, options), which runs the pack
- * as one background job (modpack-activate.ts). On → the pack's mods that are on go off, also
- * as a job. Either way the list redraws once the job has finished.
+ * A pack's primary action. Off → the activation dialog (what will change, options), which runs
+ * the pack as one background job (modpack-activate.ts). On → the pack's mods that are on go
+ * off, also as a job. Either way the list redraws once the job has finished.
  */
 async function _applyModpack(container, pack) {
     if (!pack || !pack.mods || pack.mods.length === 0) return;
     const onDone = async () => {
         await _loadData();
-        if (container && container.isConnected && !_editingPack) _renderModpackList(container);
+        if (container && container.isConnected) _renderModpackList(container);
     };
     try {
         const shaIndex = await _resolveHashesToModIds(pack.mods);
@@ -1372,88 +1487,6 @@ async function _applyModpack(container, pack) {
 /** The repair dialog for the activation dialog's "Repair": re-plans once it is done. */
 function _repairFor(container) {
     return (pack, report, after) => { void _showRepairModal(container, pack, report, async () => { after(); }); };
-}
-
-async function _exportModpack(pack) {
-    if (!pack) return;
-    try {
-        await invoke('export_modpack', { id: pack.id });
-        toastSaved(t('modpack.exportSuccess') || 'Modpack exporté !');
-    } catch (err) {
-        if (String(err) !== 'repo.errCancel') toast(String(err), 'error');
-    }
-}
-
-async function _deleteModpack(container, pack) {
-    if (!pack) return;
-
-    const action = await _showDeleteModal(container, pack);
-    if (action === 'edit') {
-        _openEditor(container, pack);
-        return;
-    }
-    if (!action) return;
-
-    try {
-        await invoke('delete_modpack', { id: pack.id });
-        toast(t('modpack.deletedOk') || 'Modpack supprimé.', 'success');
-        await _loadData();
-        _renderModpackList(container);
-        window.dispatchEvent(new CustomEvent('bmm://modpacks-updated'));
-    } catch (err) {
-        toast(String(err), 'error');
-    }
-}
-
-/**
- * Premium delete-confirmation modal.
- * Returns:  'delete' → user confirmed,  'edit' → user clicked Edit,  null → cancelled.
- */
-function _showDeleteModal(container: any, pack: any): Promise<'delete' | 'edit' | null> {
-    return new Promise((resolve) => {
-        const modsCount = pack.mods?.length || 0;
-        const gameLine = pack.game_name ? ` · ${escHtml(pack.game_name)}` : '';
-        const descBlock = pack.description
-            ? `<div class="mp-del-desc">${escHtml(pack.description)}</div>`
-            : '';
-        let result: 'delete' | 'edit' | null = null;
-        const TRASH = (uiIcon('delete', 20));
-        const m = openModal({
-            title: t('modpack.deleteTitle') || 'Delete the launchpack',
-            subtitle: t('modpack.deleteSubtitle') || 'This cannot be undone. The pack will be deleted for good.',
-            icon: TRASH,
-            tone: 'danger',
-            size: 'sm',
-            closeLabel: t('common.close') || 'Close',
-            body: `
-            <div class="mp-del-card">
-                <div class="mp-del-row">
-                    <div class="mp-del-ic">${uiIcon('folders', 16)}</div>
-                    <div style="min-width:0;">
-                        <div class="mp-del-name">${escHtml(pack.name)}</div>
-                        <div class="mp-del-meta">${modsCount} mod${modsCount !== 1 ? 's' : ''}${gameLine}</div>
-                    </div>
-                </div>
-                ${descBlock}
-            </div>`,
-            // The destructive action stands apart: Edit on the left, Cancel then Delete.
-            footer: `
-                <div class="modal-footer-start">
-                    <button type="button" class="btn btn-ghost" id="dmod-edit">
-                        ${uiIcon('edit', 12)}
-                        ${t('modpack.edit') || 'Edit'}
-                    </button>
-                </div>
-                <button type="button" class="btn btn-secondary" id="dmod-cancel">${t('common.cancel') || 'Cancel'}</button>
-                <button type="button" class="btn btn-danger" id="dmod-confirm">${t('modpack.deleteConfirmBtn') || 'Delete'}</button>`,
-            initialFocus: '#dmod-cancel',
-            onClose: () => resolve(result),
-        });
-        const close = (r: 'delete' | 'edit' | null) => { result = r; m.close(); };
-        m.q('#dmod-cancel')?.addEventListener('click', () => close(null));
-        m.q('#dmod-confirm')?.addEventListener('click', () => close('delete'));
-        m.q('#dmod-edit')?.addEventListener('click', () => close('edit'));
-    });
 }
 
 // ── Quick Apply Modal ────────────────────────────────────────────────────────

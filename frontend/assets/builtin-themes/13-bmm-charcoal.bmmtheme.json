@@ -3,6 +3,7 @@
   "name": "Charcoal",
   "author": "BMM Team",
   "description": "A dense working look: flat charcoal surfaces, 1 px borders, a blue focus accent and small square corners.",
+  "brand": { "mark": "badge" },
   "vars": {
     "--bmm-bg-base": "#1f1f1f",
     "--bmm-bg-elevated": "#252526",

@@ -489,7 +489,7 @@ export function marksForDraft(saved: AnyStep[] | null | undefined, record: Param
 // runAction and evalConditionRaw to prove the two lists are the same list. The executor still
 // decides; this only lets the flow say so before the run does.
 
-export type PermKey = 'command' | 'script' | 'deeplink' | 'stopProcess' | 'delete' | 'resources' | 'tasks' | 'network' | 'ai';
+export type PermKey = 'command' | 'script' | 'deeplink' | 'stopProcess' | 'delete' | 'resources' | 'tasks' | 'network' | 'ai' | 'navigate';
 interface PermRule { perm: PermKey; label: string; when?: (p: Record<string, any>) => boolean }
 
 const DL: PermRule = { perm: 'deeplink', label: 'sched.permDeeplink' };
@@ -498,6 +498,7 @@ const RES: PermRule = { perm: 'resources', label: 'sched.permResources' };
 const TASKS: PermRule = { perm: 'tasks', label: 'sched.permTasks' };
 const NET: PermRule = { perm: 'network', label: 'sched.permNetwork' };
 const AI: PermRule = { perm: 'ai', label: 'sched.permAi' };
+const NAV: PermRule = { perm: 'navigate', label: 'sched.permNavigate' };
 
 export const ACTION_PERMS: Record<string, PermRule> = {
     'app.stop': { perm: 'stopProcess', label: 'sched.permStopProcess' },
@@ -526,6 +527,17 @@ export const ACTION_PERMS: Record<string, PermRule> = {
     'ai.classify': AI, 'ai.ask': AI, 'ai.suggest_mod_metadata': AI,
     'ai.run_task': AI, 'ai.classify_mod': AI, 'ai.library_check': AI, 'ai.crash_label': AI,
     'ai.explain_crash': AI, 'ai.triage_report': AI, 'ai.status': AI,
+    // Navigation (sched-nav.ts): only the two steps that ACT ask; the others only show.
+    'nav.modal': NAV, 'nav.click': NAV,
+    // Upkeep (sched-maint.ts): deleting and reaching out are asked for only when the step
+    // really does them — a dry run measures and touches nothing.
+    'cache.clean': { ...DEL, when: (p) => p.dryRun !== true },
+    'logs.rotate': { ...DEL, when: (p) => p.dryRun !== true },
+    'catalog.updates': { ...NET, when: (p) => String(p.mode || 'check') !== 'check' && p.dryRun !== true },
+    'repo.server': { ...NET, when: (p) => String(p.state || 'start') !== 'stop' && p.dryRun !== true },
+    'catalog.install': NET,
+    // A local-API route reaches whatever the app exposes: the deeplink grant's meaning.
+    'api.call': DL,
 };
 
 /** Second needs of one step: « explain » with a remote writer also reaches the network. */

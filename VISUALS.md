@@ -17,6 +17,7 @@ with its link kept in a comment.
 - [Themes](#themes)
 - [Plugins and API](#plugins-and-api)
 - [Settings](#settings)
+- [Stories: BMM used for real](#stories-bmm-used-for-real)
 
 ## Library and profiles
 
@@ -93,6 +94,31 @@ preview card follows), the permissions it asks for, with their risk.
 *Clip coming*: **Settings**, Ctrl+F finds a setting; the index edits the page layout (hide a
 card, move one), then folds away.
 <!-- ![Settings](.github/gifs/settings.gif) -->
+
+## Stories: BMM used for real
+
+Each clip is one goal followed from start to finish, with no tutorial on screen. The same takes are interactive recordings (`.bmmreplay`) on the [documentation site](https://freeproject089.github.io/BMM-Docs/), in the page of the feature.
+
+- **Set up a new game**: A profile for Northwind Saga, three mods added from their archives, switched on, the conflict they make settled, and the files in the game folder.
+  ![Set up a new game](.github/gifs/new-game.gif)
+- **Share a setup with friends**: The profile becomes a modpack, the modpack is hosted as a Server Repo on the LAN, a friend follows it by its address and syncs.
+  ![Share a setup with friends](.github/gifs/share-setup.gif)
+- **Make BMM yours**: A theme made in the theme editor, a navigation bar rearranged with a custom page of your own, and a string translated in the translation studio.
+  ![Make BMM yours](.github/gifs/make-it-yours.gif)
+- **Automate the chores**: A scheduled task that checks the followed repos and backs up the profiles every evening, previewed before it is saved.
+  ![Automate the chores](.github/gifs/automate.gif)
+- **Build a plugin with a mod list**: Plugins & API → Create: a plugin that ships a list of mods, its permissions, the live preview, and the plugin saved on this PC.
+  ![Build a plugin with a mod list](.github/gifs/build-plugin.gif)
+- **Write an interactive tutorial**: A tutorial of your own for your friends: steps that point at the interface, a check that waits for an action, tried out, then exported.
+  ![Write an interactive tutorial](.github/gifs/create-tutorial.gif)
+- **Fix a badly packaged mod**: A mod whose archive puts its files one folder too deep: the Mapper shows where they would land, the root is moved, the result checked and the mod updated.
+  ![Fix a badly packaged mod](.github/gifs/fix-a-mod.gif)
+- **Share a mod list and an order**: An activation order settled and kept as a named list with its share code; the mods exported as a .MM list, imported into another profile with the plan of what is new, installed, and switched on in the saved order.
+  ![Share a mod list and an order](.github/gifs/share-list.gif)
+- **Find apps and content in the catalogues**: The App Catalog: browse and search, an app’s details, where the list comes from, and a catalogue of your own built in the Create tab.
+  ![Find apps and content in the catalogues](.github/gifs/catalogues.gif)
+- **Everyday shortcuts**: The command palette finds a mod and runs a command, BMM Tools measures the disk, a launch pack starts the game with its tools, and the docs answer a question without leaving the app.
+  ![Everyday shortcuts](.github/gifs/everyday.gif)
 
 ---
 

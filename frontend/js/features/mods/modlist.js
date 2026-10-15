@@ -27,7 +27,7 @@ function newRunId() {
 let _installRun = null;
 // Re-exporting toast from app.js for now or until moved to a better place
 import { toast, toastSaved } from '../../ui/app.js';
-import { uiIcon } from '../../ui/icons.js';
+import { uiIcon, brandIcon } from '../../ui/icons.js';
 /**
  * The origins the mods in the ACTIVE profile update from.
  *
@@ -645,7 +645,7 @@ export function renderImportedModlist(modlist) {
         const hashedFiles = fileEntries.filter(f => f.sha256).length;
         const hashBadge = fileEntries.length === 0 ? '' :
             hashedFiles === fileEntries.length
-                ? `<span style="font-size:9px;font-weight:700;color:var(--bmm-success);background:rgba(16,185,129,0.12);padding:2px 6px;border-radius:4px;border:1px solid rgba(16,185,129,0.25);flex-shrink:0;white-space:nowrap" data-tooltip="${t('mm.hashVerifiedAll')} (${hashedFiles} ${t('mm.hashFiles')})">SHA-256 ✓</span>`
+                ? `<span style="font-size:9px;font-weight:700;color:var(--bmm-success);background:rgba(16,185,129,0.12);padding:2px 6px;border-radius:4px;border:1px solid rgba(16,185,129,0.25);flex-shrink:0;white-space:nowrap" data-tooltip="${t('mm.hashVerifiedAll')} (${hashedFiles} ${t('mm.hashFiles')})">SHA-256 ${uiIcon('check', 12, { style: 'vertical-align:-2px' })}</span>`
                 : hashedFiles > 0
                     ? `<span style="font-size:9px;font-weight:700;color:var(--bmm-warning);background:rgba(245,158,11,0.1);padding:2px 6px;border-radius:4px;border:1px solid rgba(245,158,11,0.25);flex-shrink:0;white-space:nowrap" data-tooltip="${t('mm.hashPartial')}">${hashedFiles}/${fileEntries.length} SHA</span>`
                     : `<span style="font-size:9px;color:var(--text-muted);background:rgba(255,255,255,0.04);padding:2px 6px;border-radius:4px;border:1px solid var(--border);flex-shrink:0;white-space:nowrap" data-tooltip="${t('mm.hashNone')}">${t('mm.noHashes')}</span>`;
@@ -706,7 +706,7 @@ export function renderImportedModlist(modlist) {
                 ${uiIcon('chevron-right', 12)}
                 ${t('mm.fileTree').replace('{count}', fileCount)}
                 ${allHashed
-                ? `<span style="margin-left:4px;font-size:9px;font-weight:800;padding:1px 6px;border-radius:4px;background:rgba(16,185,129,0.15);color:var(--bmm-success);border:1px solid rgba(16,185,129,0.3);font-family:var(--font-sans);letter-spacing:0.03em" data-tooltip="${t('mm.hashVerifiedAll')}">SHA-256 ✓</span>`
+                ? `<span style="margin-left:4px;font-size:9px;font-weight:800;padding:1px 6px;border-radius:4px;background:rgba(16,185,129,0.15);color:var(--bmm-success);border:1px solid rgba(16,185,129,0.3);font-family:var(--font-sans);letter-spacing:0.03em" data-tooltip="${t('mm.hashVerifiedAll')}">SHA-256 ${uiIcon('check', 12, { style: 'vertical-align:-2px' })}</span>`
                 : hashedCount > 0
                     ? `<span style="margin-left:4px;font-size:9px;font-weight:800;padding:1px 6px;border-radius:4px;background:rgba(245,158,11,0.12);color:var(--bmm-warning);border:1px solid rgba(245,158,11,0.3);font-family:var(--font-sans)" data-tooltip="${t('mm.hashPartial')}">${hashedCount}/${fileCount2} SHA-256</span>`
                     : `<span style="margin-left:4px;font-size:9px;padding:1px 6px;border-radius:4px;background:rgba(255,255,255,0.04);color:var(--text-muted);border:1px solid var(--border);font-family:var(--font-sans)" data-tooltip="${t('mm.hashNone')}">${t('mm.noHashes')}</span>`}
@@ -714,7 +714,7 @@ export function renderImportedModlist(modlist) {
               <div style="max-height:180px; overflow-y:auto; margin-top:8px; padding:8px; background:rgba(0,0,0,0.2); border-radius:6px; font-size:10.5px; font-family:var(--font-mono); color:var(--text-muted); border:1px solid rgba(255,255,255,0.03)">
                 ${m.file_tree.map(f => `
                     <div style="padding:3px 0; display:flex; align-items:center; gap:6px; border-bottom:1px solid rgba(255,255,255,0.02)">
-                        <span style="opacity:0.6">${f.is_directory ? '📁' : '📄'}</span>
+                        <span style="opacity:0.6;display:inline-flex">${uiIcon(f.is_directory ? 'folder' : 'file', 14)}</span>
                         <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap" data-tooltip="${escAttr(f.relative_path)}">${escHtml(f.relative_path)}</span>
                         ${!f.is_directory ? `<span style="opacity:0.4; font-size:9px; flex-shrink:0">${formatBytes(f.size)}</span>` : ''}
                         ${f.sha256 ? `
@@ -777,15 +777,15 @@ function getLinkIcon(type) {
     const style = 'width:14px;height:14px;vertical-align:middle;margin-right:6px;opacity:0.8';
     switch (type) {
         case 'github':
-            return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}" aria-hidden="true"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>`;
+            return `${brandIcon('github', 14, { style })}`;
         case 'google_drive':
             return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}" aria-hidden="true"><path d="M22 10L14 10L14 2L22 10Z"/><path d="M6 22L14 22L22 10L14 10L6 22Z"/><path d="M2 10L10 10L6 22L2 10Z"/></svg>`;
         case 'mega':
             return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}" aria-hidden="true"><path d="M12 3l9 4v10l-9 4-9-4V7l9-4z"/><path d="M12 8v8M8 12h8"/></svg>`;
         case 'direct':
-            return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
+            return `${uiIcon('download', 14, { style })}`;
         default:
-            return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>`;
+            return `${uiIcon('link', 14, { style })}`;
     }
 }
 /**

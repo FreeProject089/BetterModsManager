@@ -1361,8 +1361,8 @@ toujours l'adresse de la connexion et la tronque côté serveur.
 
 ## 80. Les comptes à cette version
 
-669 commandes enregistrées, 97 endpoints dans l'API locale, 95 outils MCP, 81 sous-commandes CLI,
-120 actions de tâche dans le planificateur, 13 thèmes intégrés, et 92 étapes dans `npm run ci`.
+671 commandes enregistrées, 97 endpoints dans l'API locale, 95 outils MCP, 81 sous-commandes CLI,
+137 actions de tâche dans le planificateur, 13 thèmes intégrés, et 92 étapes dans `npm run ci`.
 `check-counts` et `check-theme-count` échouent quand une page cite un autre nombre.
 
 ## 81. 1.0.2 : chaîne de mise à jour, registre des consentements, dépôts suivis, activité, index des catalogues

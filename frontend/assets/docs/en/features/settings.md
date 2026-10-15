@@ -4,7 +4,7 @@ Settings is a long page, but most of it you set once and forget. This tour start
 handful that change how BMM *feels*, then walks the rest section by section so nothing is a
 mystery.
 
-<div class="bmm-replay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/settings.bmmreplay" data-page="features/settings" data-title="A tour of Settings"></div>
+<div class="bmm-replay" data-src="assets/docs/media/replays/settings.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/settings.bmmreplay" data-page="features/settings" data-title="A tour of Settings"></div>
 
 
 ## Finding a setting
@@ -21,12 +21,32 @@ what you type and says how many sections still do. Clear the box to see everythi
 button above the cards brings it back. BMM remembers the choice, and :kbd[Ctrl+F] brings the
 index back to search. On a narrow window the index stays the strip above the cards.
 
-Every card has the same header: its icon on a quiet tile, the title, the card's actions, and the
-description right under the title.
+Every card has the same anatomy: an icon on a quiet tile, the title and the card's actions,
+**one sentence** under the title saying what the card is for, then the settings as **rows** (a
+label and its control), a footer for the buttons that apply or export, and, when something cannot
+be undone, a **danger zone** at the bottom. A small **Learn more** link on a card opens the page of
+this documentation that explains it, at the right section.
+
+The cards are ordered by what you reach for most, group by group:
+
+| Group | Cards, in order |
+|---|---|
+| **Appearance** | Themes, Language, Interface and notifications, Graphics and display, Keyboard shortcuts |
+| **Library** | Scanning and mod updates, Tags, Catalogue index, Integrity (SHA) |
+| **Automation** | Launch Packs, Scheduling and automation |
+| **Performance** | Storage, Benchmark |
+| **Accounts and services** | Identity & API, GitHub token, Discord Rich Presence |
+| **Privacy and security** | Privacy and telemetry, Optional AI, Security (plugin trust), Security |
+| **Application** | Auto update, Data, Old installations, Feedback, Crash reports, Session recorder, Debug |
+
+**Edit layout** (beside the search) lets you make the page yours: drag a card, or press
+:kbd[Alt+Up] / :kbd[Alt+Down], to move it within its group, and use the eye to hide a card from the
+page (search still finds it). **Done** leaves the mode; **Share layout** copies a code or a
+`bmm://` link you can import on another PC, and **Reset** brings the default order back.
 
 ## Panels in their own window
 
-The **theme editor**, the **translation sandbox** and the **task debugger** can leave BMM's
+The **theme editor**, the **Translation studio** and the **task debugger** can leave BMM's
 window: press **Open in its own window** in their header, or drag the header past the edge of
 BMM's window and let go. The panel becomes a window of its own that you can put anywhere, on
 another screen too, beside what it works on instead of over it.
@@ -45,7 +65,7 @@ window shows it and sends your clicks and typing back. It follows the theme, lig
 ### Themes & Appearance
 
 The explanation boxes across the app — the coloured callout tips — can be hidden app-wide
-with **Show tips** in the Tasky card, once you know your way around. Warnings are exempt by
+with **Show tips** in the Tasky tab of Interface and notifications, once you know your way around. Warnings are exempt by
 design: hiding tips never hides anything load-bearing.
 
 > Customise every colour, font and element of BMM. Share themes in one click.
@@ -145,18 +165,9 @@ BMM reloads afterwards, because half the app reads its state at startup.
 
 Switch BMM's interface language. Languages are plain JSON files in the app's `Lang/` folder —
 adding one requires **no rebuild**. The card gives you everything: a **Guide**, a downloadable
-**template**, an **Import** button, and the **Translation Sandbox**.
-
-The comfortable way to translate is the **Sandbox**:
-
-- **Create new language** — give it a code (`de`, `pt-br`…), optionally seeded from an
-  existing language.
-- Translate key by key with search, a **progress bar**, a "**next missing**" jump, and
-  side-by-side reference from other languages.
-- Preview any string **live** (toast / tooltip / swapped into the real UI), and **pick from
-  screen**: click any text in BMM to jump straight to its key.
-- Edits auto-save to the sandbox (never the live app); **Export** downloads the finished JSON —
-  import it to make it live.
+**template**, an **Import** button, and the **Translation studio**, which has [its own
+page](doc-page:features/translation-studio): a floating window (that can also pop out) to translate key by key,
+check variables, see your drafts live in the whole app, and import or export a language file.
 
 Keep the `_info` block (name + flag shown in the picker) and the `_synonyms` groups (they power
 semantic search in your language). **French is the base**: an untranslated key falls back to
@@ -192,6 +203,10 @@ an older BMM keeps its meaning.
 - **Reduce animations** ends transitions and effects at once, whatever the theme (a theme can also
   do it with `--bmm-anim-speed: 0`; either one is enough). Progress spinners keep turning, slowly.
   It applies immediately. Windows' own *show fewer animations* setting is honoured too.
+- **Start-up animation** (Classic with Tasky, Logo, or Off) is shown while BMM starts; a click or any key
+  skips it. It follows **only** BMM's own **Reduce animations** switch and the **Off** style, not
+  Windows' *Animation effects* setting, and a fast start plays the whole entrance instead of cutting
+  it short.
 - Folded underneath: the hardware BMM detected (processor instructions, graphics cards, each
   disk's bus).
 - If you set the `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` environment variable yourself, BMM leaves
@@ -200,6 +215,8 @@ an older BMM keeps its meaning.
   three words; nothing in it is ever pasted into the arguments, and a damaged file means Automatic.
 
 ### Identity & API
+
+Found in **Accounts and services**, not under Automation.
 
 > All your important credentials in one place. Click the eye icon to reveal a value.
 
@@ -290,6 +307,13 @@ The icon travels with the tag: because it is stored as a plain reference, a tag 
 glyph through every share path — an exported profile, a [server repo](doc-page:features/repo), a catalog —
 with nothing extra to do.
 
+### Interface and notifications
+
+One card with four tabs: **Notifications** (below), **Tasky** (the mascot and the explanation
+tips), **Sound** (UI sounds and their volume) and **Toolbar** (the buttons of the Library
+toolbar). Each tab shows its everyday rows first; **More options** unfolds the rest and **Fewer
+options** folds them back.
+
 ### Notifications
 
 Everything BMM tells you lands in **one notification centre** (the bell), with one unread count,
@@ -324,28 +348,31 @@ by a later check refreshes its entry. The list keeps the last 200 messages and n
 Keyboard in the centre: :kbd[Up] and :kbd[Down] move between messages, :kbd[Enter] opens,
 :kbd[Delete] dismisses, :kbd[S] snoozes for an hour, :kbd[Escape] closes and returns to the bell.
 
-### Sound & keyboard shortcuts
+### Sound
 
-Toggle UI sounds, and review the keyboard shortcuts BMM responds to. The volume is a row of
-the same table: the slider fills up to its level, and the figure on the right is the value
-that gets saved (it applies as you drag, no Save button).
+Toggle UI sounds. The volume is a row of the same table: the slider fills up to its level, and
+the figure on the right is the value that gets saved (it applies as you drag, no Save button).
+
+### Keyboard shortcuts
+
+A searchable table of every shortcut, where you can rebind a command or add your own shortcut for
+a Settings card, a profile, a modpack or an automation. Everything about it is in [Command palette
+& shortcuts](doc-page:features/command-palette#keyboard-shortcuts).
 
 ### Navigation & custom pages
 
-**Customize navigation** (the pencil at the bottom of the sidebar) opens an editor that is two
-columns on a wide window: the sidebar's items on the left — drag to reorder, rename, hide, add
-a section header — and, on the right, two cards: **Add a custom button** (an internal tab, a
-modal, an external URL or one of your sandboxed pages) and **Custom pages** (name, a starter
-template, HTML / CSS / JS, the documents inside the page and the files it ships). On a narrow
-window the two cards fold under the list. The whole layout travels as a `bmm://` code or a
-bundle — see the backup note above: the layout, each page's source and its permissions are
-three separate things.
+**Customize navigation** (the pencil at the bottom of the sidebar) rearranges the sidebar and adds your
+own buttons and pages. It has [its own page](doc-page:features/navigation). The whole layout travels as a
+`bmm://` code or a bundle — see the backup note above: the layout, each page's source and its
+permissions are three separate things.
 
 Importing a `.bmmnav` someone shared creates its pages with **no permission**: a review lists
 what each page asks for, nothing ticked, and only what you tick is granted — see
 [Security model](doc-page:how-it-works/security#custom-pages-review).
 
 ### Session recorder (local)
+
+Found in **Application**, beside the crash reports.
 
 Records what happens on screen — your actions plus the JS and Rust logs — so a problem can be
 replayed and analysed instead of described. **Nothing is sent anywhere:** the recording stays
@@ -369,7 +396,11 @@ limits.
 
 ### Tutorial
 
-Replay the interactive in-app tutorials at any time. New to BMM? Start here.
+Replay the interactive in-app tutorials at any time. New to BMM? Start here. The tutorial guide can
+**pop out into its own window**, so you can keep it beside BMM while you follow the steps. Every
+tutorial was rewritten for 1.0.3, and there are new parts: following a repo, conflicts and
+activation order, notifications, creating a plugin, and BMM Tools. The Automations tutorial now
+lives in Plugins & API.
 
 ### Debug & developer tools
 

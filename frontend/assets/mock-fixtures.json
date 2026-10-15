@@ -1,5 +1,6 @@
 {
   "_note": "Demo data for the BROWSER MOCK only. Never reached inside the Tauri app: mockInvoke is installed solely when the Tauri bridge is absent.",
+  "key_auth_list": { "keys": [], "active": null, "byOrigin": {} },
   "get_profiles": [
     {
       "id": "demo-profile-main",

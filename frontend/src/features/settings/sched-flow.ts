@@ -145,12 +145,12 @@ export function mountFlow(pane: HTMLElement, host: FlowHost): void {
             <button type="button" class="sflow-tb" data-act="zoomIn" aria-label="${escAttr(t('sched.flow.zoomIn'))}" data-tooltip="${escAttr(tip('sched.flow.zoomIn', 'sched.flow.zoomIn'))}">
                 ${uiIcon('add', 14)}</button>
             <button type="button" class="sflow-tb" data-act="fit" aria-label="${escAttr(t('sched.flow.fit'))}" data-tooltip="${escAttr(tip('sched.flow.fit', 'sched.flow.fit'))}">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+                ${uiIcon('maximize', 14)}</button>
             <button type="button" class="sflow-tb" data-act="layout" aria-label="${escAttr(t('sched.flow.autoLayout'))}" data-tooltip="${escAttr(tip('sched.flow.autoLayout', 'sched.flow.autoLayout'))}">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="6" height="5" rx="1"/><rect x="15" y="4" width="6" height="5" rx="1"/><rect x="15" y="15" width="6" height="5" rx="1"/><path d="M9 6.5h6M18 9v6"/></svg></button>
+                ${uiIcon('layers', 14)}</button>
             <span class="sflow-tb-sep"></span>
             <button type="button" class="sflow-tb" data-act="keys" aria-label="${escAttr(t('sched.flow.keys'))}" data-tooltip="${escAttr(t('sched.flow.keys'))}">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg></button>
+                ${uiIcon('keyboard', 14)}</button>
             <span class="sflow-run" hidden></span>
         </div>
         <div class="sflow-mini" aria-label="${escAttr(t('sched.flow.minimap'))}"></div>
@@ -964,7 +964,7 @@ function openPaletteAt(at: { slot: string; index: number; x?: number; y?: number
     el.setAttribute('role', 'dialog');
     el.setAttribute('aria-label', t('sched.flow.add'));
     el.innerHTML = `<div class="sflow-pal-search">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+            ${uiIcon('search', 14)}
             <input type="search" class="sflow-pal-q" spellcheck="false" autocomplete="off" placeholder="${escAttr(t('sched.flow.search'))}" aria-label="${escAttr(t('sched.flow.search'))}">
         </div>
         <div class="sflow-pal-list" role="listbox"></div>
