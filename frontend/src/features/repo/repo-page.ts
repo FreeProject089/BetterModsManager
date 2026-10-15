@@ -279,6 +279,12 @@ export function initRepoPage(): void {
 
     // 4. Learn more beside each step. The empty states' "go to" buttons (repo.ts draws them).
     mountGroupLinks(root);
+    // Rendered once with the words of the language at boot: the section links kept saying
+    // « En savoir plus » in English. Redrawn on a language change, like the header.
+    document.addEventListener('langChanged', () => {
+        root.querySelectorAll('.repo-group-h > [data-learn-more]').forEach((n) => n.remove());
+        mountGroupLinks(root);
+    });
     root.addEventListener('click', (e) => {
         const go = (e.target as HTMLElement).closest<HTMLElement>('[data-rp-go]')?.dataset.rpGo;
         if (go) (document.querySelector(`.nav-item[data-view="${go}"]`) as HTMLElement | null)?.click();

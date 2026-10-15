@@ -5,8 +5,8 @@
 > profil… avec conditions (si/sinon), tes propres scripts et des programmes externes. Les tâches s’exécutent tant
 > que BMM est ouvert.
 
-Accessible depuis [Plugins & API](doc-page:features/plugins). C'est la partie de BMM qui agit sans que vous
-la pilotiez.
+Dans [Plugins & API](doc-page:features/plugins), onglet **Automatisations**. C'est la partie de BMM qui agit
+sans que vous la pilotiez.
 
 !!! warning "Par défaut, BMM doit tourner"
 
@@ -174,7 +174,7 @@ une minuterie et devient utile. Les conditions :
 
 ### 3. Action — quoi
 
-Il y a ~120 actions réparties en dix groupes :
+Il y a ~137 actions réparties en onze groupes :
 
 | Groupe | Quelques actions |
 |---|---|
@@ -236,7 +236,7 @@ alors… » n'avait aucun moyen d'être exprimé.
 
 ## Les permissions
 
-Chaque tâche accorde neuf choses séparément, et chacune dit ce qu'elle débloque :
+Chaque tâche accorde dix choses séparément, et chacune dit ce qu'elle débloque :
 
 | Autorisation | Ce qu'elle permet |
 |---|---|
@@ -249,8 +249,9 @@ Chaque tâche accorde neuf choses séparément, et chacune dit ce qu'elle déblo
 | **Autres tâches** | Lancer, démarrer ou activer une autre de tes tâches (*Lancer une autre tâche*, *Lancer une autre tâche sans attendre*, *Armer ou désarmer une autre tâche*) |
 | **Réseau** | Envoyer des webhooks et des messages Discord ou Slack, et lire un flux pour le déclencheur `rss` — http(s) uniquement, jamais une adresse privée sauf si l'étape autorise le réseau local ([plus bas](#prevenir-le-monde-exterieur-webhooks-discord-slack-flux)) |
 | **Laya (IA)** | Interroger Laya sur ce PC : chaque étape `ai.*` (classer un texte, classer un mod, vérifier la bibliothèque, trouver les causes des crashs…) et la condition `aiAvailable` ([plus bas](#laya-dans-une-tache)) |
+| **Naviguer et cliquer** | Ouvrir une fenêtre listée ou appuyer sur un contrôle listé des écrans de BMM (`nav.modal`, `nav.click`, [plus bas](#naviguer-dans-bmm-depuis-une-tache)). Afficher une page, une carte ou un message ne demande rien |
 
-Les neuf sont désactivées tant que tu ne les actives pas, et une étape dont la permission
+Les dix sont désactivées tant que tu ne les actives pas, et une étape dont la permission
 manque échoue avec un message indiquant laquelle accorder — elle ne s'exécute jamais en
 silence.
 
@@ -1574,6 +1575,93 @@ s'exécute.
     le premier serait juste une fois sur deux, ce qui est pire que rien, parce qu'une tâche qui
     écrit dans le dossier de mods du mauvais profil n'échoue pas. Ces packs restent joignables
     par id via les actions modpack.
+
+## Les automatisations dans Plugins & API
+
+Les tâches planifiées sont dans **Plugins & API → Automatisations**. La carte des Paramètres qui
+les contenait n'a plus qu'un bouton qui y mène, pour qu'une vieille habitude retrouve son chemin.
+
+L'onglet réunit tout ce qui concerne une automatisation :
+
+- la liste des tâches, avec ce qui tourne, le déclencheur de chacune, sa prochaine exécution et les dernières ;
+- **Nouvelle automatisation**, qui ouvre l'éditeur (blocs, code ou flux — la même tâche) ;
+- **Modèles**, la galerie de tâches prêtes, qui ouvre celle choisie dans l'éditeur ;
+- **Fichiers…** — importer, exporter, inspecter un `.bmmpa`, suivre ou publier un catalogue d'automatisations.
+
+L'éditeur est le seul générateur. Ce que tu y écris est enregistré comme une tâche qui s'exécute
+dans BMM, ou **exporté** (le bouton *Exporter* en haut) de trois façons :
+
+| Export | Ce que tu obtiens |
+|---|---|
+| **Fichier d'automatisation** (`.bmmpa`) | Signé ; importé **désactivé**, toutes permissions coupées. Un plugin peut le livrer (Plugins & API → Créer → Automatisations). |
+| **BMMScript** (`.bmmscript`) | La tâche en texte, lisible et modifiable ; elle se rouvre en blocs. |
+| **Script** (PowerShell, CMD, Python, Node…) | Un script qui s'exécute **hors** de BMM, écrit par le moteur de scripts de Plugins & API. Il atteint BMM par des liens `bmm://` et l'API locale, et lit le jeton de l'API dans la variable `BMM_TOKEN` — le jeton n'est jamais écrit dans le fichier. |
+
+Un script n'a ni déclencheur, ni permissions, ni accès aux conditions de BMM : une étape qu'il ne
+peut pas porter (une condition, une boucle, une étape de navigation ou d'entretien) est écrite en
+**commentaire** qui la nomme, et la fenêtre d'export les liste avant l'enregistrement. Rien n'est
+perdu en silence.
+
+## Naviguer dans BMM depuis une tâche
+
+Le groupe **Naviguer dans BMM** déplace la vue, précisément, et peut désigner des éléments :
+
+| Étape | Ce qu'elle fait | Permission |
+|---|---|---|
+| `nav.page` | Ouvre une page, et un onglet dedans (`onglet/section` pour un onglet dans un onglet) | aucune |
+| `nav.settingsCard` | Fait défiler les Paramètres jusqu'à une carte, la déplie et la met en évidence | aucune |
+| `nav.item` | Ouvre un profil, un mod, un modpack, un dépôt suivi, un plugin ou une application par identifiant et désigne sa carte | aucune |
+| `nav.highlight` | Amène un élément à l'écran et l'entoure, avec une légende | aucune |
+| `nav.waitFor` | Attend qu'un élément soit à l'écran, jusqu'à un délai | aucune |
+| `nav.message` | Affiche une carte avec un titre et un texte, près d'un élément ou en bas ; peut attendre **OK** | aucune |
+| `nav.modal` | Ouvre une des fenêtres **listées** (Outils, Stockage, Intégrité, Graphismes, dépôts enregistrés…) par son propre bouton | **Naviguer et cliquer** |
+| `nav.click` | Appuie sur un des contrôles **listés** (vérifier les mises à jour, vérifier l'intégrité, recharger un catalogue…) | **Naviguer et cliquer** |
+
+Mettre en évidence et attendre acceptent le nom d'un contrôle listé ou n'importe quel sélecteur :
+ils ne font que regarder. Cliquer n'accepte qu'un contrôle listé, et l'élément est revérifié au
+moment du clic — un champ, un consentement, un formulaire d'identifiants ou ce qui ressemble à une
+suppression est refusé, même si la liste dit le contraire. Une étape qui doit continuer quand sa
+cible manque laisse `{nav.ok}` à 0.
+
+## Les étapes d'entretien
+
+| Étape | Ce qu'elle fait | La simulation mesure |
+|---|---|---|
+| `repos.checkFollowed` | Lit les dépôts suivis. *Seulement me prévenir*, *me demander puis me montrer où*, ou *synchroniser selon le suivi de chaque dépôt* | les mises à jour en attente |
+| `catalog.updates` | Les nouvelles versions des applications et plugins **que tu coches** : prévenir, télécharger (dans le dossier `downloads/` de la tâche) ou télécharger et installer | les nouvelles versions |
+| `catalog.install` | Un élément du catalogue par identifiant, selon les règles du catalogue : https et SHA-256 publié, un plugin arrive désactivé, un thème n'est jamais appliqué | — |
+| `mods.verifyIntegrity` | Le dossier du jeu face aux mods actifs, ou chaque mod face à ses empreintes | — (lecture seule) |
+| `cache.clean` | Vide les caches choisis au-delà d'un seuil ; les archives de plantage sont en option | la place libérée |
+| `logs.rotate` | Les journaux de tâche trop gros deviennent `.1.log` ; les vieilles copies et rapports de session partent ; les rapports de plantage restent | ce qui tournerait et partirait |
+| `disk.report` | Chaque profil, ses sauvegardes et les mods les plus lourds, écrits dans `disk-usage.md` | — (lecture seule) |
+| `repo.server` | Démarre ou arrête le serveur de dépôt intégré | s'il démarrerait ou s'arrêterait |
+
+Les téléchargements sont en https uniquement, vérifiés contre le SHA-256 du catalogue à mesure
+qu'ils arrivent, et rangés dans le dossier de la tâche sous un nom sûr ; une différence supprime
+le fichier partiel. Une application livrée sous forme d'installateur est téléchargée, jamais
+installée : son assistant a besoin de toi.
+
+## Appeler l'API locale
+
+`api.call` envoie n'importe quelle route de l'API locale, choisie dans sa référence (la même liste
+que Plugins & API → API) : la méthode et le chemin sont remplis, et un squelette de corps avec les
+champs requis de la route. L'appel passe **par le serveur de l'API**, donc la validation propre à
+la route s'applique. Le statut va dans `{api.status}` et `{api.ok}`, les 4 000 premiers caractères
+de la réponse dans `{api.body}`. Il demande **Déclencher des deeplinks** (une route atteint tout ce
+que l'application expose), et l'API locale doit être active.
+
+## Simulation et aperçu
+
+**Simulation**, en haut de l'éditeur et sur chaque modèle, liste chaque étape dans l'ordre
+d'exécution : si elle affiche, lit, modifie, supprime, accède au réseau ou agit hors de BMM, si
+elle peut ne pas s'exécuter (dans une branche ou une boucle), et quelle permission lui manque. Les
+étapes d'entretien qui savent mesurer sans agir sont lancées avec `dryRun` et montrent leur
+réponse. Rien d'autre ne s'exécute.
+
+**Aperçu de la navigation** rejoue ensuite les étapes de navigation pour de vrai, avec une barre en
+haut : pages, onglets, cartes et éléments s'ouvrent et s'éclairent ; une fenêtre est annoncée au
+lieu d'être ouverte ; un clic est un cercle en pointillés avec *cliquerait* dessous. Échap ou
+**Arrêter** l'interrompt.
 
 ## Deux choses plus petites
 

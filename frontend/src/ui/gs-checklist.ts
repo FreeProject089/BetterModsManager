@@ -11,6 +11,7 @@
 
 import { invoke } from '../core/api.js';
 import { uiIcon } from './icons.js';
+import { goToSettings } from '../core/settings-link.js';
 
 const CHECK = `${uiIcon('check', 12)}`;
 
@@ -42,7 +43,7 @@ async function stepStates(): Promise<Record<StepId, boolean>> {
 function go(step: StepId): void {
     const nav = (view: string) => (document.querySelector(`.nav-item[data-view="${view}"]`) as HTMLElement | null)?.click();
     switch (step) {
-        case 'lang':    nav('settings'); break;
+        case 'lang':    goToSettings('settings-lang-container'); break;   // the Language card, not the top of Settings
         case 'profile': nav('profiles'); setTimeout(() => document.getElementById('btn-new-profile')?.click(), 250); break;
         case 'mod':     nav('library'); break;
         case 'bc':      nav('community'); break;

@@ -14,7 +14,9 @@ import { sourceAccessHtml, wireSourceAccess } from '../../core/source-access.js'
 import { sshSourceHtml, wireSshSource, readSshSource } from './ssh-source.js';
 import { toast } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
+import { uiIconEl, type IconName } from '../../ui/icons.js';
 import { formatBytes } from '../../core/utils.js';
+import { openKeyManager } from '../../core/settings-link.js';
 
 interface PlanReport {
     summary: string;
@@ -81,7 +83,9 @@ function inputs(): Record<string, unknown> | null {
 
 /// Build the result box. Every value goes in as text — a server-supplied path must never
 /// become markup in the window that is about to sign a manifest describing it.
-function show(lines: Array<[string, string, string?]>, title: string, tone: string) {
+type Row = [string, string, string?, IconName?];
+
+function show(lines: Row[], title: string, tone: string) {
     const box = $('remote-result');
     if (!box) return;
     box.textContent = '';
@@ -92,11 +96,13 @@ function show(lines: Array<[string, string, string?]>, title: string, tone: stri
     head.textContent = title;
     box.append(head);
 
-    for (const [label, value, colour] of lines) {
-        if (!value) continue;
+    for (const [label, value, colour, icon] of lines) {
+        if (!value && !icon) continue;
         const row = document.createElement('div');
         row.style.cssText = colour ? `color:${colour}` : '';
-        row.textContent = `${label}: ${value}`;
+        // A status glyph from the registry, not a ✓/⚠ character in whatever font is loaded.
+        if (icon) row.append(uiIconEl(icon, 14, { style: 'vertical-align:-2px;margin-right:6px' }));
+        row.append(label && value ? `${label}: ${value}` : (label || value));
         box.append(row);
     }
 }
@@ -158,7 +164,7 @@ async function run(which: 'plan' | 'refresh') {
                 [t('repo.remoteRemoved') || 'Gone from the server', preview(r.removed), 'var(--danger)'],
                 [t('repo.remoteDownload') || 'To download', formatBytes(r.downloadBytes)],
                 [t('repo.remoteFull') || 'Everything will be re-hashed', r.fullRehash || ''],
-                ...r.warnings.map((w) => ['⚠', w, 'var(--warning)'] as [string, string, string]),
+                ...r.warnings.map((w): Row => ['', w, 'var(--warning)', 'warning']),
             ], t('repo.remotePlanned') || 'Nothing changed yet', 'var(--text)');
         } else {
             const r = (await invoke('refresh_repo_from_server', args)) as RefreshReport;
@@ -168,7 +174,7 @@ async function run(which: 'plan' | 'refresh') {
                 // those hashes were carried forward from a document the SERVER handed us, and
                 // the reader deserves to know that rather than infer it.
                 ...(r.previousFromServer
-                    ? [[t('repo.remoteFromServer') || 'Updated the repo.json already on the server', '✓', 'var(--success)'] as [string, string, string]]
+                    ? [[t('repo.remoteFromServer') || 'Updated the repo.json already on the server', '', 'var(--success)', 'check'] as Row]
                     : []),
                 ['', `${r.mods} mods · ${r.files} files`],
                 [t('repo.remoteMissing') || 'Newly published', String(r.added), 'var(--accent)'],
@@ -176,8 +182,8 @@ async function run(which: 'plan' | 'refresh') {
                 [t('repo.remoteReused') || 'Already covered', String(r.reused), 'var(--success)'],
                 [t('repo.remoteRemoved') || 'Gone from the server', preview(r.removed), 'var(--danger)'],
                 [t('repo.remoteDownload') || 'Downloaded', formatBytes(r.downloadedBytes)],
-                ...(r.signed ? [] : [['⚠', t('repo.manifestUnsigned') || 'Written unsigned', 'var(--warning)'] as [string, string, string]]),
-                ...r.warnings.map((w) => ['⚠', w, 'var(--warning)'] as [string, string, string]),
+                ...(r.signed ? [] : [['', t('repo.manifestUnsigned') || 'Written unsigned', 'var(--warning)', 'warning'] as Row]),
+                ...r.warnings.map((w): Row => ['', w, 'var(--warning)', 'warning']),
             ], r.created
                 ? (t('repo.remoteCreated') || 'repo.json created — upload it to your server')
                 : (t('repo.remoteDone') || 'repo.json updated — upload it to your server'),
@@ -209,9 +215,7 @@ export function initRemoteRefresh() {
         mount.innerHTML = sourceAccessHtml('remote-access');
         wireSourceAccess('remote-access', (m, k) => toast(m, k === 'warning' ? 'warning' : 'success'),
             () => {
-                (document.getElementById('nav-settings') as HTMLElement | null)?.click();
-                setTimeout(() => document.getElementById('settings-identity-card')
-                    ?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
+                openKeyManager();
             },
             () => ($('remote-base-url') as HTMLInputElement | null)?.value?.trim() || '');
 
@@ -224,9 +228,7 @@ export function initRemoteRefresh() {
         // make one control mean two things depending on the address typed above it.
         mount.insertAdjacentHTML('beforeend', sshSourceHtml('remote'));
         wireSshSource('remote', () => {
-            (document.getElementById('nav-settings') as HTMLElement | null)?.click();
-            setTimeout(() => document.getElementById('settings-identity-card')
-                ?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
+            openKeyManager();
         });
     }
 

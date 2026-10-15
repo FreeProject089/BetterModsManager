@@ -221,3 +221,20 @@ textarea.sched-secret:not(.is-shown) { -webkit-text-security: disc; }
     .sched-step.sched-flash { animation: none; outline: 2px solid var(--bmm-accent); }
     .sched-modeask-opt { transition: none; }
 }
+
+/* Template options in the automation gallery (scheduler.ts openPresetGallery). */
+.spg-opts { display: flex; flex-direction: column; gap: 4px; }
+
+/* Plugins & API → Automations (scheduler.ts mountAutomations): the task list moved here. */
+.auto-root { display: flex; flex-direction: column; gap: 12px; }
+.auto-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.auto-head-text { min-width: 0; flex: 1 1 280px; }
+.auto-head-text .plug-section-lead { margin-bottom: 0; }
+.auto-head-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.auto-head-actions .btn { display: inline-flex; align-items: center; gap: 6px; }
+.auto-list { display: flex; flex-direction: column; gap: 8px; }
+.auto-foot { display: flex; justify-content: flex-end; align-items: center; gap: 8px; flex-wrap: wrap; }
+.auto-foot > .btn { display: inline-flex; align-items: center; gap: 6px; }
+/* The export dialog of an automation (scheduler.ts openExportDialog). */
+.sex-pre { margin: 10px 0 0; max-height: 320px; overflow: auto; padding: 10px; border-radius: var(--bmm-radius-input); border: 1px solid var(--bmm-border); background: var(--bmm-bg-base); color: var(--bmm-text-primary); font-family: var(--bmm-font-mono); font-size: 12px; white-space: pre; }
+.sex-format { margin-top: 10px; }

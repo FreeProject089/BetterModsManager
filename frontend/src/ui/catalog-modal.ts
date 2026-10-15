@@ -29,6 +29,7 @@ import { t } from '../core/i18n.js';
 import { escHtml, escAttr } from '../core/utils.js';
 import { toast } from './app.js';
 import { sourceAccessHtml, wireSourceAccess } from '../core/source-access.js';
+import { openKeyManager } from '../core/settings-link.js';
 import { planPublish, safeFileStem, type EntryChoice } from '../core/catalog-publish.js';
 import { looksLikeCatalog } from '../core/catalog-bundle.js';
 import { raiseAboveAll } from './layer.js';
@@ -669,7 +670,9 @@ export async function openCatalogModal<T>(spec: CatalogKindSpec<T>): Promise<voi
             // address box so "which server" is answered without asking twice.
             wireSourceAccess(P, (msg, kind) => toast(t(msg), kind), () => {
                 close();
-                spec.manageKeys?.();
+                // No destination given = the keyring in Settings. Two kinds (mod lists, scheduler
+                // presets) passed none, and « Manage keys » closed the dialog and went nowhere.
+                if (spec.manageKeys) spec.manageKeys(); else openKeyManager();
             }, () => (ov.querySelector(`#${P}-url`) as HTMLInputElement | null)?.value?.trim() || '');
             return;
         }

@@ -87,10 +87,10 @@ export const KNOWN_GLUED = new Set([
     // Unit labels after a count in a chip or a header ("12 fichiers"): readable as they are.
     'analytics.packetEvents', 'bench.cmpRuns', 'conflict.active', 'conflict.files',
     'conflict.modsInConflict', 'conflict.potential', 'hub.parts', 'hub.steps',
-    'modpack.dependenciesShort', 'modpack.modsAvailable', 'repo.autoSyncPending', 'repo.hub.found',
+    'repo.autoSyncPending', 'repo.hub.found',
     'repo.manifestRemovedWarn', 'rstudio.events', 'settings.launchPackExes',
     // Still written with (s)/(x) in French: next in line for a .one/.many pair.
-    'anim.matches', 'bench.selected', 'i18n.unsavedEdits', 'modpack.modsSelected',
+    'anim.matches', 'bench.selected',
     'navedit.imported', 'navedit.skipped', 'plugins.modsSelected', 'plugins.pluginsCount',
     'sched.imported',
 ]);

@@ -3,6 +3,7 @@
   "name": "Arctic",
   "author": "BMM Team",
   "description": "Cool and quiet: deep slate surfaces, snow-white text and a frost-blue accent.",
+  "brand": { "mark": "logo" },
   "vars": {
     "--bmm-bg-base": "#2e3440",
     "--bmm-bg-elevated": "#3b4252",

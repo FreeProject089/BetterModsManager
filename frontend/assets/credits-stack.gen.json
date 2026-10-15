@@ -35,12 +35,12 @@
      "installer"
     ],
     "commits": {
-     "bmm": 1679,
+     "bmm": 1697,
      "bcw": 1740,
      "docs": 310,
      "installer": 107
     },
-    "total": 3836,
+    "total": 3854,
     "since": "2026"
    }
   ]
@@ -1582,6 +1582,15 @@
      "repo": "https://github.com/JetBrains/JetBrainsMono"
     },
     {
+     "name": "Bricolage Grotesque",
+     "version": null,
+     "license": "OFL-1.1",
+     "url": "https://github.com/ateliertriay/bricolage",
+     "key": "bricolage-grotesque",
+     "source": "frontend/assets/fonts/bricolage-grotesque/ (bundled: BricolageGrotesque-ExtraBold.subset.woff2)",
+     "licenseFrom": "frontend/assets/fonts/bricolage-grotesque/OFL.txt"
+    },
+    {
      "name": "lucide",
      "version": null,
      "license": "ISC",
@@ -1682,6 +1691,16 @@
      "source": "BMM Docs/requirements.in",
      "licenseFrom": "https://github.com/orzih/mkdocs-with-pdf/blob/master/LICENSE",
      "repo": "https://github.com/orzih/mkdocs-with-pdf"
+    },
+    {
+     "name": "mkdocs-print-site-plugin",
+     "version": "2.9",
+     "license": "MIT",
+     "url": "https://pypi.org/project/mkdocs-print-site-plugin/",
+     "key": "mkdocs-print-site-plugin",
+     "source": "BMM Docs/requirements.in",
+     "licenseFrom": "https://github.com/timvink/mkdocs-print-site-plugin/blob/master/LICENSE",
+     "repo": "https://github.com/timvink/mkdocs-print-site-plugin"
     },
     {
      "name": "Pillow",

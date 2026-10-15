@@ -275,9 +275,8 @@ export async function renderModList(force = false) {
       card = createModCard(mod);
       applyCardActivity(card, mod.id);
       _anyNewCard = true;
-      if (S.selectedModId === mod.id) {
-        setTimeout(() => import('./mods-details.js').then(m => m.renderModDetail(mod.id)), 0);
-      }
+      // The selected mod's card is marked by createModCard; its details live in the side drawer
+      // (mods-details.ts), which a card scrolled back into view does not redraw.
     } else if (!skipInPlaceUpdates && !isProcessing) {
       updateCardState(card, mod);
     }
@@ -685,7 +684,7 @@ export function ensureModCancelContextMenu(): void {
     };
 
     const ICstop = `${uiIcon('error', 12)}`;
-    const ICtrash = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>`;
+    const ICtrash = `${uiIcon('delete', 12)}`;
     const ICSpin  = `${uiIcon('loader', 12, { style: 'animation:spin 1s linear infinite' })}`;
 
     const header = document.createElement('div');

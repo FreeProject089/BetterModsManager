@@ -647,20 +647,6 @@
 
 .adm-root { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 
-/* ── Top accent (no image) ── */
-.adm-top-bar {
-    flex-shrink: 0;
-    height: 48px;
-    position: relative;
-    border-radius: 14px 14px 0 0;
-    overflow: hidden;
-}
-.adm-color-strip {
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 3px;
-}
-
 /* ── Gallery ── */
 .adm-gallery { flex-shrink: 0; background: var(--bmm-bg-base); border-radius: 14px 14px 0 0; overflow: hidden; }
 /* `contain` keeps logos at a sane size and never crops screenshots */
@@ -1592,3 +1578,159 @@
     .apps-toolbar .apps-filter { flex: 1 1 calc(50% - 8px); max-width: none; }
     .apps-grid { grid-template-columns: 1fr; }
 }
+
+/* ══════════════════════════════════════════════════
+   1.0.3 — catalogue builder as a guided flow, a cleaner browse bar, the details as a drawer.
+   Theme tokens only; the accent is a fill or a border, never the colour of body text.
+   ══════════════════════════════════════════════════ */
+
+/* ── Browse toolbar: sources one click away ── */
+.apps-sources-btn { white-space: nowrap; }
+.apps-sources-btn.is-warn { border-color: var(--warning); }
+.apps-sources-btn.is-warn .ic { color: var(--warning); }
+
+/* ── Create: the step rail ── */
+.apps-wiz { display: flex; flex-direction: column; gap: 16px; }
+.apps-wiz .apps-create-header { margin-bottom: 0; padding-bottom: 0; border-bottom: 0; }
+.apps-wiz-steps {
+    list-style: none; margin: 0; padding: 0;
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px;
+}
+.apps-wiz-step-btn {
+    width: 100%; min-width: 0;
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px;
+    background: var(--bmm-s02);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text-secondary);
+    text-align: left; cursor: pointer;
+    transition: border-color .15s, background .15s;
+}
+.apps-wiz-step-btn:hover { border-color: var(--border-hover); background: var(--bmm-s04); }
+.apps-wiz-step.is-on .apps-wiz-step-btn { border-color: var(--accent); background: var(--bmm-s04); color: var(--text-primary); }
+.apps-wiz-step-n {
+    flex-shrink: 0;
+    width: 24px; height: 24px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 800;
+    background: var(--bmm-s06); color: var(--text-secondary);
+    border: 1px solid var(--border);
+}
+.apps-wiz-step.is-on .apps-wiz-step-n { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
+.apps-wiz-step.is-done:not(.is-on) .apps-wiz-step-n { background: var(--success); border-color: var(--success); color: var(--text-on-accent); }
+.apps-wiz-step.is-warn:not(.is-on) .apps-wiz-step-n { border-color: var(--warning); color: var(--text-primary); }
+.apps-wiz-step-txt { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+.apps-wiz-step-txt > b { font-size: 12px; font-weight: 700; color: var(--text-primary); }
+.apps-wiz-step-txt > span { font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 900px) {
+    .apps-wiz-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* ── Create: the one pane on screen ── */
+/* Unframed: the rows, the cards and the publishing choices inside carry their own frames, and
+   a frame around frames is the nested-panel look the rest of the app moved away from. */
+.apps-wiz-pane {
+    border-top: 1px solid var(--bmm-s07);
+    padding-top: 16px;
+    display: flex; flex-direction: column; gap: 14px;
+    min-width: 0;
+}
+.apps-wiz-pane-h h4 { margin: 0 0 4px; font-size: 15px; font-weight: 800; color: var(--text-primary); display: flex; align-items: center; gap: 8px; }
+.apps-wiz-pane-h p { margin: 0; font-size: 12px; line-height: 1.5; color: var(--text-muted); max-width: 70ch; }
+.apps-wiz-pane-h--row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.apps-wiz-field { display: flex; flex-direction: column; gap: 5px; max-width: 640px; }
+.apps-wiz-field .apps-install-label { margin: 0; }
+.apps-wiz-field .apps-path-input { width: 100%; margin: 0; }
+.apps-wiz-say { font-size: 11px; line-height: 1.45; color: var(--text-muted); margin: 0; }
+.apps-wiz-say.is-bad { color: var(--text-primary); font-weight: 600; }
+.apps-wiz-say.is-bad::before { content: '! '; color: var(--warning); font-weight: 800; }
+.apps-path-input.is-invalid,
+.apps-cr-form .apps-path-input.is-invalid { border-color: var(--warning); }
+.apps-wiz-sub { margin: 4px 0 0; font-size: 13px; font-weight: 700; color: var(--text-primary); }
+.apps-wiz-ok {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; font-weight: 600; color: var(--text-primary);
+    padding: 10px 12px; border-radius: 9px;
+    border: 1px solid var(--success);
+}
+.apps-wiz-ok .ic { color: var(--success); }
+.apps-wiz-note {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    font-size: 12px; color: var(--text-primary);
+    padding: 8px 12px; border-radius: 9px; border: 1px solid var(--warning);
+}
+.apps-wiz-note .ic { color: var(--warning); }
+.apps-wiz .apps-create-problems ul { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.apps-wiz .apps-create-problems li { display: flex; align-items: center; gap: 10px; justify-content: space-between; font-size: 12px; }
+.apps-wiz .apps-create-problems-h { display: inline-flex; align-items: center; gap: 6px; }
+/* Previews are pictures of cards: no hover lift, nothing to press. */
+.apps-wiz-preview .apps-card, .apps-cr-card .apps-card { pointer-events: none; }
+.apps-card.is-preview { transform: none !important; }
+
+/* ── Create: the entry list ── */
+.apps-wiz-list { display: flex; flex-direction: column; gap: 6px; }
+.apps-wiz .apps-create-app-row {
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1.2fr) minmax(0, 1fr) auto;
+    align-items: center; gap: 10px;
+    margin: 0;
+    background: var(--bg-secondary);
+    border-color: var(--border);
+}
+.apps-wiz .apps-create-app-row:hover { transform: none; border-color: var(--border-hover); }
+.apps-wiz-row-state { display: inline-flex; color: var(--success); }
+.apps-create-app-row.has-faults .apps-wiz-row-state { color: var(--warning); }
+.apps-wiz-row-main { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
+.apps-wiz-row-main > b { font-size: 12px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.apps-wiz .apps-create-app-id { font-family: var(--font-mono); font-size: 11px; font-weight: 500; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.apps-wiz-row-acts { display: flex; gap: 4px; justify-content: flex-end; }
+.apps-wiz-row-why { grid-column: 2 / -1; font-size: 11px; color: var(--text-secondary); }
+@media (max-width: 760px) {
+    .apps-wiz .apps-create-app-row { grid-template-columns: 20px minmax(0, 1fr) auto; }
+    .apps-wiz .apps-create-app-facts { grid-column: 2 / -1; grid-row: 2; }
+}
+
+/* ── Create: Back / Next ── */
+.apps-wiz-nav { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.apps-wiz-nav-at { font-size: 11px; color: var(--text-muted); }
+
+/* ── Entry editor: form | live card ── */
+.apps-cr-modal { max-width: 1000px; }
+.apps-cr-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 22px; align-items: start; }
+.apps-cr-aside { position: sticky; top: 0; display: flex; flex-direction: column; gap: 8px; }
+.apps-cr-aside-h { font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); }
+.apps-cr-card .apps-card { width: 100%; }
+.apps-cr-field-say { display: block; margin: -4px 0 10px; font-size: 11px; color: var(--text-primary); }
+.apps-cr-field-say::before { content: '! '; color: var(--warning); font-weight: 800; }
+@media (max-width: 860px) {
+    .apps-cr-layout { grid-template-columns: minmax(0, 1fr); }
+    .apps-cr-aside { position: static; }
+}
+
+/* ── Details: a drawer on the right, not a box in the middle ──
+   The grid stays visible beside it, so going from one entry to the next does not mean
+   closing a dialog to find your place again. */
+#apps-detail-modal { justify-content: flex-end; align-items: stretch; }
+#apps-detail-modal .apps-modal {
+    width: min(560px, 100%);
+    max-width: 560px;
+    height: 100%;
+    max-height: none;
+    border-radius: 0;
+    border-width: 0 0 0 1px;
+    animation: apps-drawer-in .22s ease-out;
+}
+@keyframes apps-drawer-in { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { #apps-detail-modal .apps-modal { animation: none; } }
+#apps-detail-modal .apps-modal-close { background: var(--bg-secondary); }
+#apps-detail-modal .adm-gallery { border-radius: 0; }
+#apps-detail-modal .adm-body { padding-top: 22px; }
+.adm-initials-badge { background: var(--bmm-s06); border: 1px solid var(--border); color: var(--text-secondary); }
+.adm-action-primary { background: var(--bmm-btn-primary-bg, var(--accent)); color: var(--bmm-btn-primary-text, var(--text-on-accent)); }
+/* In a drawer the actions get their own row under the title: beside it they pushed the title
+   onto three lines and ran under the close button. The backdrop is lighter, so the grid it
+   came from stays readable beside it. */
+#apps-detail-modal { background: rgba(0,0,0,0.35); backdrop-filter: none; }
+#apps-detail-modal .adm-header { flex-wrap: wrap; padding-right: 40px; }
+#apps-detail-modal .adm-header-actions { order: 3; flex-basis: 100%; flex-wrap: wrap; }

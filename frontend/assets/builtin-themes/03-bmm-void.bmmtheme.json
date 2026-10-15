@@ -3,6 +3,7 @@
   "name": "Pure Black",
   "author": "BMM Team",
   "description": "True black, a monochrome grey-white accent and hairline borders.",
+  "brand": { "mark": "logo" },
   "vars": {
     "--bmm-bg-base": "#000000",
     "--bmm-bg-elevated": "#0b0b0d",

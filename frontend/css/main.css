@@ -70,7 +70,6 @@ img {
 .mod-detail-panel,
 #mod-detail-panel,
 .detail-body,
-#detail-body,
 .modal-body,
 #global-conflicts-list,
 #detail-conflicts-list {
@@ -82,7 +81,6 @@ img {
 .mod-detail-panel::-webkit-scrollbar,
 #mod-detail-panel ::-webkit-scrollbar,
 .detail-body::-webkit-scrollbar,
-#detail-body::-webkit-scrollbar,
 #global-conflicts-list::-webkit-scrollbar,
 #detail-conflicts-list::-webkit-scrollbar {
     width: 6px; /* Slightly thinner for elegance */
@@ -91,7 +89,6 @@ img {
 .mod-detail-panel::-webkit-scrollbar-thumb,
 #mod-detail-panel ::-webkit-scrollbar-thumb,
 .detail-body::-webkit-scrollbar-thumb,
-#detail-body::-webkit-scrollbar-thumb,
 #global-conflicts-list::-webkit-scrollbar-thumb,
 #detail-conflicts-list::-webkit-scrollbar-thumb {
     background: var(--bmm-s15);
@@ -102,7 +99,6 @@ img {
 .mod-detail-panel::-webkit-scrollbar-thumb:hover,
 #mod-detail-panel ::-webkit-scrollbar-thumb:hover,
 .detail-body::-webkit-scrollbar-thumb:hover,
-#detail-body::-webkit-scrollbar-thumb:hover,
 #global-conflicts-list::-webkit-scrollbar-thumb:hover,
 #detail-conflicts-list::-webkit-scrollbar-thumb:hover {
     background: var(--accent);
@@ -223,6 +219,17 @@ body.is-maximized .titlebar-spacer {
     color: var(--bmm-text-on-accent);
 }
 
+/* Maximize is one square, restore is two (the Windows convention); the window state is
+   body.is-maximized, set by ui/titlebar.ts on every resize. */
+#tb-max .tb-ic-restore,
+body.is-maximized #tb-max .tb-ic-max {
+    display: none;
+}
+
+body.is-maximized #tb-max .tb-ic-restore {
+    display: block;
+}
+
 /* ═══════════════════════════════════
    APP SHELL
 ═══════════════════════════════════ */
@@ -274,25 +281,56 @@ body.is-maximized .titlebar-spacer {
     border-color: var(--bmm-s10);
     background: var(--bmm-s05);
 }
+/* The inset shade reads as depth on a dark sidebar and as a smudge on a light one. */
+body.bmm-theme-light .brand-text-logo { box-shadow: none; }
 
-.brand-better {
-    font-family: var(--font-sans);
-    font-weight: 700;
-    font-style: italic;
-    font-size: 19px;
-    color: var(--bmm-brand-better);   /* fixed — never recolours with the theme */
-    letter-spacing: 0.02em;
+/* The brand face: Bricolage Grotesque ExtraBold (OFL, assets/fonts/bricolage-grotesque/OFL.txt),
+   bundled as a Basic Latin subset instanced at weight 800 — no network, the CSP is untouched.
+   `block`: the wordmark is the one place a fallback face for a moment would read as a glitch. */
+@font-face {
+    font-family: 'Bricolage Grotesque';
+    src: url('../assets/fonts/bricolage-grotesque/BricolageGrotesque-ExtraBold.subset.woff2') format('woff2');
+    font-weight: 800;
+    font-style: normal;
+    font-display: block;
 }
 
-.brand-modmanager {
-    font-family: var(--font-sans);
-    font-weight: 900;
-    font-style: italic;
-    font-size: 24px;
-    color: var(--bmm-brand-mm);       /* fixed brand amber */
-    letter-spacing: -0.01em;
-    text-shadow: 0 0 15px rgba(245, 158, 11, 0.3);
+/* The wordmark « Better Mod.Manager »: one inline SVG, sharp at any zoom and DPI, with tokens
+   for inks so one drawing serves every theme. Dark themes get the fixed grey + amber, light
+   themes the darker pair (tokens.css); a theme can still name its own with --bmm-wordmark-*.
+   Its user units are hundredths of an em (font-size 100 in the markup) and its box is sized
+   in em, so the letters render at exactly 1.7rem. */
+.bmm-wordmark {
+    --_wm-better: var(--bmm-wordmark-better, var(--bmm-brand-better));
+    --_wm-mm:     var(--bmm-wordmark-mm, var(--bmm-brand-mm));
+    --_wm-glow:   var(--bmm-wordmark-glow, var(--bmm-brand-mm-glow));
+    display: block;
+    font-size: 1.7rem;
+    width: 6.82em;    /* viewBox 682 × 178 */
+    height: 1.78em;
+    overflow: visible;
 }
+body.bmm-theme-light .bmm-wordmark {
+    --_wm-better: var(--bmm-wordmark-better, var(--bmm-brand-better-light));
+    --_wm-mm:     var(--bmm-wordmark-mm, var(--bmm-brand-mm-light));
+    --_wm-glow:   var(--bmm-wordmark-glow, transparent);
+}
+.bmm-wordmark text {
+    font-family: var(--bmm-brand-font);
+    font-size: 100px;
+    font-weight: 800;
+    font-kerning: normal;
+}
+.bmm-wm-better { fill: var(--_wm-better); }
+.bmm-wm-mm { fill: var(--_wm-mm); filter: drop-shadow(0 0 7px var(--_wm-glow)); }
+.bmm-wm-hl { fill: var(--bmm-wordmark-highlight, transparent); }
+
+/* The compact mark: « BMM » on a 7 px-rounded tile, accent fill and the ink made for it.
+   Shown where the wordmark does not fit (the narrow layout below); the same drawing ships as
+   assets/brand/bmm-badge-*.svg and is a theme brand mark (brand.mark: "badge"). */
+.bmm-badge { display: none; width: 34px; height: 34px; flex: none; }
+.bmm-badge-tile { fill: var(--bmm-accent); }
+.bmm-badge-ink { fill: var(--bmm-text-on-accent); }
 
 /* Nav */
 .sidebar-nav {
@@ -5500,28 +5538,8 @@ body.tut-docked.tut-min .app-shell {
 .nav-item-hidden { display: none !important; }
 .nav-customize-btn { opacity: 0.6; }
 .nav-customize-btn:hover { opacity: 1; }
-/* The editor is the house shell (.modal.modal--xl.modal--tall): header, the body scrolls,
-   the actions are the footer. Only its content is styled here. */
-.nbe-sub { font-size: 12px; color: var(--text-muted); margin: 0 0 12px; }
-.nbe-scroll { min-width: 0; }
-.nbe-list { display: flex; flex-direction: column; gap: 6px; }
-.nbe-row {
-    display: flex; align-items: center; gap: 10px;
-    padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px;
-    background: rgba(255,255,255,0.025);
-}
-.nbe-row.nbe-dragging { opacity: 0.5; border-color: var(--accent); }
-.nbe-grip { cursor: grab; color: var(--text-muted); user-select: none; font-size: 14px; line-height: 1; }
-.nbe-grip:active { cursor: grabbing; }
-.nbe-icon { display: inline-flex; width: 20px; height: 20px; color: var(--text-secondary); flex-shrink: 0; }
-.nbe-icon svg { width: 18px; height: 18px; }
-.nbe-name { flex: 1; min-width: 0; }
-.nbe-eye {
-    flex-shrink: 0; width: 30px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
-    background: transparent; border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); cursor: pointer;
-}
-.nbe-eye.is-hidden { color: var(--text-muted); opacity: 0.7; }
-.nbe-eye:disabled { opacity: 0.3; cursor: not-allowed; }
+/* The editor (Settings → Customise navigation) is the house shell; its two columns are
+   css/navbar-editor.css. Here: the footer actions and the page-code pieces it reuses. */
 .nbe-actions { justify-content: flex-end; }
 /* The shell's footer order: Reset and Share/Import on the left, Done on the right at its own
    width. The three used to stretch across the footer, a full-width blue bar for « Done ». */
@@ -5530,29 +5548,7 @@ body.tut-docked.tut-min .app-shell {
 .nbe-act .nbe-act-ic svg { width: 15px; height: 15px; }
 .nbe-act .nbe-act-tx { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (min-width: 460px) { #nbe-done { flex-basis: auto; } }
-.nbe-edit { flex-shrink: 0; width: 26px; height: 28px; background: transparent; border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); cursor: pointer; }
-.nbe-edit:hover { color: var(--accent); border-color: var(--accent); }
-.nbe-del { flex-shrink: 0; width: 26px; height: 28px; background: transparent; border: 1px solid var(--border); border-radius: 6px; color: var(--danger); cursor: pointer; }
-.nbe-add { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; }
-.nbe-add > summary { cursor: pointer; font-size: 13px; color: var(--accent); user-select: none; }
-.nbe-add-form { display: flex; flex-direction: column; gap: 7px; margin-top: 10px; }
-.nbe-add-form .input, .nbe-add-form #nbe-add-target-wrap > * { width: 100%; box-sizing: border-box; }
-.nbe-flbl { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 4px; }
-.nbe-add-go { margin-top: 8px; }
-/* Icon picker */
-.nbe-icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 6px; }
-.nbe-icon-opt {
-    display: inline-flex; align-items: center; justify-content: center; height: 38px;
-    background: rgba(255,255,255,0.025); border: 1px solid var(--border); border-radius: 8px;
-    color: var(--text-secondary); cursor: pointer; transition: all 0.12s;
-}
-.nbe-icon-opt:hover { color: var(--text-primary); border-color: var(--accent); }
-.nbe-icon-opt.sel { color: var(--accent); border-color: var(--accent); background: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.12); }
-.nbe-icon-opt img, .nbe-icon-preview img { width: 18px; height: 18px; object-fit: contain; }
-.nbe-icon-upload { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
-.nbe-icon-preview { display: inline-flex; align-items: center; }
-.nbe-icon-preview img { width: 22px; height: 22px; border: 1px solid var(--accent); border-radius: 6px; padding: 2px; }
-/* Uploaded custom icon shown on the real nav button */
+/* An image icon (an upload, a Better* logo) on the real nav button */
 .nav-custom-img { width: 18px; height: 18px; object-fit: contain; display: block; }
 /* Import row */
 .nbe-import-row { display: flex; gap: 8px; margin-top: 12px; }
@@ -5744,7 +5740,6 @@ body.tut-docked.tut-min .app-shell {
 
 /* The document strip inside a custom page's editor. Reads as tabs because that is what it
    is: one HTML box showing whichever document is selected. */
-.nbe-subpages { margin: 10px 0 4px; }
 .nbe-subpages-list { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 8px; align-items: center; }
 .nbe-subpage {
     padding: 3px 10px; border-radius: 999px; cursor: pointer; font-size: 12px;
@@ -5766,7 +5761,6 @@ body.tut-docked.tut-min .app-shell {
 
 /* The bundle's own files. A list, not a tree: a page holds tens of files, not thousands,
    and a relative path reads faster than a folder you have to open. */
-.nbe-pagefiles { margin: 10px 0 4px; }
 .nbe-pagefiles-list { max-height: 190px; overflow-y: auto; margin: 6px 0 8px; }
 .nbe-pagefile {
     display: flex; align-items: center; gap: 8px; font-size: 12px;
@@ -5814,19 +5808,6 @@ body.tut-docked.tut-min .app-shell {
 .nbe-menu-item:hover { background: var(--bmm-bg-hover); }
 .nbe-mi-title { font-size: 13px; font-weight: 600; }
 .nbe-mi-hint { font-size: 11px; color: var(--text-muted); }
-.nbe-pages > summary { color: var(--accent); }
-.nbe-page-block { border: 1px solid var(--border); border-radius: 8px; background: rgba(255,255,255,0.025); padding: 8px; margin-bottom: 8px; }
-.nbe-page-row { display: flex; align-items: center; gap: 10px; }
-.nbe-page-row .nbe-name { flex: 1; min-width: 0; font-weight: 600; }
-.nbe-caps { display: flex; flex-wrap: wrap; gap: 10px 14px; margin-top: 8px; }
-.nbe-cap { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-secondary); cursor: pointer; user-select: none; }
-.nbe-cap input { accent-color: var(--accent); }
-.nbe-presets { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-.nbe-preset-lbl { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
-.nbe-net-origins { margin-top: 8px; font-size: 11px; }
-.nbe-jsnote { font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--text-muted); }
-.nbe-review-note { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 6px; font-size: 11px; color: var(--text-muted); }
-.nbe-review-pending { color: var(--warning); }
 /* Import review of a .bmmnav: one block per page, one row per permission or site. */
 .ngr-body { display: flex; flex-direction: column; gap: 14px; }
 .ngr-page { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: var(--bg-secondary); }
@@ -5856,9 +5837,6 @@ body.tut-docked.tut-min .app-shell {
     font-size: 10px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
     color: var(--text-muted); padding: 12px 14px 4px; user-select: none;
 }
-.nbe-row-group { background: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.06); }
-.nbe-section-tag { font-size: 9px; font-weight: 800; letter-spacing: 0.06em; color: var(--accent); padding: 2px 6px; border: 1px solid var(--accent); border-radius: 4px; flex-shrink: 0; }
-.nbe-add-section-btn { margin-top: 10px; width: 100%; }
 
 /* "Scroll up/down" cue when the highlighted target is off-screen. */
 .tut-scroll-hint {
@@ -6440,9 +6418,24 @@ body.tut-docked.tut-min .app-shell {
         flex: 0 0 auto;
     }
 
+    /* No room for the wordmark in the one-row strip: the compact BMM tile stands in for it,
+       first in the row, still the way into Flappy Tasky. */
     .sidebar-brand {
-        display: none;
+        display: flex;
+        align-items: center;
+        flex: none;
+        padding: 0 4px 0 8px;
+        border-bottom: none;
     }
+    .sidebar-brand .brand-text-logo {
+        padding: 0;
+        background: none;
+        border: none;
+        box-shadow: none;
+        display: flex;
+    }
+    .sidebar-brand .bmm-wordmark { display: none; }
+    .sidebar-brand .bmm-badge { display: block; }
 
     .sidebar-nav {
         flex-direction: row;
@@ -10510,24 +10503,16 @@ body.tasky-hidden #app-mascot-container {
     text-overflow: ellipsis;
 }
 
-/* Active — Sync = accent, Hosting = cyan */
-.repo-tab-btn[data-repo-tab="sync"].active {
-    background: linear-gradient(135deg, rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.12) 0%, rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.03) 100%);
-    border-color: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.4);
+/* Active: one look for both tabs. Host used to have its own literal cyan (0,194,255) that no
+   theme could reach and that matched nothing else on the page. */
+.repo-tab-btn.active {
+    background: color-mix(in srgb, var(--bmm-accent) 8%, var(--bmm-s02));
+    border-color: color-mix(in srgb, var(--bmm-accent) 45%, var(--bmm-border));
 }
-.repo-tab-btn[data-repo-tab="sync"].active .repo-tab-ic {
-    background: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.18);
-    border-color: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.35);
-    color: var(--accent);
-}
-.repo-tab-btn[data-repo-tab="host"].active {
-    background: linear-gradient(135deg, rgba(0,194,255,0.12) 0%, rgba(0,194,255,0.03) 100%);
-    border-color: rgba(0,194,255,0.4);
-}
-.repo-tab-btn[data-repo-tab="host"].active .repo-tab-ic {
-    background: rgba(0,194,255,0.18);
-    border-color: rgba(0,194,255,0.35);
-    color: var(--cyan);
+.repo-tab-btn.active .repo-tab-ic {
+    background: var(--bmm-accent);
+    border-color: var(--bmm-accent);
+    color: var(--bmm-text-on-accent);
 }
 .repo-tab-btn.active .repo-tab-sub { color: var(--text-secondary); }
 /* An unmistakable "selected tab" underline on the active card. */
@@ -10538,8 +10523,7 @@ body.tasky-hidden #app-mascot-container {
     height: 3px;
     border-radius: 3px 3px 0 0;
 }
-.repo-tab-btn[data-repo-tab="sync"].active::after { background: var(--accent); }
-.repo-tab-btn[data-repo-tab="host"].active::after { background: var(--cyan); }
+.repo-tab-btn.active::after { background: var(--bmm-accent); }
 
 /* Panels — high specificity so it beats .repo-column { display:flex } */
 .repo-tab-body { position: relative; }
@@ -10598,11 +10582,6 @@ body.tasky-hidden #app-mascot-container {
     border-radius: 50%;
     flex-shrink: 0;
 }
-.repo-column-label--host { color: var(--cyan); }
-.repo-column-label--host .col-dot {
-    background: var(--cyan);
-    box-shadow: 0 0 6px var(--cyan);
-}
 .repo-column-label--join { color: var(--accent); }
 .repo-column-label--join .col-dot {
     background: var(--accent);
@@ -10651,8 +10630,7 @@ body.tasky-hidden #app-mascot-container {
 .repo-card-step { display: none; }
 .repo-card-body { padding: 16px; }
 /* The accent hairline carries each method's colour. */
-.repo-card--cyan::before { background: var(--cyan); opacity: 0.85; }
-.repo-card--green::before { background: #2ecc71; opacity: 0.85; }
+.repo-card--green::before { background: var(--bmm-success); opacity: 0.85; }
 .repo-card--accent::before { background: var(--accent); opacity: 0.85; }
 .repo-card--optional { background: color-mix(in srgb, var(--bmm-s02) 42%, transparent); }
 .repo-card--optional::before { opacity: 0.4; }
@@ -10772,18 +10750,6 @@ body.tasky-hidden #app-mascot-container {
     opacity: 0.65;
     line-height: 1.4;
 }
-
-.repo-section-intro--host {
-    background: linear-gradient(135deg, rgba(0,194,255,0.07) 0%, rgba(0,194,255,0.02) 100%);
-    border-color: rgba(0,194,255,0.13);
-}
-.repo-section-intro--host .repo-section-intro-icon {
-    background: rgba(0,194,255,0.13);
-    color: var(--cyan);
-    border: 1px solid rgba(0,194,255,0.2);
-}
-.repo-section-intro--host .repo-section-intro-label { color: var(--cyan); }
-.repo-section-intro--host .repo-section-intro-desc { color: var(--text-secondary); }
 
 .repo-section-intro--join {
     background: linear-gradient(135deg, rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.07) 0%, rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.02) 100%);
@@ -15370,102 +15336,6 @@ body.bmm-toolbar-stacked-labels .profile-select-icon-wrap select { width: 100% !
     background: rgba(232, 99, 92, 0.12);
 }
 
-/* ── Translation Sandbox: what the dialog (i18n-sandbox.ts) still uses ───────
-   The old full-page sandbox styles (.i18n-sb-* panels, key rows, chips) went with
-   the split-view redesign; .i18x-* in i18n-sandbox.ts carries the current look. */
-.modal.i18n-sb { position: relative; }
-.i18n-overlay-active .i18n-ovl-opacity { background: var(--bmm-s05); }
-
-/* Detail / editor */
-.i18n-edit-area {
-    width: 100%; font-size: 13.5px; line-height: 1.5; border-radius: 9px;
-    padding: 11px 13px; background: rgba(0,0,0,0.28);
-    border: 1px solid var(--bmm-s10); color: var(--text-primary);
-    resize: vertical; font-family: inherit; transition: border-color 0.15s ease;
-}
-.i18n-edit-area:focus { outline: none; border-color: rgba(6,182,212,0.5); }
-.i18n-ref-lang { font-weight: 700; color: var(--cyan); min-width: 34px; flex-shrink: 0; }
-
-/* Hardcoded tab */
-.i18n-hc-kind {
-    font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em;
-    padding: 2px 7px; border-radius: 5px; border: 1px solid; flex-shrink: 0;
-    background: var(--bmm-s03);
-}
-
-/* Pick-from-screen highlight on the live app */
-body.i18n-picking, body.i18n-picking * { cursor: crosshair !important; }
-.i18n-pick-hover {
-    outline: 2px solid var(--cyan) !important; outline-offset: 1px !important;
-    background: rgba(6,182,212,0.12) !important; border-radius: 3px;
-}
-/* Devtools-style hardcoded text highlight (persistent) */
-.i18n-hc-mark {
-    outline: 1.5px dashed rgba(245,158,11,0.8) !important; outline-offset: 1px !important;
-    background: rgba(245,158,11,0.1) !important; border-radius: 2px; cursor: crosshair !important;
-}
-
-/* JSON editing (object-valued keys like _info / _synonyms) */
-.i18n-edit-area.mono { font-family: var(--font-mono); font-size: 12px; line-height: 1.55; }
-
-/* drag handle affordance in overlay mode */
-.i18n-overlay-active .i18n-drag-handle { cursor: move; }
-/* …but the controls living IN the drag handle must not claim to be draggable. Pairing this
-   with the mousedown guard means the header now reads correctly: grab anywhere on the bar,
-   except on a control, which keeps its own cursor and its own behaviour. */
-.i18n-overlay-active .i18n-drag-handle :is(button, input, select, textarea, label, a) { cursor: auto; }
-.i18n-overlay-active .i18n-drag-handle :is(button, a) { cursor: pointer; }
-.i18n-overlay-active .i18n-drag-handle input[type="range"] { cursor: ew-resize; }
-/* Overlay panel polish + accent edge */
-.i18n-overlay-active .modal {
-    border: 1px solid var(--bmm-s10) !important;
-    border-top: 2.5px solid var(--bmm-accent) !important;
-    border-radius: 16px !important;
-}
-/* Floating opacity slider — hidden unless the window is floating */
-.i18n-ovl-opacity { display: none; align-items: center; gap: 6px; color: var(--text-muted);
-    padding: 4px 8px; border: 1px solid var(--border); border-radius: 8px; }
-.i18n-overlay-active .i18n-ovl-opacity { display: inline-flex; }
-.i18n-ovl-opacity input[type="range"] { width: 74px; accent-color: var(--accent); }
-
-/* Custom 8-direction resize handles (overlay mode) */
-.i18n-rsz { position: absolute; z-index: 40; transition: background 0.12s ease; }
-.i18n-rsz:hover { background: rgba(6,182,212,0.16); }
-.i18n-rsz-n  { top: 0; left: 16px; right: 16px; height: 8px; cursor: ns-resize; }
-.i18n-rsz-s  { bottom: 0; left: 16px; right: 16px; height: 8px; cursor: ns-resize; }
-.i18n-rsz-e  { right: 0; top: 16px; bottom: 16px; width: 8px; cursor: ew-resize; }
-.i18n-rsz-w  { left: 0; top: 16px; bottom: 16px; width: 8px; cursor: ew-resize; }
-.i18n-rsz-ne { top: 0; right: 0; width: 18px; height: 18px; cursor: nesw-resize; border-radius: 0 16px 0 0; }
-.i18n-rsz-nw { top: 0; left: 0; width: 18px; height: 18px; cursor: nwse-resize; border-radius: 16px 0 0 0; }
-.i18n-rsz-se { bottom: 0; right: 0; width: 20px; height: 20px; cursor: nwse-resize; border-radius: 0 0 16px 0; }
-.i18n-rsz-sw { bottom: 0; left: 0; width: 18px; height: 18px; cursor: nesw-resize; border-radius: 0 0 0 16px; }
-/* visible grip on the SE corner */
-.i18n-rsz-se::after {
-    content: ''; position: absolute; right: 4px; bottom: 4px; width: 8px; height: 8px;
-    border-right: 2px solid var(--bmm-s20); border-bottom: 2px solid var(--bmm-s20);
-    pointer-events: none;
-}
-.i18n-rsz:hover { background: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.18); }
-
-/* New language popover */
-.i18n-newlang-pop {
-    position: absolute; inset: 0; z-index: 30; display: flex;
-    align-items: center; justify-content: center; background: rgba(0,0,0,0.55);
-    border-radius: inherit;
-}
-.i18n-newlang-card {
-    width: min(360px, 90%); background: var(--bg-elevated, #15161d);
-    border: 1px solid var(--bmm-s12); border-radius: 14px; padding: 20px;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-}
-.i18n-newlang-title { font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 14px; }
-.i18n-newlang-lbl { display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 6px; }
-.i18n-newlang-check {
-    display: flex; align-items: center; gap: 7px; font-size: 12px;
-    color: var(--text-secondary); margin: 12px 0; cursor: pointer;
-}
-.i18n-newlang-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
-
 /* ── Legal modals (Privacy / TOS / GPL License) — premium rework ──────────── */
 /* The legal dialogs are house dialogs (.modal--lg, .bms-icon header); only the document's
    typography is theirs. The body is the dialog's own scroll region. */
@@ -15574,28 +15444,6 @@ h1 {
     vertical-align: middle;
     cursor: help;
 }
-
-/* ── i18n sandbox dock mode ─────────────────────────────────────────────────
-   body.i18nsb-docked: the sandbox panel becomes a right-side column inside the
-   window; the overlay is click-through (set inline by toggleDockMode) so the app
-   stays usable while translating against it. Width via --i18nsb-w; the grip is
-   the shared .bmm-dock-resize (ui/dock-space.ts). */
-body.i18nsb-docked #modal-i18n-sandbox .modal {
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    left: auto;
-    width: var(--i18nsb-w, 460px);
-    max-width: none;
-    height: auto;
-    max-height: none;
-    margin: 0;
-    border-radius: 0;
-    transform: none;
-    pointer-events: auto;
-}
-#i18n-dock-toggle.active { color: var(--accent); }
 
 /* -- Icon pack picker ---------------------------------------------------------
    The first cut leaned on .modal-generic-header, whose close button dropped onto
@@ -15774,26 +15622,6 @@ body.i18nsb-docked #modal-i18n-sandbox .modal {
 }
 #setting-tag-color2.tag-color2-hidden { opacity: 0; pointer-events: none; }
 
-/* ── Translation sandbox, docked: one column, not two ────────────────────────
-   The keys list and the detail editor sit side by side, which is right in the
-   full-screen modal and unreadable in a 460px dock — the detail pane became a
-   ~180px ribbon of wrapped words (field screenshot). Docked, they stack: the list
-   on top with a bounded height, the editor below it with the rest. */
-body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-panel[data-i18n-panel="keys"] {
-    flex-direction: column;
-}
-body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-left {
-    width: 100%;
-    max-width: none;
-    min-width: 0;
-    max-height: 46%;
-    border-right: none;
-    border-bottom: 1px solid var(--bmm-s08);
-}
-body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-right { min-height: 0; }
-body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-filters { flex-wrap: wrap; row-gap: 6px; }
-body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-header-actions { flex-wrap: wrap; row-gap: 6px; }
-
 /* ── Dependency explainer (Credits → Technical Architecture) ─────────────────
    Clicking a stack card used to launch a browser. It opens this first: what the
    library is, and — the part worth reading — what BMM uses it FOR. */
@@ -15821,31 +15649,6 @@ body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-header-actions { flex-wrap: wrap
    Bounding the content area to the reserved band makes that impossible: wide
    content scrolls inside its own box instead of sliding beneath the dock. */
 /* (The overflow backstop went with the padding it was protecting.) */
-
-/* ── Translation sandbox header, docked: room to breathe, no overlap ─────────
-   At 460px the title, the two action tools, the opacity slider and three window
-   buttons all fought for one row and printed on top of each other (field
-   screenshot). Docked, the header wraps properly and the title stops shrinking
-   below its own text. */
-body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-header {
-    flex-wrap: wrap;
-    row-gap: 8px;
-    align-items: center;
-}
-body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-header > div:first-child {
-    flex: 1 1 100%;
-    min-width: 0;
-}
-body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-header-actions {
-    flex: 1 1 100%;
-    flex-wrap: wrap;
-    row-gap: 6px;
-    margin-left: 0;
-}
-/* The opacity slider only means something while floating — it is dead weight in a
-   dock, where the panel is opaque by construction. */
-body.i18nsb-docked #modal-i18n-sandbox .i18n-ovl-opacity { display: none; }
-body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-progress { max-width: 100%; }
 
 /* ── Icon picker: the colour row ─────────────────────────────────────────────
    The colour is part of the answer, not a separate setting — it rides the ref the
@@ -15917,8 +15720,7 @@ body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-progress { max-width: 100%; }
    the same 5px pill with the same accent hover. They are aliases of this now, so
    the affordance cannot drift between panels. */
 .bmm-dock-resize,
-.bte-dock-resize,
-.i18nsb-dock-resize {
+.bte-dock-resize {
     position: absolute;
     top: 0; bottom: 0; left: 0;
     width: 12px;
@@ -15926,8 +15728,7 @@ body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-progress { max-width: 100%; }
     z-index: 5;
 }
 .bmm-dock-resize::after,
-.bte-dock-resize::after,
-.i18nsb-dock-resize::after {
+.bte-dock-resize::after {
     content: '';
     position: absolute;
     top: 50%; left: 50%;
@@ -15939,16 +15740,14 @@ body.i18nsb-docked #modal-i18n-sandbox .i18n-sb-progress { max-width: 100%; }
     transition: background 0.15s, opacity 0.15s, height 0.15s;
 }
 .bmm-dock-resize:hover::after, .bmm-dock-resize.dragging::after,
-.bte-dock-resize:hover::after, .bte-dock-resize.dragging::after,
-.i18nsb-dock-resize:hover::after, .i18nsb-dock-resize.dragging::after {
+.bte-dock-resize:hover::after, .bte-dock-resize.dragging::after {
     background: var(--accent);
     opacity: 1;
     height: 62px;
 }
 /* Only visible on the panel that is actually docked. */
 .bmm-dock-resize { display: none; }
-body.bte-docked #bmm-theme-editor .bmm-dock-resize,
-body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
+body.bte-docked #bmm-theme-editor .bmm-dock-resize { display: block; }
 
 /* ── The spinner, made un-shadowable ─────────────────────────────────────────
    `@keyframes spin` is declared THREE times (main.css twice, mapper.css once) and
@@ -18163,19 +17962,36 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 /* Margin on BOTH sides. It sits between an "add a source" row and the list of sources
    below, and with only a top margin it touched the first row — which reads as belonging to
    that row rather than to the field above it. */
-.src-access { margin: 10px 0 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--bmm-s03); }
+/* A fold, not a box: it is mounted inside dialogs, where a framed panel is a box in a box
+   (modal-shell.css). One hairline above and below; the summary reads as a disclosure row. */
+.src-access { margin: 10px 0 14px; border-top: 1px solid var(--bmm-border); border-bottom: 1px solid var(--bmm-border); }
 .src-access > summary {
-    cursor: pointer; padding: 8px 10px; font-size: 12px; font-weight: 600;
-    color: var(--text-secondary); list-style: none;
+    display: flex; align-items: center; gap: 8px;
+    cursor: pointer; padding: 9px 2px; font-size: 12.5px; font-weight: 600;
+    color: var(--bmm-text-secondary); list-style: none; border-radius: 6px;
 }
+.src-access > summary:hover { color: var(--bmm-text-primary); }
+.src-access > summary:focus-visible { outline: 2px solid color-mix(in srgb, var(--bmm-accent) 75%, transparent); outline-offset: 2px; }
 .src-access > summary::-webkit-details-marker { display: none; }
-.src-access > summary::before { content: '▸ '; color: var(--text-muted); }
-.src-access[open] > summary::before { content: '▾ '; }
-.src-access-body { padding: 4px 10px 10px; display: flex; flex-direction: column; gap: 4px; }
-.src-access-label {
-    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
-    color: var(--text-muted); margin-top: 6px;
+.src-access > summary::before {
+    content: ""; flex: none; width: 6px; height: 6px; margin: 0 3px 0 2px;
+    border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+    transform: rotate(-45deg); transition: transform 0.15s ease; opacity: 0.7;
 }
+.src-access[open] > summary::before { transform: rotate(45deg); }
+.src-access[open] > summary { color: var(--bmm-text-primary); }
+.src-access-body { padding: 2px 2px 12px; display: flex; flex-direction: column; gap: 6px; }
+.src-access-label {
+    font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
+    color: var(--bmm-text-secondary); margin-top: 6px;
+}
+/* The ring in words (source-access.ts paints data-state). No key = a quiet note with the
+   action beside it; an unreadable ring = a warning. */
+.src-access-state { margin: 0; font-size: 12px; line-height: 1.5; color: var(--bmm-text-secondary); }
+.src-access-state[hidden] { display: none; }
+.src-access-state[data-state="broken"] { color: color-mix(in srgb, var(--bmm-warning) 65%, var(--bmm-text-primary)); }
+.src-access-row > select[hidden],
+.src-access-row > select[hidden] + .bmm-csel { display: none; }
 /* min-width:0 on the row AND the input: without it a long address makes the flex row
    refuse to shrink and the whole panel grows sideways past its card. */
 /* WRAPS, and the select keeps a floor.
@@ -18186,7 +18002,7 @@ body.i18nsb-docked #modal-i18n-sandbox .bmm-dock-resize { display: block; }
 .src-access-row { display: flex; gap: 6px; align-items: center; min-width: 0; flex-wrap: wrap; }
 .src-access-row > .input { flex: 1 1 160px; min-width: 140px; }
 .src-access-row > .btn { flex: 0 0 auto; }
-.src-access-hint { font-size: 10px; color: var(--text-muted); line-height: 1.5; }
+.src-access-hint { font-size: 11px; color: var(--bmm-text-secondary); line-height: 1.5; }
 
 /* The SSH panel's header is now a button that folds the body away. Styled to still read as a
    card heading, not as a control: people look for the title, not for something to press. */
@@ -19259,7 +19075,7 @@ button.repo-ssh-head.is-open .repo-ssh-chev { transform: rotate(180deg); }
     left: 0; bottom: 0;
     width: 34px; height: 3px;
     border-radius: 3px;
-    background: var(--cyan);
+    background: var(--bmm-accent);
 }
 .repo-host-group[data-host-group="serve"] .repo-group-t::after { background: var(--success); }
 .repo-column[data-repo-panel="sync"] .repo-group-t::after { background: var(--accent); }
@@ -20205,8 +20021,6 @@ button.ssh-br-item:focus-visible { background: var(--bmm-s08, rgba(255, 255, 255
 
 /* ── Settings cards sit on one rhythm; Tasky's card is one of them, not a tinted one. ── */
 #view-settings .glass-card + .glass-card { margin-top: 16px; }
-.settings-card-tasky { border-color: color-mix(in srgb, var(--accent) 22%, var(--border)); }
-.settings-card-tasky .set-rows { margin-top: 8px; }
 
 /* ── Plugins › API & scripts: what the tab shows while it builds itself. ── */
 .plug-skel { display: flex; flex-direction: column; gap: 12px; padding: 4px 0; }
@@ -20232,30 +20046,8 @@ button.ssh-br-item:focus-visible { background: var(--bmm-s08, rgba(255, 255, 255
 .sched-branch { margin: 6px 0 2px 10px; padding-left: 10px; border-left: 1.5px dashed var(--bmm-s15, rgba(255,255,255,.15)); border-radius: 0 0 0 8px; }
 .sched-steps > .sched-step + .sched-step { margin-top: 2px; }
 
-/* ── Customize navigation: two columns when there is room — the list on the left, the
-   "add a button" and "custom pages" panels on the right as cards rather than stacked
-   disclosures that pushed the list off screen. ── */
-.nbe-scroll { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-content: start; }
-@media (min-width: 860px) {
-    .nbe-scroll { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "list add" "list pages" "addsec pages"; }
-    .nbe-scroll > #nbe-list { grid-area: list; }
-    .nbe-scroll > #nbe-add-section { grid-area: addsec; justify-self: start; }
-    .nbe-scroll > .nbe-add:not(.nbe-pages) { grid-area: add; margin-top: 0; border-top: 0; padding-top: 0; }
-    .nbe-scroll > .nbe-pages { grid-area: pages; margin-top: 0; border-top: 0; padding-top: 0; }
-}
-.nbe-add { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; background: var(--bmm-s02, rgba(255,255,255,.02)); }
-.nbe-add > summary { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--text-primary); list-style: none; }
-.nbe-add > summary::-webkit-details-marker { display: none; }
-.nbe-add > summary::before { content: '▸'; color: var(--text-muted); transition: transform .15s; }
-.nbe-add[open] > summary::before { transform: rotate(90deg); }
-.nbe-add[open] > summary { margin-bottom: 4px; }
-.nbe-row { transition: border-color .12s, background .12s; }
-.nbe-row:hover { border-color: var(--bmm-border-hover, var(--border)); background: var(--bmm-s03, rgba(255,255,255,.03)); }
-.nbe-row-group { background: color-mix(in srgb, var(--accent) 6%, transparent); }
-.nbe-section-tag { font-size: 9.5px; font-weight: 800; letter-spacing: .08em; color: var(--accent); padding: 2px 7px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
-.nbe-page-row, .nbe-page-block { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; background: var(--bmm-s03, rgba(255,255,255,.03)); margin: 6px 0; }
-.nbe-page-row:hover { border-color: var(--bmm-border-hover, var(--border)); }
-.nbe-pagefiles-list, .nbe-subpages-list { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; }
+/* ── Customize navigation: the rest of the editor is css/navbar-editor.css. ── */
+.nbe-pagefiles-list { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; }
 .nbe-pagefile-path { font-family: var(--font-mono); font-size: 11px; }
 .nbe-pagefile-size { font-size: 10.5px; color: var(--text-muted); }
 
@@ -20324,24 +20116,6 @@ button.ssh-br-item:focus-visible { background: var(--bmm-s08, rgba(255, 255, 255
 .ipk-grid { min-width: 0; }
 .ipk-cell { min-width: 0; }
 .ipk-searchwrap { min-width: 0; }
-
-/* Nav customizer: more room to breathe. Bigger gap between the two columns, calmer
-   rows, and the add/pages panels sit on a faint surface so the left list and the right
-   forms read as two areas rather than one crowded sheet. */
-@media (min-width: 860px) { .nbe-scroll { gap: 12px 22px; } }
-.nbe-row { padding: 8px 10px; gap: 11px; border-radius: 9px; }
-.nbe-row:hover { border-color: var(--bmm-s15, var(--border)); background: rgba(255,255,255,0.04); }
-.nbe-list { gap: 7px; }
-.nbe-scroll > .nbe-add:not(.nbe-pages),
-.nbe-scroll > .nbe-pages {
-    background: var(--bmm-s02); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px;
-}
-.nbe-scroll > .nbe-add > summary,
-.nbe-scroll > .nbe-pages > summary { margin: -12px -14px 10px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
-.nbe-add-form { gap: 9px; }
-.nbe-icon-grid { grid-template-columns: repeat(auto-fill, minmax(38px, 1fr)); gap: 7px; }
-.nbe-icon-opt { height: 40px; border-radius: 9px; }
-.nbe-flbl { margin-top: 4px; }
 
 /* ── BetterCommunity screen ──────────────────────────────────────────
    Four layouts got here. The third had almost no decoration and still read as a

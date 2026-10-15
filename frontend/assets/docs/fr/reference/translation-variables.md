@@ -23,24 +23,24 @@ la compilation quand une traduction et le code ne sont pas d’accord. Elle ne p
 | `{name}` | un nom (mod, profil, tâche, fichier…) |
 | `{m}` | un second nombre, ou un nom, à côté de {n} |
 | `{v}` | une version ou une valeur |
+| `{s}` | des secondes, ou un mot court choisi par le code |
 | `{total}` | le total sur lequel porte le compte |
 | `{count}` | un nombre d’éléments |
-| `{s}` | des secondes, ou un mot court choisi par le code |
-| `{err}` | un message d’erreur |
 | `{id}` | un identifiant |
-| `{e}` | un message d’erreur |
+| `{err}` | un message d’erreur |
 | `{size}` | une taille déjà formatée (Ko, Mo…) |
+| `{e}` | un message d’erreur |
 | `{label}` | un titre court |
 | `{path}` | un chemin de fichier ou de dossier |
-| `{profile}` | un nom de profil |
 | `{version}` | un numéro de version |
+| `{profile}` | un nom de profil |
 | `{mod}` | un nom de mod |
 | `{error}` | un message d’erreur |
+| `{file}` | un nom de fichier |
 | `{host}` | un nom de serveur |
 | `{url}` | une adresse web |
-| `{file}` | un nom de fichier |
-| `{time}` | une heure |
 | `{x}` | une liste ou un détail inséré par le code |
+| `{time}` | une heure |
 | `{date}` | une date |
 | `{type}` | un genre (un importateur, un format…) |
 
@@ -73,7 +73,7 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 
 ## Toutes les clés avec variables
 
-1073 clés, regroupées par leur premier segment. Le texte est le texte français, raccourci.
+1210 clés, regroupées par leur premier segment. Le texte est le texte français, raccourci.
 
 ### activity
 
@@ -197,14 +197,19 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `apps.card.openAria` | `{name}` | Détails de {name} |
 | `apps.create.bundled` | `{f}` `{n}` | Publié : {n} application(s) empaquetée(s), {f} |
 | `apps.create.clearBody` | `{n}` | Ceci jette le brouillon ({n} entrée(s)). Exportez-le d'abord pour le garder. |
+| `apps.create.delBody` | `{name}` | « {name} » quitte le brouillon. Exportez d’abord le catalogue si vous voulez la garder. |
+| `apps.create.next` | `{step}` | Suivant : {step} |
 | `apps.create.opened` | `{n}` | Ouvert : {n} application(s) |
 | `apps.create.packMissing` | `{n}` | {n} entrée(s) nomment un fichier absent du dossier |
+| `apps.create.pbBadId` | `{id}` | {id} : un id ne contient que des lettres, des chiffres, le point, le tiret et le tiret bas. |
 | `apps.create.pbDupe` | `{id}` `{n}` | {id} apparaît {n} fois. Les id doivent être uniques. |
 | `apps.create.pbFileOnly` | `{id}` | {id} : un fichier, pas d’adresse. Seule la publication en un fichier le porte. |
 | `apps.create.pbNoTitle` | `{id}` | {id} : pas de titre. |
 | `apps.create.pbNoUrl` | `{id}` | {id} : pas d'URL de téléchargement. Les lecteurs ignoreront cette entrée. |
 | `apps.create.problems` | `{n}` | {n} chose(s) à regarder |
+| `apps.create.stepOf` | `{n}` `{total}` | Étape {n} sur {total} |
 | `apps.create.stillNeeded` | `{x}` | Il manque encore : {x} |
+| `apps.create.sub.entries` | `{n}` | {n} entrées |
 | `apps.detail.versionPair` | `{installed}` `{latest}` | v{installed} installée, v{latest} dans le catalogue |
 | `apps.shownOf` | `{n}` `{total}` | {n} sur {total} |
 | `apps.someSourcesFailed` | `{n}` | {n} source(s) n'ont pas répondu. Leurs apps manquent ci-dessous. |
@@ -215,6 +220,8 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `apps.sources.indexAll` | `{n}` | Cet index liste {n} catalogue(s) d’apps et vous les suivez déjà tous. |
 | `apps.sources.indexNone` | `{n}` | Cet index ne liste aucun catalogue d’apps, seulement {n} entrée(s) d’autres types. |
 | `apps.sources.indexNone2` | `{what}` | Aucun catalogue d’apps dans cet index, seulement {what}. Ajoute-les depuis leurs écrans. |
+| `apps.sourcesBtn` | `{n}` | {n} sources |
+| `apps.sourcesBtnOff` | `{n}` | {n} hors ligne |
 | `apps.sourcesFailedMany` | `{n}` | {n} sources n'ont pas répondu. Leurs applications manquent ci-dessous. |
 | `apps.state.updatedToast` | `{name}` | {name} : mise à jour terminée |
 | `apps.updatesMany` | `{n}` | {n} mises à jour |
@@ -486,7 +493,30 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 
 | Clé | Variables | Texte |
 |---|---|---|
+| `history.exported` | `{n}` | {n} entrées exportées |
 | `history.revertError` | `{error}` | Erreur lors de l'annulation : {error} |
+| `history.s.deleted` | `{name}` | {name} supprimé |
+| `history.s.disabled` | `{name}` | {name} désactivé |
+| `history.s.edited` | `{n}` `{name}` | {n} informations de {name} modifiées |
+| `history.s.editedOne` | `{field}` `{name}` | {field} de {name} modifié |
+| `history.s.editedPlain` | `{name}` | {name} modifié |
+| `history.s.enabled` | `{name}` | {name} activé |
+| `history.s.enabledDeps` | `{name}` | {name} activé avec ses dépendances |
+| `history.s.profileCreate` | `{name}` | Profil {name} créé |
+| `history.s.profileDelete` | `{name}` | Profil {name} supprimé |
+| `history.s.profileEdit` | `{name}` | Profil {name} modifié |
+| `history.s.profileSwitch` | `{name}` | Passage au profil {name} |
+| `history.s.repoFollow` | `{name}` | Dépôt {name} suivi |
+| `history.s.repoFollowEdit` | `{name}` | Suivi du dépôt {name} modifié |
+| `history.s.repoUnfollow` | `{name}` | {name} n'est plus suivi |
+| `history.s.settingOne` | `{field}` | Réglage {field} modifié |
+| `history.s.settings` | `{n}` | {n} réglages modifiés |
+| `history.s.sourceAdd` | `{name}` | Source de catalogue {name} ajoutée |
+| `history.s.sourceRemove` | `{name}` | Source de catalogue {name} retirée |
+| `history.s.updateAvailable` | `{version}` | Mise à jour {version} disponible |
+| `history.s.updateInstalled` | `{version}` | BMM mis à jour en {version} |
+| `history.subProfile` | `{name}` | Profil {name}, et profils, réglages, dépôts et mises à jour |
+| `history.took` | `{s}` | {s} s |
 
 ### hub
 
@@ -586,6 +616,12 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `md.sched.ahead` | `{here}` `{span}` `{tz}` | {here} est en avance de {span} sur {tz} en ce moment |
 | `md.sched.behind` | `{here}` `{span}` `{tz}` | {here} est en retard de {span} sur {tz} en ce moment |
 | `md.sched.same` | `{here}` `{tz}` | {here} est à la même heure que {tz} en ce moment |
+
+### mdd
+
+| Clé | Variables | Texte |
+|---|---|---|
+| `mdd.filesShort` | `{n}` | {n} fichiers |
 
 ### mg
 
@@ -692,6 +728,13 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `modpack.repair.notFound` | `{name}` | {name} : fichier introuvable sur le serveur |
 | `modpack.repair.partial` | `{errors}` | Réparé, mais certains mods ont été ignorés : • {errors} |
 | `modpack.repair.repairing` | `{name}` | Réparation de {name}… |
+| `modpack.ui.building` | `{n}` `{name}` `{total}` | Lecture de {name} ({n}/{total}) |
+| `modpack.ui.deps` | `{n}` | {n} dép. |
+| `modpack.ui.pickAll` | `{n}` | Tous ({n}) |
+| `modpack.ui.pickEnabled` | `{n}` | Activés en ce moment ({n}) |
+| `modpack.ui.quickPick` | `{src}` | Depuis {src} : |
+| `modpack.ui.selCount` | `{n}` | {n} sélectionné(s) |
+| `modpack.ui.stepOf` | `{n}` `{total}` | Étape {n} sur {total} |
 | `modpack.updatedAt` | `{date}` | Mis à jour le {date} |
 
 ### mods
@@ -699,6 +742,15 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | Clé | Variables | Texte |
 |---|---|---|
 | `mods.sha.missingDesc` | `{name}` | Le mod "{name}" n'a pas de hachage SHA valide. Pour des raisons de sécurité, il est recommandé de calculer le… |
+
+### nbx
+
+| Clé | Variables | Texte |
+|---|---|---|
+| `nbx.added` | `{name}` | « {name} » ajouté à la barre latérale. |
+| `nbx.deleteButtonD` | `{name}` | « {name} » quitte la barre latérale. |
+| `nbx.deletePageD` | `{name}` | « {name} » et ses données enregistrées sont supprimées définitivement. |
+| `nbx.tplUses` | `{perms}` | Ce modèle utilise : {perms}. |
 
 ### notif
 
@@ -1125,6 +1177,8 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | Clé | Variables | Texte |
 |---|---|---|
 | `sched.ai.tainted` | `{f}` | La réponse de Laya ne peut pas servir dans « {f} » de cette étape. Utilisez plutôt une étiquette pour choisir… |
+| `sched.api.badRoute` | `{r}` | Ce n’est pas une route de l’API locale : {r} |
+| `sched.api.failed` | `{s}` | L’API locale a répondu {s}. |
 | `sched.arm.done` | `{n}` `{s}` | « {n} » mise sur {s} |
 | `sched.arm.gone` | `{n}` | aucune tâche avec l’id {n}, rien n’a changé |
 | `sched.bk.done` | `{f}` `{mb}` `{n}` | {f} écrit ({mb} Mo, {n} section(s)) |
@@ -1136,16 +1190,38 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `sched.catBundled` | `{f}` | Empaqueté dans {f}. |
 | `sched.catDone` | `{n}` | {n} entrée(s) publiée(s). |
 | `sched.catEmpty` | `{k}` | rien à publier pour « {k} », aucun catalogue écrit |
+| `sched.cc.found` | `{size}` | {size} dans les caches choisis |
+| `sched.cc.freed` | `{size}` | {size} libéré(s) |
+| `sched.cc.line` | `{busy}` `{id}` `{n}` `{size}` | {id} : {size} en {n} élément(s) |
 | `sched.chainLoop` | `{n}` `{name}` | Chaîne arrêtée après {n} tâches : « {name} » s’attend elle-même en boucle. |
+| `sched.ci.done` | `{id}` | Installé : {id} |
 | `sched.cond.gonePlugin` | `{n}` | {n} (pas installé ici) |
 | `sched.creds.keyActive` | `{k}` | La clé active ({k}) |
 | `sched.creds.keyMissing` | `{k}` | {k} (n'est plus sur le trousseau) |
+| `sched.cu.done` | `{d}` `{n}` `{s}` | {n} mise(s) à jour : {d} faite(s), {s} ignorée(s) |
+| `sched.cu.errApps` | `{e}` | Catalogue d’applications : {e} |
+| `sched.cu.errPlugins` | `{e}` | Catalogue de plugins : {e} |
+| `sched.cu.found` | `{n}` `{of}` | {n} mise(s) à jour parmi {of} élément(s) |
+| `sched.cu.gone` | `{k}` | {k} : n’est plus installé |
 | `sched.dbg.finishedLine` | `{n}` `{s}` `{w}` | {w} : {n} étape(s), {s} s |
 | `sched.dbg.modeUntil` | `{n}` | jusqu'à « {n} » |
 | `sched.dbg.trailN` | `{n}` | {n} valeur(s) |
 | `sched.dcsHookOff` | `{n}` | Surveillance DCS retirée de {n} dossier(s). |
 | `sched.dcsHookOk` | `{n}` | Surveillance DCS installée dans {n} dossier(s). |
+| `sched.dl.status` | `{s}` | Le serveur a répondu {s}. |
 | `sched.dl.steps` | `{n}` | {n} étape(s) |
+| `sched.dr.measureFailed` | `{e}` | Mesure impossible : {e} |
+| `sched.dr.navActs` | `{w}` | Agit sur : {w} (en aperçu : montré, jamais pressé) |
+| `sched.dr.navShows` | `{w}` | Affiche : {w} |
+| `sched.dr.needs` | `{p}` | demande : {p} |
+| `sched.dr.noteMissing` | `{n}` | {n} étape(s) seraient refusées : accordez les permissions marquées en rouge. |
+| `sched.dr.play` | `{n}` | Aperçu de la navigation ({n}) |
+| `sched.dr.title` | `{name}` | Simulation : {name} |
+| `sched.dr.wouldRun` | `{s}` | Exécuterait : {s} |
+| `sched.du.done` | `{n}` `{size}` | {size} sur {n} profil(s) |
+| `sched.du.mdTop` | `{n}` | Les {n} mods les plus lourds |
+| `sched.ex.skipped` | `{list}` `{n}` | {n} étape(s) ne s’exécutent que dans BMM (étape {list}) : elles sont écrites en commentaire. |
+| `sched.ex.title` | `{name}` | Exporter {name} |
 | `sched.exp.missing` | `{n}` | {n} tâche(s) référencée(s) n’existent plus et ne peuvent pas être incluses. |
 | `sched.exp.withSubs` | `{n}` | Inclut {n} tâche(s) appelée(s) par celle-ci. |
 | `sched.exportedN` | `{n}` | {n} automatisation(s) exportée(s) |
@@ -1173,14 +1249,20 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `sched.importedIncl` | `{n}` | {n} élément(s) nécessaire(s) également restauré(s) |
 | `sched.importStripped` | `{p}` | Importé désactivé. Il demandait : {p}. Accordez ce que vous voulez dans ses permissions. |
 | `sched.insp.unresolved` | `{n}` | Désigne {n} élément(s) qu’il n’inclut pas (ils échoueront sur une autre machine) : |
+| `sched.iv.gameDone` | `{n}` | {n} fichier(s) modifié(s) dans le dossier du jeu |
+| `sched.iv.hashDone` | `{c}` `{n}` | {c} mod(s) vérifié(s), {n} avec des fichiers modifiés |
+| `sched.iv.line` | `{a}` `{m}` `{name}` `{x}` | {name} : {m} modifié(s), {x} manquant(s), {a} ajouté(s) |
 | `sched.key.exists` | `{k}` | « {k} » est déjà sur le trousseau, laissée telle quelle |
 | `sched.key.made` | `{k}` | clé d'identité « {k} » créée |
 | `sched.listApply.done` | `{new}` `{on}` | {on} mod(s) activé(s), {new} installé(s). |
 | `sched.listApply.missing` | `{n}` | {n} mod(s) introuvable(s) |
+| `sched.lr.done` | `{d}` `{r}` `{size}` | {r} journal(aux) tourné(s), {d} fichier(s) supprimé(s), {size} libéré(s) |
+| `sched.lr.would` | `{d}` `{r}` `{size}` | Ferait tourner {r} journal(aux) et supprimerait {d} fichier(s) ({size}) |
 | `sched.net.badHeader` | `{s}` | L’en-tête « {s} » a un nom ou une valeur inutilisable. |
 | `sched.net.error` | `{s}` | Erreur réseau : {s} |
 | `sched.net.refused` | `{why}` | Refusé avant l’envoi : {why}. |
 | `sched.net.status` | `{s}` | Le serveur a répondu HTTP {s}. |
+| `sched.nv.itemHint` | `{p}` | Ouvre {p} et désigne sa carte. |
 | `sched.order.notActive` | `{m}` | « {m} » n'est pas actif : il n'a pas de place dans l'ordre de déploiement. |
 | `sched.pa.copied` | `{f}` | {f} copié |
 | `sched.pa.missing` | `{p}` | {p} (plus installé) |
@@ -1213,10 +1295,14 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `sched.ref.more` | `{n}` | {n} de plus. Affine la recherche pour les voir. |
 | `sched.retry.again` | `{n}` `{t}` | échec, tentative {n} sur {t}… |
 | `sched.retry.againIn` | `{s}` | en échec, nouvel essai dans {s} s |
+| `sched.rf.done` | `{e}` `{n}` `{u}` | {n} dépôt(s) vérifié(s), {u} mise(s) à jour, {e} erreur(s) |
+| `sched.rf.line` | `{n}` `{name}` | {name} : {n} mise(s) à jour |
+| `sched.rf.lineErr` | `{err}` `{name}` | {name} : {err} |
 | `sched.rm.done` | `{a}` `{c}` `{n}` `{r}` | {n} mod(s) indexé(s) : {a} ajouté(s), {c} modifié(s), {r} RETIRÉ(S) |
 | `sched.scrEngOk` | `{program}` `{version}` | S’exécutera avec {program} ({version}) sur cet ordinateur. |
 | `sched.sparkFails` | `{m}` `{n}` | {n} des {m} dernières exécutions ont échoué |
 | `sched.sparkOk` | `{m}` | les {m} dernières exécutions se sont bien passées |
+| `sched.srv.wouldStart` | `{d}` | Démarrerait le serveur pour {d}. |
 | `sched.ssh.targetDefault` | `{n}` | Celui par défaut ({n}) |
 | `sched.ssh.targetMissing` | `{n}` | {n} (n'est plus enregistré) |
 | `sched.switchGap` | `{m}` | Non traités : {m} (DEFAULT les absorbe). |
@@ -1325,6 +1411,64 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `sha.selected` | `{n}` | {n} sélectionné(s) |
 | `sha.selectOne` | `{name}` | Sélectionner {name} |
 | `sha.verifyAllN` | `{n}` | Vérifier les {n} affichés |
+
+### sk
+
+| Clé | Variables | Texte |
+|---|---|---|
+| `sk.alsoUsedBy` | `{name}` | Mêmes touches que « {name} » : un seul des deux s'exécute. |
+| `sk.changeFor` | `{name}` | Changer les touches de {name} |
+| `sk.count` | `{c}` `{n}` | {n} raccourcis, {c} modifiés ou à vous |
+| `sk.onlyOn` | `{page}` | seulement sur {page} |
+| `sk.reserved` | `{keys}` | {keys} est réservé à Windows ou à BMM. Essayez-en un autre. |
+
+### skd
+
+| Clé | Variables | Texte |
+|---|---|---|
+| `skd.clash` | `{name}` | Déjà utilisé par « {name} ». Enregistrer déplace les touches ici. |
+| `skd.deleteConfirm` | `{name}` | Supprimer le raccourci {name} ? |
+| `skd.imported` | `{n}` | {n} entrées de raccourcis importées. |
+| `skd.lbl.automation` | `{name}` | Lancer l'automatisation {name} |
+| `skd.lbl.modpack` | `{name}` | Activer le modpack {name} |
+| `skd.lbl.profile` | `{name}` | Passer au profil {name} |
+| `skd.lbl.settings` | `{name}` | Ouvrir les Paramètres : {name} |
+| `skd.saved` | `{keys}` | Raccourci enregistré : {keys} |
+| `skd.scopeOnly` | `{page}` | Seulement sur {page} |
+
+### snav
+
+| Clé | Variables | Texte |
+|---|---|---|
+| `snav.done.card` | `{k}` | Carte « {k} » ouverte |
+| `snav.done.click` | `{c}` | Cliqué : {c} |
+| `snav.done.highlight` | `{s}` | Désigné : {s} |
+| `snav.done.item` | `{id}` | Ouvert : {id} |
+| `snav.done.message` | `{m}` | Affiché : « {m} » |
+| `snav.done.modal` | `{m}` | Ouvert : {m} |
+| `snav.done.page` | `{p}` | Ouvert : {p} |
+| `snav.done.wait` | `{s}` | Apparu : {s} |
+| `snav.err.badControl` | `{c}` | Ce n’est pas un contrôle qu’une étape peut cliquer : {c} |
+| `snav.err.badKind` | `{k}` | Ce n’est pas quelque chose qu’une étape peut ouvrir : {k} |
+| `snav.err.badModal` | `{m}` | Ce n’est pas une fenêtre qu’une étape peut ouvrir : {m} |
+| `snav.err.badPage` | `{p}` | Ce n’est pas une page qu’une étape peut ouvrir : {p} |
+| `snav.err.badTab` | `{t}` | Ce n’est pas un onglet qu’une étape peut ouvrir : {t} |
+| `snav.err.badTarget` | `{s}` | Ce n’est pas une cible qu’une étape peut désigner : {s} |
+| `snav.err.cardMissing` | `{k}` | Aucune carte « {k} » dans les Paramètres de ce BMM. |
+| `snav.err.controlMissing` | `{c}` | « {c} » n’est pas sur sa page en ce moment. |
+| `snav.err.itemMissing` | `{id}` `{p}` | « {id} » n’est pas sur la page {p} (un autre profil, un filtre, ou il n’existe plus). |
+| `snav.err.modalMissing` | `{m}` | Ce BMM n’a pas de fenêtre « {m} ». |
+| `snav.err.noPage` | `{p}` | Il n’y a pas de page « {p} » dans ce BMM (ou la barre de navigation la masque). |
+| `snav.err.noTab` | `{p}` `{t}` | L’onglet « {t} » n’est pas sur la page {p}. |
+| `snav.err.sensitive` | `{c}` `{w}` | « {c} » ressemble à un contrôle qu’une tâche ne doit pas presser ({w}). Rien n’a été cliqué. |
+| `snav.err.targetMissing` | `{s}` | Rien à l’écran ne correspond à {s}. |
+| `snav.err.unknown` | `{t}` | Ce n’est pas une étape de navigation : {t} |
+| `snav.err.waitTimeout` | `{n}` `{s}` | Toujours absent de l’écran après {n} s : {s} |
+| `snav.miss.item` | `{id}` | Introuvable sur sa page : {id} |
+| `snav.miss.target` | `{s}` | Rien à l’écran ne correspond à {s} |
+| `snav.miss.wait` | `{n}` `{s}` | Toujours absent de l’écran après {n} s : {s} |
+| `snav.would.click` | `{c}` | Cliquerait : {c} |
+| `snav.would.modal` | `{m}` | Ouvrirait : {m} |
 
 ### sshact
 
@@ -1475,6 +1619,25 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `tools.validate.bad` | `{f}` `{n}` | Format {f} : {n} problème(s). |
 | `tools.validate.ok` | `{f}` `{n}` | Format {f} : aucun problème trouvé ({n} entrées). |
 
+### tstudio
+
+| Clé | Variables | Texte |
+|---|---|---|
+| `tstudio.allTranslated` | `{lang}` | Rien ne manque en {lang}. |
+| `tstudio.drafts` | `{lang}` `{n}` | {n} brouillons en {lang} |
+| `tstudio.exported` | `{file}` `{n}` | {file} exporté ({n} clés) |
+| `tstudio.foundOnScreen` | `{n}` | Entourée à l'écran ({n}) |
+| `tstudio.imported` | `{lang}` `{n}` | {n} différences chargées en brouillons {lang} |
+| `tstudio.importInstalled` | `{lang}` | {lang} installée comme nouvelle langue |
+| `tstudio.liveOtherLang` | `{app}` `{lang}` | En direct : brouillons {lang} sur une app affichée en {app} |
+| `tstudio.nlCreated` | `{lang}` | {lang} créée |
+| `tstudio.progressOf` | `{lang}` `{pct}` | {lang} : {pct} % traduit |
+| `tstudio.progressTip` | `{done}` `{total}` | {done} clés sur {total}. Cliquez pour traduire cette langue |
+| `tstudio.revertAllConfirm` | `{n}` | Recliquez pour abandonner {n} brouillons |
+| `tstudio.reverted` | `{n}` | {n} brouillons abandonnés |
+| `tstudio.sub` | `{done}` `{lang}` `{total}` | {lang} : {done} sur {total} traduites |
+| `tstudio.unknownKey` | `{key}` | Aucune clé nommée {key} |
+
 ### tut
 
 | Clé | Variables | Texte |
@@ -1508,6 +1671,9 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | Clé | Variables | Texte |
 |---|---|---|
 | `update.availableToast` | `{version}` | BMM v{version} est disponible. Cliquez ici pour voir les nouveautés. |
+| `update.countFixed` | `{n}` | Corrigé : {n} |
+| `update.countImproved` | `{n}` | Amélioré : {n} |
+| `update.countNew` | `{n}` | Nouveau : {n} |
 | `update.daysAgo` | `{n}` | il y a {n} jours |
 | `update.dlProgress` | `{done}` `{total}` | Téléchargement {done} / {total} Mo |
 | `update.etaMin` | `{n}` | environ {n} min restantes |
@@ -1522,3 +1688,4 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `update.stagedBody` | `{n}` `{version}` | La v{version} a été téléchargée et vérifiée la dernière fois. Installation dans {n} s. |
 | `update.stagedReady` | `{version}` | La v{version} a été téléchargée et vérifiée la dernière fois. |
 | `update.stagedToast` | `{version}` | La v{version} est téléchargée et vérifiée. Elle s'installera au prochain démarrage de BMM. |
+| `update.versionN` | `{v}` | Version {v} |

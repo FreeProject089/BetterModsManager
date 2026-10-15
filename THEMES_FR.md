@@ -32,6 +32,13 @@ démonstration, habillée du thème.
 Le code sous chaque nom est l'identifiant du thème, celui qu'utilisent un lien
 `bmm://theme/apply?id=…`, une tâche du planificateur ou le pont MCP.
 
+**Tasky, le logo ou le badge.** Les thèmes ludiques (Default, Ember, Neon, Newsprint, Clay,
+Blossom) gardent Tasky. Les thèmes sobres (Graphite, Pure Black, Daylight, Indigo, Arctic, Cobalt,
+BMM Logo) montrent le logo de BMM, celui de l'icône de l'application, partout où Tasky
+apparaîtrait : le coin, l'écran de démarrage, les pages vides et les fenêtres. Sur un thème sombre,
+il est posé sur sa tuile pâle, comme dans l'icône. Charcoal montre le badge compact : les lettres
+BMM sur une tuile de la couleur d'accent du thème.
+
 > **Renommés en 1.0.3.** Six identifiants intégrés reprenaient le nom d'autres produits. Ils ont
 > été renommés, les thèmes eux-mêmes n'ont pas changé, et les anciens identifiants fonctionnent
 > toujours partout (votre choix enregistré, les thèmes masqués, les tâches planifiées, les liens,
@@ -74,8 +81,9 @@ flotte au-dessus de BMM, s'ancre sur le côté, ou s'ouvre dans une fenêtre à 
    ratio et son niveau WCAG. Une paire qui échoue propose **Corriger** : la couleur la plus proche
    qui passe, dans la même teinte (blanc ou presque noir pour le texte d'un bouton). *Tout corriger*
    les traite toutes.
-6. **Allez plus loin si vous le souhaitez.** *Images* remplace Tasky, le logo latéral ou le fond
-   d'écran (les fichiers sont intégrés au thème). *Éléments* restyle un type d'élément (désignez-le
+6. **Allez plus loin si vous le souhaitez.** *Images* choisit entre Tasky et le logo de BMM, et
+   remplace Tasky, le logo latéral ou le fond d'écran par vos propres images (les fichiers sont
+   intégrés au thème). *Éléments* restyle un type d'élément (désignez-le
    à l'écran d'un clic droit) ou ajoute vos propres boutons et bannières. *CSS* accepte n'importe
    quel CSS, pour toute l'application ou une seule page.
 7. **Enregistrez.** *Enregistrer* écrase votre propre thème ; sur un thème intégré, il en
@@ -138,6 +146,7 @@ texte, pour qu'un thème clair reste lisible.
   "version": "1.0.0",
   "description": "Une ligne, affichée dans les listes de thèmes.",
   "mode": "dark",
+  "brand": { "mark": "tasky" },
   "vars": { "--bmm-accent": "#22c55e", "--bmm-bg-base": "#07100a" },
   "assets": {},
   "global_css": "",
@@ -153,6 +162,10 @@ texte, pour qu'un thème clair reste lisible.
 - `format_version` est la version de ce format. Un fichier sans elle est en version 1 et est migré
   à la lecture : les noms de jetons écrits sans leur `--` le reçoivent, les nombres deviennent du
   texte, un `mode` invalide est retiré. Rien n'est réécrit avant que vous n'enregistriez.
+- `brand.mark` vaut `"tasky"` (la valeur par défaut, y compris sans le champ), `"logo"` ou
+  `"badge"` : ce qui tient lieu de mascotte. Une image dans `assets.mascot` l'emporte sur les trois. Le logotype de la
+  barre latérale suit seul le mode du thème ; `--bmm-wordmark-better`, `--bmm-wordmark-mm` et
+  `--bmm-wordmark-highlight` (une bande derrière « Mod.Manager ») fixent ses encres à la main.
 - Les champs que BMM ne connaît pas sont conservés tels quels : un fichier fait par un BMM plus
   récent ou par un autre outil survit à un aller-retour dans l'éditeur.
 

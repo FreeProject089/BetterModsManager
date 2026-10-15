@@ -162,6 +162,10 @@ const HARMLESS = {
     // read the key of the row being dragged, a row the index built itself; the value only
     // reorders the app's own settings cards.
     'data-card-key': 'settings index edit-mode drag, own rows; reorders the app\'s own cards',
+    // Navigation editor (navbar-customize.ts): the eye button of a sidebar row, read by the click
+    // listener bound to the editor's own list (not document-wide); the probe reaches it through
+    // the 3000-char window after the row drag's named `onMove`. It only hides an app nav item.
+    'data-eye': 'navigation editor row eye, own list; hides an app nav item',
 };
 
 function documentListenerAttrs() {

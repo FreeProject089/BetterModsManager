@@ -23,24 +23,24 @@ when a translation and the code disagree. It cannot go out of date.
 | `{name}` | a name (mod, profile, task, file…) |
 | `{m}` | a second number, or a name, next to {n} |
 | `{v}` | a version or a value |
+| `{s}` | seconds, or a short word the code picks |
 | `{total}` | the total the count is out of |
 | `{count}` | a number of items |
-| `{s}` | seconds, or a short word the code picks |
-| `{err}` | an error message |
 | `{id}` | an identifier |
-| `{e}` | an error message |
+| `{err}` | an error message |
 | `{size}` | a size, already formatted (KB, MB…) |
+| `{e}` | an error message |
 | `{label}` | a short title |
 | `{path}` | a file or folder path |
-| `{profile}` | a profile name |
 | `{version}` | a version number |
+| `{profile}` | a profile name |
 | `{mod}` | a mod name |
 | `{error}` | an error message |
+| `{file}` | a file name |
 | `{host}` | a server name |
 | `{url}` | a web address |
-| `{file}` | a file name |
-| `{time}` | a time |
 | `{x}` | a list or a detail the code inserts |
+| `{time}` | a time |
 | `{date}` | a date |
 | `{type}` | a kind of thing (an importer, a format…) |
 
@@ -73,7 +73,7 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 
 ## Every key with variables
 
-1073 keys, grouped by their first segment. The text is the English one, shortened.
+1210 keys, grouped by their first segment. The text is the English one, shortened.
 
 ### activity
 
@@ -197,14 +197,19 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `apps.card.openAria` | `{name}` | Details for {name} |
 | `apps.create.bundled` | `{f}` `{n}` | Published: {n} app(s) packed, {f} |
 | `apps.create.clearBody` | `{n}` | This throws away the draft ({n} entr(ies)). Export it first to keep it. |
+| `apps.create.delBody` | `{name}` | « {name} » leaves the draft. Export the catalogue first if you want to keep it. |
+| `apps.create.next` | `{step}` | Next: {step} |
 | `apps.create.opened` | `{n}` | Opened: {n} app(s) |
 | `apps.create.packMissing` | `{n}` | {n} entr(ies) name a file that is not in the folder |
+| `apps.create.pbBadId` | `{id}` | {id}: use only letters, digits, dot, dash and underscore in an id. |
 | `apps.create.pbDupe` | `{id}` `{n}` | {id} appears {n} times. Ids must be unique. |
 | `apps.create.pbFileOnly` | `{id}` | {id}: a file, no address. Only the one-file publish carries it. |
 | `apps.create.pbNoTitle` | `{id}` | {id}: no title. |
 | `apps.create.pbNoUrl` | `{id}` | {id}: no download URL. Readers will skip this entry. |
 | `apps.create.problems` | `{n}` | {n} thing(s) to look at |
+| `apps.create.stepOf` | `{n}` `{total}` | Step {n} of {total} |
 | `apps.create.stillNeeded` | `{x}` | Still needed: {x} |
+| `apps.create.sub.entries` | `{n}` | {n} entries |
 | `apps.detail.versionPair` | `{installed}` `{latest}` | v{installed} installed, v{latest} in the catalog |
 | `apps.shownOf` | `{n}` `{total}` | {n} of {total} |
 | `apps.someSourcesFailed` | `{n}` | {n} source(s) did not answer. Their apps are missing below. |
@@ -215,6 +220,8 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `apps.sources.indexAll` | `{n}` | That index lists {n} app catalog(s) and you already follow them all. |
 | `apps.sources.indexNone` | `{n}` | That index lists no app catalogs, only {n} entr(y/ies) of other kinds. |
 | `apps.sources.indexNone2` | `{what}` | No app catalogs in that index, only {what}. Add those from their own screens. |
+| `apps.sourcesBtn` | `{n}` | {n} sources |
+| `apps.sourcesBtnOff` | `{n}` | {n} offline |
 | `apps.sourcesFailedMany` | `{n}` | {n} sources did not answer. Their apps are missing below. |
 | `apps.state.updatedToast` | `{name}` | {name} updated |
 | `apps.updatesMany` | `{n}` | {n} updates |
@@ -486,7 +493,30 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 
 | Key | Variables | Text |
 |---|---|---|
+| `history.exported` | `{n}` | {n} entries exported |
 | `history.revertError` | `{error}` | Error during revert: {error} |
+| `history.s.deleted` | `{name}` | Deleted {name} |
+| `history.s.disabled` | `{name}` | Disabled {name} |
+| `history.s.edited` | `{n}` `{name}` | Edited {n} details of {name} |
+| `history.s.editedOne` | `{field}` `{name}` | Edited the {field} of {name} |
+| `history.s.editedPlain` | `{name}` | Edited {name} |
+| `history.s.enabled` | `{name}` | Enabled {name} |
+| `history.s.enabledDeps` | `{name}` | Enabled {name} with its dependencies |
+| `history.s.profileCreate` | `{name}` | Created the profile {name} |
+| `history.s.profileDelete` | `{name}` | Deleted the profile {name} |
+| `history.s.profileEdit` | `{name}` | Edited the profile {name} |
+| `history.s.profileSwitch` | `{name}` | Switched to the profile {name} |
+| `history.s.repoFollow` | `{name}` | Followed the repo {name} |
+| `history.s.repoFollowEdit` | `{name}` | Changed how the repo {name} is followed |
+| `history.s.repoUnfollow` | `{name}` | Stopped following {name} |
+| `history.s.settingOne` | `{field}` | Changed the setting {field} |
+| `history.s.settings` | `{n}` | Changed {n} settings |
+| `history.s.sourceAdd` | `{name}` | Added the catalogue source {name} |
+| `history.s.sourceRemove` | `{name}` | Removed the catalogue source {name} |
+| `history.s.updateAvailable` | `{version}` | Update {version} available |
+| `history.s.updateInstalled` | `{version}` | BMM updated to {version} |
+| `history.subProfile` | `{name}` | Profile {name}, plus profiles, settings, repos and updates |
+| `history.took` | `{s}` | {s} s |
 
 ### hub
 
@@ -586,6 +616,12 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `md.sched.ahead` | `{here}` `{span}` `{tz}` | {here} is {span} ahead of {tz} right now |
 | `md.sched.behind` | `{here}` `{span}` `{tz}` | {here} is {span} behind {tz} right now |
 | `md.sched.same` | `{here}` `{tz}` | {here} is on the same clock as {tz} right now |
+
+### mdd
+
+| Key | Variables | Text |
+|---|---|---|
+| `mdd.filesShort` | `{n}` | {n} files |
 
 ### mg
 
@@ -692,6 +728,13 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `modpack.repair.notFound` | `{name}` | {name}: file not found on server |
 | `modpack.repair.partial` | `{errors}` | Repaired, but some mods were skipped: • {errors} |
 | `modpack.repair.repairing` | `{name}` | Repairing {name}… |
+| `modpack.ui.building` | `{n}` `{name}` `{total}` | Reading {name} ({n}/{total}) |
+| `modpack.ui.deps` | `{n}` | {n} dep. |
+| `modpack.ui.pickAll` | `{n}` | All ({n}) |
+| `modpack.ui.pickEnabled` | `{n}` | Enabled now ({n}) |
+| `modpack.ui.quickPick` | `{src}` | From {src}: |
+| `modpack.ui.selCount` | `{n}` | {n} selected |
+| `modpack.ui.stepOf` | `{n}` `{total}` | Step {n} of {total} |
 | `modpack.updatedAt` | `{date}` | Updated {date} |
 
 ### mods
@@ -699,6 +742,15 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | Key | Variables | Text |
 |---|---|---|
 | `mods.sha.missingDesc` | `{name}` | The mod "{name}" does not have a valid SHA hash. For security reasons, it is recommended to calculate the has… |
+
+### nbx
+
+| Key | Variables | Text |
+|---|---|---|
+| `nbx.added` | `{name}` | “{name}” added to the sidebar. |
+| `nbx.deleteButtonD` | `{name}` | “{name}” leaves the sidebar. |
+| `nbx.deletePageD` | `{name}` | “{name}” and its saved data are removed for good. |
+| `nbx.tplUses` | `{perms}` | This starter uses: {perms}. |
 
 ### notif
 
@@ -1125,6 +1177,8 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | Key | Variables | Text |
 |---|---|---|
 | `sched.ai.tainted` | `{f}` | Laya’s answer cannot be used in «{f}» of this step. Branch on a label instead. |
+| `sched.api.badRoute` | `{r}` | Not a local API route: {r} |
+| `sched.api.failed` | `{s}` | The local API answered {s}. |
 | `sched.arm.done` | `{n}` `{s}` | set “{n}” to {s} |
 | `sched.arm.gone` | `{n}` | no task with the id {n}, nothing changed |
 | `sched.bk.done` | `{f}` `{mb}` `{n}` | wrote {f} ({mb} MB, {n} section(s)) |
@@ -1136,16 +1190,38 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `sched.catBundled` | `{f}` | Packed into {f}. |
 | `sched.catDone` | `{n}` | Published {n} entry(ies). |
 | `sched.catEmpty` | `{k}` | nothing to publish for "{k}", no catalogue written |
+| `sched.cc.found` | `{size}` | {size} in the chosen caches |
+| `sched.cc.freed` | `{size}` | {size} freed |
+| `sched.cc.line` | `{busy}` `{id}` `{n}` `{size}` | {id}: {size} in {n} item(s) |
 | `sched.chainLoop` | `{n}` `{name}` | Chain stopped after {n} tasks: “{name}” waits on itself in a loop. |
+| `sched.ci.done` | `{id}` | Installed {id} |
 | `sched.cond.gonePlugin` | `{n}` | {n} (not installed here) |
 | `sched.creds.keyActive` | `{k}` | The active key ({k}) |
 | `sched.creds.keyMissing` | `{k}` | {k} (no longer on the ring) |
+| `sched.cu.done` | `{d}` `{n}` `{s}` | {n} update(s): {d} done, {s} skipped |
+| `sched.cu.errApps` | `{e}` | App catalogue: {e} |
+| `sched.cu.errPlugins` | `{e}` | Plugin catalogue: {e} |
+| `sched.cu.found` | `{n}` `{of}` | {n} update(s) among {of} item(s) |
+| `sched.cu.gone` | `{k}` | {k}: no longer installed |
 | `sched.dbg.finishedLine` | `{n}` `{s}` `{w}` | {w}: {n} step(s), {s}s |
 | `sched.dbg.modeUntil` | `{n}` | running until “{n}” |
 | `sched.dbg.trailN` | `{n}` | {n} value(s) |
 | `sched.dcsHookOff` | `{n}` | DCS watcher removed from {n} folder(s). |
 | `sched.dcsHookOk` | `{n}` | DCS watcher installed in {n} folder(s). |
+| `sched.dl.status` | `{s}` | The server answered {s}. |
 | `sched.dl.steps` | `{n}` | {n} step(s) |
+| `sched.dr.measureFailed` | `{e}` | Could not measure: {e} |
+| `sched.dr.navActs` | `{w}` | Acts on: {w} (in a preview: shown, never pressed) |
+| `sched.dr.navShows` | `{w}` | Shows: {w} |
+| `sched.dr.needs` | `{p}` | needs: {p} |
+| `sched.dr.noteMissing` | `{n}` | {n} step(s) would be refused: grant the permissions marked in red. |
+| `sched.dr.play` | `{n}` | Preview navigation ({n}) |
+| `sched.dr.title` | `{name}` | Dry run: {name} |
+| `sched.dr.wouldRun` | `{s}` | Would run: {s} |
+| `sched.du.done` | `{n}` `{size}` | {size} across {n} profile(s) |
+| `sched.du.mdTop` | `{n}` | The {n} heaviest mods |
+| `sched.ex.skipped` | `{list}` `{n}` | {n} step(s) only run inside BMM (step {list}): they are written as comments. |
+| `sched.ex.title` | `{name}` | Export {name} |
 | `sched.exp.missing` | `{n}` | {n} referenced task(s) no longer exist and cannot be included. |
 | `sched.exp.withSubs` | `{n}` | Including {n} task(s) this one calls. |
 | `sched.exportedN` | `{n}` | Exported {n} automation(s) |
@@ -1173,14 +1249,20 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `sched.importedIncl` | `{n}` | also restored {n} item(s) it needed |
 | `sched.importStripped` | `{p}` | Imported disabled. It asked for: {p}. Grant what you want in its permissions. |
 | `sched.insp.unresolved` | `{n}` | Names {n} thing(s) it does not include (they will fail on another machine): |
+| `sched.iv.gameDone` | `{n}` | {n} file(s) changed in the game folder |
+| `sched.iv.hashDone` | `{c}` `{n}` | {c} mod(s) checked, {n} with changed files |
+| `sched.iv.line` | `{a}` `{m}` `{name}` `{x}` | {name}: {m} modified, {x} missing, {a} added |
 | `sched.key.exists` | `{k}` | "{k}" is already on the ring, left alone |
 | `sched.key.made` | `{k}` | made the identity key "{k}" |
 | `sched.listApply.done` | `{new}` `{on}` | {on} mod(s) turned on, {new} installed. |
 | `sched.listApply.missing` | `{n}` | {n} mod(s) could not be found |
+| `sched.lr.done` | `{d}` `{r}` `{size}` | {r} log(s) rotated, {d} file(s) removed, {size} freed |
+| `sched.lr.would` | `{d}` `{r}` `{size}` | Would rotate {r} log(s) and remove {d} file(s) ({size}) |
 | `sched.net.badHeader` | `{s}` | The header “{s}” has an unusable name or value. |
 | `sched.net.error` | `{s}` | Network error: {s} |
 | `sched.net.refused` | `{why}` | Refused before sending: {why}. |
 | `sched.net.status` | `{s}` | The server answered HTTP {s}. |
+| `sched.nv.itemHint` | `{p}` | Opens {p} and points at its card. |
 | `sched.order.notActive` | `{m}` | “{m}” is not active, so it has no place in the deployment order. |
 | `sched.pa.copied` | `{f}` | copied {f} |
 | `sched.pa.missing` | `{p}` | {p} (no longer installed) |
@@ -1213,10 +1295,14 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `sched.ref.more` | `{n}` | {n} more. Narrow the search to see them. |
 | `sched.retry.again` | `{n}` `{t}` | failed, attempt {n} of {t}… |
 | `sched.retry.againIn` | `{s}` | failed, trying again in {s}s |
+| `sched.rf.done` | `{e}` `{n}` `{u}` | {n} repo(s) checked, {u} update(s), {e} error(s) |
+| `sched.rf.line` | `{n}` `{name}` | {name}: {n} update(s) |
+| `sched.rf.lineErr` | `{err}` `{name}` | {name}: {err} |
 | `sched.rm.done` | `{a}` `{c}` `{n}` `{r}` | {n} mod(s) indexed: {a} added, {c} changed, {r} REMOVED |
 | `sched.scrEngOk` | `{program}` `{version}` | Will run with {program} ({version}) on this computer. |
 | `sched.sparkFails` | `{m}` `{n}` | {n} of the last {m} runs failed |
 | `sched.sparkOk` | `{m}` | last {m} runs all fine |
+| `sched.srv.wouldStart` | `{d}` | Would start the server for {d}. |
 | `sched.ssh.targetDefault` | `{n}` | The default one ({n}) |
 | `sched.ssh.targetMissing` | `{n}` | {n} (no longer saved) |
 | `sched.switchGap` | `{m}` | Not handled: {m} (DEFAULT catches them). |
@@ -1325,6 +1411,64 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `sha.selected` | `{n}` | {n} selected |
 | `sha.selectOne` | `{name}` | Select {name} |
 | `sha.verifyAllN` | `{n}` | Verify {n} shown |
+
+### sk
+
+| Key | Variables | Text |
+|---|---|---|
+| `sk.alsoUsedBy` | `{name}` | Same keys as « {name} »: only one of them runs. |
+| `sk.changeFor` | `{name}` | Change the keys of {name} |
+| `sk.count` | `{c}` `{n}` | {n} shortcuts, {c} changed or yours |
+| `sk.onlyOn` | `{page}` | only on {page} |
+| `sk.reserved` | `{keys}` | {keys} is kept for Windows or BMM. Try another one. |
+
+### skd
+
+| Key | Variables | Text |
+|---|---|---|
+| `skd.clash` | `{name}` | Already used by « {name} ». Saving moves the keys here. |
+| `skd.deleteConfirm` | `{name}` | Delete the shortcut {name}? |
+| `skd.imported` | `{n}` | {n} shortcut entries imported. |
+| `skd.lbl.automation` | `{name}` | Run automation {name} |
+| `skd.lbl.modpack` | `{name}` | Activate modpack {name} |
+| `skd.lbl.profile` | `{name}` | Switch to profile {name} |
+| `skd.lbl.settings` | `{name}` | Open Settings: {name} |
+| `skd.saved` | `{keys}` | Shortcut saved: {keys} |
+| `skd.scopeOnly` | `{page}` | Only on {page} |
+
+### snav
+
+| Key | Variables | Text |
+|---|---|---|
+| `snav.done.card` | `{k}` | Opened the « {k} » card |
+| `snav.done.click` | `{c}` | Clicked {c} |
+| `snav.done.highlight` | `{s}` | Pointed at {s} |
+| `snav.done.item` | `{id}` | Opened {id} |
+| `snav.done.message` | `{m}` | Showed « {m} » |
+| `snav.done.modal` | `{m}` | Opened {m} |
+| `snav.done.page` | `{p}` | Opened {p} |
+| `snav.done.wait` | `{s}` | Appeared: {s} |
+| `snav.err.badControl` | `{c}` | Not a control a step can click: {c} |
+| `snav.err.badKind` | `{k}` | Not something a step can open: {k} |
+| `snav.err.badModal` | `{m}` | Not a dialog a step can open: {m} |
+| `snav.err.badPage` | `{p}` | Not a page a step can open: {p} |
+| `snav.err.badTab` | `{t}` | Not a tab a step can open: {t} |
+| `snav.err.badTarget` | `{s}` | Not a target a step can point at: {s} |
+| `snav.err.cardMissing` | `{k}` | No Settings card « {k} » in this BMM. |
+| `snav.err.controlMissing` | `{c}` | « {c} » is not on its page right now. |
+| `snav.err.itemMissing` | `{id}` `{p}` | « {id} » is not on the {p} page (another profile, a filter, or it no longer exists). |
+| `snav.err.modalMissing` | `{m}` | This BMM has no « {m} » dialog. |
+| `snav.err.noPage` | `{p}` | There is no « {p} » page in this BMM (or the navigation bar hides it). |
+| `snav.err.noTab` | `{p}` `{t}` | The « {t} » tab is not on the {p} page. |
+| `snav.err.sensitive` | `{c}` `{w}` | « {c} » looks like a control a task must not press ({w}). Nothing was clicked. |
+| `snav.err.targetMissing` | `{s}` | Nothing on screen matches {s}. |
+| `snav.err.unknown` | `{t}` | Not a navigation step: {t} |
+| `snav.err.waitTimeout` | `{n}` `{s}` | Still not on screen after {n}s: {s} |
+| `snav.miss.item` | `{id}` | Not found on its page: {id} |
+| `snav.miss.target` | `{s}` | Nothing on screen matches {s} |
+| `snav.miss.wait` | `{n}` `{s}` | Still not on screen after {n}s: {s} |
+| `snav.would.click` | `{c}` | Would click: {c} |
+| `snav.would.modal` | `{m}` | Would open: {m} |
 
 ### sshact
 
@@ -1475,6 +1619,25 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `tools.validate.bad` | `{f}` `{n}` | Format {f}: {n} problem(s). |
 | `tools.validate.ok` | `{f}` `{n}` | Format {f}: no problem found ({n} entries). |
 
+### tstudio
+
+| Key | Variables | Text |
+|---|---|---|
+| `tstudio.allTranslated` | `{lang}` | Nothing is missing in {lang}. |
+| `tstudio.drafts` | `{lang}` `{n}` | {n} drafts in {lang} |
+| `tstudio.exported` | `{file}` `{n}` | Exported {file} ({n} keys) |
+| `tstudio.foundOnScreen` | `{n}` | Outlined on screen ({n}) |
+| `tstudio.imported` | `{lang}` `{n}` | {n} differences loaded as {lang} drafts |
+| `tstudio.importInstalled` | `{lang}` | {lang} installed as a new language |
+| `tstudio.liveOtherLang` | `{app}` `{lang}` | Live: {lang} drafts over an app shown in {app} |
+| `tstudio.nlCreated` | `{lang}` | {lang} created |
+| `tstudio.progressOf` | `{lang}` `{pct}` | {lang}: {pct}% translated |
+| `tstudio.progressTip` | `{done}` `{total}` | {done} of {total} keys. Click to translate this language |
+| `tstudio.revertAllConfirm` | `{n}` | Click again to drop {n} drafts |
+| `tstudio.reverted` | `{n}` | {n} drafts dropped |
+| `tstudio.sub` | `{done}` `{lang}` `{total}` | {lang}: {done} of {total} translated |
+| `tstudio.unknownKey` | `{key}` | No key named {key} |
+
 ### tut
 
 | Key | Variables | Text |
@@ -1508,6 +1671,9 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | Key | Variables | Text |
 |---|---|---|
 | `update.availableToast` | `{version}` | BMM v{version} is available. Click here to see what is new. |
+| `update.countFixed` | `{n}` | {n} fixed |
+| `update.countImproved` | `{n}` | {n} improved |
+| `update.countNew` | `{n}` | {n} new |
 | `update.daysAgo` | `{n}` | {n} days ago |
 | `update.dlProgress` | `{done}` `{total}` | Downloading {done} / {total} MB |
 | `update.etaMin` | `{n}` | about {n} min left |
@@ -1522,3 +1688,4 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `update.stagedBody` | `{n}` `{version}` | v{version} was downloaded and verified last time. It installs in {n} s. |
 | `update.stagedReady` | `{version}` | v{version} was downloaded and verified last time. |
 | `update.stagedToast` | `{version}` | v{version} is downloaded and verified. It installs the next time you start BMM. |
+| `update.versionN` | `{v}` | Version {v} |

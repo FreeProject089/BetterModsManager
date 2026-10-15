@@ -16,12 +16,12 @@ import { uiIcon } from './icons.js';
 // ── Icons (reusable SVG snippets) ────────────────────────────────────────────
 const ICON = {
     profile: `${uiIcon('user', 20)}`,
-    scan: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>`,
+    scan: `${uiIcon('scan', 20)}`,
     map: `${uiIcon('map', 20)}`,
     modpack: `${uiIcon('hexagon', 20)}`,
     activate: `${uiIcon('power', 20)}`,
     shield: `${uiIcon('shield-check', 20)}`,
-    conflict: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>`,
+    conflict: `${uiIcon('warning', 20, { style: 'color:var(--warning)' })}`,
     share: `${uiIcon('share', 20)}`,
     repo: `${uiIcon('network', 20)}`,
     plugin: `${uiIcon('tag', 20)}`,
@@ -30,10 +30,10 @@ const ICON = {
     rocket: `${uiIcon('launch', 20)}`,
     bench: `${uiIcon('activity', 20)}`,
     bug: `${uiIcon('bug', 20)}`,
-    catalog: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 9l1-5h16l1 5"/><path d="M5 9v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9"/><path d="M9 13h6"/></svg>`,
+    catalog: `${uiIcon('store', 20)}`,
     translate: `${uiIcon('languages', 20)}`,
     palette: `${uiIcon('palette', 20)}`,
-    disk: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="22" y1="12" x2="2" y2="12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" y1="16" x2="6.01" y2="16"/><line x1="10" y1="16" x2="10.01" y2="16"/></svg>`,
+    disk: `${uiIcon('hard-drive', 20)}`,
 };
 // ── Tutorial: BMM Modding Basics ─────────────────────────────────────────────
 const BASICS = {
@@ -42,7 +42,7 @@ const BASICS = {
     level: 1,
     title_key: 'tut.basics.meta.title',
     desc_key: 'tut.basics.meta.desc',
-    icon: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>`,
+    icon: `${uiIcon('book-open', 24)}`,
     color: 'var(--accent)',
     assets: [
         {
@@ -235,13 +235,13 @@ const BASICS = {
                     // ONE (Save) while the panel displays seven — the "FIELDS ON THIS
                     // SCREEN: 1" box under a form full of inputs was the visible symptom.
                     fields: [
-                        { sel: 'detail-name', key: 'tut.basics.moddetails.f.name' },
-                        { sel: 'detail-version', key: 'tut.basics.moddetails.f.version' },
-                        { sel: 'detail-author', key: 'tut.basics.moddetails.f.author' },
-                        { sel: 'detail-desc', key: 'tut.basics.moddetails.f.desc' },
-                        { sel: 'detail-tag-open', key: 'tut.basics.moddetails.f.tags' },
-                        { sel: 'detail-dep-input', key: 'tut.basics.moddetails.f.deps' },
-                        { sel: 'btn-save-detail', key: 'tut.basics.moddetails.f.edit' },
+                        { sel: 'detail-name', key: 'tut.basics.moddetails.f.name', open: '#mdd-tab-details' },
+                        { sel: 'detail-version', key: 'tut.basics.moddetails.f.version', open: '#mdd-tab-details' },
+                        { sel: 'detail-author', key: 'tut.basics.moddetails.f.author', open: '#mdd-tab-details' },
+                        { sel: 'detail-desc', key: 'tut.basics.moddetails.f.desc', open: '#mdd-tab-details' },
+                        { sel: 'detail-tag-open', key: 'tut.basics.moddetails.f.tags', open: '#mdd-tab-details' },
+                        { sel: 'detail-dep-input', key: 'tut.basics.moddetails.f.deps', open: '#mdd-tab-details' },
+                        { sel: 'btn-save-detail', key: 'tut.basics.moddetails.f.edit', open: '#mdd-tab-details' },
                     ],
                 },
                 {
@@ -251,8 +251,8 @@ const BASICS = {
                     text_key: 'tut.basics.moddetails.s4.text',
                     nav: 'library',
                     fields: [
-                        { sel: 'btn-verify-mod-integrity', key: 'tut.basics.moddetails.f.verify' },
-                        { sel: 'btn-copy-content-id', key: 'tut.basics.moddetails.f.contentid' },
+                        { sel: 'btn-verify-mod-integrity', key: 'tut.basics.moddetails.f.verify', open: '#mdd-tab-files' },
+                        { sel: 'btn-copy-content-id', key: 'tut.basics.moddetails.f.contentid', open: '#mdd-tab-files' },
                     ],
                 },
                 {
@@ -262,8 +262,8 @@ const BASICS = {
                     text_key: 'tut.basics.moddetails.s5.text',
                     nav: 'library',
                     fields: [
-                        { sel: 'btn-browse-archive', key: 'tut.basics.moddetails.f.browse' },
-                        { sel: 'btn-add-link', key: 'tut.basics.moddetails.f.link' },
+                        { sel: 'btn-browse-archive', key: 'tut.basics.moddetails.f.browse', open: '#mdd-tab-files' },
+                        { sel: 'btn-add-link', key: 'tut.basics.moddetails.f.link', open: '#mdd-tab-updates' },
                     ],
                 },
                 {
@@ -373,23 +373,26 @@ const BASICS = {
                     nav: 'modpacks',
                     selector: 'modpack-create-btn',
                     modal_selector: 'editor-save',
+                    // The creator is a four-step wizard (Basics, Mods, Options, Review); these
+                    // are the fields of its first step and its footer.
                     modal_fields: [
                         { sel: 'mp-name', key: 'tut.basics.modpacks.f.name' },
-                        { sel: 'mp-desc', key: 'tut.basics.modpacks.f.desc' },
                         { sel: 'mp-game', key: 'tut.basics.modpacks.f.game' },
-                        { sel: 'mp-multi', key: 'tut.basics.modpacks.f.multi' },
-                        { sel: 'btn-add-mods-pack', key: 'tut.basics.modpacks.f.addmods' },
+                        { sel: 'mp-desc', key: 'tut.basics.modpacks.f.desc' },
+                        { sel: 'mp-next', key: 'tut.basics.modpacks.f.next' },
+                        { sel: 'mp-pick-all', key: 'tut.basics.modpacks.f.addmods' },
                         { sel: 'editor-save', key: 'tut.basics.modpacks.f.save' },
                     ],
                     action: { event: BMM_ACTIONS.MODPACK_CREATED, desc_key: 'tut.basics.modpacks.s2.action' },
                 },
                 {
                     // Apply a pack in one click — the demo "Example Modpack" is the target.
+                    // The card's Activate / Deactivate button (data-mp-act="apply").
                     id: 's3',
                     title_key: 'tut.basics.modpacks.s3.title',
                     text_key: 'tut.basics.modpacks.s3.text',
                     nav: 'modpacks',
-                    selector: 'btn-apply',
+                    selector: '.modpack-card [data-mp-act="apply"]',
                     action: { event: BMM_ACTIONS.MODPACK_APPLIED, desc_key: 'tut.basics.modpacks.s3.action' },
                 },
             ],
@@ -537,7 +540,7 @@ const ADVANCED = {
     title_key: 'tut.advanced.meta.title',
     desc_key: 'tut.advanced.meta.desc',
     // lucide: book-open-text
-    icon: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7v14"/><path d="M16 12h2"/><path d="M16 8h2"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/><path d="M6 12h2"/><path d="M6 8h2"/></svg>`,
+    icon: `${uiIcon('book-open-text', 24)}`,
     color: '#f59e0b',
     parts: [
         // ── Part 1 : .MM Lists ─────────────────────────────────────
@@ -599,6 +602,8 @@ const ADVANCED = {
                         // Two arrivals the lesson has to keep up with: the up-front
                         // password row and the no-manifest inspector.
                         { sel: 'btn-sync-pass-toggle', key: 'tut.advanced.repo.f.password' },
+                        // A repo can also demand a signed request (keyauth): the key row.
+                        { sel: 'btn-sync-key-toggle', key: 'tut.advanced.repo.f.key' },
                         { sel: 'btn-discover-server', key: 'tut.advanced.repo.f.inspect' },
                         // The destination / mods / backup fields only exist for a NEW
                         // profile (repo-sync-paths-section is hidden otherwise); the step
@@ -620,6 +625,43 @@ const ADVANCED = {
                     title_key: 'tut.advanced.repo.s4.title',
                     text_key: 'tut.advanced.repo.s4.text',
                     nav: 'repo',
+                },
+            ],
+        },
+        // ── Part 2b : Following a repo (1.0.3) ─────────────────────
+        //
+        // « Follow a repo » sits in the Followed repos card on the Sync tab (the default tab),
+        // and opens features/repo/follow-dialog.ts: a modal-shell dialog with className
+        // 'rdlg-modal' whose fields have names rather than ids, hence the compound selectors.
+        {
+            id: 'follow',
+            title_key: 'tut.advanced.follow.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.advanced.follow.s1.title',
+                    text_key: 'tut.advanced.follow.s1.text',
+                    nav: 'repo',
+                    icon: ICON.repo,
+                    selector: 'btn-repo-follow-add',
+                    modal_selector: 'rdlg-modal',
+                    modal_fields: [
+                        { sel: '.rdlg-modal [name="url"]', key: 'tut.advanced.follow.f.address' },
+                        { sel: '.rdlg-modal [name="password"]', key: 'tut.advanced.follow.f.password' },
+                        { sel: 'rdlg-test', key: 'tut.advanced.follow.f.test' },
+                        { sel: '.rdlg-modal [name="mode"]', key: 'tut.advanced.follow.f.mode' },
+                        { sel: '.rdlg-modal [data-r="save"]', key: 'tut.advanced.follow.f.save' },
+                    ],
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.advanced.follow.s2.title',
+                    text_key: 'tut.advanced.follow.s2.text',
+                    nav: 'repo',
+                    fields: [
+                        { sel: 'repo-follow-card', key: 'tut.advanced.follow.f.list' },
+                        { sel: 'btn-repo-follow-check-all', key: 'tut.advanced.follow.f.checkall' },
+                    ],
                 },
             ],
         },
@@ -713,6 +755,8 @@ const OTHER = {
                     id: 's2',
                     title_key: 'tut.other.launchpack.s2.title',
                     text_key: 'tut.other.launchpack.s2.text',
+                    nav: 'settings',
+                    selector: 'settings-launchpack-section',
                 },
             ],
         },
@@ -915,6 +959,57 @@ const OTHER = {
                 },
             ],
         },
+        // ── Part : Create a plugin (1.0.3) ─────────────────────────
+        //
+        // The Create tab (plugins.ts renderCreate): a six-step form, a step bar and a live
+        // preview. Its sections only exist once the tab is open, which the first step asks for.
+        {
+            id: 'plugincreate',
+            title_key: 'tut.other.plugincreate.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.other.plugincreate.s1.title',
+                    text_key: 'tut.other.plugincreate.s1.text',
+                    nav: 'plugins',
+                    icon: ICON.plugin,
+                    selector: '.plug-tabs [data-tab="create"]',
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.other.plugincreate.s2.title',
+                    text_key: 'tut.other.plugincreate.s2.text',
+                    fields: [
+                        { sel: 'pc-steps', key: 'tut.other.plugincreate.f.steps' },
+                        { sel: 'pc-sec-template', key: 'tut.other.plugincreate.f.template' },
+                        { sel: 'pc-sec-identity', key: 'tut.other.plugincreate.f.identity' },
+                        { sel: 'pc-sec-contents', key: 'tut.other.plugincreate.f.contents' },
+                        { sel: 'pc-sec-perms', key: 'tut.other.plugincreate.f.perms' },
+                    ],
+                },
+                {
+                    id: 's3',
+                    title_key: 'tut.other.plugincreate.s3.title',
+                    text_key: 'tut.other.plugincreate.s3.text',
+                    icon: ICON.shield,
+                    fields: [
+                        { sel: 'pc-checks', key: 'tut.other.plugincreate.f.checks' },
+                        { sel: 'pc-manifest', key: 'tut.other.plugincreate.f.manifest' },
+                    ],
+                },
+                {
+                    id: 's4',
+                    title_key: 'tut.other.plugincreate.s4.title',
+                    text_key: 'tut.other.plugincreate.s4.text',
+                    icon: ICON.share,
+                    fields: [
+                        { sel: 'pc-save-local', key: 'tut.other.plugincreate.f.save' },
+                        { sel: 'pc-dry-run', key: 'tut.other.plugincreate.f.dryrun' },
+                        { sel: 'pc-export-bmmplug', key: 'tut.other.plugincreate.f.export' },
+                    ],
+                },
+            ],
+        },
         // ── Part 5 : App Catalog ───────────────────────────────────
         {
             id: 'appcatalog',
@@ -948,7 +1043,8 @@ const OTHER = {
                     title_key: 'tut.other.appcatalog.s4.title',
                     text_key: 'tut.other.appcatalog.s4.text',
                     nav: 'apps',
-                    selector: 'apps-tabs',
+                    // The Sources tab itself (1.0.3: the one source list, shared with Settings).
+                    selector: '#apps-tabs [data-tab="sources"]',
                 },
             ],
         },
@@ -970,13 +1066,14 @@ const OTHER = {
                     text_key: 'tut.other.translate.s2.text',
                     nav: 'settings',
                     selector: 'btn-open-i18n-sandbox',
-                    modal_selector: 'modal-i18n-sandbox',
+                    modal_selector: 'bmm-translation-studio',
                     modal_fields: [
-                        { sel: 'i18n-base-lang', key: 'tut.other.translate.f.base' },
-                        { sel: 'i18n-new-lang', key: 'tut.other.translate.f.target' },
-                        { sel: 'i18n-pick-screen', key: 'tut.other.translate.f.pick' },
-                        { sel: 'i18n-key-list', key: 'tut.other.translate.f.keys' },
-                        { sel: 'i18n-export', key: 'tut.other.translate.f.export' },
+                        { sel: 'tst-source', key: 'tut.other.translate.f.base' },
+                        { sel: 'tst-target', key: 'tut.other.translate.f.target' },
+                        { sel: 'tst-pick', key: 'tut.other.translate.f.pick' },
+                        { sel: 'tst-list', key: 'tut.other.translate.f.keys' },
+                        { sel: 'tst-live', key: 'tut.other.translate.f.live' },
+                        { sel: 'tst-export', key: 'tut.other.translate.f.export' },
                     ],
                 },
                 {
@@ -1013,12 +1110,16 @@ const OTHER = {
                     nav: 'settings',
                     selector: 'btn-open-theme-editor',
                     modal_selector: 'bte-save',
+                    // The rebuilt editor (1.0.3): section rail, live preview, contrast checks.
+                    // Import / Export moved into the File menu (hidden until opened), so the
+                    // guide points at the menu button instead of its items.
                     modal_fields: [
+                        { sel: 'bte-rail', key: 'tut.other.themes.f.sections' },
+                        { sel: 'bte-live', key: 'tut.other.themes.f.live' },
+                        { sel: 'bte-contrast', key: 'tut.other.themes.f.contrast' },
                         { sel: 'bte-pick-token', key: 'tut.other.themes.f.pick' },
-                        { sel: 'bte-import-file', key: 'tut.other.themes.f.import' },
+                        { sel: 'bte-file-menu-btn', key: 'tut.other.themes.f.filemenu' },
                         { sel: 'bte-save', key: 'tut.other.themes.f.save' },
-                        { sel: 'bte-save-as', key: 'tut.other.themes.f.saveas' },
-                        { sel: 'bte-export', key: 'tut.other.themes.f.export' },
                     ],
                 },
                 {
@@ -1034,6 +1135,51 @@ const OTHER = {
                     text_key: 'tut.other.themes.s4.text',
                     nav: 'settings',
                     icon: ICON.share,
+                },
+                {
+                    // Pop-out (ui/popout.ts): the editor can leave BMM's window. The button is
+                    // only shown where popping out is possible, hence a field, not a selector.
+                    id: 's5',
+                    title_key: 'tut.other.themes.s5.title',
+                    text_key: 'tut.other.themes.s5.text',
+                    nav: 'settings',
+                    fields: [
+                        { sel: '#bmm-theme-editor .bmm-popout-btn', key: 'tut.other.themes.f.popout' },
+                        { sel: 'bte-dock', key: 'tut.other.themes.f.dock' },
+                    ],
+                },
+            ],
+        },
+        // ── Part : Notification centre (1.0.3) ─────────────────────
+        //
+        // The bell in the sidebar footer opens ui/notification-center.ts's panel (.nc-panel);
+        // the preferences are rendered into #notif-source-list in Settings by ui/app.ts.
+        {
+            id: 'notifications',
+            title_key: 'tut.other.notifications.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.other.notifications.s1.title',
+                    text_key: 'tut.other.notifications.s1.text',
+                    selector: 'btn-notif-center',
+                    modal_selector: 'nc-panel',
+                    modal_fields: [
+                        { sel: 'nc-dnd', key: 'tut.other.notifications.f.dnd' },
+                        { sel: 'nc-read-all', key: 'tut.other.notifications.f.readall' },
+                        { sel: 'nc-settings', key: 'tut.other.notifications.f.settings' },
+                    ],
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.other.notifications.s2.title',
+                    text_key: 'tut.other.notifications.s2.text',
+                    nav: 'settings',
+                    fields: [
+                        { sel: 'notif-source-list', key: 'tut.other.notifications.f.groups' },
+                        { sel: 'notif-quiet-on', key: 'tut.other.notifications.f.quiet' },
+                        { sel: 'notif-test', key: 'tut.other.notifications.f.test' },
+                    ],
                 },
             ],
         },
@@ -1074,15 +1220,15 @@ const OTHER = {
                     id: 's1',
                     title_key: 'tut.other.automation.s1.title',
                     text_key: 'tut.other.automation.s1.text',
-                    nav: 'settings',
-                    selector: 'settings-scheduler-section',
+                    nav: 'plugins',
+                    selector: '.plug-tab[data-tab="automations"]',
                     icon: ICON.activate,
                 },
                 {
                     id: 's2',
                     title_key: 'tut.other.automation.s2.title',
                     text_key: 'tut.other.automation.s2.text',
-                    nav: 'settings',
+                    nav: 'plugins',
                     // Clicking "Load example" builds a real, ready-to-use simple-loop
                     // automation (createExampleAutomation) and opens it, so the fields
                     // below actually contain a working loop the user can inspect.
@@ -1159,6 +1305,14 @@ const OTHER = {
                     selector: 'cardorder-navbar',
                     icon: ICON.share,
                 },
+                {
+                    // BMM Tools (features/tools/tools-hub.ts) open from the palette only (or a
+                    // pinned navbar entry), so this step has no target of its own.
+                    id: 's5',
+                    title_key: 'tut.other.palette.s5.title',
+                    text_key: 'tut.other.palette.s5.text',
+                    icon: ICON.bench,
+                },
             ],
         },
     ],
@@ -1202,6 +1356,8 @@ const QUICK = {
             steps: [
                 { id: 's1', title_key: 'tut.quick.connect.s1.title', text_key: 'tut.quick.connect.s1.text', nav: 'repo', selector: 'repo-sync-url' },
                 { id: 's2', title_key: 'tut.quick.connect.s2.title', text_key: 'tut.quick.connect.s2.text', nav: 'repo', selector: 'btn-fetch-repo-info' },
+                // The notification bell (sidebar footer): where every message BMM showed is kept.
+                { id: 'bell', title_key: 'tut.quick.connect.bell.title', text_key: 'tut.quick.connect.bell.text', selector: 'btn-notif-center', dim: false },
                 { id: 's3', title_key: 'tut.quick.connect.s3.title', text_key: 'tut.quick.connect.s3.text', nav: 'settings' },
                 { id: 's4', title_key: 'tut.quick.connect.s4.title', text_key: 'tut.quick.connect.s4.text', nav: 'docs' },
             ],
@@ -1247,6 +1403,54 @@ const ORDER = {
                     selector: 'lo-apply',
                     optional: true,
                     action: { event: BMM_ACTIONS.ORDER_APPLIED, desc_key: 'tut.order.order.s4.action' },
+                },
+            ],
+        },
+        // ── The Conflicts view (1.0.3) ─────────────────────────────
+        //
+        // features/mods/conflicts-view.ts: a modal-shell dialog (className 'cv-modal'). A
+        // library badge opens the conflict list, whose « Resolve conflicts » opens this view;
+        // the palette (« Resolve conflicts ») opens it directly. No action event is dispatched
+        // on open or apply, so these steps are plain Next.
+        {
+            id: 'conflicts',
+            title_key: 'tut.order.conflicts.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.order.conflicts.s1.title',
+                    text_key: 'tut.order.conflicts.s1.text',
+                    nav: 'library',
+                    icon: ICON.conflict,
+                    selector: 'tag-conflict',
+                    modal_selector: 'cv-modal',
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.order.conflicts.s2.title',
+                    text_key: 'tut.order.conflicts.s2.text',
+                    fields: [
+                        { sel: 'cv-order', key: 'tut.order.conflicts.f.order' },
+                        { sel: 'cv-pairs', key: 'tut.order.conflicts.f.pairs' },
+                    ],
+                },
+                {
+                    id: 's3',
+                    title_key: 'tut.order.conflicts.s3.title',
+                    text_key: 'tut.order.conflicts.s3.text',
+                    fields: [
+                        { sel: 'cv-pair-acts', key: 'tut.order.conflicts.f.pairacts' },
+                        { sel: 'cv-batch', key: 'tut.order.conflicts.f.batch' },
+                    ],
+                },
+                {
+                    id: 's4',
+                    title_key: 'tut.order.conflicts.s4.title',
+                    text_key: 'tut.order.conflicts.s4.text',
+                    fields: [
+                        { sel: '.cv-foot [data-cv="moves"]', key: 'tut.order.conflicts.f.moves' },
+                        { sel: '.cv-foot [data-cv="apply"]', key: 'tut.order.conflicts.f.apply' },
+                    ],
                 },
             ],
         },

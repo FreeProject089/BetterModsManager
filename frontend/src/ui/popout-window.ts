@@ -144,7 +144,10 @@ function start(): void {
         if (p) void send('act', { k: 'submit', p } satisfies PopoutAction);
     }, true);
     document.addEventListener('keydown', (e) => {
-        const named = ['Enter', 'Escape', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Delete'].includes(e.key) || /^F\d{1,2}$/.test(e.key);
+        // ←/→ move a caret in a field; anywhere else they are the panel's (the tutorial
+        // guide's previous / next step).
+        const sideways = (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !(e.target as Element | null)?.closest?.(TEXTY);
+        const named = sideways || ['Enter', 'Escape', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Delete'].includes(e.key) || /^F\d{1,2}$/.test(e.key);
         if (!named && !e.ctrlKey && !e.metaKey) return;
         // Copy, paste, select-all and undo in a field belong to the field.
         if ((e.ctrlKey || e.metaKey) && ['a', 'c', 'v', 'x', 'z', 'y'].includes(e.key.toLowerCase())) return;

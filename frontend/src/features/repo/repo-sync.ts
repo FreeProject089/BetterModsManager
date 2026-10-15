@@ -9,6 +9,7 @@ import { renderProfiles } from '../profiles/profiles.js';
 import { formatBytes, escHtml } from '../../core/utils.js';
 import { checkModUpdates } from './mod-updates.js';
 import { getLinks } from '../../core/links-config.js';
+import { openKeyManager } from '../../core/settings-link.js';
 
 let lastFetchedRepo = null;
 let lastFetchedRepoSaltedId = null;
@@ -93,16 +94,10 @@ function initSyncKeyAndSshFields(): void {
             }
         });
     }
-    // NAVIGATE first, then scroll.
-    //
-    // This only scrolled. #settings-identity-card lives in the Settings view, and while
-    // another view is showing it is in a hidden subtree — scrollIntoView on it moves nothing
-    // and reports nothing, so the button did exactly nothing, forever. Every other screen
-    // that offers this clicks nav-settings first; this one had been written without it.
+    // Settings → Identity & API, on the keyring row (core/settings-link.ts: shows the view,
+    // unfolds or un-hides the card, scrolls, and checks it got there).
     document.getElementById('btn-sync-key-manage')?.addEventListener('click', () => {
-        (document.getElementById('nav-settings') as HTMLElement | null)?.click();
-        setTimeout(() => document.getElementById('settings-identity-card')
-            ?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
+        openKeyManager();
     });
     // Making or adding a key lives in Settings → Identity & API, where the ring is.
     //

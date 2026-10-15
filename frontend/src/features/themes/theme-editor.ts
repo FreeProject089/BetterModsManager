@@ -37,7 +37,7 @@ import {
     THEME_FORMAT, TOKEN_CATALOG, TOKEN_GROUPS, BASIC_GROUPS, tokenSlug, isInternalToken, guessTokenType,
     validateTheme, migrateTheme, parseThemeText, slugThemeId, isSafeCssValue, rootVars,
     parseColor, toHex, checkContrast, resolveToken, generatePalette, deriveVariant, isLightTheme,
-    ThemeHistory, canonicalThemeId,
+    ThemeHistory, canonicalThemeId, brandMark, brandMascotSrc,
 } from './theme-model.js';
 import type { TokenDef, ThemeIssue, ContrastResult } from './theme-model.js';
 import { learnMore } from '../../core/learn-more.js';
@@ -633,7 +633,19 @@ function buildPictures(): string {
             <button type="button" class="btn btn-secondary btn-sm" data-bte="asset-pick" data-asset="${key}" data-accept="${accept}">${escHtml(t('themes.choose'))}</button>
             ${assets[key] ? `<button type="button" class="bte-mini" data-bte="asset-clear" data-asset="${key}" aria-label="${escAttr(t('themes.clear'))}">${uiIcon('close', 14)}</button>` : ''}
         </div>`;
+    // Tasky, the BMM logo or the BMM badge wherever the mascot appears (brand.mark). A picture
+    // of your own (the mascot row below) wins over all three.
+    const mark = brandMark(_draft);
+    const markBtn = (m: string, label: string) =>
+        `<button type="button" class="bte-seg-btn${mark === m ? ' active' : ''}" data-bte="brand-mark" data-mark="${m}" aria-pressed="${mark === m}">${escHtml(label)}</button>`;
     return `
+        <div class="bte-block">
+            <h3 class="bte-group-title">${escHtml(t('themes.ed.brandMark'))}</h3>
+            <div class="bte-seg" role="group" aria-label="${escAttr(t('themes.ed.brandMark'))}">
+                ${markBtn('tasky', t('themes.ed.brandMarkTasky'))}${markBtn('logo', t('themes.ed.brandMarkLogo'))}${markBtn('badge', t('themes.ed.brandMarkBadge'))}
+            </div>
+            <p class="bte-hint">${escHtml(t('themes.ed.brandMarkHint'))}</p>
+        </div>
         <p class="bte-hint">${escHtml(t('themes.assetsDesc'))}</p>
         <section class="bte-group">
             ${row('mascot', t('themes.assetMascot'), t('themes.assetMascotDesc'), 'image/*')}
@@ -828,9 +840,10 @@ function paintStage(): void {
     const stage = _panel?.querySelector('.bte-stage') as HTMLElement | null;
     stage?.classList.toggle('bte-stage--light', isLightTheme(_draft));
     // The stage's own pictures follow the draft's assets.
+    // An embedded picture of the theme's own wins; else the BMM logo when the draft asks for it.
     const mascot = (_draft.assets as Record<string, string> | undefined)?.mascot;
     const img = _panel?.querySelector('.bte-pv-mascot') as HTMLImageElement | null;
-    if (img) img.src = mascot && /^(data:image\/|https?:)/i.test(mascot) ? mascot : 'assets/Tasky.png';
+    if (img) img.src = mascot && /^(data:image\/|https?:)/i.test(mascot) ? mascot : (brandMascotSrc(_draft) || 'assets/Tasky.png');
 }
 
 function renderStage(): void {
@@ -1046,6 +1059,16 @@ function onClick(e: MouseEvent): void {
                 for (const r of bad) _draft.vars[r.pair.fg] = r.fix!;
                 paintStage();
             }
+            changed(null, true);
+            break;
+        }
+        case 'brand-mark': {
+            // Tasky is the default, so it is written as no field at all: a theme that never
+            // touched this stays byte-for-byte what it was. Other keys under `brand` are kept.
+            const brand = { ...((_draft.brand as Record<string, unknown> | undefined) || {}) };
+            const m = btn.dataset.mark;
+            if (m === 'logo' || m === 'badge') brand.mark = m; else delete brand.mark;
+            if (Object.keys(brand).length) _draft.brand = brand as BmmTheme['brand']; else delete _draft.brand;
             changed(null, true);
             break;
         }

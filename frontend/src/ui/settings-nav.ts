@@ -26,6 +26,7 @@
 
 import { t } from '../core/i18n.js';
 import { uiIcon } from './icons.js';
+import { initSettingsTabs } from './settings-tabs.js';
 import {
     SETTINGS_GROUPS, settingsCardKey, LAYOUT_EVENT, isLayoutEditing, setLayoutEditing, isCardHidden,
     setCardHidden, hiddenCardCount, reorderSettingsCards, resetSettingsLayout,
@@ -471,6 +472,27 @@ function queueSpy(): void {
 
 // ── Search ───────────────────────────────────────────────────────────────────
 
+/** Shortcut groups the search opened go back to how the user left them. */
+function restoreFolds(card: HTMLElement): void {
+    card.querySelectorAll<HTMLDetailsElement>('details.sk-group[data-stg-was-open]').forEach((g) => {
+        g.open = g.dataset.stgWasOpen === '1';
+        delete g.dataset.stgWasOpen;
+    });
+}
+
+/** A block label (.stg-sub) whose rows the search all hid is hidden with them. */
+function hideEmptySubs(card: HTMLElement): void {
+    card.querySelectorAll<HTMLElement>('.stg-sub').forEach((sub) => {
+        let el = sub.nextElementSibling;
+        let any = false;
+        while (el && !el.classList.contains('stg-sub')) {
+            if (el.matches(ROW_SEL) && !el.classList.contains(HIDE)) { any = true; break; }
+            el = el.nextElementSibling;
+        }
+        sub.classList.toggle(HIDE, !any);
+    });
+}
+
 function applySearch(raw: string): void {
     _query = norm(raw);
     const q = _query;
@@ -478,25 +500,32 @@ function applySearch(raw: string): void {
     for (const card of cards()) {
         const rows = Array.from(card.querySelectorAll(ROW_SEL)) as HTMLElement[];
         rows.forEach((r) => r.classList.remove(HIDE));
-        card.querySelectorAll('.sk-group').forEach((g) => g.classList.remove(HIDE));
+        card.querySelectorAll('.sk-group, .stg-sub').forEach((g) => g.classList.remove(HIDE));
         if (!q) {
             card.classList.remove(HIDE, OPEN);
+            restoreFolds(card);
             continue;
         }
         const titleHit = norm(cardTitle(card)).includes(q);
         const textHit = titleHit || cardText(card).includes(q);
-        if (!textHit) { card.classList.add(HIDE); card.classList.remove(OPEN); continue; }
+        if (!textHit) { card.classList.add(HIDE); card.classList.remove(OPEN); restoreFolds(card); continue; }
         card.classList.remove(HIDE);
         card.classList.add(OPEN);
         shown++;
-        if (titleHit) continue;
+        if (titleHit) { restoreFolds(card); continue; }
         const hits = rows.filter((r) => norm(r.textContent || '').includes(q));
-        if (!hits.length) continue; // the match is elsewhere in the card: show it whole
+        if (!hits.length) { restoreFolds(card); continue; } // the match is elsewhere in the card: show it whole
         rows.forEach((r) => { if (!hits.includes(r)) r.classList.add(HIDE); });
         card.querySelectorAll('.sk-group').forEach((g) => {
             const visible = Array.from(g.querySelectorAll('.sk-row')).some((r) => !r.classList.contains(HIDE));
             if (!visible) g.classList.add(HIDE);
+            // A folded shortcut group that holds a match is shown open while the search lasts.
+            if (g instanceof HTMLDetailsElement) {
+                if (!g.dataset.stgWasOpen) g.dataset.stgWasOpen = g.open ? '1' : '0';
+                g.open = visible;
+            }
         });
+        hideEmptySubs(card);
     }
     sections()?.classList.toggle('stg-searching', !!q);
 
@@ -548,6 +577,7 @@ export function initSettingsNav(): void {
     const layout = ensureLayout();
     if (!layout) return;
     renderIndex();
+    initSettingsTabs();
 
     const sec = sections();
     if (sec && !_observer) {

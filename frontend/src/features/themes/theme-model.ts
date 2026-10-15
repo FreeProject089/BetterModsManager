@@ -32,7 +32,7 @@ export interface ThemeDoc {
 export const KNOWN_THEME_KEYS: readonly string[] = [
     'id', 'name', 'format_version', 'author', 'version', 'description', 'preview', 'vars', 'fonts',
     'assets', 'global_css', 'pages', 'element_overrides', 'custom_elements', 'html_swaps', 'mode',
-    'catalog_url', 'download_url', '_src', 'bmm_min_version', 'based_on', 'variant_of',
+    'catalog_url', 'download_url', '_src', 'bmm_min_version', 'based_on', 'variant_of', 'brand',
     // Stamped by the backend on built-in rows; harmless, and not the theme author's.
     '_hidden', '_builtin',
 ];
@@ -62,6 +62,64 @@ export const BUILTIN_ID_ALIASES: Readonly<Record<string, string>> = {
 export function canonicalThemeId(id: unknown): string {
     const s = String(id ?? '').trim();
     return Object.prototype.hasOwnProperty.call(BUILTIN_ID_ALIASES, s) ? BUILTIN_ID_ALIASES[s] : s;
+}
+
+// ── Brand mark ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * What a theme shows where BMM shows its mascot: Tasky (the default, and what every theme
+ * without the field keeps), the BMM logo (the one in the app icon) or the compact « BMM » badge
+ * (the letters on a 7 px-rounded tile in the theme's accent).
+ *
+ * `brand.mark` is a top-level object rather than an asset so a theme can pick the logo
+ * without embedding a picture, and so it can grow (a sidebar mark, say) without a new key.
+ * A theme's own `assets.mascot` still wins: it is the more specific choice. Format v2 is
+ * unchanged: a file without `brand` is Tasky, as it always was, and an older BMM keeps the
+ * field as an unknown one.
+ */
+export const BRAND_MARKS = ['tasky', 'logo', 'badge'] as const;
+export type BrandMark = typeof BRAND_MARKS[number];
+
+/** The logo on its own (ink and yellow): reads on a light canvas. */
+export const BRAND_LOGO_SRC = 'assets/brand/bmm-logo.svg';
+/** The logo on its pale rounded tile, as in the .ico: reads on any canvas, dark ones included. */
+export const BRAND_LOGO_TILE_SRC = 'assets/brand/bmm-logo-tile.svg';
+
+export function brandMark(theme: { brand?: unknown } | null | undefined): BrandMark {
+    const b = theme?.brand;
+    return isObj(b) && (b.mark === 'logo' || b.mark === 'badge') ? b.mark : 'tasky';
+}
+
+/** « BMM » in Bricolage Grotesque ExtraBold (OFL), outlined and centred on a 48-unit tile: the
+ *  same letters as assets/brand/bmm-badge-*.svg and the narrow-layout mark in index.html. */
+export const BRAND_BADGE_PATH = 'M4.3 29.3V18.74H8.86Q9.86 18.74 10.65 18.91Q11.44 19.08 12 19.42Q12.56 19.76 12.86 20.3Q13.15 20.84 13.15 21.57Q13.15 22.2 12.89 22.66Q12.62 23.12 12.06 23.41Q11.5 23.7 10.58 23.8V24.07Q12.11 24.16 12.85 24.8Q13.58 25.44 13.58 26.53Q13.58 27.46 13.09 28.07Q12.59 28.68 11.63 28.99Q10.67 29.3 9.26 29.3ZM6.77 27.25H9.17Q10.14 27.25 10.61 26.97Q11.07 26.69 11.07 26.08Q11.07 25.41 10.51 25.08Q9.95 24.74 8.8 24.74H6.77ZM6.77 23.17H8.45Q9.58 23.17 10.11 22.86Q10.64 22.55 10.64 21.92Q10.64 21.32 10.15 21.04Q9.66 20.76 8.67 20.76H6.77ZM15.38 29.3V18.74H19.23L21.98 26.34H22.06L24.75 18.74H28.43V29.3H26L26.14 21.36H25.97L22.91 29.3H20.8L17.81 21.36H17.63L17.78 29.3ZM30.66 29.3V18.74H34.51L37.26 26.34H37.34L40.03 18.74H43.71V29.3H41.28L41.42 21.36H41.25L38.19 29.3H36.08L33.09 21.36H32.91L33.06 29.3Z';
+
+/** A colour that can go into an SVG attribute as it is: hex, rgb()/hsl(), or a name. */
+const svgColour = (v: string | null | undefined, fallback: string): string =>
+    v && /^(#[0-9a-f]{3,8}|(rgb|hsl)a?\([\d\s.,%/-]+\)|[a-z]+)$/i.test(v.trim()) ? v.trim() : fallback;
+
+/** The badge for this theme as a data: URL: its accent fills the tile, and the letters take
+ *  --bmm-text-on-accent when that reads on the accent (3:1, large bold text), else the ink
+ *  that does. An <img> cannot see the page's CSS variables, so the colours are baked in. */
+export function brandBadgeSrc(theme: { mode?: unknown; vars?: Record<string, string> } | null | undefined): string {
+    const vars = sanitizeVars(theme?.vars);
+    const light = isLightTheme(theme);
+    const tile = svgColour(resolveToken(vars, '--bmm-accent', light), '#3b82f6');
+    let ink = svgColour(resolveToken(vars, '--bmm-text-on-accent', light), '#ffffff');
+    const ct = parseColor(tile), ci = parseColor(ink);
+    if (!ct || !ci || contrastRatio(ct, ci) < 3) ink = textOnFill(tile);
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">'
+        + '<rect width="48" height="48" rx="7" fill="' + tile + '"/>'
+        + '<path fill="' + ink + '" d="' + BRAND_BADGE_PATH + '"/></svg>';
+    return 'data:image/svg+xml,' + encodeURIComponent(svg);
+}
+
+/** The picture that stands in for Tasky under this theme, or undefined to keep Tasky. */
+export function brandMascotSrc(theme: { brand?: unknown; mode?: unknown; vars?: Record<string, string> } | null | undefined): string | undefined {
+    const mark = brandMark(theme);
+    if (mark === 'badge') return brandBadgeSrc(theme);
+    if (mark !== 'logo') return undefined;
+    return isLightTheme(theme) ? BRAND_LOGO_SRC : BRAND_LOGO_TILE_SRC;
 }
 
 // ── Issues ─────────────────────────────────────────────────────────────────────────────────
@@ -167,6 +225,12 @@ export function validateTheme(input: unknown): ThemeIssue[] {
     listOf('custom_elements', (x) => typeof x.target === 'string' && typeof x.html === 'string');
     listOf('html_swaps', (x) => typeof x.selector === 'string' && typeof x.html === 'string');
     listOf('fonts', (x) => typeof x.family === 'string');
+    if (th.brand !== undefined) {
+        if (!isObj(th.brand)) out.push({ level: 'warning', code: 'notObjectField', path: 'brand' });
+        else if (th.brand.mark !== undefined && !(BRAND_MARKS as readonly unknown[]).includes(th.brand.mark)) {
+            out.push({ level: 'warning', code: 'brandMark', path: 'brand.mark' });
+        }
+    }
     for (const k of ['assets', 'pages']) {
         if (th[k] !== undefined && !isObj(th[k])) out.push({ level: 'warning', code: 'notObjectField', path: k });
     }

@@ -11,7 +11,7 @@
 
 import { sourceAccessHtml, wireSourceAccess } from '../../core/source-access.js';
 import { copyIdButtons, wireCopyIds } from '../../core/copy-id.js';
-import { invoke, pickFiles } from '../../core/api.js';
+import { invoke, pickFiles, apiBase, apiRunning } from '../../core/api.js';
 import { expectedRepoSignature } from '../repo/repo-pin.js';
 import { t, getLang } from '../../core/i18n.js';
 import { parseLabels, takeAiStep, chargeAiTime, taint, untaint, taintProblem, condTaintProblem, propagateTaint, readSharedTaint, writeSharedTaint, aiLabelHolds, aiErrorParts } from './sched-ai.js';
@@ -25,6 +25,10 @@ import { CAUSE_FAMILY, CRASH_CAUSES, CRASH_FAMILIES, REPORT_KINDS, APP_AREAS } f
 import { causeWord, familyWord } from '../ai/laya-words.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { toast as appToast } from '../../ui/app.js';
+import { openKeyManager } from '../../core/settings-link.js';
+import { renderUpkeepForm } from './sched-forms.js';
+import { scriptEngine } from '../../core/script-engine.js';
+import { toScriptActions } from './sched-script.js';
 // Everything the scheduler says is grouped under it in the notification centre, and Settings
 // decides how that group is delivered (in the app, as a system notification, or not at all).
 const toast = (message: string, type = 'info', duration = 3000, icon = '', source = 'Tasks') => appToast(message, type, duration, icon, source);
@@ -76,7 +80,7 @@ import { newFeedItems, feedEventData, parseHeaderBlock, hostOf, webhookUrlProble
 import { regexWithBudget } from './regex-budget.js';
 import { fieldProblem } from './sched-feed.js';
 import { variablesOf, insertVar, type KnownVar } from './sched-debug-map.js';
-import { uiIcon } from '../../ui/icons.js';
+import { uiIcon, type IconName } from '../../ui/icons.js';
 
 /**
  * A 16px line icon, drawn the way every other icon in this panel is drawn: one stroked
@@ -85,8 +89,7 @@ import { uiIcon } from '../../ui/icons.js';
  * different typeface on every OS, and several of them are simply a coloured square in the
  * webview. The preset chips were the last place in the scheduler still using them.
  */
-const SVG16 = (d: string): string =>
-    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const SVG16 = (name: IconName): string => uiIcon(name, 16);
 
 // ── Types ───────────────────────────────────────────────────────────────────
 type Trigger =
@@ -228,6 +231,12 @@ interface TaskPerms {
      *  back is DATA (sched-ai.ts marks the free text untrusted). Off for every existing task
      *  and reset on import, like the others. */
     ai?: boolean;
+    /** Open an allow-listed dialog or click an allow-listed control on BMM's screens
+     *  (`nav.modal`, `nav.click` — sched-nav-model.ts). The other navigation steps only SHOW
+     *  (a page, a card, a highlight, a message) and ask for nothing. Its own key because a click
+     *  acts as the person would, and a task from a plugin must not press buttons on their
+     *  behalf until they said so. Off for every existing task and reset on import. */
+    navigate?: boolean;
 }
 
 /** A task's effective permissions. An old task has no `perms`, only the single
@@ -438,7 +447,7 @@ export async function createExampleAutomation(): Promise<void> {
         trigger: { type: 'hourly', everyHours: 1 },
         steps: [
             { kind: 'repeat', mode: 'times', times: 3, maxIters: 3, everySec: 2, steps: [
-                { kind: 'action', action: { type: 'notify', params: { message: t('sched.example.msg') || 'Hello from your automation! 🎉' } } },
+                { kind: 'action', action: { type: 'notify', params: { message: t('sched.example.msg') || 'Hello from your automation!' } } },
             ] },
         ],
         allowCustomCommands: false,
@@ -506,6 +515,30 @@ export async function initScheduler(): Promise<void> {
         if (stale.length) console.log(`[SCHED] re-registered ${stale.length} OS task(s) with the schedule key`);
     }
 
+    wireCreateRow();
+    // Settings keeps a card that points here, so a habit (or a tutorial) still finds its way.
+    const go = document.getElementById('btn-open-automations');
+    if (go && !go.dataset.wired) {
+        go.dataset.wired = '1';
+        go.addEventListener('click', () => { void openAutomations(); });
+    }
+    (window as any).bmmOpenAutomations = openAutomations;
+    // Let the interactive tutorial build a real automation for the user.
+    (window as any).bmmCreateExampleAutomation = createExampleAutomation;
+    if (!_langWired) {
+        _langWired = true;
+        document.addEventListener('langChanged', () => renderScheduleList());
+    }
+    startEngine();
+}
+let _langWired = false;
+
+/**
+ * « New automation » and the Files… menu beside it, wired once per drawn button. The list moved
+ * from Settings to Plugins & API → Automations, which is redrawn on every visit, so this runs
+ * each time the tab is drawn (the old button carried `data-wired` for the same reason).
+ */
+function wireCreateRow(): void {
     const btn = document.getElementById('btn-create-schedule');
     if (btn && !btn.dataset.wired) {
         btn.dataset.wired = '1';
@@ -604,15 +637,51 @@ export async function initScheduler(): Promise<void> {
             row.appendChild(wrap);
         }
     }
-    // Let the interactive tutorial build a real automation for the user.
-    (window as any).bmmCreateExampleAutomation = createExampleAutomation;
-    if (!_langWired) {
-        _langWired = true;
-        document.addEventListener('langChanged', () => renderScheduleList());
-    }
-    startEngine();
 }
-let _langWired = false;
+
+/**
+ * Plugins & API → Automations: every scheduled task, the one builder that writes them (as a
+ * task in BMM, or exported as a .bmmscript, a .bmmpa or a script), the templates, the files and
+ * the catalogues. It used to be a card in Settings; the card now points here.
+ */
+export async function mountAutomations(host: HTMLElement): Promise<void> {
+    ensureSchedCss();
+    if (!_tasks.length) await loadTasks().catch(() => {});
+    host.innerHTML = `
+        <div class="plug-section-card auto-root">
+            <div class="auto-head">
+                <div class="auto-head-text">
+                    <h3 class="plug-section-title">${uiIcon('clock', 16)} ${escHtml(t('auto.title'))}</h3>
+                    <p class="plug-section-lead">${escHtml(t('auto.lead'))}</p>
+                </div>
+                <div class="auto-head-actions">
+                    <button type="button" class="btn btn-sm btn-secondary" id="auto-templates">${uiIcon('grid', 14)}<span>${escHtml(t('auto.templates'))}</span></button>
+                </div>
+            </div>
+            <div id="scheduler-running" class="sched-run-panel" style="display:none"></div>
+            <div id="scheduler-list-container" class="auto-list"></div>
+            <div class="auto-foot">
+                <button type="button" class="btn btn-primary btn-sm" id="btn-create-schedule">${uiIcon('add', 14)}<span>${escHtml(t('auto.create'))}</span></button>
+            </div>
+        </div>`;
+    wireCreateRow();
+    host.querySelector('#auto-templates')?.addEventListener('click', () => { void openTemplates(); });
+    renderScheduleList();
+    renderRunningPanel();
+}
+
+/** The template gallery, over a new task in the editor: picking one fills the editor. */
+export async function openTemplates(): Promise<void> {
+    await openTaskModal(null);
+    const modal = document.getElementById('modal-scheduler');
+    if (modal) await openPresetGallery(modal);
+}
+
+/** Take the person to Plugins & API → Automations (the old Settings card, the palette, a tour). */
+export async function openAutomations(): Promise<void> {
+    const { openPage } = await import('./sched-nav.js');
+    await openPage('plugins', 'automations');
+}
 // Kept across re-renders but NOT persisted: a filter is about the next few seconds, and one
 // that survived a restart would hide tasks from somebody who had forgotten they set it.
 let _taskFilter = '';
@@ -1102,7 +1171,7 @@ export async function runTaskOnce(task: Partial<Task>): Promise<void> {
  * why the imported task does nothing.
  */
 export function sanitiseImportedTask(task: any): { task: any; strippedPerms: string[]; wasEnabled: boolean } {
-    const RISKY = ['command', 'script', 'deeplink', 'stopProcess', 'delete', 'resources', 'tasks', 'network', 'ai'] as const;
+    const RISKY = ['command', 'script', 'deeplink', 'stopProcess', 'delete', 'resources', 'tasks', 'network', 'ai', 'navigate'] as const;
     const asked: string[] = [];
     for (const k of RISKY) if (task?.perms?.[k] === true) asked.push(k);
     // The legacy single flag means command + deeplink; a file written by an older BMM carries
@@ -1116,7 +1185,7 @@ export function sanitiseImportedTask(task: any): { task: any; strippedPerms: str
             enabled: false,
             osSchedule: false,
             allowCustomCommands: false,
-            perms: { command: false, script: false, deeplink: false, stopProcess: false, delete: false, resources: false, tasks: false, network: false, ai: false },
+            perms: { command: false, script: false, deeplink: false, stopProcess: false, delete: false, resources: false, tasks: false, network: false, ai: false, navigate: false },
         },
         strippedPerms: asked,
         wasEnabled,
@@ -2189,7 +2258,7 @@ function netWhy(code: string): string {
 function netErrorText(e: unknown): string {
     const raw = String(e instanceof Error ? e.message : e ?? '');
     const [key, arg = ''] = raw.split('|');
-    if (!/^(sched\.net|sched\.feed|task\.feed|task\.out)\./.test(key)) return raw;
+    if (!/^(sched\.net|sched\.feed|sched\.dl|task\.feed|task\.out)\./.test(key)) return raw;
     const words = t(key);
     if (!words || words === key) return raw;
     const why = arg ? (t('sched.net.why.' + arg) !== 'sched.net.why.' + arg ? t('sched.net.why.' + arg) : arg) : '';
@@ -3930,6 +3999,255 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             toast(`${task.name}: ${mount} — ${ctx.nums['disk.free_gb']} GB ${t('sched.free') || 'free'} (${ctx.nums['disk.free_percent']}%)`, 'info');
             break;
         }
+        // ── Upkeep (sched-maint.ts) ──────────────────────────────────────────────────────
+        //
+        // Each one answers in numbers a condition can read, and in a line (`*.summary`) the dry
+        // run shows. `dryRun` only measures: nothing is deleted, downloaded, installed, started.
+        case 'repos.checkFollowed': {
+            const mode = ['report', 'ask', 'auto'].includes(String(p.mode)) ? String(p.mode) : 'report';
+            const dry = p.dryRun === true;
+            const M = await import('./sched-maint.js');
+            const r = await M.checkFollowedRepos(dry ? 'report' : mode, parseList(p.only, '\n'), () => !!_running.get(task.id)?.cancel);
+            ctx.nums['repos.checked'] = r.checked;
+            ctx.nums['repos.updates'] = r.updates;
+            ctx.nums['repos.errors'] = r.errors;
+            ctx.text['repos.list'] = r.lines.join('\n');
+            const msg = t('sched.rf.done', { n: String(r.checked), u: String(r.updates), e: String(r.errors) });
+            ctx.text['repos.summary'] = r.applied ? `${msg} · ${t('sched.rf.applied')}` : msg;
+            if (dry) break;
+            if (mode === 'ask' && r.updates > 0) {
+                // Asked with the count in front of the person; « yes » takes them to the follow
+                // list, where each repo's own sync is one click — the task never installs here.
+                const go = await showConfirm(t('sched.rf.askTitle'), `${msg}\n\n${r.lines.join('\n')}\n\n${t('sched.rf.askBody')}`, false);
+                if (go) await navStep('nav.highlight', task, ctx, { page: 'repo', tab: 'sync', target: '#repo-follow-card', note: t('sched.rf.askHere'), seconds: 8 });
+            } else if (p.notify !== false && (r.updates > 0 || r.errors > 0 || mode === 'report')) {
+                toast(`${task.name}: ${ctx.text['repos.summary']}`, r.errors ? 'warning' : r.updates ? 'info' : 'success', 9000);
+            }
+            break;
+        }
+        case 'catalog.updates': {
+            const mode = ['check', 'download', 'install'].includes(String(p.mode)) ? String(p.mode) : 'check';
+            const dry = p.dryRun === true;
+            if (mode !== 'check' && !dry) requirePerm(task, 'network', t('sched.permNetwork'));
+            // Only what was ticked when the task was written. Nothing ticked is a task that was
+            // never set up, and it says so instead of quietly checking nothing.
+            const keys = parseList(p.items, '\n');
+            if (!keys.length) throw new Error(t('sched.cu.noneChosen'));
+            const M = await import('./sched-maint.js');
+            const all = await M.listSubscribed();
+            const items = all.filter((i) => keys.includes(i.key));
+            const gone = keys.filter((k) => !all.some((i) => i.key === k));
+            const { updates, errors } = await M.findCatalogUpdates(items);
+            ctx.nums['catalog.updates'] = updates.length;
+            const lines: string[] = [...errors, ...gone.map((k) => t('sched.cu.gone', { k }))];
+            const paths: string[] = [];
+            let done = 0;
+            let skipped = 0;
+            for (const u of updates) {
+                lines.push(`${u.item.name}: ${u.item.version || '?'} → ${u.version}`);
+                if (dry || mode === 'check') continue;
+                if (_running.get(task.id)?.cancel) break;
+                const cantFetch = M.unattendedProblem(u, false);
+                if (cantFetch) { skipped++; lines.push(`  ${cantFetch}`); continue; }
+                const cantInstall = mode === 'install' ? M.unattendedProblem(u, true) : 'download';
+                try {
+                    if (!cantInstall) {
+                        await M.installCatalogUpdate(u, task.id);
+                        lines.push(`  ${t('sched.cu.installed')}`);
+                    } else {
+                        const out = task.outputDir === '-' ? null : (task.outputDir || null);
+                        const path = await M.downloadCatalogUpdate(u, task.id, out);
+                        paths.push(path);
+                        lines.push(`  ${path}${cantInstall !== 'download' ? ` (${cantInstall})` : ''}`);
+                    }
+                    done++;
+                } catch (e) {
+                    skipped++;
+                    lines.push(`  ${netErrorText(e)}`);
+                }
+            }
+            ctx.nums['catalog.done'] = done;
+            ctx.nums['catalog.skipped'] = skipped;
+            ctx.text['catalog.updateList'] = lines.join('\n');
+            ctx.text['catalog.paths'] = paths.join('\n');
+            const msg = mode === 'check' || dry
+                ? t('sched.cu.found', { n: String(updates.length), of: String(items.length) })
+                : t('sched.cu.done', { n: String(updates.length), d: String(done), s: String(skipped) });
+            ctx.text['catalog.summary'] = msg;
+            if (!dry && p.notify !== false && (updates.length || errors.length || gone.length)) {
+                toast(`${task.name}: ${msg}`, skipped || errors.length || gone.length ? 'warning' : 'info', 10000);
+            }
+            break;
+        }
+        case 'repo.server': {
+            const want = p.state === 'stop' ? 'stop' : 'start';
+            const dry = p.dryRun === true;
+            const status = await invoke('get_repo_server_status').catch(() => null) as { url?: string } | null;
+            const running = !!status;
+            if (dry || (want === 'start') === running) {
+                ctx.nums['server.running'] = running ? 1 : 0;
+                ctx.text['server.summary'] = (want === 'start') === running
+                    ? t(running ? 'sched.srv.already' : 'sched.srv.alreadyOff')
+                    : t(want === 'start' ? 'sched.srv.wouldStart' : 'sched.srv.wouldStop', { d: String(p.dir || '') });
+                break;
+            }
+            if (want === 'stop') {
+                await invoke('stop_repo_server');
+            } else {
+                // Opening a port on this machine is reaching the network: granted, not assumed.
+                requirePerm(task, 'network', t('sched.permNetwork'));
+                const dir = String(p.dir || '').trim();
+                if (!dir) throw new Error(t('sched.srv.noDir'));
+                await invoke('start_repo_server', {
+                    path: dir, port: clampInt(p.port, 1, 65535, 8000), uploadLimit: clampInt(p.uploadLimit, 0, 1_000_000, 0),
+                    downloadPassword: String(p.password || '') || null, authorizedKeys: null,
+                });
+            }
+            // The Server Repo screen shows what runs; it has to hear about a change it did not make.
+            document.dispatchEvent(new CustomEvent('bmm:repo-server-changed'));
+            ctx.nums['server.running'] = want === 'start' ? 1 : 0;
+            ctx.text['server.summary'] = t(want === 'start' ? 'sched.srv.started' : 'sched.srv.stopped');
+            if (p.notify !== false) toast(`${task.name}: ${ctx.text['server.summary']}`, 'success', 6000);
+            break;
+        }
+        case 'mods.verifyIntegrity': {
+            const scope = p.scope === 'hashes' ? 'hashes' : 'game';
+            const M = await import('./sched-maint.js');
+            const r = await M.verifyIntegrity(scope, p.enabledOnly !== false, clampInt(p.max, 1, 5000, 500), () => !!_running.get(task.id)?.cancel);
+            ctx.nums['integrity.checked'] = r.checked;
+            ctx.nums['integrity.problems'] = r.problems;
+            ctx.text['integrity.list'] = r.lines.join('\n');
+            ctx.text['integrity.summary'] = scope === 'game'
+                ? t('sched.iv.gameDone', { n: String(r.problems) })
+                : t('sched.iv.hashDone', { c: String(r.checked), n: String(r.problems) });
+            if (p.dryRun !== true && p.notify !== false && (r.problems > 0 || p.notifyClean === true)) {
+                toast(`${task.name}: ${ctx.text['integrity.summary']}`, r.problems ? 'warning' : 'success', 10000);
+            }
+            break;
+        }
+        case 'cache.clean': {
+            const dry = p.dryRun === true;
+            if (!dry) requirePerm(task, 'delete', t('sched.permDelete'));
+            const M = await import('./sched-maint.js');
+            const targets = parseList(p.targets).length ? parseList(p.targets) : M.CACHE_DEFAULT;
+            const r = await M.cleanCaches(targets, Number(p.minMb) || 0, dry);
+            ctx.nums['cache.bytes'] = r.total;
+            ctx.nums['cache.freed'] = r.freed;
+            ctx.text['cache.list'] = [...r.lines, ...r.errors].join('\n');
+            ctx.text['cache.summary'] = dry || !r.freed
+                ? t('sched.cc.found', { size: M.humanBytes(r.total) })
+                : t('sched.cc.freed', { size: M.humanBytes(r.freed) });
+            if (!dry && p.notify !== false && (r.freed > 0 || r.errors.length)) {
+                toast(`${task.name}: ${ctx.text['cache.summary']}`, r.errors.length ? 'warning' : 'success', 8000);
+            }
+            break;
+        }
+        case 'logs.rotate': {
+            const dry = p.dryRun === true;
+            if (!dry) requirePerm(task, 'delete', t('sched.permDelete'));
+            const r = await invoke('sched_logs_rotate', {
+                keepDays: clampInt(p.keepDays, 1, 3650, 30), maxKb: clampInt(p.maxKb, 16, 1_048_576, 1024), dryRun: dry,
+            }) as { rotated: number; deleted: number; freedBytes: number; errors: string[]; items: { path: string; action: string }[] };
+            ctx.nums['logs.rotated'] = r.rotated;
+            ctx.nums['logs.deleted'] = r.deleted;
+            ctx.nums['logs.freed'] = r.freedBytes;
+            ctx.text['logs.list'] = r.items.map((i) => `${i.action}: ${i.path}`).concat(r.errors).join('\n');
+            const { humanBytes } = await import('./sched-maint.js');
+            ctx.text['logs.summary'] = t(dry ? 'sched.lr.would' : 'sched.lr.done', { r: String(r.rotated), d: String(r.deleted), size: humanBytes(r.freedBytes) });
+            if (!dry && p.notify === true) toast(`${task.name}: ${ctx.text['logs.summary']}`, r.errors.length ? 'warning' : 'success', 7000);
+            break;
+        }
+        case 'disk.report': {
+            const M = await import('./sched-maint.js');
+            const r = await M.diskReport(clampInt(p.top, 1, 100, 10));
+            ctx.nums['disk.used_gb'] = Math.round(r.total / 1073741824 * 10) / 10;
+            ctx.nums['disk.profiles'] = r.profiles;
+            ctx.text['disk.top'] = r.top.join('\n');
+            ctx.text['disk.summary'] = t('sched.du.done', { size: M.humanBytes(r.total), n: String(r.profiles) });
+            // The report is a file in the task's own folder, so last week's can be compared with
+            // this week's; `write: false` keeps only the variables.
+            if (p.dryRun !== true && p.write !== false && task.outputDir !== '-') {
+                const path = await invoke('task_write_file', {
+                    taskId: task.id, outputDir: task.outputDir || null,
+                    path: String(p.file || 'disk-usage.md'), text: r.markdown, append: false,
+                });
+                ctx.text['disk.reportPath'] = String(path);
+            }
+            if (p.dryRun !== true && p.notify !== false) toast(`${task.name}: ${ctx.text['disk.summary']}`, 'info', 8000);
+            break;
+        }
+        // ── The catalogue and the local API ─────────────────────────────────────────────
+        case 'catalog.install': {
+            // Installing downloads: granted, not assumed. The catalogue's own unattended rules
+            // (https, a published SHA-256, a plugin lands disabled, a theme is never applied)
+            // are applied by catalogInstall itself, for a task exactly as for a plugin.
+            requirePerm(task, 'network', t('sched.permNetwork'));
+            const kind = String(p.kind || 'app');
+            const id = String(p.id || '').trim();
+            const { catalogInstall } = await import('../catalogs/catalog-actions.js');
+            const r = await catalogInstall(kind as any, id, { source: 'task', taskId: task.id });
+            ctx.nums['catalog.installed'] = r.ok ? 1 : 0;
+            ctx.text['catalog.result'] = r.ok ? t('sched.ci.done', { id: String(r.installed || id) }) : `${t(r.reason || 'catalog.act.failed')}${r.detail ? ` (${r.detail})` : ''}`;
+            if (!r.ok && p.onFail !== 'continue') throw new Error(ctx.text['catalog.result']);
+            if (p.notify !== false) toast(`${task.name}: ${ctx.text['catalog.result']}`, r.ok ? 'success' : 'warning', 8000);
+            break;
+        }
+        case 'api.call': {
+            // A route of the local API reaches anything the app exposes, which is what the
+            // deeplink grant already means; the call goes through the API server, so the route's
+            // own validation and limits apply as for any client.
+            requirePerm(task, 'deeplink', t('sched.permDeeplink'));
+            const method = String(p.method || 'GET').toUpperCase();
+            const path = String(p.path || '').trim();
+            if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(method) || !/^\/api\/[\w\-./:?=&%]*$/.test(path)) {
+                throw new Error(t('sched.api.badRoute', { r: `${method} ${path}`.slice(0, 120) }));
+            }
+            if (!apiRunning()) throw new Error(t('sched.api.off'));
+            const body = method === 'GET' ? '' : String(p.body || '').trim();
+            if (body) { try { JSON.parse(body); } catch { throw new Error(t('sched.api.badJson')); } }
+            const token = String(await invoke('get_api_token').catch(() => ''));
+            const res = await fetch(apiBase() + path, {
+                method,
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: body || undefined,
+            });
+            const text = await res.text().catch(() => '');
+            ctx.nums['api.status'] = res.status;
+            ctx.nums['api.ok'] = res.ok ? 1 : 0;
+            ctx.text['api.body'] = text.slice(0, 4000);
+            if (!res.ok && p.anyStatus !== true) throw new Error(t('sched.api.failed', { s: String(res.status) }));
+            break;
+        }
+        // ── Navigation (sched-nav.ts) ────────────────────────────────────────────────────
+        //
+        // Showing needs nothing; opening a dialog and clicking need `navigate`. The allow-lists
+        // and the element guard are in sched-nav-model.ts and apply whoever runs the step.
+        case 'nav.page':
+            await navStep(action.type, task, ctx, { page: p.page, tab: p.tab, note: p.note, seconds: p.seconds });
+            break;
+        case 'nav.settingsCard':
+            await navStep(action.type, task, ctx, { card: p.card, note: p.note, seconds: p.seconds });
+            break;
+        case 'nav.item':
+            await navStep(action.type, task, ctx, { kind: p.kind, id: p.id, note: p.note, seconds: p.seconds, onMissing: p.onMissing });
+            break;
+        case 'nav.highlight':
+            await navStep(action.type, task, ctx, { target: p.target, page: p.page, tab: p.tab, note: p.note, seconds: p.seconds, waitSec: p.waitSec, onMissing: p.onMissing });
+            break;
+        case 'nav.waitFor':
+            await navStep(action.type, task, ctx, { target: p.target, timeoutSec: p.timeoutSec, onTimeout: p.onTimeout });
+            break;
+        case 'nav.message':
+            await navStep(action.type, task, ctx, { title: p.title, message: p.message, target: p.target, waitOk: p.waitOk, okLabel: p.okLabel, seconds: p.seconds });
+            break;
+        case 'nav.modal':
+            requirePerm(task, 'navigate', t('sched.permNavigate'));
+            await navStep(action.type, task, ctx, { modal: p.modal });
+            break;
+        case 'nav.click':
+            requirePerm(task, 'navigate', t('sched.permNavigate'));
+            await navStep(action.type, task, ctx, { control: p.control });
+            break;
         case 'open.url': {
             const u = String(p.url || '');
             if (u) { try { await (window as any).__TAURI__?.shell?.open?.(u); } catch { window.open(u, '_blank'); } }
@@ -3939,6 +4257,155 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
         default:
             throw new Error(`Unknown action: ${action.type}`);
     }
+}
+
+/**
+ * Run one navigation step for a task (sched-nav.ts). `canAct` is the task's own `navigate`
+ * grant; the two acting cases have already asked requirePerm, this passes the same answer down so
+ * the module refuses on its own too. What the step reached is left in {nav.ok} and {nav.note}.
+ */
+async function navStep(type: string, task: Task, ctx: RunCtx, p: Record<string, any>): Promise<void> {
+    const { runNav } = await import('./sched-nav.js');
+    const r = await runNav(type, p, {
+        preview: false,
+        canAct: hasPerm(task, 'navigate'),
+        cancelled: () => !!_running.get(task.id)?.cancel,
+    });
+    ctx.nums['nav.ok'] = r.ok ? 1 : 0;
+    ctx.text['nav.note'] = r.note;
+}
+
+/**
+ * Measure one step without its effect, for the dry run (sched-dryrun.ts).
+ *
+ * Only the steps listed in DRY_MEASURED come here, and each is run with `dryRun: true` — the
+ * same case as the real run, which reads that flag and stops before deleting, downloading,
+ * installing or starting anything. The line it leaves in `*.summary` is the answer. Toasts are
+ * the real run's business: every measured case is silent under `dryRun`.
+ */
+export async function dryRunAction(action: { type: string; params: Record<string, any> }, task: { id?: string; name?: string; outputDir?: string; perms?: Record<string, boolean> }): Promise<string> {
+    const ctx: RunCtx = { nums: {}, text: {} };
+    const t0: Task = {
+        id: task.id || 'dry-run', name: task.name || '', enabled: false, trigger: { type: 'manual' }, steps: [],
+        allowCustomCommands: false, perms: { ...(task.perms || {}) }, outputDir: task.outputDir,
+    };
+    await runAction({ type: action.type, params: { ...(action.params || {}), dryRun: true, notify: false } }, t0, ctx);
+    const key = Object.keys(ctx.text).find((k) => k.endsWith('.summary'));
+    if (key) return ctx.text[key];
+    if (action.type === 'perf.diskSpace') return `${ctx.nums['disk.free_gb']} GB (${ctx.nums['disk.free_percent']}%)`;
+    return Object.entries(ctx.nums).map(([k, v]) => `${k} = ${v}`).join(' · ');
+}
+
+/**
+ * What the dry run (sched-dryrun.ts) needs from the scheduler: its step names, its measuring
+ * call and its permission rule. `cover` is the dialog to hide while the navigation preview plays
+ * (the task editor, the template gallery), so the pages it opens are actually visible.
+ */
+export function dryHost(cover?: HTMLElement | null): {
+    stepLabel: (step: any) => string;
+    measure: (action: { type: string; params: Record<string, any> }, task: any) => Promise<string>;
+    hasPerm: (task: any, key: string) => boolean;
+    beforePlay: () => void;
+    afterPlay: () => void;
+} {
+    let wasOpen = false;
+    return {
+        stepLabel: (step) => stepLabel(step as Step),
+        measure: (action, task) => dryRunAction(action, task),
+        hasPerm: (task, key) => hasPerm(task as Task, key as keyof TaskPerms),
+        beforePlay: () => { wasOpen = !!cover?.classList.contains('open'); if (wasOpen) cover?.classList.remove('open'); },
+        afterPlay: () => { if (wasOpen) cover?.classList.add('open'); },
+    };
+}
+
+/** Open the dry run of a task the editor is not showing (the task builder, the task list). */
+export async function openTaskDryRun(task: Partial<Task>, cover?: HTMLElement | null): Promise<void> {
+    const { openDryRun } = await import('./sched-dryrun.js');
+    openDryRun({ steps: [], ...(task as any) }, dryHost(cover));
+}
+
+/**
+ * Export the task being edited: as a .bmmpa (to share or ship in a plugin), as .bmmscript text,
+ * or as a SCRIPT that runs outside BMM, written by Plugins & API's script engine
+ * (core/script-engine.ts). One builder, three outputs: the steps a script cannot carry (a
+ * condition, a navigation, an upkeep step) become comments that say so, listed before saving.
+ */
+async function openExportDialog(): Promise<void> {
+    const task = JSON.parse(JSON.stringify(_draft)) as Task;
+    const engine = scriptEngine();
+    const { openModal } = await import('../../ui/modal-shell.js');
+    const body = document.createElement('div');
+    const formats = engine?.formats || [];
+    body.innerHTML = `
+        <p class="sdr-lede">${escHtml(t('sched.ex.lede'))}</p>
+        <div class="spg-opts" role="radiogroup">
+            <label class="sched-opt"><input type="radio" name="sex-kind" value="bmmpa" checked><div><b>${escHtml(t('sched.ex.bmmpa'))}</b><span>${escHtml(t('sched.ex.bmmpaD'))}</span></div></label>
+            <label class="sched-opt"><input type="radio" name="sex-kind" value="bmmscript"><div><b>${escHtml(t('sched.ex.bmms'))}</b><span>${escHtml(t('sched.ex.bmmsD'))}</span></div></label>
+            <label class="sched-opt"><input type="radio" name="sex-kind" value="script"${engine ? '' : ' disabled'}><div><b>${escHtml(t('sched.ex.script'))}</b><span>${escHtml(engine ? t('sched.ex.scriptD') : t('sched.ex.noEngine'))}</span></div></label>
+        </div>
+        <div class="sex-format" hidden>
+            <label class="sched-cmd-label">${escHtml(t('sched.ex.format'))}</label>
+            <select class="input" id="sex-format" style="max-width:220px">${formats.map((x) => `<option value="${escAttr(x)}">.${escHtml(x)}</option>`).join('')}</select>
+        </div>
+        <div class="sex-skipped sched-cmd-hint"></div>
+        <pre class="sex-pre"></pre>
+        <p class="sched-cmd-hint">${escHtml(t('sched.ex.plugin'))}</p>`;
+    const footer = document.createElement('div');
+    footer.style.display = 'contents';
+    footer.innerHTML = `<button type="button" class="btn btn-sm btn-ghost" id="sex-cancel">${escHtml(t('common.cancel'))}</button>
+        <button type="button" class="btn btn-sm btn-primary" id="sex-save">${uiIcon('save', 14)}<span>${escHtml(t('sched.ex.save'))}</span></button>`;
+    const m = openModal({ title: t('sched.ex.title', { name: task.name || t('sched.untitled') }), icon: uiIcon('export', 18), size: 'lg', tall: true, className: 'sex-modal', body, footer });
+    const kindOf = () => (body.querySelector<HTMLInputElement>('input[name="sex-kind"]:checked')?.value || 'bmmpa');
+    const pre = body.querySelector('.sex-pre') as HTMLElement;
+    const skippedBox = body.querySelector('.sex-skipped') as HTMLElement;
+    let text = '';
+    const refresh = async () => {
+        const kind = kindOf();
+        (body.querySelector('.sex-format') as HTMLElement).hidden = kind !== 'script';
+        skippedBox.textContent = '';
+        if (kind === 'bmmpa') text = JSON.stringify({ magic: BMMPA_MAGIC, version: 1, tasks: [forExport(task)] }, null, 2);
+        else if (kind === 'bmmscript') text = String(await invoke('bmms_decompile', { task: { name: task.name, description: task.description, trigger: task.trigger, steps: task.steps, perms: task.perms } }).catch((e) => String(e)));
+        else if (engine) {
+            const fmt = (body.querySelector('#sex-format') as HTMLSelectElement).value || formats[0];
+            const plan = toScriptActions(task.steps, fmt, apiBase(), (st) => stepLabel(st as Step));
+            if (plan.skipped.length) skippedBox.textContent = t('sched.ex.skipped', { n: String(plan.skipped.length), list: plan.skipped.map((x) => x.n).join(', ') });
+            text = (await engine.generate(fmt, plan.actions)) || '';
+        }
+        pre.textContent = text;
+    };
+    body.querySelectorAll('input[name="sex-kind"], #sex-format').forEach((el) => el.addEventListener('change', () => { void refresh(); }));
+    m.q('#sex-cancel')?.addEventListener('click', () => m.close());
+    m.q('#sex-save')?.addEventListener('click', async () => {
+        const kind = kindOf();
+        const stem = safeFileStem(task.name);
+        if (kind === 'bmmpa') { await writeBmmpa([task], `${stem}.bmmpa`); m.close(); return; }
+        const ext = kind === 'bmmscript' ? 'bmmscript' : ((body.querySelector('#sex-format') as HTMLSelectElement).value || 'txt');
+        const { saveFile } = await import('../../core/api.js');
+        const path = await saveFile({ defaultPath: `${stem}.${ext}`, filters: [{ name: ext, extensions: [ext] }] }).catch(() => null);
+        if (!path) return;
+        try {
+            await invoke('write_text_file', { path, content: text });
+            toast(t('sched.ex.saved'), 'success');
+            m.close();
+        } catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); }
+    });
+    await refresh();
+}
+
+/** Whether a task (or a draft not yet saved) holds a permission, as the runner decides it. */
+export function taskHasPerm(task: { perms?: Record<string, boolean>; allowCustomCommands?: boolean }, key: string): boolean {
+    return hasPerm(task as Task, key as keyof TaskPerms);
+}
+
+/** Open the full task editor on a task built elsewhere (the task builder of Plugins & API). */
+export async function openTaskEditorWith(task: Partial<Task>): Promise<void> {
+    if (!_tasks.length) await loadTasks().catch(() => {});
+    const full: Task = {
+        id: newTaskId(), name: '', enabled: true, createdAt: Date.now(), catchUp: true,
+        trigger: { type: 'manual' }, steps: [], allowCustomCommands: false,
+        ...JSON.parse(JSON.stringify(task)),
+    };
+    await openTaskModal(full);
 }
 
 /** Flip one boolean field in AppSettings and persist (read-modify-write). */
@@ -4538,28 +5005,12 @@ function evalExpr(expr: string, ctx: RunCtx): number {
 // ── List rendering (glass-card) ───────────────────────────────────────────────
 /** Inline SVG icon for a trigger type (clock family / rocket / hand). */
 function triggerIcon(tr: Trigger): string {
-    const P = (d: string) => `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
-    switch (tr.type) {
-        case 'once':      return P('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>');
-        case 'interval':
-        case 'hourly':    return P('<polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>');
-        case 'dailyAt':   return P('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>');
-        case 'weeklyAt':
-        case 'monthlyAt': return P('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>');
-        case 'watchFile': return P('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><circle cx="12" cy="15" r="2"/>');
-        // A bell: BMM telling you, rather than you going to look.
-        case 'onEvent': return P('<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>');
-        case 'appStart':  return P('<path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>');
-        // A link in a chain: this one hangs off another task.
-        case 'afterTask': return P('<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>');
-        // A terminal prompt: you wrote the question, BMM only asks it.
-        case 'script':    return P('<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>');
-        // A branch: true one way, false the other.
-        case 'condition': return P('<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>');
-        // The feed glyph: a dot and two arcs.
-        case 'rss':       return P('<path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/>');
-        case 'manual':    return P('<path d="M18 11V6a2 2 0 0 0-4 0v5"/><path d="M14 10V4a2 2 0 0 0-4 0v2"/><path d="M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>');
-    }
+    const ICON: Record<Trigger['type'], IconName> = {
+        once: 'clock', interval: 'refresh', hourly: 'refresh', dailyAt: 'clock', weeklyAt: 'calendar', monthlyAt: 'calendar',
+        watchFile: 'file', onEvent: 'bell', appStart: 'launch', afterTask: 'link', script: 'terminal', condition: 'git-branch',
+        rss: 'activity', manual: 'play',
+    };
+    return uiIcon(ICON[tr.type] || 'clock', 16);
 }
 
 /**
@@ -4683,7 +5134,6 @@ export function renderScheduleList(): void {
         }
     }
 
-    const I = (d: string) => `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
     for (const task of shown) {
         const row = document.createElement('div');
         row.className = `sched-row ${task.enabled ? 'sched-on' : 'sched-off'}`;
@@ -4709,11 +5159,11 @@ export function renderScheduleList(): void {
                     <input type="checkbox" ${task.enabled ? 'checked' : ''} data-act="toggle">
                     <span class="plug-toggle-slider"></span>
                 </label>
-                <button class="btn btn-xs btn-ghost sched-act" data-act="run" data-tooltip="${escAttr(t('sched.runNow') || 'Run now')}">${I('<polygon points="5 3 19 12 5 21 5 3"/>')}</button>
-                <button class="btn btn-xs btn-ghost sched-act" data-act="dup" data-tooltip="${escAttr(t('sched.dupTask') || 'Duplicate task')}">${I('<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>')}</button>
-                <button class="btn btn-xs btn-ghost sched-act" data-act="exp1" data-tooltip="${escAttr(t('sched.exportOne') || 'Export this automation')}">${I('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>')}</button>
-                <button class="btn btn-xs btn-ghost sched-act" data-act="edit" data-tooltip="${escAttr(t('common.edit') || 'Edit')}">${I('<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>')}</button>
-                <button class="btn btn-xs btn-ghost sched-act sched-act-del" data-act="del" data-tooltip="${escAttr(t('common.delete') || 'Delete')}">${I('<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>')}</button>
+                <button class="btn btn-xs btn-ghost sched-act" data-act="run" data-tooltip="${escAttr(t('sched.runNow') || 'Run now')}">${uiIcon('play', 14)}</button>
+                <button class="btn btn-xs btn-ghost sched-act" data-act="dup" data-tooltip="${escAttr(t('sched.dupTask') || 'Duplicate task')}">${uiIcon('copy', 14)}</button>
+                <button class="btn btn-xs btn-ghost sched-act" data-act="exp1" data-tooltip="${escAttr(t('sched.exportOne') || 'Export this automation')}">${uiIcon('export', 14)}</button>
+                <button class="btn btn-xs btn-ghost sched-act" data-act="edit" data-tooltip="${escAttr(t('common.edit') || 'Edit')}">${uiIcon('edit', 14)}</button>
+                <button class="btn btn-xs btn-ghost sched-act sched-act-del" data-act="del" data-tooltip="${escAttr(t('common.delete') || 'Delete')}">${uiIcon('delete', 14)}</button>
             </div>`;
         wireCopyIds(row, toast);
         row.querySelector('[data-act="toggle"]')?.addEventListener('change', async (e) => {
@@ -5045,16 +5495,20 @@ async function loadPickers(): Promise<void> {
  */
 /** What a preset is FOR. The picker groups by this, and the order below is the order the
  *  groups appear in: what you came for first, the housekeeping after it. */
-type PresetCat = 'mods' | 'upkeep' | 'watch' | 'repo' | 'advanced';
+type PresetCat = 'mods' | 'upkeep' | 'watch' | 'repo' | 'advanced' | 'nav';
 const PRESET_CATS: { cat: PresetCat; label: string; key: string }[] = [
     { cat: 'mods', key: 'sched.presetCat.mods', label: 'Mods & profiles' },
     { cat: 'upkeep', key: 'sched.presetCat.upkeep', label: 'Backups & upkeep' },
     { cat: 'watch', key: 'sched.presetCat.watch', label: 'Watching something' },
     { cat: 'repo', key: 'sched.presetCat.repo', label: 'Repos & syncing' },
     { cat: 'advanced', key: 'sched.presetCat.advanced', label: 'Chains & variables' },
+    { cat: 'nav', key: 'sched.presetCat.nav', label: 'Guided tours & navigation' },
 ];
 
-const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc: string; make: () => Partial<Task> }[] = [
+/** A choice a template asks for when it is used (« download only, or download and install »). */
+interface PresetOption { opt: string; choices: string[]; dflt: string }
+type PresetDef = { cat: PresetCat; key: string; icon: IconName; title: string; desc: string; options?: PresetOption[]; make: (opt?: Record<string, string>) => Partial<Task> };
+const PRESETS: PresetDef[] = [
     {
         // Two presets for the same idea: notice which server you are on, put the right mods
         // on before the loading screen decides for you. This one is DCS because DCS can be
@@ -5064,7 +5518,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         // in with a guess would be a task that looks configured, runs, finds nothing, and
         // reports success.
         cat: 'mods', key: 'dcsServer',
-        icon: '<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/>',
+        icon: 'game',
         title: 'DCS: the right mods for the server you joined',
         desc: 'Sets up the DCS watcher, then applies the mod list for whichever server you join.',
         make: () => ({
@@ -5108,7 +5562,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         // a line, branch. Every game that prints what it connected to can do this, and the
         // only part that changes between them is the pattern.
         cat: 'mods', key: 'gameServer',
-        icon: '<rect width="20" height="8" x="2" y="2" rx="2"/><rect width="20" height="8" x="2" y="14" rx="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/>',
+        icon: 'server',
         title: 'Any game: mods for the server in the log',
         desc: 'Watch a game log, read the server name out of a line, apply the matching mod list.',
         make: () => ({
@@ -5137,7 +5591,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'upkeep', key: 'backup', icon: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>',
+        cat: 'upkeep', key: 'backup', icon: 'save',
         title: 'Weekly backup',
         desc: 'Every Monday at 09:00, export your BMM data and say so.',
         make: () => ({
@@ -5150,7 +5604,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'upkeep', key: 'updates', icon: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
+        cat: 'upkeep', key: 'updates', icon: 'refresh',
         title: 'Tell me about updates',
         desc: 'Every morning, check for mod and BMM updates — and only notify if there is one.',
         make: () => ({
@@ -5171,7 +5625,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'upkeep', key: 'disk', icon: '<line x1="22" x2="2" y1="12" y2="12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" x2="6.01" y1="16" y2="16"/><line x1="10" x2="10.01" y1="16" y2="16"/>',
+        cat: 'upkeep', key: 'disk', icon: 'hard-drive',
         title: 'Warn me before the disk fills',
         desc: 'Twice a day, check free space and warn under 20 GB. Silent otherwise.',
         make: () => ({
@@ -5189,7 +5643,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'mods', key: 'scan', icon: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+        cat: 'mods', key: 'scan', icon: 'folder',
         title: 'Rescan mods when BMM opens',
         desc: 'Picks up anything you added to the mods folder outside BMM.',
         make: () => ({
@@ -5199,7 +5653,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'mods', key: 'aftergame', icon: '<line x1="6" x2="10" y1="11" y2="11"/><line x1="8" x2="8" y1="9" y2="13"/><line x1="15" x2="15.01" y1="12" y2="12"/><line x1="18" x2="18.01" y1="10" y2="10"/><path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.544-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z"/>',
+        cat: 'mods', key: 'aftergame', icon: 'game',
         title: 'Tidy up after the game closes',
         desc: 'Waits for the game to exit, then stops its launcher and rescans your mods. Fill in the two names, and grant “Stop programs”.',
         make: () => ({
@@ -5225,7 +5679,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'upkeep', key: 'diskguard', icon: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+        cat: 'upkeep', key: 'diskguard', icon: 'warning',
         title: 'Stop early if the disk is nearly full',
         desc: 'A guard for the TOP of another task: checks free space and stops cleanly under 10 GB, so the real work never starts on a full disk.',
         make: () => ({
@@ -5245,7 +5699,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'mods', key: 'rescan', icon: '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
+        cat: 'mods', key: 'rescan', icon: 'search',
         title: 'Rescan the library every morning',
         desc: 'Picks up mods added or removed outside BMM, before you sit down to play.',
         make: () => ({
@@ -5255,7 +5709,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'watch', key: 'watchsite', icon: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+        cat: 'watch', key: 'watchsite', icon: 'clock',
         title: 'Tell me when a server stops answering',
         desc: 'Calls an address every 30 minutes and speaks up only when the answer is not 200. Put your own URL in the step — needs “Run external programs”.',
         make: () => ({
@@ -5275,7 +5729,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'advanced', key: 'sharedvar', icon: '<path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/>',
+        cat: 'advanced', key: 'sharedvar', icon: 'database',
         title: 'Share a value with your other tasks',
         desc: 'Writes one shared variable that every other task can read as {sharedNote}. A building block rather than a finished job.',
         make: () => ({
@@ -5293,7 +5747,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
     // call, a plugin — are how a task reaches anything else, and they are the ones nobody
     // starts from, because knowing they exist means having read the action list to the end.
     {
-        cat: 'watch', key: 'apiPing', icon: '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+        cat: 'watch', key: 'apiPing', icon: 'network',
         title: 'Watch a service and say when it breaks',
         desc: 'Every 15 minutes, call an HTTP endpoint. Notify only when it stops answering.',
         make: () => ({
@@ -5313,7 +5767,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'advanced', key: 'deeplinkOpen', icon: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+        cat: 'advanced', key: 'deeplinkOpen', icon: 'link',
         title: 'Open a BMM screen on a schedule',
         desc: 'Open a screen or a window (the library, the docs, the theme editor) at a set time.',
         make: () => ({
@@ -5329,7 +5783,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'advanced', key: 'pluginNight', icon: '<path d="M12 2v4"/><path d="M12 18v4"/><path d="m4.93 4.93 2.83 2.83"/><path d="m16.24 16.24 2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="m4.93 19.07 2.83-2.83"/><path d="m16.24 7.76 2.83-2.83"/>',
+        cat: 'advanced', key: 'pluginNight', icon: 'package',
         title: 'Compare a plugin, then apply it',
         desc: 'See what a plugin would change before it changes it — and only apply if it differs.',
         make: () => ({
@@ -5347,7 +5801,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'repo', key: 'sshNightly', icon: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
+        cat: 'repo', key: 'sshNightly', icon: 'terminal',
         title: 'Publish the repo over SSH, nightly',
         desc: 'Export, then send it to the saved SSH target. Needs a key with no passphrase.',
         make: () => ({
@@ -5361,7 +5815,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'repo', key: 'unattendedSync', icon: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
+        cat: 'repo', key: 'unattendedSync', icon: 'refresh',
         title: 'Sync a repo while you sleep',
         desc: 'A real sync, not a screen. Nothing to press at 3am.',
         make: () => ({
@@ -5374,7 +5828,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'upkeep', key: 'packBackup', icon: '<path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>',
+        cat: 'upkeep', key: 'packBackup', icon: 'package',
         title: 'Export your modpacks every week',
         desc: 'A .bmp beside your data, so a broken profile is an import away from fixed.',
         make: () => ({
@@ -5395,7 +5849,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         //
         // Both fields arrive blank on purpose. Filled in with a guess, this would be a task
         // that looks configured, runs, matches nothing and reports success.
-        cat: 'advanced', key: 'packUnchanged', icon: '<path d="M20 6 9 17l-5-5"/><circle cx="12" cy="12" r="10"/>',
+        cat: 'advanced', key: 'packUnchanged', icon: 'check',
         title: 'Apply a modpack only if it has not changed',
         desc: 'Reads what the pack IS and compares it to the id you recorded, so an edited pack stops rather than applying quietly.',
         make: () => ({
@@ -5419,7 +5873,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'repo', key: 'diskThenSync', icon: '<line x1="22" x2="2" y1="12" y2="12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+        cat: 'repo', key: 'diskThenSync', icon: 'hard-drive',
         title: 'Only sync if there is room',
         desc: 'Check free space first, and stop with a reason rather than filling the disk.',
         make: () => ({
@@ -5437,7 +5891,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'advanced', key: 'apiChain', icon: '<path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/>',
+        cat: 'advanced', key: 'apiChain', icon: 'workflow',
         title: 'Read a value from an API and keep it',
         desc: 'Pull one field out of a JSON response into a shared variable other tasks can read.',
         make: () => ({
@@ -5453,7 +5907,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'mods', key: 'gameNight', icon: '<path d="M6 11h4"/><path d="M8 9v4"/><path d="M15 12h.01"/><path d="M18 10h.01"/><path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z"/>',
+        cat: 'mods', key: 'gameNight', icon: 'game',
         title: 'Friday game night',
         desc: 'Every Friday at 19:00, switch to the profile and the modpack you play with. Pick both in the steps.',
         make: () => ({
@@ -5467,7 +5921,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'mods', key: 'cleanSlate', icon: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
+        cat: 'mods', key: 'cleanSlate', icon: 'clear',
         title: 'Start from a clean slate',
         desc: 'Turn every mod off, then enable one modpack — the state you want, and nothing left over from last time.',
         make: () => ({
@@ -5481,7 +5935,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'upkeep', key: 'monthlyBackup', icon: '<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/>',
+        cat: 'upkeep', key: 'monthlyBackup', icon: 'calendar',
         title: 'Full backup on the 1st',
         desc: 'On the first of every month, a complete export of your data plus your modpacks — the one you restore from.',
         make: () => ({
@@ -5495,7 +5949,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'upkeep', key: 'onlineUpdates', icon: '<path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" x2="12.01" y1="20" y2="20"/>',
+        cat: 'upkeep', key: 'onlineUpdates', icon: 'cloud',
         title: 'Check for updates only when online',
         desc: 'The daily update check, skipped cleanly when there is no connection — so an offline morning never logs a failure.',
         make: () => ({
@@ -5521,7 +5975,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'upkeep', key: 'startupChecklist', icon: '<path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/>',
+        cat: 'upkeep', key: 'startupChecklist', icon: 'clipboard-list',
         title: 'Startup checklist',
         desc: 'When BMM opens: rescan the library, then warn if the disk is under 15 GB. Silent when all is well.',
         make: () => ({
@@ -5540,7 +5994,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'watch', key: 'fileArrived', icon: '<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><path d="m9 15 3 3 3-3"/>',
+        cat: 'watch', key: 'fileArrived', icon: 'download',
         title: 'React when a file changes',
         desc: 'Watches one file you name — a launcher log, a download marker — and rescans the library the moment it changes.',
         make: () => ({
@@ -5553,7 +6007,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'watch', key: 'gameProfile', icon: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/><path d="M16 8h.01"/>',
+        cat: 'watch', key: 'gameProfile', icon: 'profile',
         title: 'Switch profile when the game starts',
         desc: 'Every 2 minutes: if the game is running and its profile is not active, activate it. Name the program and pick the profile.',
         make: () => ({
@@ -5580,7 +6034,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'repo', key: 'syncAfterTask', icon: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+        cat: 'repo', key: 'syncAfterTask', icon: 'link',
         title: 'Sync once another task succeeds',
         desc: 'A chain: runs right after the task you pick finishes WITHOUT error, and syncs the repo. Pick the task in the trigger.',
         make: () => ({
@@ -5593,7 +6047,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'advanced', key: 'pollThrice', icon: '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M12 7v5l3 3"/>',
+        cat: 'advanced', key: 'pollThrice', icon: 'refresh',
         title: 'Check three times, then stop',
         desc: 'A repeat block: three checks ten minutes apart, warning under 10 GB — the shape of any wait-and-see task.',
         make: () => ({
@@ -5616,7 +6070,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'advanced', key: 'nightTheme', icon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+        cat: 'advanced', key: 'nightTheme', icon: 'palette',
         title: 'Night theme in the evening',
         desc: 'At 20:00 switch to a dark theme, unless it is already on. Duplicate it with a morning time and a light theme for the other half.',
         make: () => ({
@@ -5646,7 +6100,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
     // thing and could not ask about it first, so the only version that existed did it
     // every time.
     {
-        cat: 'mods', key: 'enableIfInstalled', icon: '<path d="M20 6 9 17l-5-5"/><circle cx="12" cy="12" r="10"/>',
+        cat: 'mods', key: 'enableIfInstalled', icon: 'check',
         title: 'Enable a mod, or say it is missing',
         desc: 'Enables the mod you pick when it is installed, and tells you when it is not — instead of failing silently on a mod that was removed.',
         make: () => ({
@@ -5663,7 +6117,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'mods', key: 'profileOnce', icon: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 11h-6"/>',
+        cat: 'mods', key: 'profileOnce', icon: 'user',
         title: 'Make a profile, once',
         desc: 'Creates the profile only when it is not already there — so a monthly or seasonal task can run every time without replacing the one you have been using.',
         make: () => ({
@@ -5683,7 +6137,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'upkeep', key: 'librarySize', icon: '<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/>',
+        cat: 'upkeep', key: 'librarySize', icon: 'activity',
         title: 'Warn when the library gets big',
         desc: 'Reads the counts and says something when this install passes 400 mods — the point where scanning and deploying start to be worth watching.',
         make: () => ({
@@ -5701,7 +6155,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'advanced', key: 'countsAround', icon: '<path d="M12 2v20M2 12h20"/>',
+        cat: 'advanced', key: 'countsAround', icon: 'scale',
         title: 'Measure what a step changed',
         desc: 'Counts the library before and after, then reports the difference. The shape for "did that import actually bring anything in?".',
         make: () => ({
@@ -5717,7 +6171,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'watch', key: 'themeGuard', icon: '<circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 0 0 20z"/>',
+        cat: 'watch', key: 'themeGuard', icon: 'contrast',
         title: 'Put the theme back',
         desc: 'Every hour, if the theme is not the one you chose, set it back. For a shared machine, or after trying something out and forgetting.',
         make: () => ({
@@ -5739,7 +6193,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
     // what Laya can do on THIS PC — a task that fires with AI off is refused at its first Laya
     // step anyway, but saying « not available » is better than a failed run every night.
     {
-        cat: 'mods', key: 'layaTagMods', icon: '<path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/>',
+        cat: 'mods', key: 'layaTagMods', icon: 'ai',
         title: 'Tag new mods with Laya',
         desc: 'Every night, finds the mods with no tag and lets Laya tag them from their own files. Tags are written only if « apply without asking » is on in Laya’s answer settings.',
         make: () => ({
@@ -5765,7 +6219,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'watch', key: 'layaCrashNotify', icon: '<path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/>',
+        cat: 'watch', key: 'layaCrashNotify', icon: 'ai',
         title: 'Label new crashes and tell me',
         desc: 'When BMM starts, Laya finds the probable cause of each crash report that arrived since last time, and you get one message with the latest.',
         make: () => ({
@@ -5792,7 +6246,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'upkeep', key: 'layaWeeklyCheck', icon: '<path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/>',
+        cat: 'upkeep', key: 'layaWeeklyCheck', icon: 'ai',
         title: 'Weekly library check',
         desc: 'Every Monday, lists likely duplicate mods, mods overwriting each other and mods with no tag — and Laya’s tags for a few of them. Nothing is changed.',
         make: () => ({
@@ -5811,7 +6265,7 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
         }),
     },
     {
-        cat: 'watch', key: 'layaNewCrashKind', icon: '<path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/>',
+        cat: 'watch', key: 'layaNewCrashKind', icon: 'ai',
         title: 'Tell me about a new kind of crash',
         desc: 'Waits for Laya to see a crash unlike any before (from the crash page or another task) and tells you its probable cause. Needs no permission: it only reads the event.',
         make: () => ({
@@ -5819,6 +6273,185 @@ const PRESETS: { cat: PresetCat; key: string; icon: string; title: string; desc:
             trigger: { type: 'onEvent', event: 'bmm.ai.crashGroup' },
             steps: [
                 { kind: 'action', action: { type: 'notify', params: { message: 'A new kind of crash: {event.family} / {event.cause} ({event.report}).' } } },
+            ],
+        }),
+    },
+    // ── Upkeep, on a schedule (sched-maint.ts) ─────────────────────────────────────────────
+    //
+    // Each one is complete as it stands and has a dry run worth reading before it is armed:
+    // the editor's « Dry run » measures what it would clean, check or download, and changes
+    // nothing. Anything that deletes or reaches the network declares it in `permissions`, which
+    // the gallery shows and the task does NOT get: it is ticked by the person, after reading.
+    {
+        cat: 'repo', key: 'followedRepos', icon: 'refresh',
+        title: 'Check the repos you follow',
+        desc: 'Every six hours: reads each followed repo. Choose whether it only tells you, asks you, or syncs as each repo is set to.',
+        options: [{ opt: 'mode', choices: ['ask', 'report', 'auto'], dflt: 'ask' }],
+        make: (opt) => ({
+            name: 'Followed repos',
+            trigger: { type: 'hourly', everyHours: 6 },
+            steps: [
+                { kind: 'action', action: { type: 'repos.checkFollowed', params: { mode: opt?.mode || 'ask' } } },
+            ],
+        }),
+    },
+    {
+        cat: 'upkeep', key: 'catalogUpdates', icon: 'download',
+        title: 'New versions of the catalogue items you pick',
+        desc: 'Each morning: looks for new versions of the apps and plugins you tick in the step, then only tells you, downloads them, or downloads and installs them. Verified by SHA-256.',
+        options: [{ opt: 'mode', choices: ['check', 'download', 'install'], dflt: 'check' }],
+        make: (opt) => ({
+            name: 'Catalogue updates',
+            trigger: { type: 'dailyAt', time: '09:00' },
+            // Nothing is ticked: a task that updates « everything installed » is one nobody chose.
+            steps: [
+                { kind: 'action', action: { type: 'catalog.updates', params: { mode: opt?.mode || 'check', items: [] } } },
+            ],
+            ...(opt?.mode && opt.mode !== 'check' ? { permissions: { network: true } } : {}),
+        }),
+    },
+    {
+        cat: 'upkeep', key: 'integrityWeekly', icon: 'shield-check',
+        title: 'Verify your mods every week',
+        desc: 'Sunday morning: checks the active profile\'s files in the game folder. When something changed, it opens the library and points at Verify integrity.',
+        make: () => ({
+            name: 'Weekly integrity check',
+            trigger: { type: 'weeklyAt', time: '10:00', days: [0] },
+            steps: [
+                { kind: 'action', action: { type: 'mods.verifyIntegrity', params: { scope: 'game' } } },
+                {
+                    kind: 'if',
+                    condition: { type: 'value', params: { source: 'integrity.problems', op: '>', value: 0 } },
+                    then: [
+                        { kind: 'action', action: { type: 'nav.highlight', params: { page: 'library', target: 'library.verify', note: '{integrity.summary}', seconds: 8 } } },
+                    ],
+                    else: [],
+                },
+            ],
+        }),
+    },
+    {
+        cat: 'upkeep', key: 'cacheMonthly', icon: 'clear',
+        title: 'Clean the caches every month',
+        desc: 'On the 1st: empties the catalogue cache, the mod cache and update leftovers once they weigh more than 500 MB. Crash archives are kept.',
+        make: () => ({
+            name: 'Monthly cache clean',
+            trigger: { type: 'monthlyAt', day: 1, time: '04:00' },
+            steps: [
+                { kind: 'action', action: { type: 'cache.clean', params: { minMb: 500 } } },
+            ],
+            permissions: { delete: true },
+        }),
+    },
+    {
+        cat: 'upkeep', key: 'logRotate', icon: 'file-text',
+        title: 'Keep task logs small',
+        desc: 'Every Monday: rotates task logs past 1 MB (one old copy kept) and drops rotated copies and session reports older than 30 days.',
+        make: () => ({
+            name: 'Rotate logs',
+            trigger: { type: 'weeklyAt', time: '05:00', days: [1] },
+            steps: [
+                { kind: 'action', action: { type: 'logs.rotate', params: { keepDays: 30, maxKb: 1024 } } },
+            ],
+            permissions: { delete: true },
+        }),
+    },
+    {
+        cat: 'upkeep', key: 'pendingUpdates', icon: 'bell',
+        title: 'Remind me about pending updates',
+        desc: 'When BMM starts: reads your followed repos and BMM\'s own update channel, and only when something waits shows it on screen with where to go.',
+        make: () => ({
+            name: 'Pending updates',
+            trigger: { type: 'appStart' },
+            steps: [
+                { kind: 'delay', seconds: 20 },
+                { kind: 'action', action: { type: 'repos.checkFollowed', params: { mode: 'report', notify: false } } },
+                { kind: 'action', action: { type: 'app.checkUpdate', params: {} } },
+                {
+                    kind: 'if',
+                    condition: { type: 'value', params: { source: 'repos.updates', op: '>', value: 0 } },
+                    then: [
+                        { kind: 'action', action: { type: 'nav.highlight', params: { page: 'repo', tab: 'sync', target: '#repo-follow-card', note: '{repos.summary}', seconds: 8 } } },
+                    ],
+                    else: [],
+                },
+            ],
+        }),
+    },
+    {
+        cat: 'upkeep', key: 'diskReport', icon: 'hard-drive',
+        title: 'A disk usage report every week',
+        desc: 'Monday morning: writes disk-usage.md in the task\'s folder — every profile, its backups and the ten heaviest mods — so this week can be compared with last week.',
+        make: () => ({
+            name: 'Disk usage report',
+            trigger: { type: 'weeklyAt', time: '09:00', days: [1] },
+            steps: [
+                { kind: 'action', action: { type: 'disk.report', params: { top: 10 } } },
+            ],
+        }),
+    },
+    {
+        cat: 'repo', key: 'serverHours', icon: 'server',
+        title: 'Serve your repo only in the evening',
+        desc: 'Every 15 minutes: the built-in repo server runs between 18:00 and 23:30 and is stopped outside those hours. Fill in the repo folder.',
+        make: () => ({
+            name: 'Repo server hours',
+            trigger: { type: 'interval', everyMinutes: 15 },
+            steps: [
+                {
+                    kind: 'if',
+                    condition: { type: 'timeRange', params: { from: '18:00', to: '23:30' } },
+                    then: [{ kind: 'action', action: { type: 'repo.server', params: { state: 'start', dir: '', port: 8000, notify: false } } }],
+                    else: [{ kind: 'action', action: { type: 'repo.server', params: { state: 'stop', notify: false } } }],
+                },
+            ],
+            permissions: { network: true },
+        }),
+    },
+    // ── Guided tours (sched-nav.ts) ─────────────────────────────────────────────────────────
+    //
+    // Navigation that SHOWS needs no permission, so these run as they arrive; the preview in
+    // the dry run plays them without the task even being saved.
+    {
+        cat: 'nav', key: 'tourUpdates', icon: 'map',
+        title: 'Show me where updates live',
+        desc: 'A tour you run by hand: installed apps, followed repos, the library\'s update check — each opened and pointed at, with a word on what it is for.',
+        make: () => ({
+            name: 'Tour: where updates live',
+            trigger: { type: 'manual' },
+            steps: [
+                { kind: 'action', action: { type: 'nav.page', params: { page: 'apps', tab: 'installed', note: 'Apps you installed from a catalogue: an update shows on its card.', seconds: 4 } } },
+                { kind: 'action', action: { type: 'nav.highlight', params: { page: 'repo', tab: 'sync', target: '#repo-follow-card', note: 'Repos you follow are checked here, on their own schedule.', seconds: 4 } } },
+                { kind: 'action', action: { type: 'nav.highlight', params: { page: 'library', target: 'library.checkUpdates', note: 'This checks your mods against their sources.', seconds: 4 } } },
+                { kind: 'action', action: { type: 'nav.message', params: { title: 'That is all', message: 'A task can check all three for you: see the « Catalogue updates » and « Followed repos » templates.', waitOk: true } } },
+            ],
+        }),
+    },
+    {
+        cat: 'nav', key: 'tourAutomation', icon: 'workflow',
+        title: 'Show me where automation lives',
+        desc: 'A tour you run by hand: Plugins & API, its Automations tab and the templates button.',
+        make: () => ({
+            name: 'Tour: automation',
+            trigger: { type: 'manual' },
+            steps: [
+                { kind: 'action', action: { type: 'nav.page', params: { page: 'plugins', tab: 'automations', note: 'Your automations: each one, its trigger, its last runs.', seconds: 5 } } },
+                { kind: 'action', action: { type: 'nav.highlight', params: { page: 'plugins', tab: 'automations', target: '#auto-templates', note: 'Start from a template: it opens in the builder, ready to change.', seconds: 5 } } },
+                { kind: 'action', action: { type: 'nav.highlight', params: { page: 'plugins', tab: 'automations', target: '#btn-create-schedule', note: 'Or build one step by step, and save it as a task or export it as a script.', seconds: 5 } } },
+            ],
+        }),
+    },
+    {
+        cat: 'nav', key: 'morningBrief', icon: 'home',
+        title: 'Start the day on the right screen',
+        desc: 'When BMM starts: opens the library and points at the profile you use, so the first click is the one you came for. Pick the profile in the step.',
+        make: () => ({
+            name: 'Morning start',
+            trigger: { type: 'appStart' },
+            steps: [
+                { kind: 'delay', seconds: 3 },
+                { kind: 'action', action: { type: 'nav.item', params: { kind: 'profile', id: '', onMissing: 'continue', seconds: 4 } } },
+                { kind: 'action', action: { type: 'nav.page', params: { page: 'library' } } },
             ],
         }),
     },
@@ -5845,8 +6478,16 @@ async function applyPreset(modal: HTMLElement, p: (typeof PRESETS)[number]): Pro
 }
 
 /** What a template needs granted, as the permission keys the editor shows. */
+/** The options picked in the gallery, per template (« download only » vs « download and install »). */
+const _presetOpts: Record<string, Record<string, string>> = {};
+function presetOptions(p: (typeof PRESETS)[number]): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const o of p.options || []) out[o.opt] = _presetOpts[p.key]?.[o.opt] || o.dflt;
+    return out;
+}
+
 function presetPerms(p: (typeof PRESETS)[number]): string[] {
-    const task = p.make();
+    const task = p.make(presetOptions(p));
     const pm: Record<string, unknown> = { ...((task as any).permissions || {}), ...((task as any).perms || {}) };
     return Object.keys(pm).filter((k) => pm[k] === true);
 }
@@ -5920,7 +6561,7 @@ async function openPresetGallery(modal: HTMLElement): Promise<void> {
         }).join('');
         let detail = `<div class="spg-detail-empty">${escHtml(t('sched.pg.pick') || 'Select a template to see exactly what it does.')}</div>`;
         if (sel) {
-            const task = sel.make();
+            const task = sel.make(presetOptions(sel));
             const perms = presetPerms(sel);
             const steps = (task.steps || []) as Step[];
             const stepRows = steps.map((st) => {
@@ -5936,8 +6577,14 @@ async function openPresetGallery(modal: HTMLElement): Promise<void> {
                 <ol class="spg-detail-steps">${stepRows || `<li class="spg-inner">${escHtml(t('sched.pg.nosteps') || 'No steps yet.')}</li>`}</ol>
                 <div class="spg-detail-sec">${escHtml(t('sched.pg.perms') || 'Permissions')}</div>
                 <div class="spg-detail-perms">${perms.length ? escHtml((t('sched.pg.permsNeed') || 'Needs {p} — left unticked, grant it after reading the steps.').replace('{p}', perms.map(permLabel).join(', '))) : escHtml(t('sched.pg.permsNone') || 'None — nothing here touches other programs.')}</div>
+                ${(sel.options || []).map((o) => `
+                <div class="spg-detail-sec">${escHtml(t('sched.pgo.' + sel.key + '.' + o.opt))}</div>
+                <div class="spg-opts" role="radiogroup">${o.choices.map((c) => `
+                    <label class="sched-opt"><input type="radio" name="spg-opt-${escAttr(o.opt)}" data-opt="${escAttr(o.opt)}" value="${escAttr(c)}"${presetOptions(sel)[o.opt] === c ? ' checked' : ''}>
+                        <div><b>${escHtml(t('sched.pgo.' + sel.key + '.' + o.opt + '.' + c))}</b></div></label>`).join('')}</div>`).join('')}
                 <div class="spg-detail-actions">
-                    <button type="button" class="btn btn-primary" id="spg-use">${SVG16('<path d="M20 6 9 17l-5-5"/>')}<span>${escHtml(t('sched.pg.use') || 'Use this template')}</span></button>
+                    <button type="button" class="btn btn-secondary" id="spg-dry">${SVG16('search')}<span>${escHtml(t('sched.dr.run'))}</span></button>
+                    <button type="button" class="btn btn-primary" id="spg-use">${SVG16('check')}<span>${escHtml(t('sched.pg.use') || 'Use this template')}</span></button>
                     <span class="spg-detail-note">${escHtml(t('sched.pg.useNote') || 'Blanks in the steps are yours to fill.')}</span>
                 </div>`;
         }
@@ -5945,11 +6592,11 @@ async function openPresetGallery(modal: HTMLElement): Promise<void> {
             <div class="modal glass modal--xl spg" role="dialog" aria-modal="true" aria-labelledby="spg-title">
                 <div class="modal-header spg-head">
                     <div class="spg-head-l">
-                        <div class="spg-head-ico">${SVG16('<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>')}</div>
+                        <div class="spg-head-ico">${SVG16('grid')}</div>
                         <div><h2 class="modal-title" id="spg-title">${escHtml(t('sched.pg.title') || 'Automation templates')}</h2><p>${escHtml((t('sched.pg.sub') || '{n} ready-made tasks. Each one is complete and does something useful as is; pick one, read what it does, then make it yours.').replace('{n}', String(PRESETS.length)))}</p></div>
                     </div>
-                    <div class="spg-search">${SVG16('<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>')}<input id="spg-q" type="search" placeholder="${escAttr(t('sched.pg.search') || 'Search templates…')}" value="${escAttr(q)}" autocomplete="off"></div>
-                    <button type="button" class="modal-close" id="spg-close" aria-label="${escAttr(t('common.close') || 'Close')}">${SVG16('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>')}</button>
+                    <div class="spg-search">${SVG16('search')}<input id="spg-q" type="search" placeholder="${escAttr(t('sched.pg.search') || 'Search templates…')}" value="${escAttr(q)}" autocomplete="off"></div>
+                    <button type="button" class="modal-close" id="spg-close" aria-label="${escAttr(t('common.close') || 'Close')}">${SVG16('close')}</button>
                 </div>
                 <div class="spg-body">
                     <nav class="spg-rail">${rail}</nav>
@@ -5966,6 +6613,17 @@ async function openPresetGallery(modal: HTMLElement): Promise<void> {
         const qi = g.querySelector<HTMLInputElement>('#spg-q');
         qi?.addEventListener('input', () => { q = qi.value.trim().toLowerCase(); const pos = qi.selectionStart; render(); const again = g.querySelector<HTMLInputElement>('#spg-q'); again?.focus(); try { again?.setSelectionRange(pos, pos); } catch { /* not focusable */ } });
         g.querySelector('#spg-use')?.addEventListener('click', () => { void useSelected(); });
+        g.querySelectorAll<HTMLInputElement>('[data-opt]').forEach((r) => r.addEventListener('change', () => {
+            const p = selected ? PRESETS.find((x) => x.key === selected) : null;
+            if (!p || !r.checked) return;
+            _presetOpts[p.key] = { ...(_presetOpts[p.key] || {}), [r.dataset.opt || '']: r.value };
+            render();
+        }));
+        // What the template would do, measured and previewed, before it is even used.
+        g.querySelector('#spg-dry')?.addEventListener('click', () => {
+            const p = selected ? PRESETS.find((x) => x.key === selected) : null;
+            if (p) void openTaskDryRun(taskFromPreset(p), g);
+        });
     };
     const useSelected = async () => {
         const p = selected ? PRESETS.find((x) => x.key === selected) : null;
@@ -5984,7 +6642,7 @@ function taskFromPreset(p: (typeof PRESETS)[number]): Task {
     return {
         id: newTaskId(), enabled: true, createdAt: Date.now(), catchUp: true,
         allowCustomCommands: false, name: '', trigger: { type: 'interval', everyMinutes: 60 }, steps: [],
-        ...p.make(),
+        ...p.make(presetOptions(p)),
     } as Task;
 }
 
@@ -6104,7 +6762,7 @@ function draftSummary(): string {
     return bits.join(' · ');
 }
 /** « 2 of 9 granted » / « none granted »: the folded permission row of the task editor. */
-const PERM_KEYS = ['command', 'script', 'deeplink', 'stopProcess', 'delete', 'resources', 'tasks', 'network', 'ai'] as const;
+const PERM_KEYS = ['command', 'script', 'deeplink', 'stopProcess', 'delete', 'resources', 'tasks', 'network', 'ai', 'navigate'] as const;
 function permSummaryText(pm: TaskPerms): string {
     const granted = PERM_KEYS.filter((k) => (pm as any)[k] === true).length;
     return granted
@@ -6410,7 +7068,7 @@ function renderModal(modal: HTMLElement): void {
                     <span class="sched-mode-glider" aria-hidden="true"></span>
                     <button type="button" class="sched-mode-btn on" data-mode="bricks" role="tab" aria-selected="true"
                             data-tooltip="${escAttr(t('sched.modeBricksTip') || 'Build this task by clicking. Everything the language has is here.')}">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+                        ${uiIcon('grid', 12)}
                         <span>${t('sched.modeBricks') || 'Blocks'}</span>
                     </button>
                     <button type="button" class="sched-mode-btn" data-mode="code" role="tab" aria-selected="false"
@@ -6420,15 +7078,19 @@ function renderModal(modal: HTMLElement): void {
                     </button>
                     <button type="button" class="sched-mode-btn" data-mode="flow" role="tab" aria-selected="false"
                             data-tooltip="${escAttr(t('sched.modeFlowTip') || 'See this task as a graph of nodes. Same steps, same task.')}">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="9" width="6" height="6" rx="1.5"/><rect x="16" y="3" width="6" height="6" rx="1.5"/><rect x="16" y="15" width="6" height="6" rx="1.5"/><path d="M8 12h3a2 2 0 0 0 2-2V8a2 2 0 0 1 2-2h1M11 12a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2h1"/></svg>
+                        ${uiIcon('workflow', 12)}
                         <span>${t('sched.modeFlow') || 'Flow'}</span>
                     </button>
                 </span>
                 <span class="sched-head-sep" aria-hidden="true"></span>
                 <button class="btn btn-sm btn-ghost sched-test" id="sched-preview" data-tooltip="${escAttr(t('sched.prev.hint'))}">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg><span>${escHtml(t('sched.prev.run'))}</span></button>
+                    ${uiIcon('eye', 12)}<span>${escHtml(t('sched.prev.run'))}</span></button>
+                <button class="btn btn-sm btn-ghost sched-test" id="sched-export" data-tooltip="${escAttr(t('sched.ex.hint'))}">
+                    ${uiIcon('export', 12)}<span>${escHtml(t('sched.ex.run'))}</span></button>
+                <button class="btn btn-sm btn-ghost sched-test" id="sched-dryrun" data-tooltip="${escAttr(t('sched.dr.hint'))}">
+                    ${uiIcon('search', 12)}<span>${escHtml(t('sched.dr.run'))}</span></button>
                 <button class="btn btn-sm btn-ghost sched-test" id="sched-debug" data-tooltip="${escAttr(t('sched.dbg.hint'))}">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 5V3M12 21v-2M5 12H3M21 12h-2M6.5 6.5 5 5M17.5 17.5 19 19M17.5 6.5 19 5M6.5 17.5 5 19"/></svg><span>${escHtml(t('sched.dbg.run'))}</span></button>
+                    ${uiIcon('bug', 12)}<span>${escHtml(t('sched.dbg.run'))}</span></button>
                 <button class="btn btn-sm btn-secondary sched-test" id="sched-test" data-tooltip="${escAttr(t('sched.testHint') || 'Run the steps once right now, without saving')}">
                     ${uiIcon('play', 12)}<span>${t('sched.testRun') || 'Test run'}</span></button>
                 <button class="btn btn-sm btn-primary" id="sched-save-stay" data-tooltip="${escAttr(t('sched.head.saveTip'))}">${escHtml(t('common.save') || 'Save')}</button>
@@ -6452,7 +7114,7 @@ function renderModal(modal: HTMLElement): void {
                     // moment you have typed a name.
                     const browse = `<button type="button" class="sched-preset-tile sched-preset-browse" id="sched-preset-catalog"
                             data-tooltip="${escAttr(t('sched.pc.tip') || 'Automations published by other people. Each one is inspected before anything is imported.')}">
-                            ${SVG16('<path d="M12 13v8"/><path d="m8 17 4 4 4-4"/><path d="M4.393 15.269A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.436 8.284"/>')}
+                            ${SVG16('download')}
                             <span>${escHtml(t('sched.pc.browse') || 'From a catalogue…')}</span>
                         </button>`;
                     // ALWAYS on screen, including while editing.
@@ -6473,11 +7135,11 @@ function renderModal(modal: HTMLElement): void {
                     // blind. The modal shows every template as a card with what it does, lets
                     // you search, and explains the trigger, the steps and the permissions
                     // BEFORE anything replaces the draft.
-                    return `<h3 class="sched-side-h">${SVG16('<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>')}<span>${t('sched.presetsTitle') || 'Start from a preset'}</span> <span class="sched-hint-inline">${t('sched.presetsHint') || '— or build your own below'}</span></h3>
+                    return `<h3 class="sched-side-h">${SVG16('grid')}<span>${t('sched.presetsTitle') || 'Start from a preset'}</span> <span class="sched-hint-inline">${t('sched.presetsHint') || '— or build your own below'}</span></h3>
                     <div class="sched-preset-row">
                         <button type="button" class="sched-preset-tile sched-preset-open" id="sched-preset-open"
                             data-tooltip="${escAttr(t('sched.pg.tip') || 'Ready-made automations, with what each one does explained before it replaces the draft.')}">
-                            ${SVG16('<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>')}
+                            ${SVG16('grid')}
                             <span>${escHtml(t('sched.pg.open') || 'Browse templates…')}</span>
                             <span class="sched-preset-count">${PRESETS.length}</span>
                         </button>
@@ -6493,7 +7155,7 @@ function renderModal(modal: HTMLElement): void {
                 </section>
 
                 <section class="sched-side-sec">
-                <h3 class="sched-side-h">${SVG16('<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>')}<span>${t('sched.fTrigger') || 'Trigger'}</span> <span class="sched-hint-inline">${t('sched.fTriggerHint') || '— WHEN it runs'}</span></h3>
+                <h3 class="sched-side-h">${SVG16('clock')}<span>${t('sched.fTrigger') || 'Trigger'}</span> <span class="sched-hint-inline">${t('sched.fTriggerHint') || '— WHEN it runs'}</span></h3>
                 <div id="sched-trigger"></div>
                 </section>
 
@@ -6521,7 +7183,7 @@ function renderModal(modal: HTMLElement): void {
                     // the column. The count follows every tick (permSummaryText below).
                     return `<details class="sched-perm-group" id="sched-perms">
                         <summary class="sched-perm-sum">
-                            <span class="sched-perm-sum-ic">${SVG16('<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>')}</span>
+                            <span class="sched-perm-sum-ic">${SVG16('shield')}</span>
                             <span class="sched-perm-sum-main">
                                 <b>${t('sched.permsTitle') || 'Permissions'}</b>
                                 <span class="sched-perm-count" id="sched-perm-count">${escHtml(permSummaryText(pm))}</span>
@@ -6545,12 +7207,15 @@ function renderModal(modal: HTMLElement): void {
 
                         <div class="sched-perm-sub">${escHtml(t('sched.permsOther') || 'Acts through your other tasks')}</div>
                         ${row('tasks', pm.tasks === true, t('sched.allowTasksTitle') || 'Other tasks', t('sched.allowTasks') || 'This task may run, start or switch on your other tasks, which then do whatever THEY are permitted to do.')}
+
+                        <div class="sched-perm-sub">${escHtml(t('sched.permsScreens'))}</div>
+                        ${row('navigate', pm.navigate === true, t('sched.allowNavTitle'), t('sched.allowNav'))}
                     </details>`;
                 })()}
                 </section>
 
                 <section class="sched-side-sec">
-                <h3 class="sched-side-h">${SVG16('<path d="M10 5H3"/><path d="M12 19H3"/><path d="M14 3v4"/><path d="M16 17v4"/><path d="M21 12h-9"/><path d="M21 19h-5"/><path d="M21 5h-7"/><path d="M8 10v4"/><path d="M8 12H3"/>')}<span>${t('sched.secOptions') || 'Options'}</span></h3>
+                <h3 class="sched-side-h">${SVG16('sliders')}<span>${t('sched.secOptions') || 'Options'}</span></h3>
                 <label class="sched-opt">
                     <input type="checkbox" id="sched-os" ${_draft.osSchedule ? 'checked' : ''}>
                     <div><b>${t('sched.osScheduleTitle') || 'Run even when BMM is closed'}</b><span>${t('sched.osSchedule') || 'Registers a Windows Scheduled Task that launches BMM at the trigger time.'}</span></div>
@@ -6612,12 +7277,12 @@ function renderModal(modal: HTMLElement): void {
                         <span class="sched-code-bar-hint">${escHtml(t('sched.bmms.barHint'))}</span>
                         <button type="button" class="btn btn-xs btn-ghost" id="sched-code-outline" aria-pressed="false"
                             data-tasky="sched.outline.tip" data-tasky-icon="list">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h4M4 12h4M4 18h4M11 6h9M11 12h9M11 18h9"/></svg>
+                            ${uiIcon('list', 12)}
                             ${escHtml(t('sched.outline.toggle'))}
                         </button>
                         <button type="button" class="btn btn-xs btn-ghost" id="sched-code-ref" aria-pressed="false"
                             data-tasky="sched.ref.insertHint" data-tasky-icon="icon-info">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 21l-4.35-4.35"/><circle cx="11" cy="11" r="7"/></svg>
+                            ${uiIcon('search', 12)}
                             ${escHtml(t('sched.ref.toggle'))}
                         </button>
 
@@ -6722,6 +7387,16 @@ function renderModal(modal: HTMLElement): void {
     // that runs the task differently from how it really runs is a debugger that lies about
     // the bug.
     modal.querySelector('#sched-preview')?.addEventListener('click', () => { void openPreview(); });
+    // Dry run: every step with what it would do, the measurable ones measured, and the
+    // navigation played in preview (sched-dryrun.ts). The text is the task in code mode.
+    modal.querySelector('#sched-export')?.addEventListener('click', async () => {
+        if (!(await flushCode())) return;
+        await openExportDialog();
+    });
+    modal.querySelector('#sched-dryrun')?.addEventListener('click', async () => {
+        if (!(await flushCode())) return;
+        await openTaskDryRun(_draft, modal);
+    });
 
     modal.querySelector('#sched-debug')?.addEventListener('click', async () => {
         // In code mode the TEXT is the task: compiled first, so the run, the line map and the
@@ -7772,10 +8447,7 @@ function askEditorMode(): Promise<EditorMode | null | 'away'> {
 }
 
 function modeIcon(m: EditorMode): string {
-    const P = (d: string) => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
-    if (m === 'flow') return P('<rect x="2" y="9" width="6" height="6" rx="1.5"/><rect x="16" y="3" width="6" height="6" rx="1.5"/><rect x="16" y="15" width="6" height="6" rx="1.5"/><path d="M8 12h3a2 2 0 0 0 2-2V8a2 2 0 0 1 2-2h1M11 12a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2h1"/>');
-    if (m === 'code') return P('<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>');
-    return P('<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>');
+    return uiIcon(m === 'flow' ? 'workflow' : m === 'code' ? 'code' : 'grid', 18);
 }
 
 /** The preference, as a setting: a row in Settings → the scheduler card. */
@@ -8374,7 +9046,7 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
             const offTip = step.disabled ? (t('sched.enableStep') || 'Enable this step') : (t('sched.disableStep') || 'Disable this step (skipped at run time)');
             tools.innerHTML = `
                 <button class="sched-tool sched-run1" data-tooltip="${escAttr(t('sched.test.btnTip'))}" aria-label="${escAttr(t('sched.test.btn'))}">${uiIcon('play', 12)}</button>
-                <button class="sched-tool sched-bp" aria-pressed="false" data-tooltip="${escAttr(t('sched.bp.add'))}" aria-label="${escAttr(t('sched.bp.add'))}"><svg width="11" height="11" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" fill="currentColor"/></svg></button>
+                <button class="sched-tool sched-bp" aria-pressed="false" data-tooltip="${escAttr(t('sched.bp.add'))}" aria-label="${escAttr(t('sched.bp.add'))}">${uiIcon('record', 12)}</button>
                 <button class="sched-tool sched-dup" data-tooltip="${escAttr(t('sched.dupStep') || 'Duplicate step')}">${uiIcon('copy', 12)}</button>
                 <button class="sched-tool sched-off ${step.disabled ? 'active' : ''}" data-tooltip="${escAttr(offTip)}">${uiIcon('power', 12)}</button>
                 <button class="sched-tool sched-del2" data-tooltip="${escAttr(t('common.delete') || 'Delete')}">${SCHED_X}</button>`;
@@ -8420,7 +9092,7 @@ function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
         const handle = document.createElement('span');
         handle.className = 'sched-drag-handle';
         handle.title = t('sched.reorder') || 'Drag to reorder';
-        handle.innerHTML = `<svg width="12" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.6"/><circle cx="15" cy="5" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="19" r="1.6"/><circle cx="15" cy="19" r="1.6"/></svg>`;
+        handle.innerHTML = uiIcon('grip', 12);
         handle.addEventListener('mousedown', (e) => _startStepDrag(e, steps, i, block, host, rerenderHere));
         block.prepend(handle);
 
@@ -8521,6 +9193,7 @@ const ACTION_GROUPS: { g: string; label: string }[] = [
     { g: 'notify',  label: 'Notifications & web' },
     { g: 'system',  label: 'System & flow' },
     { g: 'ai',      label: 'Laya (AI)' },
+    { g: 'nav',     label: 'Navigate BMM' },
 ];
 
 // icon per group (inline SVG, no emoji — matches the BMM icon-only rule).
@@ -8528,39 +9201,40 @@ const ACTION_GROUPS: { g: string; label: string }[] = [
 // "look"/"system"/"logic" icons were busy compound paths that read as a blur
 // at tile size — this was the "ugly action-type icons" complaint).
 const GROUP_ICON: Record<string, string> = {
-    mods:    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>',
-    repo:    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9v3a3 3 0 0 1-3 3H9"/></svg>',
-    apps:    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>',
-    look:    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>',
-    perf:    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg>',
+    mods:    (uiIcon('mod', 14)),
+    repo:    (uiIcon('git-branch', 14)),
+    apps:    (uiIcon('grid', 14)),
+    look:    (uiIcon('palette', 14)),
+    perf:    (uiIcon('activity', 14)),
     privacy: (uiIcon('shield', 14)),
-    system:  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>',
-    logic:   '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h6l3 14h7M13 5h7"/></svg>',
+    system:  (uiIcon('clock', 14)),
+    logic:   (uiIcon('sliders', 14)),
     // A paper plane: something leaves BMM for somewhere else.
-    notify:  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></svg>',
+    notify:  (uiIcon('send', 14)),
     ai:      (uiIcon('ai', 14)),
+    nav:     (uiIcon('map', 14)),
 };
 
 // Clean inline X icon for delete buttons (replaces the raw ✕ glyph).
 const SCHED_X = (uiIcon('close', 12));
 // One icon per step kind — used by the head tiles, the add-chips and the pickers.
 const KIND_ICON: Record<string, string> = {
-    action:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>',
-    if:      '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3v6a6 6 0 0 0 6 6h6M14 9l4 3-4 3"/></svg>',
-    repeat:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2.1 21 6l-4 3.9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 21.9 3 18l4-3.9"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>',
-    waitFor: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5l3 2"/></svg>',
-    delay:   '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6.5" y="4.5" width="4" height="15" rx="1.2"/><rect x="13.5" y="4.5" width="4" height="15" rx="1.2"/></svg>',
-    forEach: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="7" height="5" rx="1"/><rect x="3" y="15" width="7" height="5" rx="1"/><path d="M14 6.5h7M14 17.5h7M14 12h7"/></svg>',
-    switch:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v5"/><path d="M12 8 5 13v8M12 8l7 5v8"/></svg>',
+    action:  (uiIcon('play', 12)),
+    if:      (uiIcon('git-branch', 12)),
+    repeat:  (uiIcon('refresh', 12)),
+    waitFor: (uiIcon('clock', 12)),
+    delay:   (uiIcon('pause', 12)),
+    forEach: (uiIcon('list', 12)),
+    switch:  (uiIcon('list-ordered', 12)),
     try:     (uiIcon('warning', 12)),
     // Two lines running side by side, then meeting: the whole idea of the step.
-    parallel: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v3"/><path d="M12 6H6v6"/><path d="M12 6h6v6"/><path d="M6 12v3"/><path d="M18 12v3"/><path d="M6 15h12"/><path d="M12 15v6"/></svg>',
+    parallel: (uiIcon('layers', 12)),
     // A circular arrow with a small warning break: try again, because it went wrong.
     retry:   (uiIcon('reapply', 12)),
-    ensure:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 12a8.5 8.5 0 1 1-2.9-6.4"/><path d="M8.5 12.2l2.7 2.7L21 5.5"/></svg>',
-    signal:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>',
+    ensure:  (uiIcon('shield-check', 12)),
+    signal:  (uiIcon('stop', 12)),
     // A box with an arrow going into it — the body lives elsewhere and is brought in here.
-    call:    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5V16"/><path d="M13 12H2M6 8.5 2.5 12 6 15.5"/></svg>',
+    call:    (uiIcon('link', 12)),
 };
 /** Kind-coloured icon tile that opens every step head (the visual anchor). */
 function _kindTile(kind: string): string {
@@ -9012,6 +9686,27 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'discord.send', label: 'Send a Discord message', needs: 'discordHook', group: 'notify' },
     { v: 'slack.send', label: 'Send a Slack message', needs: 'slackHook', group: 'notify' },
     { v: 'feed.publish', label: 'Add an entry to a feed (RSS/Atom)', needs: 'feedPublish', group: 'notify' },
+    // Upkeep (sched-maint.ts). Each measures before it acts and takes `dryRun` to only measure.
+    { v: 'repos.checkFollowed', label: 'Check the repos you follow (and sync)', needs: 'reposCheck', group: 'repo' },
+    { v: 'catalog.updates', label: 'Check, download or install catalogue updates', needs: 'catUpdates', group: 'repo' },
+    { v: 'repo.server', label: 'Start or stop the repo server', needs: 'repoServer', group: 'repo' },
+    { v: 'mods.verifyIntegrity', label: 'Verify mod integrity', needs: 'integrity', group: 'mods' },
+    { v: 'cache.clean', label: 'Clean BMM caches', needs: 'cacheClean', group: 'system' },
+    { v: 'logs.rotate', label: 'Rotate task logs and old session reports', needs: 'logsRotate', group: 'system' },
+    { v: 'disk.report', label: 'Disk usage report', needs: 'diskReport', group: 'perf' },
+    // The catalogue's single door (catalogs/catalog-actions.ts), as a task: never applied.
+    { v: 'catalog.install', label: 'Install one catalogue item', needs: 'catInstall', group: 'repo' },
+    // Any route of the local API, through the API itself: its own checks apply.
+    { v: 'api.call', label: 'Call the local API', needs: 'apiCall', group: 'system' },
+    // Navigation (sched-nav.ts, allow-lists in sched-nav-model.ts). Only modal and click act.
+    { v: 'nav.page', label: 'Open a page (and a tab)', needs: 'navPage', group: 'nav' },
+    { v: 'nav.settingsCard', label: 'Open a Settings card', needs: 'navCard', group: 'nav' },
+    { v: 'nav.item', label: 'Open a profile, mod, modpack, repo, plugin or app', needs: 'navItem', group: 'nav' },
+    { v: 'nav.highlight', label: 'Point at something on screen', needs: 'navTarget', group: 'nav' },
+    { v: 'nav.waitFor', label: 'Wait until something is on screen', needs: 'navWait', group: 'nav' },
+    { v: 'nav.message', label: 'Show a message on screen', needs: 'navMessage', group: 'nav' },
+    { v: 'nav.modal', label: 'Open a dialog', needs: 'navModal', group: 'nav' },
+    { v: 'nav.click', label: 'Click a named control', needs: 'navClick', group: 'nav' },
 ];
 
 /**
@@ -9655,6 +10350,15 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
             <span class="sched-cmd-hint">${escHtml(t('sched.mp.delHint'))}</span>
         </div>`;
         host.querySelector('.sched-p')?.addEventListener('change', (e) => { params.id = (e.target as HTMLSelectElement).value; });
+    }
+    // The upkeep and navigation steps: their forms live in sched-forms.ts, shared with the task
+    // builder of Plugins & API so a step is written with the same pickers in both places.
+    else if (needs === 'navPage' || needs === 'navCard' || needs === 'navItem' || needs === 'navTarget'
+        || needs === 'navWait' || needs === 'navMessage' || needs === 'navModal' || needs === 'navClick'
+        || needs === 'reposCheck' || needs === 'catUpdates' || needs === 'integrity' || needs === 'cacheClean'
+        || needs === 'logsRotate' || needs === 'diskReport' || needs === 'repoServer'
+        || needs === 'catInstall' || needs === 'apiCall') {
+        renderUpkeepForm(host, needs, params, { profiles: _profiles, mods: _mods, modpacks: _modpacks, apps: _apps });
     }
     else if (needs === 'viewPick') {
         // The screens come from the navbar rather than a list written here: a list here goes
@@ -11514,6 +12218,20 @@ const VALUE_SOURCES = [
     // is genuinely empty are the same empty string, and a task cannot tell "not there" from
     // "there and blank".
     'map.size', 'map.hit',
+    // The upkeep steps (sched-maint.ts): what each one found, so a task can branch on it —
+    // « if a followed repo has updates, tell me », « if the caches weigh more than 2 GB, clean ».
+    'repos.checked', 'repos.updates', 'repos.errors',
+    'catalog.updates', 'catalog.done', 'catalog.skipped',
+    'integrity.checked', 'integrity.problems',
+    'cache.bytes', 'cache.freed',
+    'logs.rotated', 'logs.deleted', 'logs.freed',
+    'disk.used_gb', 'disk.profiles',
+    'server.running',
+    // The catalogue's single door, and the local API.
+    'catalog.installed', 'api.status', 'api.ok',
+    // Whether the last navigation step found what it was pointed at (1/0), for a step told to
+    // carry on when its target is missing.
+    'nav.ok',
 ];
 function conditionEditor(cond: Condition): HTMLElement {
     const el = document.createElement('div');
@@ -12558,11 +13276,11 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
                             ? (t('sched.pc.on') || 'Fetch this one again')
                             : (t('sched.pc.offit') || 'Keep it listed but stop fetching it'))}">${
                         s.state === 'off'
-                            ? SVG16('<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>')
-                            : SVG16('<path d="M10.7 5.1A10.9 10.9 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-2.2 3.1"/><path d="M6.6 6.6A17 17 0 0 0 2 12s3.5 7 10 7a10.9 10.9 0 0 0 4.2-.8"/><path d="m2 2 20 20"/>')
+                            ? SVG16('eye')
+                            : SVG16('eye-off')
                     }</button>
                     <button class="sched-pc-drop" data-url="${escAttr(s.url)}"
-                        data-tooltip="${escAttr(t('sched.pc.unfollow') || 'Stop following this catalogue')}">${SVG16('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>')}</button>`}
+                        data-tooltip="${escAttr(t('sched.pc.unfollow') || 'Stop following this catalogue')}">${SVG16('close')}</button>`}
                 </div>
                 <div class="sched-pc-src-url" title="${escAttr(s.url)}">${esc(s.url)}</div>
                 ${(() => {
@@ -12598,7 +13316,7 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
                 ? (t('sched.pc.emptyHelp') || 'Nothing is wrong — they simply have no automations in them. Follow another address on the left.')
                 : (t('sched.pc.downHelp') || 'Each source on the left says what happened. A server being down is not something you can fix from here; a wrong address is.');
             return `<div class="sched-pc-blank">
-                <div class="sched-pc-blank-icon">${SVG16('<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>')}</div>
+                <div class="sched-pc-blank-icon">${SVG16('info')}</div>
                 <b>${esc(title)}</b>
                 <p>${esc(body)}</p>
                 <button class="btn btn-sm btn-secondary" id="sched-pc-retry">${esc(t('sched.pc.retry') || 'Try again')}</button>
@@ -12630,7 +13348,7 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
             <div class="modal-header">
                 <div style="display:flex;align-items:center;gap:12px;">
                     <div class="bms-icon">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                        ${uiIcon('clock', 18)}
                     </div>
                     <div>
                         <h2 class="modal-title">${esc(t('sched.pc.title') || 'Automations from a catalogue')}</h2>
@@ -12654,7 +13372,7 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
                          one and there is nothing to host and no address to keep alive. -->
                     <button class="btn btn-sm btn-ghost sched-pc-publish" id="sched-pc-openbundle"
                             data-tooltip="${escAttr(t('sched.pc.bundleTip') || 'Follow a catalogue that came as a single file — it carries its own automations')}">
-                        ${SVG16('<path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/>')}
+                        ${SVG16('archive')}
                         <span>${esc(t('sched.pc.openBundle') || 'Open a bundle file…')}</span>
                     </button>
                     <!-- Publishing lives beside following, because they are the two halves of
@@ -12662,7 +13380,7 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
                          writer makes a format look closed even when it is not. -->
                     <button class="btn btn-sm btn-ghost sched-pc-publish" id="sched-pc-publish"
                             data-tooltip="${escAttr(t('sched.tcb.tip') || 'Write a folder of your own automations plus a catalog.json — drop it on GitHub and follow it from anywhere')}">
-                        ${SVG16('<path d="M12 21V11"/><path d="m8 15 4-4 4 4"/><path d="M4.4 15.3A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.4 8.3"/>')}
+                        ${SVG16('upload')}
                         <span>${esc(t('sched.tcb.open') || 'Publish my own…')}</span>
                     </button>
                     <!-- Where following says what happened. A toast was the only feedback, and
@@ -12703,7 +13421,7 @@ function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): v
 
     function wire(): void {
         wireSourceAccess('pc', (m, k) => toast(m, k === 'warning' ? 'warning' : 'success'),
-            () => { (document.getElementById('nav-settings') as HTMLElement | null)?.click(); setTimeout(() => document.getElementById('settings-identity-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250); },
+            () => { openKeyManager(); },
             () => (document.getElementById('sched-pc-url') as HTMLInputElement | null)?.value?.trim() || '');
         overlay.querySelector('#sched-pc-close')?.addEventListener('click', close);
         overlay.querySelector('#sched-pc-refresh')?.addEventListener('click', () => { void reload(); });

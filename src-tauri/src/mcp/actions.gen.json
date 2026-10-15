@@ -719,6 +719,108 @@
       "label": "Add an entry to a feed (RSS/Atom)",
       "needs": "feedPublish",
       "group": "notify"
+    },
+    {
+      "type": "repos.checkFollowed",
+      "label": "Check the repos you follow (and sync)",
+      "needs": "reposCheck",
+      "group": "repo"
+    },
+    {
+      "type": "catalog.updates",
+      "label": "Check, download or install catalogue updates",
+      "needs": "catUpdates",
+      "group": "repo"
+    },
+    {
+      "type": "repo.server",
+      "label": "Start or stop the repo server",
+      "needs": "repoServer",
+      "group": "repo"
+    },
+    {
+      "type": "mods.verifyIntegrity",
+      "label": "Verify mod integrity",
+      "needs": "integrity",
+      "group": "mods"
+    },
+    {
+      "type": "cache.clean",
+      "label": "Clean BMM caches",
+      "needs": "cacheClean",
+      "group": "system"
+    },
+    {
+      "type": "logs.rotate",
+      "label": "Rotate task logs and old session reports",
+      "needs": "logsRotate",
+      "group": "system"
+    },
+    {
+      "type": "disk.report",
+      "label": "Disk usage report",
+      "needs": "diskReport",
+      "group": "perf"
+    },
+    {
+      "type": "catalog.install",
+      "label": "Install one catalogue item",
+      "needs": "catInstall",
+      "group": "repo"
+    },
+    {
+      "type": "api.call",
+      "label": "Call the local API",
+      "needs": "apiCall",
+      "group": "system"
+    },
+    {
+      "type": "nav.page",
+      "label": "Open a page (and a tab)",
+      "needs": "navPage",
+      "group": "nav"
+    },
+    {
+      "type": "nav.settingsCard",
+      "label": "Open a Settings card",
+      "needs": "navCard",
+      "group": "nav"
+    },
+    {
+      "type": "nav.item",
+      "label": "Open a profile, mod, modpack, repo, plugin or app",
+      "needs": "navItem",
+      "group": "nav"
+    },
+    {
+      "type": "nav.highlight",
+      "label": "Point at something on screen",
+      "needs": "navTarget",
+      "group": "nav"
+    },
+    {
+      "type": "nav.waitFor",
+      "label": "Wait until something is on screen",
+      "needs": "navWait",
+      "group": "nav"
+    },
+    {
+      "type": "nav.message",
+      "label": "Show a message on screen",
+      "needs": "navMessage",
+      "group": "nav"
+    },
+    {
+      "type": "nav.modal",
+      "label": "Open a dialog",
+      "needs": "navModal",
+      "group": "nav"
+    },
+    {
+      "type": "nav.click",
+      "label": "Click a named control",
+      "needs": "navClick",
+      "group": "nav"
     }
   ]
 }

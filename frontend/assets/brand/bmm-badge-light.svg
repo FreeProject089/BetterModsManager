@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-labelledby="t">
+  <!-- Compact « BMM » mark for a LIGHT background: the default accent tile, 7 px
+       corners, and the ink made for it. Outlined from Bricolage Grotesque ExtraBold (SIL OFL 1.1, frontend/assets/fonts/bricolage-grotesque/OFL.txt), so it renders without the font installed.
+       In the app the tile takes the theme's accent (index.html .bmm-badge). -->
+  <title id="t">Better Mod Manager</title>
+  <rect width="48" height="48" rx="7" fill="#1d4ed8"/>
+  <path fill="#ffffff" d="M4.3 29.3V18.74H8.86Q9.86 18.74 10.65 18.91Q11.44 19.08 12 19.42Q12.56 19.76 12.86 20.3Q13.15 20.84 13.15 21.57Q13.15 22.2 12.89 22.66Q12.62 23.12 12.06 23.41Q11.5 23.7 10.58 23.8V24.07Q12.11 24.16 12.85 24.8Q13.58 25.44 13.58 26.53Q13.58 27.46 13.09 28.07Q12.59 28.68 11.63 28.99Q10.67 29.3 9.26 29.3ZM6.77 27.25H9.17Q10.14 27.25 10.61 26.97Q11.07 26.69 11.07 26.08Q11.07 25.41 10.51 25.08Q9.95 24.74 8.8 24.74H6.77ZM6.77 23.17H8.45Q9.58 23.17 10.11 22.86Q10.64 22.55 10.64 21.92Q10.64 21.32 10.15 21.04Q9.66 20.76 8.67 20.76H6.77ZM15.38 29.3V18.74H19.23L21.98 26.34H22.06L24.75 18.74H28.43V29.3H26L26.14 21.36H25.97L22.91 29.3H20.8L17.81 21.36H17.63L17.78 29.3ZM30.66 29.3V18.74H34.51L37.26 26.34H37.34L40.03 18.74H43.71V29.3H41.28L41.42 21.36H41.25L38.19 29.3H36.08L33.09 21.36H32.91L33.06 29.3Z"/>
+</svg>

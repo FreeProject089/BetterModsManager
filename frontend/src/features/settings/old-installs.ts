@@ -421,16 +421,13 @@ export function mountOldInstallsCard(): HTMLElement | null {
     card.id = CARD_ID;
 
     const h3 = el('h3', 'card-title');
-    h3.style.display = 'flex';
-    h3.style.alignItems = 'center';
-    h3.style.gap = '10px';
     h3.insertAdjacentHTML('afterbegin', uiIcon('archive', 16));
     const title = el('span', '', t('oldInstalls.cardTitle'));
     title.setAttribute('data-i18n', 'oldInstalls.cardTitle');
     h3.appendChild(title);
     card.appendChild(h3);
 
-    const lede = el('p', 'oi-card-lede', t('oldInstalls.cardLede'));
+    const lede = el('p', 'stg-help oi-card-lede', t('oldInstalls.cardLede'));
     lede.setAttribute('data-i18n', 'oldInstalls.cardLede');
     card.appendChild(lede);
     const status = el('div', 'oi-card-status');
@@ -438,7 +435,7 @@ export function mountOldInstallsCard(): HTMLElement | null {
     card.appendChild(status);
     card.appendChild(el('ul', 'oi-card-list'));
 
-    const actions = el('div', 'oi-card-actions');
+    const actions = el('div', 'stg-foot oi-card-actions');
     const scanBtn = button('btn btn-secondary btn-sm', t('oldInstalls.scanAgain'), () => void scanFromCard(scanBtn));
     scanBtn.setAttribute('data-i18n', 'oldInstalls.scanAgain');
     const review = button('btn btn-primary btn-sm oi-review', t('oldInstalls.review'), () => {
@@ -446,10 +443,10 @@ export function mountOldInstallsCard(): HTMLElement | null {
     });
     review.setAttribute('data-i18n', 'oldInstalls.review');
     actions.append(scanBtn, review);
-    card.appendChild(actions);
 
-    const sw = el('div', 'oi-card-switch');
-    const swText = el('div', 'oi-grow', t('oldInstalls.offerAtStartup'));
+    const rows = el('div', 'set-rows oi-card-rows');
+    const sw = el('div', 'set-row oi-card-switch');
+    const swText = el('div', 'set-row-title oi-grow', t('oldInstalls.offerAtStartup'));
     swText.setAttribute('data-i18n', 'oldInstalls.offerAtStartup');
     const lab = el('label', 'bmm-switch');
     const input = el('input', 'oi-offer-switch');
@@ -466,7 +463,9 @@ export function mountOldInstallsCard(): HTMLElement | null {
     track.appendChild(el('span', 'bmm-switch-thumb'));
     lab.append(input, track);
     sw.append(swText, lab);
-    card.appendChild(sw);
+    rows.appendChild(sw);
+    card.appendChild(rows);
+    card.appendChild(actions);
 
     parent.appendChild(card);
     renderCard();

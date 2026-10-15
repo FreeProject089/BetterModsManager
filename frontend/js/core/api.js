@@ -165,6 +165,16 @@ function activityStart(command, args) {
         return null;
     }
 }
+const _listeners = new Set();
+export function addInvokeListener(fn) { _listeners.add(fn); return () => { _listeners.delete(fn); }; }
+function notifyListeners(command, args, result) {
+    for (const fn of _listeners) {
+        try {
+            fn(command, args, result);
+        }
+        catch { /* a listener never breaks a call */ }
+    }
+}
 export async function invoke(command, args = {}, opts) {
     if (!_invoke) {
         // Early boot call before loadTauri() finished — wait for the bridge (max 5s) instead
@@ -184,6 +194,8 @@ export async function invoke(command, args = {}, opts) {
         const duration = Math.round(performance.now() - startTime);
         debugHub.recordIPC(command, args, 'success', res, duration);
         observe(command, args, true, res, duration);
+        if (_listeners.size)
+            notifyListeners(command, args, res);
         if (_act) {
             try {
                 _act(true, res);

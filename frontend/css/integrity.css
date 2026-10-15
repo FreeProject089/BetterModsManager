@@ -40,21 +40,9 @@
 .shc-pill.is-missing { border-color: color-mix(in srgb, var(--bmm-warning) 40%, var(--bmm-border)); background: var(--bmm-warning-dim); color: var(--shc-warn-ink); }
 .shc-pill.is-zero { opacity: .55; }
 
-/* ── The settings card ──────────────────────────────────────────────────────────────────── */
-.sha-card { display: flex; flex-direction: column; gap: 16px; }
-.sha-card-head { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
-.sha-card-ic { display: grid; place-items: center; width: 38px; height: 38px; flex: none; border-radius: 10px; border: 1px solid var(--bmm-border-accent); background: var(--bmm-accent-dim); color: var(--shc-accent-ink); }
-.sha-card-titles { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.sha-card-titles .card-title { margin: 0; }
-.sha-card-lead { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--bmm-text-secondary); }
+/* ── The settings card: the shared card anatomy is in css/settings-page.css ────────────────── */
 .sha-card-summary { display: flex; flex-wrap: wrap; gap: 6px; }
 .sha-card-summary[hidden] { display: none; }
-.sha-card-opts { display: flex; flex-direction: column; border: 1px solid var(--bmm-border); border-radius: 10px; background: var(--bmm-s02); }
-.sha-card-opt { display: flex; align-items: center; gap: 12px; padding: 12px 14px; min-width: 0; }
-.sha-card-opt + .sha-card-opt { border-top: 1px solid var(--bmm-border); }
-.sha-card-opt-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; cursor: pointer; }
-.sha-card-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.sha-card-actions .btn { display: inline-flex; align-items: center; gap: 6px; }
 
 /* ── The dialog ─────────────────────────────────────────────────────────────────────────── */
 .shc { display: flex; flex-direction: column; gap: 14px; min-width: 0; }

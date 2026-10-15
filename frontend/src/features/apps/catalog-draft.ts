@@ -72,6 +72,14 @@ export function entryProblems(app: any, say: Say): EntryProblem[] {
     const id = String(app?.id || '').trim();
     if (!id) {
         out.push({ key: 'apps.create.pbNoId', field: 'id', text: say('apps.create.pbNoId', 'An entry has no id.') });
+    } else if (!/^[A-Za-z0-9._-]+$/.test(id)) {
+        // The id names the install folder (<apps folder>/<id>) and the install record, and the
+        // link installer refuses anything else (link_guard.rs › app_id_ok). A space or a slash
+        // parses here and fails later, on somebody else's machine.
+        out.push({
+            key: 'apps.create.pbBadId', field: 'id',
+            text: say('apps.create.pbBadId', '{id}: use only letters, digits, dot, dash and underscore in an id.').replace('{id}', id),
+        });
     }
     if (!String(app?.title || '').trim()) {
         out.push({

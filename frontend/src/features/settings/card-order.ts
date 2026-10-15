@@ -7,6 +7,7 @@
 
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
+import { uiIcon } from '../../ui/icons.js';
 
 const ORDER_KEY = 'bmm_settings_card_order';
 /** Cards the user took off the page (keys). Search still finds them; the layout code does not
@@ -39,29 +40,33 @@ export const LAYOUT_EVENT = 'bmm:settings-layout';
  * in one group on the page and another in the index. `label` is an i18n key.
  */
 export const SETTINGS_GROUPS: { id: string; label: string; keys: string[] }[] = [
+    // Inside a group, the card people open most comes first (Oct 2026 pass): a theme is changed
+    // far more often than the language, a tag created far more often than an index published.
     { id: 'look', label: 'settings.group.look', keys: [
-        'k:settings.language',
         'k:themes.settingsTitle',
-        'settings-graphics-card',
+        'k:settings.language',
         'k:settings.taskyTitle',
+        'settings-graphics-card',
         'k:settings.shortcutsTitle',
     ] },
     { id: 'library', label: 'settings.group.library', keys: [
         'settings-scan-updates-card',
-        'settings-sha-card',
         'k:settings.tagsTitle',
         'settings-catalog-index-card',
+        'settings-sha-card',
     ] },
     { id: 'automation', label: 'settings.group.automation', keys: [
-        'settings-scheduler-section',
         'settings-launchpack-section',
-        'settings-identity-card',
+        'settings-scheduler-section',
     ] },
     { id: 'performance', label: 'settings.group.performance', keys: [
         'settings-storage-section',
         'settings-benchmark-section',
     ] },
+    // The accounts BMM talks to, and its own identity (the local API token, the signing keys):
+    // Identity sat under Automation, where nobody looked for a token.
     { id: 'accounts', label: 'settings.group.accounts', keys: [
+        'settings-identity-card',
         'k:settings.githubPatTitle',
         'settings-discord-rpc-card',
     ] },
@@ -71,20 +76,19 @@ export const SETTINGS_GROUPS: { id: string; label: string; keys: string[] }[] = 
     { id: 'privacy', label: 'settings.group.privacy', keys: [
         'settings-privacy-section',
         'settings-ai-section',
-        'settings-watcher-section',
         'settings-security-section',
         'settings-security-card',
     ] },
-    // The app looking after itself. Debug stays last but for feedback, which was already
-    // after it when it was unlisted.
+    // The app looking after itself: updates and backups first, the diagnostics after (the
+    // session recorder is a diagnostic tool, beside the crash reports), debug last.
     { id: 'app', label: 'settings.group.app', keys: [
         'settings-auto-update-card',
-        'settings-old-installs-card',
         'k:settings.dataTitle',
-        'k:settings.crashTitle',
-        'k:betahub.cardTitle',
-        'debug-menu-card',
+        'settings-old-installs-card',
         'settings-feedback-card',
+        'k:settings.crashTitle',
+        'settings-watcher-section',
+        'debug-menu-card',
     ] },
 ];
 
@@ -231,7 +235,7 @@ function makeDraggable(card: HTMLElement, index: number): void {
     handle.className = 'card-drag-handle';
     handle.type = 'button';
     handle.title = t('cardorder.drag') || 'Drag to reorder';
-    handle.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>`;
+    handle.innerHTML = uiIcon('grip', 14);
     card.appendChild(handle);
 
     // In Edit mode the WHOLE card is the drag handle (pointerdown anywhere on it
@@ -304,7 +308,7 @@ function renderToolbar(): void {
     bar.id = 'cardorder-bar';
     bar.className = 'cardorder-bar';
     bar.innerHTML = `
-        <span class="cardorder-hint">⇅ ${t('cardorder.hintEdit') || 'Turn on Edit layout, then drag cards to reorder'}</span>
+        <span class="cardorder-hint">${uiIcon('grip', 14)}${t('cardorder.hintEdit') || 'Turn on Edit layout, then drag cards to reorder'}</span>
         <div class="cardorder-actions">
             <button class="btn btn-xs btn-ghost" id="cardorder-editbtn">${t('cardorder.edit') || 'Edit layout'}</button>
             <button class="btn btn-xs btn-ghost" id="cardorder-navbar">${t('navedit.title') || 'Customize navigation'}</button>

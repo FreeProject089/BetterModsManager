@@ -188,12 +188,12 @@ pub async fn resolve_checked(u: &reqwest::Url, allow_lan: bool) -> Result<Vec<So
 }
 
 /// The code the frontend translates, with the reason after a bar: `sched.net.refused|private`.
-fn refusal_text(why: &str) -> String {
+pub(crate) fn refusal_text(why: &str) -> String {
     format!("sched.net.refused|{why}")
 }
 
 /// A reqwest error, without the URL it would otherwise carry (the URL can be the secret).
-fn clean_err(e: reqwest::Error) -> String {
+pub(crate) fn clean_err(e: reqwest::Error) -> String {
     if e.is_timeout() {
         return "sched.net.timeout".to_string();
     }
@@ -206,7 +206,7 @@ fn clean_err(e: reqwest::Error) -> String {
 /// One client per request, pinned to the addresses that were checked, with no proxy and no
 /// automatic redirects. Building a client is cheap next to a TLS handshake, and a shared one
 /// could not be pinned per host.
-fn pinned_client(u: &reqwest::Url, addrs: &[SocketAddr], timeout: Duration) -> Result<reqwest::Client, String> {
+pub(crate) fn pinned_client(u: &reqwest::Url, addrs: &[SocketAddr], timeout: Duration) -> Result<reqwest::Client, String> {
     let mut b = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .no_proxy()

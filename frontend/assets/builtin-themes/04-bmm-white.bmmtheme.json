@@ -3,6 +3,7 @@
   "name": "Daylight",
   "author": "BMM Team",
   "description": "A clean, flat light interface — light-grey canvas, crisp white cards, dark text.",
+  "brand": { "mark": "logo" },
   "mode": "light",
   "vars": {
     "--bmm-bg-base": "#f5f6f8",

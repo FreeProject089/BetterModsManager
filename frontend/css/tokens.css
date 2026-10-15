@@ -62,6 +62,16 @@
     --bmm-brand-better: #9ca3af;   /* neutral, legible on dark and light */
     --bmm-brand-mm:     #f59e0b;   /* fixed brand amber */
     --bmm-brand-mm-2:   #fbbf24;   /* lighter amber for the wordmark gradient */
+    /* The sidebar wordmark is one SVG (index.html, .bmm-wordmark) with two inks: the pair
+       above on a dark theme, this pair on a light one (body.bmm-theme-light), where the grey
+       and the amber above fall to about 2:1 on a white sidebar. Same hues, darker: 7.6:1 and
+       5:1 on white. A theme that needs its own ink sets --bmm-wordmark-better / -mm (and
+       --bmm-wordmark-highlight for a band behind "Mod.Manager"); nothing defines those by
+       default, so every theme, custom ones included, gets the ink for its mode. */
+    --bmm-brand-better-light: #4b5563;
+    --bmm-brand-mm-light:     #b45309;
+    --bmm-brand-mm-glow:      rgba(245, 158, 11, 0.3);   /* the halo behind "Mod.Manager", dark themes only */
+    --bmm-brand-font:         'Bricolage Grotesque', 'Inter', 'Segoe UI', system-ui, sans-serif;   /* bundled (main.css @font-face); fixed: a wordmark does not follow the theme font */
 
     /* ── Diagrams (Help & other interactive flowcharts) ──────────────────── */
     --bmm-diagram-node:        var(--bmm-bg-elevated);   /* node fill — follows theme */

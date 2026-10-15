@@ -3,6 +3,7 @@
   "name": "BMM Logo",
   "author": "BMM Team",
   "description": "The colours of the BMM logo: its pale grey canvas, ink-black shapes and signal yellow. The logo itself replaces Tasky everywhere the mascot appears.",
+  "brand": { "mark": "logo" },
   "mode": "light",
   "vars": {
     "--bmm-bg-base": "#ececec",
@@ -23,6 +24,9 @@
     "--bmm-btn-primary-text": "#1a1a1a",
     "--bmm-brand-better": "#1a1a1a",
     "--bmm-brand-mm": "#1a1a1a",
+    "--bmm-wordmark-better": "#1a1a1a",
+    "--bmm-wordmark-mm": "#1a1a1a",
+    "--bmm-wordmark-highlight": "rgba(255,204,0,0.9)",
     "--bmm-cyan": "#0e7490",
     "--bmm-success": "#15803d",
     "--bmm-warning": "#a16207",
@@ -51,8 +55,5 @@
     "--bmm-tasky-bubble-text": "#1a1a1a",
     "--bmm-tasky-bubble-border": "rgba(255,204,0,0.75)"
   },
-  "assets": {
-    "mascot": "assets/brand/bmm-logo.svg"
-  },
-  "global_css": ".brand-modmanager{text-shadow:none;background:linear-gradient(transparent 58%,rgba(255,204,0,0.9) 58%,rgba(255,204,0,0.9) 90%,transparent 90%);padding:0 3px}\n.btn-primary{font-weight:700}\n::selection{background:rgba(255,204,0,0.55);color:#1a1a1a}\n.nav-item.active,.nav-item.active .nav-label,.nav-item.active .nav-icon,.nav-badge.show{color:var(--bmm-text-primary)}\n.lm-link,.lm-label{color:#6b5000}"
+  "global_css": ".btn-primary{font-weight:700}\n::selection{background:rgba(255,204,0,0.55);color:#1a1a1a}\n.nav-item.active,.nav-item.active .nav-label,.nav-item.active .nav-icon,.nav-badge.show{color:var(--bmm-text-primary)}\n.lm-link,.lm-label{color:#6b5000}"
 }

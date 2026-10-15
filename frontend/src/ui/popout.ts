@@ -42,6 +42,9 @@ export interface PopoutSpec {
     /** Whether dragging the header out of the window pops it out right now (default: yes).
      *  For a panel whose header only drags in one of its modes. */
     dragOut?: () => boolean;
+    /** The panel is back in BMM's window (however the pop-out went away), for a panel that
+     *  has to place itself again (the tutorial guide re-docks where the reader had it). */
+    restored?: () => void;
 }
 
 interface Live {
@@ -204,6 +207,7 @@ function restore(id: string): void {
     if (L.htmlTimer !== null) clearTimeout(L.htmlTimer);
     if (L.themeTimer !== null) clearTimeout(L.themeTimer);
     L.panel.classList.remove(HIDDEN);
+    try { L.spec.restored?.(); } catch (e) { console.warn('[popout] restored', e); }
 }
 
 function wireClosed(): void {

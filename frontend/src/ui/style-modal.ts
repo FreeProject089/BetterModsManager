@@ -17,6 +17,7 @@ import {
 } from '../features/themes/theme-engine.js';
 import { openModal, type ModalHandle } from './modal-shell.js';
 import { raiseAboveAll } from './layer.js';
+import { goToSettings as openSettingsAt } from '../core/settings-link.js';
 
 const OVERLAY_ID = 'bmm-style-modal';
 let _handle: ModalHandle | null = null;
@@ -86,10 +87,7 @@ function afterClose(): void {
 /** Jump to the settings view and, if an anchor is given, bring that card into view. */
 function goToSettings(anchorId?: string): void {
     closeStyleModal();
-    (document.querySelector('.nav-item[data-view="settings"]') as HTMLElement | null)?.click();
-    if (anchorId) setTimeout(() => {
-        document.getElementById(anchorId)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 250);
+    openSettingsAt(anchorId);
 }
 
 export function openStyleModal(onClose?: () => void): void {

@@ -412,7 +412,7 @@ async function refreshModTree(force = false): Promise<void> {
             lastModFolderPath = null;
             container.innerHTML = `
                 <div class="empty-hint error" style="color:var(--danger);text-align:center;padding:20px;">
-                    <div style="font-size:22px;margin-bottom:8px;">📂</div>
+                    <div style="margin-bottom:8px;color:var(--text-muted)">${uiIcon('open-folder', 24)}</div>
                     <strong>${t('mapper.modFolderMissing') || 'Mod folder not found'}</strong><br>
                     <span style="font-size:11px;color:var(--text-muted);display:block;margin-top:6px;">
                         ${t('mapper.modFolderMissingHint') || 'This mod\'s folder was moved or deleted externally. Rescan mods to update the list.'}
@@ -863,7 +863,7 @@ async function renderTree(nodes: FileTreeNode[], container: HTMLElement, isModSi
                     item.style.opacity = '1';
                     item.classList.add('expanded');
                     const iconBox = item.querySelector('.tree-item-icon');
-                    if (iconBox) iconBox.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v2"></path><path d="M2 11h20"></path></svg>`;
+                    if (iconBox) iconBox.innerHTML = `${uiIcon('open-folder', 14)}`;
                 } else {
                     childrenContainer.style.display = 'none';
                     if (chevron) chevron.style.transform = 'rotate(-90deg)';

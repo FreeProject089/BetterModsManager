@@ -4,8 +4,8 @@
 > Schedule BMM actions (one-time or recurring) — activate a mod, modpack, profile… with
 > conditions (if/else), your own scripts and external programs. Tasks run while BMM is open.
 
-Reachable from [Plugins & API](doc-page:features/plugins). This is the part of BMM that does things without
-you driving it.
+In [Plugins & API](doc-page:features/plugins), tab **Automations**. This is the part of BMM that does things
+without you driving it.
 
 !!! warning "By default, BMM has to be running"
 
@@ -159,7 +159,7 @@ timer and starts being useful. Conditions:
 
 ### 3. Action — what
 
-There are ~120 actions across ten groups:
+There are ~137 actions across eleven groups:
 
 | Group | A few of the actions |
 |---|---|
@@ -218,7 +218,7 @@ had no way to be expressed.
 
 ## Permissions
 
-Each task grants nine things separately, and each says what it unlocks:
+Each task grants ten things separately, and each says what it unlocks:
 
 | Grant | What it allows |
 |---|---|
@@ -231,8 +231,9 @@ Each task grants nine things separately, and each says what it unlocks:
 | **Other tasks** | Run, start or switch on another of your tasks (*Run another scheduled task*, *Start another task without waiting*, *Arm or disarm another task*) |
 | **Network** | Send webhooks and Discord or Slack messages, and read a feed for the `rss` trigger — http(s) only, never a private address unless the step allows the local network ([below](#telling-the-outside-world-webhooks-discord-slack-feeds)) |
 | **Laya (AI)** | Ask Laya on this PC: every `ai.*` step (sort a text, tag a mod, check the library, label crashes…) and the `aiAvailable` condition ([below](#laya-in-a-task)) |
+| **Navigate and click** | Open a listed dialog or press a listed control on BMM's screens (`nav.modal`, `nav.click`, [below](#navigating-bmm-from-a-task)). Showing a page, a card or a message needs nothing |
 
-All nine are off until you turn them on, and a step whose permission is missing fails with a
+All ten are off until you turn them on, and a step whose permission is missing fails with a
 message naming the one to grant — it never runs quietly.
 
 **Delete things** is the odd one out. Four of the others are about reaching *outside* BMM; this
@@ -1452,6 +1453,89 @@ You can type one by hand anywhere a path goes. It is resolved when the step runs
     would be right about half the time, which is worse than nothing, because a task writing
     into the wrong profile's mods folder does not fail. Those packs are still reachable by id
     through the modpack actions.
+
+## Automations in Plugins & API
+
+Scheduled tasks live in **Plugins & API → Automations**. The card in Settings that used to hold
+them now has one button that takes you there, so an old habit still finds its way.
+
+The tab is one place for everything about an automation:
+
+- the list of tasks, with what runs now, each task's trigger, next run and last runs;
+- **New automation**, which opens the editor (blocks, code or flow — the same task);
+- **Templates**, the gallery of ready-made tasks, which opens the chosen one in the editor;
+- **Files…** — import, export, inspect a `.bmmpa`, follow or publish a catalogue of automations.
+
+The editor is the one builder. What you write there is saved as a task that runs in BMM, or
+**exported** (the *Export* button in its head) three ways:
+
+| Export | What you get |
+|---|---|
+| **Automation file** (`.bmmpa`) | Signed; imported **disabled** with every permission off. A plugin can ship it (Plugins & API → Create → Automations). |
+| **BMMScript** (`.bmmscript`) | The task as text, readable and editable; it opens back as blocks. |
+| **Script** (PowerShell, CMD, Python, Node…) | A script that runs **outside** BMM, written by the script engine of Plugins & API. It reaches BMM through `bmm://` links and the local API, and reads the API token from the `BMM_TOKEN` variable — the token is never written in the file. |
+
+A script has no trigger, no permissions and no access to BMM's conditions, so a step it cannot
+carry (a condition, a loop, a navigation step, an upkeep step) is written as a **comment** naming
+the step, and the export dialog lists them before you save. Nothing is dropped silently.
+
+## Navigating BMM from a task
+
+The **Navigate BMM** group moves the view, precisely, and can point at things:
+
+| Step | What it does | Permission |
+|---|---|---|
+| `nav.page` | Opens a page, and a tab inside it (`tab/section` for a tab in a tab) | none |
+| `nav.settingsCard` | Scrolls Settings to a card, unfolds it and lights it up | none |
+| `nav.item` | Opens a profile, mod, modpack, followed repo, plugin or app by id and points at its card | none |
+| `nav.highlight` | Brings an element into view and rings it, with a caption | none |
+| `nav.waitFor` | Waits until an element is on screen, up to a timeout | none |
+| `nav.message` | Shows a card with a title and a text, near an element or at the bottom; can wait for **OK** | none |
+| `nav.modal` | Opens one of the **listed** dialogs (Tools, Storage, Integrity, Graphics, saved repos…) through its own opener | **Navigate and click** |
+| `nav.click` | Presses one of the **listed** controls (check for updates, verify integrity, reload a catalogue…) | **Navigate and click** |
+
+Highlighting and waiting take a listed control's name or any selector: they only look. Clicking
+takes a listed control and nothing else, and the element is checked again at the moment of the
+click — a field, a consent, a credential form or anything that reads like a delete is refused,
+even if the list says otherwise. A step told to carry on when its target is missing leaves
+`{nav.ok}` at 0.
+
+## Upkeep steps
+
+| Step | What it does | Dry run measures |
+|---|---|---|
+| `repos.checkFollowed` | Reads the repos you follow. *Only tell me*, *ask me then show me where*, or *sync as each repo is set to follow* | the updates waiting |
+| `catalog.updates` | New versions of the apps and plugins **you tick**: tell, download (to the task's `downloads/` folder) or download and install | the new versions |
+| `catalog.install` | One catalogue item by id, through the catalogue's own rules: https and a published SHA-256, a plugin arrives disabled, a theme is never applied | — |
+| `mods.verifyIntegrity` | The game folder against the active mods, or each mod against its hashes | — (reads only) |
+| `cache.clean` | Empties the chosen caches once they weigh more than a threshold; crash archives are opt-in | the size it would free |
+| `logs.rotate` | Task logs past a size become `.1.log`; old copies and session reports go; crash reports stay | what it would rotate and remove |
+| `disk.report` | Every profile, its backups and the heaviest mods, written as `disk-usage.md` | — (reads only) |
+| `repo.server` | Starts or stops the built-in repo server | whether it would start or stop |
+
+Downloads are https only, verified against the catalogue's SHA-256 as they arrive, and land in
+the task's own folder under a safe name; a mismatch deletes the partial file. An app whose
+payload is an installer is downloaded, never installed: its wizard needs you.
+
+## Calling the local API
+
+`api.call` sends any route of the local API, picked from its reference (the same list as
+Plugins & API → API): the method and path are filled in, and a body skeleton with the route's
+required fields. The call goes **through the API server**, so the route's own validation applies.
+The status lands in `{api.status}` and `{api.ok}`, the first 4 000 characters of the answer in
+`{api.body}`. It needs **Fire deeplinks** (a route reaches whatever the app exposes), and the
+local API must be on.
+
+## Dry run and preview
+
+**Dry run**, in the editor's head and on each template, lists every step in the order it runs:
+whether it shows, reads, changes, deletes, reaches the network or acts outside BMM, whether it
+may not run (inside a branch or a loop), and which permission it still lacks. The upkeep steps
+that can measure without acting are run with `dryRun` and show their answer. Nothing else runs.
+
+**Preview navigation** then plays the navigation steps for real, with a bar at the top: pages,
+tabs, cards and items open and light up; a dialog is announced instead of opened; a click is a
+dashed ring with *would click* under it. Escape or **Stop** ends it.
 
 ## Two smaller things
 

@@ -18,6 +18,7 @@ import { toast } from './app.js';
 import { fetchSourceText } from '../core/source-fetch.js';
 import { fetchCatalogText, asLegacy } from '../core/catalog-read.js';
 import { importCustomTutorialText, signatureLabel } from './tutorial-custom.js';
+import { openKeyManager } from '../core/settings-link.js';
 
 const STORE = 'bmm.tutorialCatalogs';
 
@@ -152,9 +153,7 @@ export async function openTutorialCatalog(onInstalled: () => void): Promise<void
             },
         },
         manageKeys: () => {
-            (document.getElementById('nav-settings') as HTMLElement | null)?.click();
-            setTimeout(() => document.getElementById('settings-identity-card')
-                ?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
+            openKeyManager();
         },
     });
 }

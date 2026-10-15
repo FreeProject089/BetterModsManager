@@ -110,8 +110,6 @@ export const CSS_BASELINE = {
     'launch-deck.css .ld-hosted.modal': 'the deck hosted INSIDE another surface (no overlay): a panel, not a dialog',
     'launch-deck.css .ld-hosted .modal-body': 'same hosted deck',
     'launch-deck.css .ld-hosted .modal-footer': 'same hosted deck',
-    'main.css .i18n-overlay-active .modal': 'Translation Sandbox pick mode: the dialog outlines itself while you pick on screen',
-    'main.css body.i18nsb-docked #modal-i18n-sandbox .modal': 'Translation Sandbox docked as a side panel',
     'mapper.css .modal-large .modal-body': 'the mapper borrows the confirm as its large preview (modals.ts resets it)',
     'mapper.css .modal-large .modal.glass': 'same borrowed preview',
 };

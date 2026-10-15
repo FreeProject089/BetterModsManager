@@ -199,6 +199,10 @@ Each card has a status line: how many permissions the plugin asks for, with the 
 among them, and **vX available** when its catalogue has a newer version that was not
 installed automatically (auto-update off, or no checksum).
 
+Auto-update is **off** until you switch it on for a plugin, in its menu. A catalogue proposes a
+newer version; it never installs one on its own. An update keeps the plugin enabled or
+disabled as you left it.
+
 ## What a plugin is, on disk
 
 A plugin is a folder with a manifest. Nothing is compiled, nothing is installed into BMM — you

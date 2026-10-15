@@ -271,7 +271,7 @@ function render() {
             : (t('community.serverDown') || 'BetterCommunity is not reachable right now — the server may be down or updating. Everything else in BMM keeps working.');
         bodyHtml = `<div class="community-empty">
       <div class="kit-callout ${offline ? 'kit-callout-info' : 'kit-callout-warning'}" style="max-width:520px;margin:0 auto 14px;text-align:left">
-        <span class="kit-callout-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span>
+        <span class="kit-callout-icon">${uiIcon('info', 16)}</span>
         <div class="kit-callout-body">${escHtml(msg)}</div>
       </div>
       <button class="btn btn-secondary" id="community-retry">${escHtml(t('community.retry') || 'Retry')}</button></div>`;
@@ -309,7 +309,7 @@ function render() {
           ${escHtml(t('community.openWeb') || 'Open website')}
         </button>
         <button class="btn btn-secondary" id="community-refresh" data-tooltip="${escAttr(t('community.refresh') || 'Refresh')}">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          ${uiIcon('refresh', 16)}
         </button>
         ${learnMore('community')}
       </div>
@@ -510,7 +510,7 @@ function edition(list) {
 // `tags` is null while there is no feed (loading, offline, server down): the control is then
 // shown disabled on "All" rather than removed, so the toolbar does not change shape when the
 // posts arrive.
-const ALL_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 2 10 5-10 5L2 7Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>';
+const ALL_ICON = uiIcon('layers', 14);
 function tagLabel(label) { return label ?? t('community.filter.community'); }
 function tagCount(n) { return n === 1 ? t('community.filter.countOne') : t('community.filter.count', { n: String(n) }); }
 // The tag's mark, at dropdown size. A bundled logo or the page's own icon when there is one;
@@ -654,7 +654,7 @@ async function openPost(slug) {
     _view.innerHTML = `
     <div class="community-article">
       <button class="btn btn-secondary community-back">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        ${uiIcon('arrow-left', 16)}
         ${escHtml(t('community.back') || 'Back')}
       </button>
       ${post.cover ? `<div class="community-article-cover" style="background-image:url('${escAttr(absUrl(post.cover))}')"></div>` : ''}
@@ -663,13 +663,13 @@ async function openPost(slug) {
       <div class="community-article-meta">
         ${authorsHtml}
         <span>·</span>
-        <button class="community-article-date" data-tooltip="${escAttr(t('community.viewHistory') || 'View edit history')}">${escHtml(fmtDate(post.publishedAt))}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.55;margin-left:4px;vertical-align:-1px" aria-hidden="true"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg></button>
+        <button class="community-article-date" data-tooltip="${escAttr(t('community.viewHistory') || 'View edit history')}">${escHtml(fmtDate(post.publishedAt))}${uiIcon('history', 12, { style: 'opacity:.55;margin-left:4px;vertical-align:-1px' })}</button>
       </div>
       ${untranslated}
       <div class="community-article-body md-body">${absMedia(renderMarkdown(body, { baseUrl: bcRoot() }))}</div>
       ${reactions}
       <div class="community-article-footer">
-        ${post.commentsPublic ? `<button class="btn btn-secondary community-open-comments">💬 ${escHtml(t('community.comments') || 'Comments')}</button>` : ''}
+        ${post.commentsPublic ? `<button class="btn btn-secondary community-open-comments">${uiIcon('message', 14)} ${escHtml(t('community.comments') || 'Comments')}</button>` : ''}
         <button class="btn btn-secondary community-open-post-web">${escHtml(t('community.openWeb') || 'Open on website')}</button>
       </div>
     </div>`;
@@ -857,7 +857,7 @@ async function openComments(postId) {
       <div class="community-comment-head">${contribAvatar({ displayName: c.author?.name, avatar: c.author?.avatar }, 24)}
         <span class="community-comment-name">${escHtml(c.author?.name || '')}</span>
         <span class="community-comment-time">${escHtml(fmtDate(c.createdAt))}${c.edited ? ' · <button class="community-comment-hist" data-cid="' + escAttr(c.id) + '">' + escHtml(L.edited) + '</button>' : ''}</span>
-        ${c.resolved ? `<span class="community-comment-resolved">✓ ${escHtml(L.resolved)}</span>` : ''}</div>
+        ${c.resolved ? `<span class="community-comment-resolved">${uiIcon('check', 12, { style: 'vertical-align:-2px' })} ${escHtml(L.resolved)}</span>` : ''}</div>
       ${c.anchor && !isReply ? `<div class="community-comment-anchor"># ${escHtml(c.anchor)}</div>` : ''}
       <div class="community-comment-body md-body">${absMedia(renderMarkdown(c.body || '', { baseUrl: bcRoot() }))}</div>
     </div>`;

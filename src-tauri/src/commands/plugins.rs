@@ -156,7 +156,7 @@ pub async fn install_plugin(
     ticket.add_bytes(bytes.len() as u64, 0);
     let manifest = extract_plugin_zip(&bytes, &plugins_dir, Some(&ticket))?;
 
-    let installed = InstalledPlugin {
+    let mut installed = InstalledPlugin {
         install_dir: plugins_dir.join(&manifest.id).to_string_lossy().to_string(),
         icon_path: {
             let icon = plugins_dir.join(&manifest.id).join("icon.png");
@@ -173,6 +173,10 @@ pub async fn install_plugin(
 
     {
         let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        // An UPDATE keeps the on/off the user chose. A catalogue update (opt-in auto-update
+        // or the Update button) re-enabling a plugin somebody had switched off would be the
+        // catalogue activating something on its own.
+        installed.enabled = keep_enabled_on_update(&data.installed_plugins, &manifest.id);
         data.installed_plugins
             .retain(|p| p.manifest.id != manifest.id);
         data.installed_plugins.push(installed.clone());
@@ -180,6 +184,16 @@ pub async fn install_plugin(
     let _ = state.save();
     log_line(format!("[PLUGINS] Installed plugin '{}'", manifest.id));
     Ok(installed)
+}
+
+/// The `enabled` flag for a plugin being (re)installed from a catalogue: a first install is on
+/// (the user pressed Install), an update keeps whatever the installed copy had.
+pub fn keep_enabled_on_update(installed: &[InstalledPlugin], id: &str) -> bool {
+    installed
+        .iter()
+        .find(|p| p.manifest.id == id)
+        .map(|p| p.enabled)
+        .unwrap_or(true)
 }
 
 #[tauri::command]
@@ -3321,5 +3335,28 @@ mod duplicate_copy_tests {
         assert!(!dst.join("scripts/link.bat").exists());
         assert!(dst.join("bundle/cfg/keep.ini").is_file());
         assert!(!dst.join("bundle/cfg/out").exists(), "a link inside a folder is skipped");
+    }
+}
+
+#[cfg(test)]
+mod keep_enabled_tests {
+    use super::keep_enabled_on_update;
+    use crate::models::plugin::InstalledPlugin;
+
+    fn plugin(id: &str, enabled: bool) -> InstalledPlugin {
+        serde_json::from_value(serde_json::json!({
+            "manifest": { "id": id, "name": id },
+            "installed_at": "2026-10-15T00:00:00Z",
+            "enabled": enabled,
+        }))
+        .expect("an installed plugin")
+    }
+
+    #[test]
+    fn an_update_never_switches_a_plugin_back_on() {
+        let list = vec![plugin("off-one", false), plugin("on-one", true)];
+        assert!(!keep_enabled_on_update(&list, "off-one"), "a catalogue update must not re-enable a plugin the user switched off");
+        assert!(keep_enabled_on_update(&list, "on-one"));
+        assert!(keep_enabled_on_update(&list, "new-one"), "a first install from the Install button is on");
     }
 }

@@ -25,13 +25,14 @@ import { escHtml } from '../../core/utils.js';
 import { fmtBytes, pct } from './ai-model.js';
 import { ensureAiCss, reasonText } from './ai-shared.js';
 import { featureWord, tuningAreaWord } from './laya-words.js';
+import { uiIcon } from '../../ui/icons.js';
 
 interface Call { seq: number; at: number; feature: string; provider: string; ms: number; questions: number; ok: boolean; error?: string | null; decision?: string | null; abstained?: boolean | null; uncertain?: boolean | null }
 interface Area { area: string; own?: boolean; tuning?: { preset?: string; threshold?: number; margin?: number; temperature?: number; abstain?: string; top_k?: number } }
 type Tone = 'ok' | 'warn' | 'bad' | 'off' | 'info';
 
 /** The section's tab icon (inline SVG, as the registry expects). */
-const ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>';
+const ICON = uiIcon('ai', 14);
 
 /** The benchmark's fixed sample: never the user's text, always the same, so runs compare. */
 const BENCH_TEXT = 'The game crashes on startup after I enabled two texture mods.';

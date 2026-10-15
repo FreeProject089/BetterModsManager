@@ -18,6 +18,8 @@ import { learnMore } from '../../core/learn-more.js';
 import { uiIcon } from '../../ui/icons.js';
 import { isNewerVersion } from './app-version.js';
 import { isV2SignedFeed, ensureFeedKeys } from '../../core/catalog-read.js';
+import { registerCatalogInstaller } from '../catalogs/catalog-actions.js';
+import { openKeyManager } from '../../core/settings-link.js';
 
 // Renders a labelled, fully-visible (wrapping) + copyable hash block for the
 // checksum warning modals. Inline styles so it works inside the generic confirm
@@ -119,7 +121,7 @@ const IC = {
     trash:    `${uiIcon('delete', 12)}`,
     folder:   `${uiIcon('open-folder', 12)}`,
     star:     `${uiIcon('star', 12)}`,
-    starFill: `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
+    starFill: `${uiIcon('star', 12, { style: 'fill:currentColor' })}`,
     refresh:  `${uiIcon('refresh', 14)}`,
     close:    `${uiIcon('close', 18)}`,
     plus:     `${uiIcon('add', 12)}`,
@@ -130,7 +132,7 @@ const IC = {
     histLaunch:  `${uiIcon('play', 14)}`,
     histRemove:  `${uiIcon('error', 14)}`,
     monitor:  `${uiIcon('monitor', 12)}`,
-    replace:  `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-replace-icon lucide-replace" aria-hidden="true"><path d="M14 4a1 1 0 0 1 1-1"/><path d="M15 10a1 1 0 0 1-1-1"/><path d="M21 4a1 1 0 0 0-1-1"/><path d="M21 9a1 1 0 0 1-1 1"/><path d="m3 7 3 3 3-3"/><path d="M6 10V5a2 2 0 0 1 2-2h2"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>`,
+    replace:  `${uiIcon('replace', 18)}`,
 };
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -186,6 +188,7 @@ function paintAppsCounts(): void {
         const n = counts[el.dataset.appsCount || ''] || 0;
         el.textContent = n ? String(n) : '';
     });
+    paintSourcesButton();
 }
 
 /** Select a tab: state, ARIA and roving tabindex, the toolbar, then the content. */
@@ -236,6 +239,9 @@ function renderShell(view: HTMLElement) {
         </div>
         <div class="pg-head-actions apps-header-right">
           ${learnMore('catalogs')}
+          <!-- Where the list comes from, one click away, with how many answered. In the head, not
+               the filter bar: it is not a filter, and the bar was already full. -->
+          <button type="button" class="btn btn-sm btn-ghost apps-sources-btn" id="apps-sources-btn">${uiIcon('globe', 14)} <span id="apps-sources-label">${escHtml(t('apps.tab.sources'))}</span></button>
           <button type="button" class="btn btn-sm btn-ghost pg-iconbtn" id="apps-btn-reload"
             aria-label="${escAttr(t('apps.reloadCatalog'))}" data-tooltip="${escAttr(t('apps.reloadCatalog'))}">${IC.refresh}</button>
         </div>
@@ -276,6 +282,11 @@ function renderShell(view: HTMLElement) {
         <select class="apps-filter" id="apps-filter-state" aria-label="${escAttr(t('apps.filter.stateAria'))}">
           ${[['all', 'apps.filter.allStates'], ['installed', 'apps.filter.installed'], ['available', 'apps.filter.notInstalled'], ['updates', 'apps.filter.updates']]
             .map(([v, k]) => `<option value="${v}"${_filterState === v ? ' selected' : ''}>${escHtml(t(k))}</option>`).join('')}
+        </select>
+        <!-- Tags: a list, in the bar, with the other filters. They were a row of chips under
+             the bar — one per tag in every followed catalogue, a wall that grew with each source. -->
+        <select class="apps-filter" id="apps-filter-tag" aria-label="${escAttr(t('apps.filter.tagAria'))}" hidden>
+          <option value="all">${escHtml(t('apps.filter.allTags') || 'All tags')}</option>
         </select>
         <select class="apps-filter" id="apps-sort" aria-label="${escAttr(t('apps.sort.aria'))}">
           ${[['default', 'apps.sort.default'], ['name', 'apps.sort.name'], ['name-desc', 'apps.sort.nameDesc'], ['size', 'apps.sort.size']]
@@ -349,7 +360,7 @@ function setupEvents(view: HTMLElement) {
         _searchQ = ''; _filterCat = 'all'; _filterPrice = 'all'; _filterTag = 'all'; _filterState = 'all';
         const s = document.getElementById('apps-search') as HTMLInputElement | null;
         if (s) s.value = '';
-        (['apps-filter-cat', 'apps-filter-price', 'apps-filter-state'] as const).forEach((id) => {
+        (['apps-filter-cat', 'apps-filter-price', 'apps-filter-state', 'apps-filter-tag'] as const).forEach((id) => {
             const el = document.getElementById(id) as HTMLSelectElement | null;
             if (el) { el.value = 'all'; el.dispatchEvent(new Event('change')); }
         });
@@ -375,6 +386,11 @@ function setupEvents(view: HTMLElement) {
         _filterState = (e.target as HTMLSelectElement).value;
         renderBrowse();
     });
+    document.getElementById('apps-filter-tag')?.addEventListener('change', (e) => {
+        _filterTag = (e.target as HTMLSelectElement).value;
+        renderBrowse();
+    });
+    document.getElementById('apps-sources-btn')?.addEventListener('click', () => selectAppsTab('sources'));
     document.getElementById('apps-sort')?.addEventListener('change', (e) => {
         _sort = (e.target as HTMLSelectElement).value;
         renderBrowse();
@@ -580,12 +596,16 @@ function renderBrowse() {
     // with one catalogue missing otherwise reads as that catalogue having no apps.
     if (_failedSources.length && _catalog.length) html += failedSourcesHtml(false);
 
-    if (allTags.length) {
-        html += `<div class="apps-tags-row">
-          <button class="apps-tag-chip${_filterTag === 'all' ? ' active' : ''}" data-tag="all">${t('apps.filter.allTags')||'All tags'}</button>
-          ${allTags.map(tag => `<button class="apps-tag-chip${_filterTag === tag ? ' active' : ''}" data-tag="${escAttr(tag)}">${escHtml(tag)}</button>`).join('')}
-        </div>`;
+    // The tag list follows the catalogue (it changes with every source followed or dropped).
+    const tagSel = document.getElementById('apps-filter-tag') as HTMLSelectElement | null;
+    if (tagSel) {
+        if (_filterTag !== 'all' && !allTags.includes(_filterTag)) _filterTag = 'all';
+        tagSel.innerHTML = `<option value="all">${escHtml(t('apps.filter.allTags') || 'All tags')}</option>`
+            + allTags.map((tag) => `<option value="${escAttr(tag)}"${_filterTag === tag ? ' selected' : ''}>${escHtml(tag)}</option>`).join('');
+        tagSel.value = _filterTag;
+        tagSel.hidden = !allTags.length;
     }
+    paintSourcesButton();
 
     // How many of how many, and a way back to everything when a filter is narrowing it.
     const filtering = !!_searchQ || _filterTag !== 'all' || _filterCat !== 'all' || _filterPrice !== 'all' || _filterState !== 'all';
@@ -618,7 +638,7 @@ function renderBrowse() {
             : appsEmpty('grid', t('apps.emptyBrowse') || 'Catalog is empty', t('apps.emptyBrowseSub'),
                 `<button type="button" class="btn btn-sm btn-secondary" id="apps-empty-sources">${uiIcon('globe', 14)} ${escHtml(t('apps.tab.sources'))}</button>`);
     } else {
-        html += `<div class="apps-grid">${apps.map(renderAppCard).join('')}</div>`;
+        html += `<div class="apps-grid">${apps.map((a) => renderAppCard(a)).join('')}</div>`;
     }
 
     content.innerHTML = html;
@@ -627,13 +647,21 @@ function renderBrowse() {
     content.querySelector('#apps-notice-retry')?.addEventListener('click', () => loadCatalog(true));
     wireFailedSources(content);
 
-    content.querySelectorAll('.apps-tag-chip').forEach(chip => {
-        chip.addEventListener('click', () => {
-            _filterTag = (chip as HTMLElement).dataset.tag || 'all';
-            renderBrowse();
-        });
-    });
     wireAppCards(content);
+}
+
+/** "3 sources" or "3 sources · 1 offline" on the toolbar button that opens the Sources tab. */
+function paintSourcesButton(): void {
+    const label = document.getElementById('apps-sources-label');
+    const btn = document.getElementById('apps-sources-btn');
+    if (!label || !btn) return;
+    const n = _sourceReport.length;
+    const bad = _sourceReport.filter((r) => !r.ok).length;
+    // No report (nothing requested yet, or an older backend): just the name of the tab.
+    label.textContent = !n ? t('apps.tab.sources')
+        : (n === 1 ? t('apps.sourcesBtnOne') : t('apps.sourcesBtn')).replace('{n}', String(n))
+        + (bad ? ` · ${t('apps.sourcesBtnOff').replace('{n}', String(bad))}` : '');
+    btn.classList.toggle('is-warn', bad > 0);
 }
 
 /** Card click opens the details; the buttons in its footer act on their own. */
@@ -735,12 +763,17 @@ function sourceShort(src: string): string {
     return labelFromUrl(s);
 }
 
-function renderAppCard(app: AppEntry) {
-    const installed = !!_state.installed[app.id];
-    const upd = hasUpdate(app);
-    const fav = _state.favorites.includes(app.id);
+/**
+ * One card of the browse grid. `preview` draws an entry of the catalogue being BUILT (Create
+ * tab): as a stranger will see it — not installed, not a favourite, no job — and without the
+ * `data-app-id` the grid wiring and `setJob` look for, so nothing on it acts.
+ */
+function renderAppCard(app: AppEntry, preview = false) {
+    const installed = !preview && !!_state.installed[app.id];
+    const upd = !preview && hasUpdate(app);
+    const fav = !preview && _state.favorites.includes(app.id);
     const thumb = app.images?.thumb;
-    const job = _jobs[app.id];
+    const job = preview ? undefined : _jobs[app.id];
     const busy = !!job && !job.error;
 
     // The trust badge is translated, like its two siblings, and a community entry says so: an
@@ -748,12 +781,12 @@ function renderAppCard(app: AppEntry) {
     // blank as neutral, which is exactly the gap an impersonating catalogue lives in. It shows
     // on an installed card too now; whether the app is installed is the footer's job.
     return `
-    <div class="apps-card${installed?' apps-card-installed':''}${upd?' apps-card-update':''}${busy?' is-busy':''}" data-app-id="${escAttr(app.id)}">
+    <div class="apps-card${installed?' apps-card-installed':''}${upd?' apps-card-update':''}${busy?' is-busy':''}${preview?' is-preview':''}" ${preview ? 'aria-hidden="true"' : `data-app-id="${escAttr(app.id)}"`}>
       <div class="apps-card-thumb">
         <div class="apps-card-thumb-placeholder">${thumbIcon(app.category)}</div>
         ${thumb ? `<img class="apps-card-thumb-img" src="${escAttr(thumb)}" alt="" loading="lazy" data-onerror="hide">` : ''}
         <div class="apps-card-badges">
-          ${app.official ? `<span class="apps-official-badge">✦ ${escHtml(t('apps.badge.official'))}</span>`
+          ${app.official ? `<span class="apps-official-badge">${uiIcon('official', 12)}${escHtml(t('apps.badge.official'))}</span>`
             : app.partner ? `<span class="apps-partner-badge">${escHtml(t('apps.badge.partner'))}</span>`
             : `<span class="apps-community-badge">${escHtml(t('apps.badge.community') || 'Community')}</span>`}
           ${claimChip(app)}
@@ -763,7 +796,7 @@ function renderAppCard(app: AppEntry) {
       <div class="apps-card-body">
         <button type="button" class="apps-card-title apps-card-open" data-tooltip="${escAttr(app.title)}"
           aria-label="${escAttr(t('apps.card.openAria').replace('{name}', app.title))}">${escHtml(app.title)}</button>
-        ${app.source_label ? `<span class="apps-card-source" data-tooltip="${escAttr(app.source_label)}">${escHtml(t('apps.card.from').replace('{source}', sourceShort(app.source_label)))}</span>` : ''}
+        ${app.source_label && !app.official ? `<span class="apps-card-source" data-tooltip="${escAttr(app.source_label)}">${escHtml(t('apps.card.from').replace('{source}', sourceShort(app.source_label)))}</span>` : ''}
         <div class="apps-card-meta">
           <span class="apps-cat-badge apps-cat-${escAttr(app.category)}">${catIconSm(app.category)}${escHtml(catLabel(app.category))}</span>
           ${app.version ? `<span class="apps-version">v${escHtml(app.version)}</span>` : ''}
@@ -790,7 +823,7 @@ function renderAppCard(app: AppEntry) {
         </div>
         <!--apps-card-extra-->
       </div>
-      ${cardFootHtml(app)}
+      ${cardFootHtml(app, preview)}
     </div>`;
 }
 
@@ -803,9 +836,9 @@ function renderAppCard(app: AppEntry) {
  *   running       → a moving bar, what is happening, the button disabled
  *   failed        → what failed, the message, Retry and Dismiss
  */
-function cardFootHtml(app: AppEntry): string {
-    const inst = _state.installed[app.id];
-    const job = _jobs[app.id];
+function cardFootHtml(app: AppEntry, preview = false): string {
+    const inst = preview ? undefined : _state.installed[app.id];
+    const job = preview ? undefined : _jobs[app.id];
     const jobWord = (k: CardJobKind) => t(k === 'install' ? 'apps.state.installing' : k === 'update' ? 'apps.state.updating' : 'apps.state.removing');
     const actionWord = (k: CardJobKind) => t(k === 'install' ? 'apps.install' : k === 'update' ? 'apps.update' : 'apps.uninstall');
 
@@ -991,9 +1024,9 @@ function catLabel(cat: string): string {
 
 /** Small (badge-sized) category icon — drawn at 12px via CSS. */
 function catIconSm(cat: string) {
-    if (cat === 'game') return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="3"/><path d="M7 12h3m-1.5-1.5v3"/><circle cx="16" cy="11" r=".7" fill="currentColor" stroke="none"/><circle cx="18" cy="13" r=".7" fill="currentColor" stroke="none"/></svg>`;
-    if (cat === 'utility') return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>`;
-    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></svg>`;
+    if (cat === 'game') return uiIcon('game', 12);
+    if (cat === 'utility') return uiIcon('wrench', 12);
+    return uiIcon('app', 12);
 }
 
 /**
@@ -1019,13 +1052,13 @@ function claimChip(app: any): string {
         : (t('apps.badge.claimsPartner') || 'claims “partner”');
     const title = (t('apps.badge.claimHint') || 'This catalogue calls itself that. BMM did not — trust comes from where a catalogue is fetched, not from what it says.')
         + (host ? ` (${host})` : '');
-    return `<span class="apps-claim-badge" title="${escAttr(title)}">⚠ ${escHtml(label)}</span>`;
+    return `<span class="apps-claim-badge" title="${escAttr(title)}">${uiIcon('warning', 12)}${escHtml(label)}</span>`;
 }
 
 function thumbIcon(cat: string) {
-    if (cat === 'game') return `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 12h4m-2-2v4"/><circle cx="16" cy="10" r="1" fill="currentColor"/><circle cx="18" cy="12" r="1" fill="currentColor"/></svg>`;
-    if (cat === 'utility') return `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>`;
-    return `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>`;
+    if (cat === 'game') return uiIcon('game', 32);
+    if (cat === 'utility') return uiIcon('wrench', 32);
+    return uiIcon('app', 32);
 }
 
 // ── Shared uninstall flow (used by Installed tab + detail modal) ───────────────
@@ -1380,7 +1413,7 @@ function renderAppCardWithCollMenu(app: AppEntry) {
         <div id="${menuId}" style="display:none;position:absolute;bottom:28px;left:0;background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:4px;z-index:100;min-width:140px">
           ${_collections.map(c => `
           <button class="apps-hist-row" data-add-to-coll="${escAttr(app.id)}" data-coll-target="${escAttr(c.id)}" style="width:100%;text-align:left;border:none;cursor:pointer">
-            ${c.appIds.includes(app.id) ? IC.check : '<svg width="13" height="13" viewBox="0 0 24 24"></svg>'}
+            ${c.appIds.includes(app.id) ? IC.check : '<span style="display:inline-block;width:12px;height:12px" aria-hidden="true"></span>'}
             ${escHtml(c.name)}
           </button>`).join('')}
         </div>
@@ -1528,7 +1561,7 @@ function renderSources() {
     // MANAGE KEYS did nothing. A wire call that runs at the wrong moment fails exactly like a
     // wire call that was never written, and neither says anything.
     wireSourceAccess('apps', (m, k) => toast(m, k === 'warning' ? 'warning' : 'success'),
-        () => { (document.getElementById('nav-settings') as HTMLElement | null)?.click(); setTimeout(() => document.getElementById('settings-identity-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250); },
+        () => { openKeyManager(); },
         () => '');
 
     // The one list (shared with Settings → Catalogue index): official, partner and yours,
@@ -1617,103 +1650,185 @@ let _draftLoaded = false;
 /** The file the app editor is currently offering to pack, while its modal is open. */
 let _pickedFile = '';
 
+/**
+ * The steps of the Create tab, in the order a catalogue is actually made.
+ *
+ * One step on screen at a time. The page used to stack all of it — reopen panel, name, the
+ * entry list, the problem list and two publishing cards — into one long scroll where nothing
+ * said what came first or whether you were done. The stepper says both: where you are, and
+ * whether each step is finished, without blocking anything (it is the author's document).
+ */
+type CrStep = 'info' | 'entries' | 'check' | 'publish';
+const CR_STEPS: CrStep[] = ['info', 'entries', 'check', 'publish'];
+let _crStep: CrStep | '' = '';
+
+/** Per-entry problems, without the "file only" note (that one is information, not a fault). */
+function entryFaults(app: any) {
+    return entryProblems(app, (k, f) => t(k) || f).filter((p) => p.key !== 'apps.create.pbFileOnly');
+}
+
+/** Done, needs attention, or nothing to say yet — for the step rail. */
+function crStepState(step: CrStep, problems: string[]): 'done' | 'warn' | '' {
+    const n = _draft.apps.length;
+    if (step === 'info') return _draft.name.trim() ? 'done' : '';
+    if (step === 'entries') return !n ? '' : _draft.apps.some((a) => entryFaults(a).length) ? 'warn' : 'done';
+    if (step === 'check') return !n ? '' : problems.length ? 'warn' : 'done';
+    return '';
+}
+
+/**
+ * A draft entry as the browse grid would draw it. `renderAppCard` reads the shape the backend
+ * sends, so the fields a half-written entry does not have yet are filled with neutral values.
+ */
+function previewCard(e: Partial<AppEntry>): string {
+    const app: AppEntry = {
+        id: String(e.id || '').trim() || 'preview',
+        title: String(e.title || '').trim() || t('apps.create.pvUntitled'),
+        description: String(e.description || ''),
+        category: e.category || 'utility',
+        price: e.price || 'free',
+        tags: Array.isArray(e.tags) ? e.tags : [],
+        version: e.version,
+        images: e.images,
+        download: { url: '', file_type: 'exe', ...((e.download as any) || {}) },
+        official: false, partner: false,
+    } as AppEntry;
+    return renderAppCard(app, true);
+}
+
 function renderCreate() {
     const content = document.getElementById('apps-content');
     if (!content) return;
     if (!_draftLoaded) { _draftLoaded = true; loadDraft(); }
+    if (!_crStep) _crStep = _draft.apps.length ? 'entries' : 'info';
+    const step = _crStep as CrStep;
     const problems = problemsOf(_draft, (k, f) => t(k) || f);
+    const at = CR_STEPS.indexOf(step);
 
-    content.innerHTML = `
-    <div class="apps-create-wrap">
-      <div class="apps-create-header">
-        <h3>${t('apps.create.title')||'Create a Catalog'}</h3>
-        <p class="apps-sources-desc">${t('apps.create.desc')||'Build a catalog.json to share with others or host on GitHub.'}</p>
-        <!-- Reopening one. The screen could only build from nothing, so publishing a
-             catalogue was a one-way trip: a typo in one entry meant reassembling all of
-             them by hand, each with a URL, a size and a checksum.
-             Folded away: it is how a SECOND session starts, and it was sitting above the
-             first step competing with it for the eye of somebody who has never been here. -->
-        <details class="apps-create-reopen">
-        <summary>${escHtml(t('apps.create.reopen'))}</summary>
-        <div class="apps-create-open">
-          <button class="btn btn-xs btn-secondary" id="cr-open-file">${IC.folder} ${escHtml(t('apps.create.openFile') || 'Open a catalog.json…')}</button>
-          <input class="apps-source-input apps-create-open-url" id="cr-open-url-input" type="text"
-                 placeholder="${escAttr(t('apps.create.openUrlPh') || 'https://…/catalog.json')}">
-          <button class="btn btn-xs btn-ghost" id="cr-open-url">${escHtml(t('apps.create.openUrl') || 'From a URL')}</button>
-          ${_draft.apps.length || _draft.name
-            ? `<button class="btn btn-xs btn-ghost btn-danger-ghost apps-create-clear" id="cr-clear">${escHtml(t('apps.create.clear') || 'Start again')}</button>`
-            : ''}
+    const rail = CR_STEPS.map((s, i) => {
+        const st = crStepState(s, problems);
+        const on = s === step;
+        return `<li class="apps-wiz-step${on ? ' is-on' : ''}${st ? ' is-' + st : ''}">
+          <button type="button" class="apps-wiz-step-btn" data-cr-step="${s}" aria-current="${on ? 'step' : 'false'}">
+            <span class="apps-wiz-step-n" aria-hidden="true">${st === 'done' && !on ? uiIcon('check', 12) : i + 1}</span>
+            <span class="apps-wiz-step-txt">
+              <b>${escHtml(t('apps.create.step.' + s))}</b>
+              <span>${escHtml(crStepSub(s, problems))}</span>
+            </span>
+          </button>
+        </li>`;
+    }).join('');
+
+    let pane = '';
+    if (step === 'info') {
+        pane = `
+        <div class="apps-wiz-pane-h">
+          <h4>${escHtml(t('apps.create.step.info'))}</h4>
+          <p>${escHtml(t('apps.create.infoWhy'))}</p>
         </div>
-        <!-- The same panel the Sources tab has. fetchSourceText already asks for a password
-             when a source turns out to be protected, and already reads ssh:// sources by
-             name — but only the Sources tab let you REGISTER either, so opening your own
-             protected catalogue from here was the one place credentials could not be
-             attached. -->
-        ${sourceAccessHtml('appscreate')}
-        </details>
-      </div>
-
-      <!-- Numbered, because this screen has an order and used to draw four identical
-           panels that did not say so. -->
-      <div class="apps-create-section apps-create-section--fields">
-        <h4 class="apps-cr-step-h"><span>1</span>${escHtml(t('apps.create.stepName'))}</h4>
-        <label class="apps-install-label" for="cr-name">${t('apps.create.catalogName')||'Catalog name'}</label>
-        <input class="apps-path-input" id="cr-name" type="text" placeholder="${escAttr(t('apps.create.namePh'))}" value="${escAttr(_draft.name)}">
-        <label class="apps-install-label apps-cr-gap" for="cr-desc">${t('apps.create.catalogDesc')||'Description'}</label>
-        <input class="apps-path-input" id="cr-desc" type="text" placeholder="${escAttr(t('apps.create.descPh'))}" value="${escAttr(_draft.description)}">
-      </div>
-
-      <div class="apps-create-section">
-        <h4 class="apps-cr-step-h"><span>2</span>${escHtml(t('apps.create.stepApps'))}
-          <span class="apps-cr-step-n">${_draft.apps.length}</span>
-          <button class="btn btn-sm btn-accent apps-cr-step-btn" id="cr-add-app">${IC.plus} ${t('apps.create.addApp')||'Add app'}</button>
-        </h4>
-        <div id="cr-apps-list">
-          ${_draft.apps.map((app, i) => `
-          <div class="apps-create-app-row">
-            <span class="apps-create-app-id">${escHtml(app.id||'untitled')}</span>
-            <span style="color:var(--text-muted);font-size:11px">${escHtml(app.title||'')}</span>
-            <!-- The row said id and title. Auditing your own catalogue meant opening every
-                 entry to see whether it had a URL and a checksum at all. -->
+        <div class="apps-wiz-field">
+          <label class="apps-install-label is-need" for="cr-name">${escHtml(t('apps.create.catalogName') || 'Catalog name')}</label>
+          <input class="apps-path-input" id="cr-name" type="text" placeholder="${escAttr(t('apps.create.namePh'))}" value="${escAttr(_draft.name)}"
+            aria-describedby="cr-name-say" aria-invalid="false">
+          <span class="apps-wiz-say" id="cr-name-say">${escHtml(t('apps.create.nameSay'))}</span>
+        </div>
+        <div class="apps-wiz-field">
+          <label class="apps-install-label" for="cr-desc">${escHtml(t('apps.create.catalogDesc') || 'Description')}</label>
+          <textarea class="apps-path-input apps-cr-ta" id="cr-desc" rows="3" placeholder="${escAttr(t('apps.create.descPh'))}">${escHtml(_draft.description)}</textarea>
+        </div>
+        <!-- Reopening one. Folded away: it is how a SECOND session starts, and it competed with
+             the first step for the eye of somebody who has never been here. -->
+        <details class="apps-create-reopen">
+          <summary>${escHtml(t('apps.create.reopen'))}</summary>
+          <div class="apps-create-open">
+            <button class="btn btn-xs btn-secondary" id="cr-open-file">${IC.folder} ${escHtml(t('apps.create.openFile') || 'Open a catalog.json…')}</button>
+            <input class="apps-source-input apps-create-open-url" id="cr-open-url-input" type="text"
+                   placeholder="${escAttr(t('apps.create.openUrlPh') || 'https://…/catalog.json')}">
+            <button class="btn btn-xs btn-ghost" id="cr-open-url">${escHtml(t('apps.create.openUrl') || 'From a URL')}</button>
+            ${_draft.apps.length || _draft.name
+              ? `<button class="btn btn-xs btn-ghost btn-danger-ghost apps-create-clear" id="cr-clear">${escHtml(t('apps.create.clear') || 'Start again')}</button>`
+              : ''}
+          </div>
+          <!-- fetchSourceText asks for a password when a source is protected and reads ssh://
+               sources by name; this is where those credentials are registered for it. -->
+          ${sourceAccessHtml('appscreate')}
+        </details>`;
+    } else if (step === 'entries') {
+        pane = `
+        <div class="apps-wiz-pane-h apps-wiz-pane-h--row">
+          <div>
+            <h4>${escHtml(t('apps.create.step.entries'))} <span class="apps-cr-step-n">${_draft.apps.length}</span></h4>
+            <p>${escHtml(t('apps.create.entriesWhy'))}</p>
+          </div>
+          <button class="btn btn-sm btn-accent" id="cr-add-app">${IC.plus} ${escHtml(t('apps.create.addApp') || 'Add app')}</button>
+        </div>
+        <div id="cr-apps-list" class="apps-wiz-list">
+          ${_draft.apps.map((app, i) => {
+            const faults = entryFaults(app);
+            return `
+          <div class="apps-create-app-row${faults.length ? ' has-faults' : ''}">
+            <span class="apps-wiz-row-state" aria-hidden="true">${faults.length ? uiIcon('alert', 14) : uiIcon('check', 14)}</span>
+            <span class="apps-wiz-row-main">
+              <b>${escHtml(app.title || t('apps.create.pvUntitled'))}</b>
+              <code class="apps-create-app-id">${escHtml(app.id || '—')}</code>
+            </span>
             <span class="apps-create-app-facts">
               ${app.category ? `<span class="apps-tag">${escHtml(catLabel(app.category))}</span>` : ''}
-              ${app.price ? `<span class="apps-tag">${escHtml(priceLabel(app.price))}</span>` : ''}
               ${((app as any).download?.sha256 || '').trim()
                 ? `<span class="apps-fact-chip apps-fact-sha">${escHtml(t('apps.shaYes') || 'checksum')}</span>`
                 : `<span class="apps-fact-chip apps-fact-nosha">${escHtml(t('apps.shaNo') || 'unverified')}</span>`}
               ${((app as any).download?.url || '').trim()
                 ? httpChip((app as any).download?.url || '')
-                : `<span class="apps-fact-chip apps-fact-bad">${escHtml(t('apps.create.pbNoUrlShort') || 'no URL')}</span>`}
+                : (app as any).src_file
+                  ? `<span class="apps-fact-chip">${escHtml(t('apps.create.pvFile'))}</span>`
+                  : `<span class="apps-fact-chip apps-fact-bad">${escHtml(t('apps.create.pbNoUrlShort') || 'no URL')}</span>`}
             </span>
-            <div style="display:flex;gap:6px;margin-left:auto">
+            <span class="apps-wiz-row-acts">
               <button class="btn btn-xs btn-ghost" data-cr-edit="${i}">${escHtml(t('common.edit') || 'Edit')}</button>
-              <button class="btn btn-xs btn-ghost btn-danger-ghost" data-cr-del="${i}">${IC.trash}</button>
-            </div>
-          </div>`).join('') || `<p style="color:var(--text-muted);font-size:12px">${t('apps.create.noApps')||'No apps yet — click Add app'}</p>`}
+              <button class="btn btn-xs btn-ghost btn-danger-ghost pg-iconbtn" data-cr-del="${i}"
+                aria-label="${escAttr(t('common.delete'))}" data-tooltip="${escAttr(t('common.delete'))}">${IC.trash}</button>
+            </span>
+            ${faults.length ? `<span class="apps-wiz-row-why">${escHtml(faults.map((f) => f.text).join(' · '))}</span>` : ''}
+          </div>`; }).join('') || appsEmpty('grid', t('apps.create.noAppsTitle'), t('apps.create.noAppsSub'), '', true)}
+        </div>`;
+    } else if (step === 'check') {
+        const byEntry = _draft.apps
+            .map((a, i) => ({ a, i, f: entryFaults(a) }))
+            .filter((x) => x.f.length);
+        const dupes = problems.filter((p) => !byEntry.some((x) => x.f.some((f) => f.text === p)));
+        pane = `
+        <div class="apps-wiz-pane-h">
+          <h4>${escHtml(t('apps.create.step.check'))}</h4>
+          <p>${escHtml(t('apps.create.checkWhy'))}</p>
         </div>
-      </div>
-
-      <div class="apps-create-section">
-        <h4 class="apps-cr-step-h"><span>3</span>${escHtml(t('apps.create.stepPublish'))}</h4>
-
-        <!-- Said before the export, not after somebody follows it, and beside the buttons
-             rather than three scroll-lengths above them. Never blocking: it is a document,
-             and a document with a problem in it is still the author's to publish. -->
-        ${problems.length ? `
-        <div class="apps-create-problems">
-          <span class="apps-create-problems-h">${escHtml((t('apps.create.problems') || '{n} thing(s) to look at').replace('{n}', String(problems.length)))}</span>
-          <ul>${problems.map(p => `<li>${escHtml(p)}</li>`).join('')}</ul>
-        </div>` : ''}
-
+        ${!_draft.apps.length
+          ? appsEmpty('grid', t('apps.create.noAppsTitle'), t('apps.create.noAppsSub'), '', true)
+          : problems.length
+          ? `<div class="apps-create-problems" role="status">
+              <span class="apps-create-problems-h">${uiIcon('alert', 14)} ${escHtml((t('apps.create.problems') || '{n} thing(s) to look at').replace('{n}', String(problems.length)))}</span>
+              <ul>
+                ${byEntry.map((x) => `<li><span>${escHtml(x.f.map((f) => f.text).join(' · '))}</span>
+                  <button type="button" class="btn btn-xs btn-secondary" data-cr-edit="${x.i}">${escHtml(t('apps.create.fix'))}</button></li>`).join('')}
+                ${dupes.map((p) => `<li><span>${escHtml(p)}</span></li>`).join('')}
+              </ul>
+            </div>`
+          : `<div class="apps-wiz-ok" role="status">${uiIcon('check', 14)} ${escHtml(t('apps.create.allGood'))}</div>`}
+        ${_draft.apps.length ? `
+        <h5 class="apps-wiz-sub">${escHtml(t('apps.create.pvTitle'))}</h5>
+        <p class="apps-wiz-say">${escHtml(t('apps.create.pvWhy'))}</p>
+        <div class="apps-grid apps-wiz-preview" inert>${_draft.apps.map((a) => previewCard(a)).join('')}</div>` : ''}`;
+    } else {
+        pane = `
+        <div class="apps-wiz-pane-h">
+          <h4>${escHtml(t('apps.create.step.publish'))}</h4>
+          <p>${escHtml(t('apps.create.publishWhy'))}</p>
+        </div>
+        ${problems.length ? `<div class="apps-wiz-note" role="status">${uiIcon('alert', 14)}
+          <span>${escHtml((t('apps.create.problems') || '{n} thing(s) to look at').replace('{n}', String(problems.length)))}</span>
+          <button type="button" class="btn btn-xs btn-ghost" data-cr-step="check">${escHtml(t('apps.create.step.check'))}</button></div>` : ''}
         <!-- Two ways out, and they are NOT peers. One file needs no hosting at all; a
-             catalog.json needs somewhere to live and an address that stays alive. Four
-             buttons of equal weight in a row said nothing about that, so the choice that
-             decides whether you need a web host looked like a choice of file format.
-
-             The difference is carried by a BADGE and by the sentence under each title. It
-             used to be carried by colour — a permanent accent border on the left card and
-             the only accent button on the screen — and a card outlined in blue that nothing
-             ever un-outlines reads as the one you already picked. -->
+             catalog.json needs somewhere to live and an address that stays alive. The
+             difference is carried by a badge and the sentence under each title, not by colour. -->
         <div class="apps-create-ways">
           <div class="apps-create-way">
             <span class="apps-create-way-tag">${escHtml(t('apps.create.waySimplest'))}</span>
@@ -1732,105 +1847,154 @@ function renderCreate() {
               <button class="btn btn-ghost" id="cr-copy">${t('apps.create.copy')||'Copy JSON'}</button>
               <button class="btn btn-ghost" id="cr-preview">${t('apps.create.preview')||'Preview JSON'}</button>
             </div>
-            <!-- Et sur un serveur. Publier un catalogue voulait dire l'enregistrer, ouvrir
-                 l'ecran des depots, y configurer un serveur, puis retrouver le fichier :
-                 SSH etait un transport reserve aux depots alors que c'est le meme geste.
-                 Le panneau est monte par initCatalogSsh(), plus bas. -->
+            <!-- Publier sur un serveur SSH, depuis l'ecran ou on fabrique le catalogue.
+                 Monte par mountSshAction(), plus bas. -->
             <div id="cr-ssh-mount"></div>
           </div>
         </div>
-      </div>
+        <div id="cr-json-preview" class="apps-create-json" style="display:none"></div>`;
+    }
 
-      <div id="cr-json-preview" class="apps-create-json" style="display:none"></div>
+    const prev = at > 0 ? CR_STEPS[at - 1] : '';
+    const next = at < CR_STEPS.length - 1 ? CR_STEPS[at + 1] : '';
+    content.innerHTML = `
+    <div class="apps-create-wrap apps-wiz">
+      <div class="apps-create-header">
+        <h3>${t('apps.create.title')||'Create a Catalog'}</h3>
+        <p class="apps-sources-desc">${t('apps.create.desc')||'Build a catalog.json to share with others or host on GitHub.'}</p>
+      </div>
+      <ol class="apps-wiz-steps" aria-label="${escAttr(t('apps.create.stepsAria'))}">${rail}</ol>
+      <section class="apps-wiz-pane" aria-live="polite">${pane}</section>
+      <div class="apps-wiz-nav">
+        ${prev ? `<button type="button" class="btn btn-ghost" data-cr-step="${prev}">${uiIcon('chevron-left', 14)} ${escHtml(t('apps.create.back'))}</button>` : '<span></span>'}
+        <span class="apps-wiz-nav-at">${escHtml(t('apps.create.stepOf').replace('{n}', String(at + 1)).replace('{total}', String(CR_STEPS.length)))}</span>
+        ${next ? `<button type="button" class="btn btn-accent" data-cr-step="${next}">${escHtml(t('apps.create.next').replace('{step}', t('apps.create.step.' + next)))} ${uiIcon('chevron-right', 14)}</button>` : '<span></span>'}
+      </div>
     </div>
 
-    <!-- App editor sub-modal.
-         NOT apps-modal-sm. That caps it at 480px, and this form holds three sections, two
-         two-column grids and a three-column one — at 480px every column is ~130px and the
-         thing reads as a stack of cramped boxes. -->
+    <!-- App editor sub-modal. Wide: the form and the live card preview sit side by side. -->
     <div class="apps-modal-overlay" id="cr-app-modal" style="z-index:9700">
       <div class="apps-modal apps-cr-modal">
-        <button class="apps-modal-close" id="cr-app-close">${IC.close}</button>
+        <button class="apps-modal-close" id="cr-app-close" aria-label="${escAttr(t('common.close'))}">${IC.close}</button>
         <div class="apps-modal-body" id="cr-app-body"></div>
       </div>
     </div>`;
 
-    // Close sub-modal by clicking backdrop (re-attach each time renderCreate runs since it rebuilds DOM)
-    document.getElementById('cr-app-modal')?.addEventListener('click', e => {
-        if ((e.target as HTMLElement).id === 'cr-app-modal') {
-            document.getElementById('cr-app-modal')!.classList.remove('open');
-        }
+    const close = () => document.getElementById('cr-app-modal')?.classList.remove('open');
+    document.getElementById('cr-app-modal')?.addEventListener('click', (e) => {
+        if ((e.target as HTMLElement).id === 'cr-app-modal') close();
     });
-    document.getElementById('cr-app-close')?.addEventListener('click', () => {
-        document.getElementById('cr-app-modal')!.classList.remove('open');
-    });
+    document.getElementById('cr-app-close')?.addEventListener('click', close);
 
-    wireSourceAccess('appscreate', (m, k) => toast(m, k === 'warning' ? 'warning' : 'success'),
-        () => { (document.getElementById('nav-settings') as HTMLElement | null)?.click(); setTimeout(() => document.getElementById('settings-identity-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250); },
-        () => (document.getElementById('cr-open-url-input') as HTMLInputElement | null)?.value?.trim() || '');
+    // The rail, Back / Next, and every "go to step" link in a pane.
+    content.querySelectorAll<HTMLElement>('[data-cr-step]').forEach((b) => b.addEventListener('click', () => {
+        _crStep = (b.dataset.crStep as CrStep) || 'info';
+        renderCreate();
+        content.querySelector<HTMLElement>('.apps-wiz-step.is-on .apps-wiz-step-btn')?.focus();
+    }));
 
-    // Sync name/desc inputs to draft
-    document.getElementById('cr-name')?.addEventListener('input', e => { _draft.name = (e.target as HTMLInputElement).value; saveDraft(); });
-    document.getElementById('cr-desc')?.addEventListener('input', e => { _draft.description = (e.target as HTMLInputElement).value; saveDraft(); });
-
-    {
-        // The failure carries a KEY, so it reaches the reader in their language rather than
-        // as `apps.create.errNoApps` in both.
-        const blame = (e: unknown) => {
-            const key = String(e).replace(/^Error:\s*/, '').split('|')[0].trim();
-            toast(key.startsWith('apps.create.') ? (t(key) || key) : String(e), 'error', 7000);
-        };
-        const took = (n: number) => {
-            toast((t('apps.create.opened') || 'Opened — {n} app(s)').replace('{n}', String(n)), 'success');
-            renderCreate();
-        };
-        document.getElementById('cr-open-file')?.addEventListener('click', async () => {
-            const picked = await pickFile({ filters: [{ name: 'catalog.json', extensions: ['json'] }] }).catch(() => null);
-            if (!picked) return;
-            try { took(intoDraft(JSON.parse(await invoke('read_file_text', { path: picked }) as string))); }
-            catch (e) { blame(e); }
+    if (step === 'info') wireCreateInfo();
+    if (step === 'entries' || step === 'check') {
+        document.getElementById('cr-add-app')?.addEventListener('click', () => openAppEditor(null));
+        content.querySelectorAll<HTMLElement>('[data-cr-edit]').forEach((btn) => {
+            btn.addEventListener('click', () => openAppEditor(parseInt(btn.dataset.crEdit!)));
         });
-        document.getElementById('cr-open-url')?.addEventListener('click', async () => {
-            const url = (document.getElementById('cr-open-url-input') as HTMLInputElement)?.value.trim() || '';
-            if (!url.startsWith('http')) { toast(t('apps.sources.invalidUrl') || 'Invalid URL', 'error'); return; }
-            try { took(intoDraft(JSON.parse(await fetchSourceText(url)))); }
-            catch (e) { blame(e); }
-        });
-        document.getElementById('cr-clear')?.addEventListener('click', async () => {
-            const ok = await showConfirm(
-                t('apps.create.clear') || 'Start again',
-                (t('apps.create.clearBody') || 'This throws away the draft — {n} entr(ies). Export it first if you want to keep it.').replace('{n}', String(_draft.apps.length)),
-                true,
-            );
-            if (!ok) return;
-            _draft = { name: '', description: '', partner_catalogs: [], community_imports: [], apps: [] };
-            saveDraft();
-            renderCreate();
+        content.querySelectorAll<HTMLElement>('[data-cr-del]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+                const i = parseInt(btn.dataset.crDel!);
+                const a = _draft.apps[i];
+                const ok = await showConfirm(t('apps.create.delTitle'),
+                    t('apps.create.delBody').replace('{name}', String(a?.title || a?.id || '?')), true);
+                if (!ok) return;
+                _draft.apps.splice(i, 1);
+                saveDraft();
+                renderCreate();
+            });
         });
     }
+    if (step === 'publish') wireCreatePublish();
+}
 
-    // Add app
-    document.getElementById('cr-add-app')?.addEventListener('click', () => openAppEditor(null));
+/** The line under each step's name in the rail. */
+function crStepSub(step: CrStep, problems: string[]): string {
+    const n = _draft.apps.length;
+    if (step === 'info') return _draft.name.trim() || t('apps.create.sub.noName');
+    if (step === 'entries') return t(n === 1 ? 'apps.create.sub.oneEntry' : 'apps.create.sub.entries').replace('{n}', String(n));
+    if (step === 'check') return !n ? t('apps.create.sub.nothing') : problems.length
+        ? (t('apps.create.problems') || '{n}').replace('{n}', String(problems.length))
+        : t('apps.create.sub.ready');
+    return t('apps.create.sub.publish');
+}
 
-    // Edit / delete
-    content.querySelectorAll('[data-cr-edit]').forEach(btn => {
-        btn.addEventListener('click', () => openAppEditor(parseInt((btn as HTMLElement).dataset.crEdit!)));
+/** Step 1: name, description, and reopening an existing catalogue. */
+function wireCreateInfo(): void {
+    wireSourceAccess('appscreate', (m, k) => toast(m, k === 'warning' ? 'warning' : 'success'),
+        () => { openKeyManager(); },
+        () => (document.getElementById('cr-open-url-input') as HTMLInputElement | null)?.value?.trim() || '');
+
+    // Inline: the field says what it needs as you type, the rail follows.
+    const nameEl = document.getElementById('cr-name') as HTMLInputElement | null;
+    const nameSay = document.getElementById('cr-name-say');
+    const sayName = (touched: boolean) => {
+        const bad = touched && !(nameEl?.value || '').trim();
+        nameEl?.classList.toggle('is-invalid', bad);
+        nameEl?.setAttribute('aria-invalid', String(bad));
+        if (nameSay) {
+            nameSay.textContent = bad ? t('apps.create.nameNeeded') : t('apps.create.nameSay');
+            nameSay.classList.toggle('is-bad', bad);
+        }
+    };
+    nameEl?.addEventListener('input', () => {
+        _draft.name = nameEl.value; saveDraft(); sayName(true);
+        const sub = document.querySelector<HTMLElement>('.apps-wiz-step-btn[data-cr-step="info"] .apps-wiz-step-txt > span');
+        if (sub) sub.textContent = _draft.name.trim() || t('apps.create.sub.noName');
+        document.querySelector('.apps-wiz-step-btn[data-cr-step="info"]')?.closest('.apps-wiz-step')?.classList.toggle('is-done', !!_draft.name.trim());
     });
-    content.querySelectorAll('[data-cr-del]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const i = parseInt((btn as HTMLElement).dataset.crDel!);
-            _draft.apps.splice(i, 1);
-            saveDraft();
-            renderCreate();
-        });
-    });
+    nameEl?.addEventListener('blur', () => sayName(true));
+    document.getElementById('cr-desc')?.addEventListener('input', (e) => { _draft.description = (e.target as HTMLTextAreaElement).value; saveDraft(); });
 
-    // Preview / copy / download
+    // The failure carries a KEY, so it reaches the reader in their language.
+    const blame = (e: unknown) => {
+        const key = String(e).replace(/^Error:\s*/, '').split('|')[0].trim();
+        toast(key.startsWith('apps.create.') ? (t(key) || key) : String(e), 'error', 7000);
+    };
+    const took = (n: number) => {
+        toast((t('apps.create.opened') || 'Opened — {n} app(s)').replace('{n}', String(n)), 'success');
+        _crStep = 'entries';
+        renderCreate();
+    };
+    document.getElementById('cr-open-file')?.addEventListener('click', async () => {
+        const picked = await pickFile({ filters: [{ name: 'catalog.json', extensions: ['json'] }] }).catch(() => null);
+        if (!picked) return;
+        try { took(intoDraft(JSON.parse(await invoke('read_file_text', { path: picked }) as string))); }
+        catch (e) { blame(e); }
+    });
+    document.getElementById('cr-open-url')?.addEventListener('click', async () => {
+        const url = (document.getElementById('cr-open-url-input') as HTMLInputElement)?.value.trim() || '';
+        if (!url.startsWith('http')) { toast(t('apps.sources.invalidUrl') || 'Invalid URL', 'error'); return; }
+        try { took(intoDraft(JSON.parse(await fetchSourceText(url)))); }
+        catch (e) { blame(e); }
+    });
+    document.getElementById('cr-clear')?.addEventListener('click', async () => {
+        const ok = await showConfirm(
+            t('apps.create.clear') || 'Start again',
+            (t('apps.create.clearBody') || 'This throws away the draft — {n} entr(ies). Export it first if you want to keep it.').replace('{n}', String(_draft.apps.length)),
+            true,
+        );
+        if (!ok) return;
+        _draft = { name: '', description: '', partner_catalogs: [], community_imports: [], apps: [] };
+        saveDraft();
+        _crStep = 'info';
+        renderCreate();
+    });
+}
+
+/** Step 4: the two ways out. */
+function wireCreatePublish(): void {
     document.getElementById('cr-preview')?.addEventListener('click', () => {
         const el = document.getElementById('cr-json-preview')!;
-        const json = buildCatalogJson();
         el.style.display = el.style.display === 'none' ? 'block' : 'none';
-        el.textContent = json;
+        el.textContent = buildCatalogJson();
     });
     document.getElementById('cr-copy')?.addEventListener('click', () => {
         navigator.clipboard.writeText(buildCatalogJson()).then(() => toast(t('apps.create.copied')||'Copied!', 'success'));
@@ -1842,24 +2006,16 @@ function renderCreate() {
         a.download = 'catalog.json';
         a.click();
     });
-
     document.getElementById('cr-bundle')?.addEventListener('click', () => { void publishBundle(); });
-    // Publier le catalogue sur un serveur SSH, depuis l'ecran ou on le fabrique.
-    //
-    // Le meme panneau que les depots : on choisit un serveur configure, on peut viser un
-    // autre dossier pour ce transfert-la, on tape la phrase de passe. `pick: 'file'` parce
-    // que cette carte ne sait pas encore ou le fichier a ete enregistre — c'est la reponse
-    // honnete tant que « telecharger » ouvre une boite de dialogue systeme.
+    // Publier le catalogue sur un serveur SSH, depuis l'ecran ou on le fabrique : le meme
+    // panneau que les depots. `pick: 'file'` parce que cette carte ne sait pas encore ou le
+    // fichier a ete enregistre.
     void import('../repo/ssh-action.js').then((m) => {
         m.mountSshAction(document.getElementById('cr-ssh-mount'), {
             mode: 'publish',
             label: t('sshact.labelCatalog'),
             source: { pick: 'file' },
         });
-    });
-
-    document.getElementById('cr-app-close')?.addEventListener('click', () => {
-        document.getElementById('cr-app-modal')!.classList.remove('open');
     });
 }
 
@@ -1972,6 +2128,10 @@ function openAppEditor(index: number | null) {
     <div class="apps-install-form apps-cr-form">
       <h3 class="apps-install-title">${index !== null ? (t('apps.create.editApp')||'Edit App') : (t('apps.create.addApp')||'Add App')}</h3>
 
+      <!-- The form on the left, the card as people will see it on the right, redrawn as you type. -->
+      <div class="apps-cr-layout">
+      <div class="apps-cr-main">
+
       <!-- Three steps, in the order the answers actually arrive: what it is, where it comes
            from, then how it looks. The last one used to sit in the MIDDLE — ten cosmetic
            fields between the title and the only decision on this screen. -->
@@ -2069,6 +2229,13 @@ function openAppEditor(index: number | null) {
         ${field('extra', t('apps.create.fExtra')||'Extra images (comma-separated URLs)', (existing.images?.extra||[]).join(', '))}
         ${field('md_link', t('apps.create.fMd')||'Documentation URL (md_link)', existing.md_link||'', 'https://github.com/.../README.md')}
       </section>
+      </div>
+      <aside class="apps-cr-aside" aria-label="${escAttr(t('apps.create.pvCard'))}">
+        <span class="apps-cr-aside-h">${escHtml(t('apps.create.pvCard'))}</span>
+        <div class="apps-cr-card" id="cr-card-preview" inert></div>
+        <p class="apps-wiz-say">${escHtml(t('apps.create.pvCardWhy'))}</p>
+      </aside>
+      </div>
 
       <!-- Sticky, and it says what is still missing. Finding that out used to mean saving
            the entry, closing this, and reading a list at the bottom of the page. -->
@@ -2158,8 +2325,34 @@ function openAppEditor(index: number | null) {
     function sayMissing(): void {
         const el = document.getElementById('cr-missing');
         if (!el) return;
-        const probs = entryProblems(draftEntry(), (k, f) => t(k) || f)
+        const entry = draftEntry();
+        const probs = entryProblems(entry, (k, f) => t(k) || f)
             .filter((p) => p.key !== 'apps.create.pbFileOnly');
+        // An id another entry of this catalogue already uses: two entries would fight over
+        // one install record. Said here, while the id is being typed.
+        const eid = String(entry.id || '').trim();
+        if (eid && _draft.apps.some((a, i) => i !== index && String(a?.id || '').trim() === eid)) {
+            probs.push({ key: 'apps.create.pbDupeHere', field: 'id', text: t('apps.create.pbDupeHere') });
+        }
+        // Inline: each field that is part of the problem is marked, with its reason under it.
+        body.querySelectorAll<HTMLElement>('.apps-cr-field-say').forEach((n) => n.remove());
+        for (const f of ['id', 'title', 'dl-url']) {
+            const input = document.getElementById(`cr-${f}`) as HTMLInputElement | null;
+            const mine = probs.filter((p) => p.field === f);
+            // Not before the author has typed anything in it: an empty form is not a mistake.
+            const show = mine.length > 0 && !!input && (input.dataset.touched === '1' || index !== null);
+            input?.classList.toggle('is-invalid', show);
+            input?.setAttribute('aria-invalid', String(show));
+            if (show && input) {
+                const say = document.createElement('span');
+                say.className = 'apps-cr-field-say';
+                say.textContent = mine.map((p) => p.text).join(' · ');
+                input.insertAdjacentElement('afterend', say);
+            }
+        }
+        // The card, as the browse grid will draw it.
+        const pv = document.getElementById('cr-card-preview');
+        if (pv) pv.innerHTML = previewCard(entry);
         // The NAME of the field, not its id. `id, title, dl-url` is what the code calls
         // them; "ID, Titre, URL de téléchargement" is what the person is looking at, and a
         // warning that names things the screen does not is a warning nobody can act on.
@@ -2180,7 +2373,12 @@ function openAppEditor(index: number | null) {
         save?.classList.toggle('btn-accent', probs.length === 0);
         save?.classList.toggle('btn-secondary', probs.length > 0);
     }
-    body.addEventListener('input', sayMissing);
+    body.addEventListener('input', (e) => {
+        const el = e.target as HTMLElement;
+        if (el?.id) el.dataset.touched = '1';
+        sayMissing();
+    });
+    body.addEventListener('change', sayMissing);
     sayMissing();
 
     document.getElementById('cr-app-cancel')?.addEventListener('click', () => {
@@ -2334,9 +2532,8 @@ function openDetailModal(appId: string) {
     const body = document.getElementById('apps-modal-body');
     if (!body) return;
 
-    // Accent color per category
-    const catColor: Record<string,string> = { game:'#3b82f6', utility:'#8b5cf6', other:'#6b7280' };
-    const accent = app.official ? '#f59e0b' : (catColor[app.category] || '#6b7280');
+    // No per-category hex colours: they ignored the theme (unreadable on BMM White) and gave
+    // the primary button a different colour on every entry. The theme's accent, everywhere.
 
     // App initials badge (shown when no image)
     const initials = app.title.replace(/[^a-zA-Z0-9]/g,' ').trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();
@@ -2410,14 +2607,12 @@ function openDetailModal(appId: string) {
           <img class="adm-thumb${i===0?' active':''}" src="${escAttr(img)}" data-src="${escAttr(img)}"
                data-onerror="hide">`).join('')}
         </div>` : ''}
-      </div>` : `<div class="adm-top-bar" style="background:linear-gradient(90deg,${accent}22,transparent)">
-        <div class="adm-color-strip" style="background:${accent}"></div>
-      </div>`}
+      </div>` : ''}
 
       <div class="adm-body">
         <div class="adm-header">
           ${!hasImages ? `
-          <div class="adm-initials-badge" style="background:linear-gradient(135deg,${accent}44,${accent}22);border:1px solid ${accent}44;color:${accent}">
+          <div class="adm-initials-badge" aria-hidden="true">
             ${initials}
           </div>` : ''}
           <div class="adm-title-block">
@@ -2428,7 +2623,7 @@ function openDetailModal(appId: string) {
             <div class="adm-badges">
               <span class="apps-cat-badge apps-cat-${escAttr(app.category)}">${catIconSm(app.category)}${escHtml(catLabel(app.category))}</span>
               ${priceBadge(app.price)}
-              ${app.official ? `<span class="apps-official-badge">✦ ${escHtml(t('apps.badge.official'))}</span>` : ''}
+              ${app.official ? `<span class="apps-official-badge">${uiIcon('official', 12)}${escHtml(t('apps.badge.official'))}</span>` : ''}
               ${app.partner && !app.official ? `<span class="apps-partner-badge">${escHtml(t('apps.badge.partner'))}</span>` : ''}
               ${!app.official && !app.partner ? `<span class="apps-community-badge">${escHtml(t('apps.badge.community') || 'Community')}</span>` : ''}
               ${claimChip(app)}
@@ -2442,12 +2637,12 @@ function openDetailModal(appId: string) {
             ${busy
               // Running: the same words as the card, the button there but disabled.
               ? `<button class="adm-action-btn adm-pick-btn" disabled aria-busy="true"><span class="apps-spinner apps-spinner--xs" aria-hidden="true"></span> ${escHtml(t(job!.kind === 'install' ? 'apps.state.installing' : job!.kind === 'update' ? 'apps.state.updating' : 'apps.state.removing'))}</button>`
-              : `${upd ? `<button class="adm-action-btn" id="adm-update-btn" style="background:${accent}">${IC.download} ${escHtml(t('apps.update'))}</button>` : ''}
+              : `${upd ? `<button class="adm-action-btn adm-action-primary" id="adm-update-btn">${IC.download} ${escHtml(t('apps.update'))}</button>` : ''}
             ${installed
               ? (installed.exe_path
-                  ? `<button class="adm-action-btn${upd ? ' adm-pick-btn' : ''}" id="adm-launch-btn" data-exe="${escAttr(installed.exe_path)}"${upd ? '' : ` style="background:${accent}"`}>${IC.play} ${t('apps.launch')||'Launch'}</button>`
+                  ? `<button class="adm-action-btn${upd ? ' adm-pick-btn' : ' adm-action-primary'}" id="adm-launch-btn" data-exe="${escAttr(installed.exe_path)}">${IC.play} ${t('apps.launch')||'Launch'}</button>`
                   : `<button class="adm-action-btn adm-pick-btn" id="adm-pick-btn">${IC.monitor} ${t('apps.pickExe')||'Set executable'}</button>`)
-              : `<button class="adm-action-btn" id="adm-install-btn" style="background:${accent}">${IC.download} ${t('apps.install')||'Install'}</button>`
+              : `<button class="adm-action-btn adm-action-primary" id="adm-install-btn">${IC.download} ${t('apps.install')||'Install'}</button>`
             }`}
           </div>
         </div>
@@ -2852,6 +3047,48 @@ async function startInstall(app: AppEntry, installPath: string, kind: 'install' 
 }
 
 /**
+ * Install one catalogue app by id, for catalog-actions.ts › catalogInstall.
+ *
+ * A click (`unattended: false`) opens the same install dialog the card's Install button opens:
+ * the person still picks the folder and still reads any warning. A scheduled task or a plugin
+ * (`unattended: true`) cannot read a warning, so it goes through `link_install_app` — https, a
+ * published sha256, no script payloads, enforced in Rust — and anything that would have needed a
+ * yes is refused instead.
+ */
+export async function installCatalogAppFor(id: string, opts: { unattended: boolean; installPath?: string }): Promise<{ ok: boolean; reason?: string; detail?: string; installed?: string }> {
+    if (!_catalog.length) await loadCatalog(true);
+    const app = _catalog.find((a) => a.id === id);
+    if (!app) return { ok: false, reason: 'catalog.act.notFound' };
+    if (!opts.unattended) {
+        openInstallModal(app, _state.installed[id] && hasUpdate(app) ? 'update' : 'install');
+        return { ok: true, installed: id };
+    }
+    const { unattendedRefusal } = await import('../catalogs/catalog-consent.js');
+    const no = unattendedRefusal('app', app);
+    if (no) return { ok: false, reason: no };
+    if ((app as any)._local) return { ok: false, reason: 'catalog.act.needsHttps' };
+    setJob(id, { kind: hasUpdate(app) ? 'update' : 'install', path: opts.installPath || _defaultPath });
+    try {
+        await invoke('link_install_app', {
+            appId: app.id, appTitle: app.title, downloadUrl: app.download.url,
+            fileType: app.download.file_type || 'exe',
+            installPath: opts.installPath || null,
+            sha256: app.download.sha256 || null,
+        });
+        setJob(id, null);
+        await refreshState();
+        repaintAfterJob();
+        return { ok: true, installed: id };
+    } catch (e) {
+        setJob(id, { kind: 'install', path: opts.installPath || _defaultPath, error: String(e) });
+        return { ok: false, reason: 'catalog.act.failed', detail: String(e).slice(0, 300) };
+    }
+}
+
+// The door scheduled tasks and plugins use (catalog-actions.ts › catalogInstall).
+registerCatalogInstaller('app', installCatalogAppFor);
+
+/**
  * After a job ends, redraw what shows install state, but never a tab the user is typing in:
  * a background install finishing must not wipe a half-written catalogue on Create.
  */
@@ -2998,7 +3235,7 @@ function showLauncherPicker(appId: string, exes: { name: string; path: string; s
               return `<label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid rgba(255,255,255,0.08);border-radius:9px;cursor:pointer;background:${i===0?'rgba(6,182,212,0.08)':'rgba(255,255,255,0.02)'};">
                 <input type="radio" name="alp-exe" value="${escAttr(e.path)}" ${i===0?'checked':''} style="accent-color:var(--cyan);">
                 <div style="flex:1;min-width:0;">
-                  <div style="font-size:13px;font-weight:600;color:var(--text-primary);">${escHtml(e.name)} ${i===0?`<span style="font-size:9px;color:var(--cyan);font-weight:800;">★ ${escHtml(t('apps.autoDetected')||'AUTO')}</span>`:''}</div>
+                  <div style="font-size:13px;font-weight:600;color:var(--text-primary);">${escHtml(e.name)} ${i===0?`<span style="font-size:9px;color:var(--cyan);font-weight:800;display:inline-flex;align-items:center;gap:2px;">${uiIcon('star', 12, { style: 'fill:currentColor' })}${escHtml(t('apps.autoDetected')||'AUTO')}</span>`:''}</div>
                   <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">${escHtml(rel)} · ${fmtSize(e.size)} · depth ${depth}</div>
                 </div>
               </label>`;

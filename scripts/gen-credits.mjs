@@ -308,6 +308,16 @@ for (const fam of [...fontUrl.matchAll(/family=([^:&]+)/g)].map((m) => decodeURI
   const d = decl(fam);
   art.push(item('art', { name: fam, version: null, versionOptional: true, license: d?.license, from: d?.from, url: d?.url, source: 'frontend/index.html (Google Fonts)' }));
 }
+// Fonts bundled in the app (frontend/assets/fonts/<family>/, each with its licence file): the
+// folder name is the family, lower-case and hyphenated (bricolage-grotesque → Bricolage Grotesque).
+if (has('frontend/assets/fonts')) {
+  for (const dir of fs.readdirSync(path.join(ROOT, 'frontend/assets/fonts')).sort()) {
+    const fam = dir.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    const d = decl(fam);
+    const files = fs.readdirSync(path.join(ROOT, 'frontend/assets/fonts', dir)).filter((x) => /\.(woff2?|ttf|otf)$/i.test(x));
+    art.push(item('art', { name: fam, version: null, versionOptional: true, license: d?.license, from: d?.from, url: d?.url, source: `frontend/assets/fonts/${dir}/ (bundled: ${files.join(', ')})` }));
+  }
+}
 for (const name of ['lucide', 'simple-icons']) {
   const d = decl(name);
   const count = Object.keys(json(`frontend/assets/icons/${name}.json`)).length;

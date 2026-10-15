@@ -78,6 +78,11 @@ export function mountLearnMoreLinks(): void {
     card('analytics.settingsTitle', learnMore('privacy', end));
     card('settings.securityTitle', learnMore('security', end));
     card('settings.crashTitle', learnMore('troubleshooting', end));
+    // The cards whose help line was cut to one sentence: the detail is in these pages.
+    card('settings.scanUpdatesTitle', learnMore('mods-scan', end));
+    card('settings.dataTitle', learnMore('backups', end));
+    card('settings.identityTitle', learnMore('api', end));
+    card('oldInstalls.cardTitle', learnMore('updates', end));
     card('betahub.cardTitle', learnMore('feedback', end));
     card('security.modal.title', learnMore('security', end));
 }

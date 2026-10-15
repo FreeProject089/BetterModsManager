@@ -27,7 +27,7 @@ export interface PreviewOpts {
 
 const ROW_H = 32;
 const IC = {
-    folder: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>',
+    folder: uiIcon('folder', 14),
     chev: (uiIcon('chevron-right', 12)),
     warn: (uiIcon('warning', 14)),
     search: (uiIcon('search', 14)),

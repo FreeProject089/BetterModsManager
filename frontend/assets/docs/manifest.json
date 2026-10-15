@@ -220,7 +220,7 @@
         "en": "Extend BMM with community plugins and automate actions.",
         "fr": "Étends BMM avec des plugins communautaires et automatise des actions."
       },
-      "words": 3672,
+      "words": 3711,
       "diagrams": 0,
       "fr": true
     },
@@ -235,7 +235,7 @@
         "en": "Schedule BMM actions (one-time or recurring) — activate a mod, modpack, profile… with conditions (if/else), your own scripts and external programs.",
         "fr": "Planifiez des actions BMM (ponctuelles ou récurrentes) — activer un mod, un modpack, un profil… avec conditions (si/sinon), tes propres scripts et des…"
       },
-      "words": 11129,
+      "words": 11660,
       "diagrams": 0,
       "fr": true
     },
@@ -262,10 +262,10 @@
         "fr": "BMMScript — toutes les actions, conditions et valeurs"
       },
       "summary": {
-        "en": "120 actions · 47 conditions · 65 values · 8 loop sources",
-        "fr": "120 actions · 47 conditions · 65 valeurs · 8 sources de boucle"
+        "en": "137 actions · 47 conditions · 85 values · 8 loop sources",
+        "fr": "137 actions · 47 conditions · 85 valeurs · 8 sources de boucle"
       },
-      "words": 568,
+      "words": 635,
       "diagrams": 0,
       "fr": true
     },
@@ -280,7 +280,7 @@
         "en": "Browse & install apps in one click.",
         "fr": "Parcours et installe des apps en un clic."
       },
-      "words": 2259,
+      "words": 2480,
       "diagrams": 0,
       "fr": true
     },
@@ -1030,7 +1030,7 @@
         "en": "Some texts in BMM contain a word between braces, such as {n} or {name}. BMM replaces it with a value when it shows the text: \"{n} new mods added\" becomes « 3…",
         "fr": "Certains textes de BMM contiennent un mot entre accolades, comme {n} ou {name}."
       },
-      "words": 339,
+      "words": 345,
       "diagrams": 0,
       "fr": true
     }

@@ -44,6 +44,7 @@ const PERM_LABEL: Record<string, () => string> = {
     delete: () => t('bms.perm.delete') || 'delete profiles, modpacks and mod folders',
     resources: () => t('sched.permResources') || 'change how hard BMM works',
     tasks: () => t('sched.permTasks') || 'run or switch on other tasks',
+    navigate: () => t('sched.permNavigate'),
 };
 
 interface Compiled { ok: boolean; task?: any; errors?: { line: number; col: number; message: string }[] }

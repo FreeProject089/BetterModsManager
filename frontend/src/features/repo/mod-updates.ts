@@ -13,6 +13,7 @@
 
 import { invoke } from '../../core/api.js';
 import { toast as appToast } from '../../ui/app.js';
+import { openKeyManager } from '../../core/settings-link.js';
 // Grouped under Updates in the notification centre.
 const toast = (message: string, type = 'info', duration = 3000, icon = '', source = 'Updates') => appToast(message, type, duration, icon, source);
 import { t } from '../../core/i18n.js';
@@ -253,7 +254,7 @@ function openUpdatesModal(updates: any[], errors: any[] = [], reDownloadSources:
             <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
                 <div style="min-width:0;">
                     <div style="display:flex;align-items:center;gap:7px;">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;color:var(--bmm-warning)" aria-hidden="true"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+                        ${uiIcon('warning', 14, { style: 'flex-shrink:0;color:var(--bmm-warning)' })}
                         <span style="font-weight:700;font-size:12.5px;color:var(--bmm-warning);">${t('repo.directMaybe') || 'BMM may have detected an update'}</span>
                     </div>
                     <div style="font-weight:600;font-size:13px;color:var(--text-primary);margin-top:5px;">${escHtml(m.name)}</div>
@@ -531,9 +532,7 @@ export function openModUpdateConfig(modId: string): void {
     wireSourceAccess('muc', (m, k) => toast(t(m), k === 'warning' ? 'warning' : 'success'),
         () => {
             close();
-            (document.getElementById('nav-settings') as HTMLElement | null)?.click();
-            setTimeout(() => document.getElementById('settings-identity-card')
-                ?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250);
+            openKeyManager();
         },
         () => (ov.querySelector('#muc-primary-url') as HTMLInputElement | null)?.value?.trim() || '');
 

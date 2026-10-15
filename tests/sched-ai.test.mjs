@@ -129,7 +129,7 @@ describe('the `ai` permission is everywhere a permission is', () => {
   test('an imported task loses it', () => {
     const m = /export function sanitiseImportedTask[\s\S]*?\r?\n}\r?\n/.exec(sched);
     assert.ok(m, 'sanitiseImportedTask not found');
-    assert.match(m[0], /'network', 'ai'\]/, 'RISKY must list ai');
+    assert.match(m[0], /const RISKY = \[[^\]]*'ai'[^\]]*\]/, 'RISKY must list ai');
     assert.match(m[0], /ai: false/, 'the reset perms must turn ai off');
   });
   test('the flow knows the three steps need it', async () => {
@@ -138,6 +138,6 @@ describe('the `ai` permission is everywhere a permission is', () => {
   });
   test('the MCP creation default grants it off', () => {
     const rs = readFileSync(join(ROOT, 'src-tauri/src/mcp/state_bridge.rs'), 'utf8');
-    assert.match(rs, /TASK_PERM_KEYS: \[&str; \d+\] = \[[^\]]*"ai"\]/);
+    assert.match(rs, /TASK_PERM_KEYS: \[&str; \d+\] = \[[^\]]*"ai"[^\]]*\]/);
   });
 });

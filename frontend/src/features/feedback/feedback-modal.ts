@@ -25,7 +25,7 @@ const IC = {
     bug: (uiIcon('bug', 16)),
     bulb: (uiIcon('lightbulb', 16)),
     crash: (uiIcon('warning', 16)),
-    send: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>',
+    send: uiIcon('send', 14),
     image: (uiIcon('image', 12)),
     zip: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M4 22V4a2 2 0 0 1 2-2h8l6 6v12a2 2 0 0 1-2 2Z"/><path d="M10 12v-1"/><path d="M10 18v-2"/><path d="M10 7V6"/></svg>',
     x: (uiIcon('close', 12)),

@@ -28,7 +28,10 @@
 // themes). tests/behaviour-attrs.test.mjs fails when a new document-level listener reads an
 // attribute that is neither on this list nor explicitly classified as harmless there.
 
+import { uiIcon } from '../ui/icons.js';
+
 /** Exact `data-*` names a document-level listener acts on. */
+
 export const UNTRUSTED_DROP_ATTRS: readonly string[] = [
     'data-act', 'data-click-proxy', 'data-close-modal', 'data-remove-closest', 'data-copy',
     'data-toggle-password', 'data-backdrop-close', 'data-toggle-parent', 'data-open-url',
@@ -342,9 +345,9 @@ function bindDomBehaviours(): void {
         void navigator.clipboard.writeText(el.dataset.copy || '').then(() => {
             const flash = el.dataset.copyFlash;
             if (flash === 'tick') {
-                const before = el.textContent;
-                el.textContent = '✓';
-                setTimeout(() => { el.textContent = before; }, 800);
+                const before = el.innerHTML;
+                el.innerHTML = uiIcon('check', 14);
+                setTimeout(() => { el.innerHTML = before; }, 800);
             } else if (flash) {
                 const before = el.style.background;
                 el.style.background = flash;

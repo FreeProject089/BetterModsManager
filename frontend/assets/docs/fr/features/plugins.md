@@ -210,6 +210,10 @@ Chaque carte a une ligne d'état : combien de permissions le plugin demande, ave
 plus élevé parmi elles, et **vX disponible** quand son catalogue a une version plus récente
 qui n'a pas été installée automatiquement (mise à jour auto désactivée, ou pas d'empreinte).
 
+La mise à jour auto est **désactivée** tant que tu ne l'actives pas pour un plugin, dans son
+menu. Un catalogue propose une version plus récente ; il ne l'installe jamais tout seul. Une
+mise à jour laisse le plugin activé ou désactivé comme tu l'avais laissé.
+
 ## Ce qu'est un plugin, sur le disque
 
 Un plugin est un dossier avec un manifeste. Rien n'est compilé, rien n'est installé dans BMM —

@@ -22,7 +22,8 @@ import {
     savePosition, markStepComplete, markStepPartial, getStepStatus,
 } from './tutorial-store.js';
 import type { TutorialDef, TutorialPart, TutorialStep } from './tutorial-types.js';
-import { uiIcon } from './icons.js';
+import { uiIcon, type IconName } from './icons.js';
+import { popoutButtonHtml, wirePopout, closeWindow, isPoppedOut, type PopoutSpec } from './popout.js';
 
 // ── Nav page label / icon map ─────────────────────────────────────────────────
 
@@ -39,15 +40,16 @@ const NAV_LABELS: Record<string, string> = {
 };
 
 const NAV_ICONS: Record<string, string> = {
-    profiles:  `${uiIcon('user', 12)}`,
-    library:   `${uiIcon('book', 12)}`,
-    mapper:    `${uiIcon('map', 12)}`,
-    modpacks:  `${uiIcon('hexagon', 12)}`,
-    modlists:  `${uiIcon('share', 12)}`,
-    repo:      `${uiIcon('network', 12)}`,
-    apps:      `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 9l1-5h16l1 5"/><path d="M5 9v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9"/><path d="M9 13h6"/></svg>`,
-    plugins:   `${uiIcon('tag', 12)}`,
-    settings:  `${uiIcon('settings', 12)}`,
+    // The same glyph the sidebar item wears (index.html .nav-icon), so a hint points at what you see.
+    profiles:  uiIcon('user', 12),
+    library:   uiIcon('library', 12),
+    mapper:    uiIcon('layers', 12),
+    modpacks:  uiIcon('folders', 12),
+    modlists:  uiIcon('clipboard-list', 12),
+    repo:      uiIcon('database', 12),
+    apps:      uiIcon('grid', 12),
+    plugins:   uiIcon('box', 12),
+    settings:  uiIcon('settings', 12),
 };
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -82,10 +84,51 @@ let _isMinimized = false;
 // it, the window moves, not the reader. Where it was put is remembered; where it was moved
 // to dodge a target is not, so the next lesson opens where the reader left it.
 //
-// Not a second OS window, on purpose: the guide drives this window's DOM (rings, tabs,
-// dialogs) and reads it ten times a second, which a separate webview could only do through
-// IPC round-trips for every measurement.
+// The guide's logic never leaves this window: it drives this window's DOM (rings, tabs,
+// dialogs) and reads it ten times a second. It can still be SHOWN in an OS window of its
+// own, like the theme editor (« Pop out » in its title bar, or drag the title bar past the
+// edge of BMM's window): ui/popout.ts hides the panel here and mirrors it there, and the
+// clicks (next, back, skip, a step in the list, a part chip) and ←/→ come back and run on
+// the real panel. The rings and the dimming stay in BMM's window, where the targets are.
+// « Back to BMM » (or closing that window) puts the guide back where the reader had it.
 type GuideMode = 'float' | 'left' | 'right' | 'bottom';
+const POPOUT_ID = 'tutorial-guide';
+/** The guide is shown in its own OS window: nothing here places it, docks it or dodges. */
+let _poppedOut = false;
+const TUT_POPOUT: PopoutSpec = {
+    id: POPOUT_ID,
+    title: () => (_tutorial ? `${t('tut.win.title')} · ${t(_tutorial.title_key)}` : t('tut.win.title')),
+    panel: () => document.getElementById('tut-engine-panel'),
+    isOpen: () => {
+        const p = document.getElementById('tut-engine-panel');
+        return !!_tutorial && !!p && !p.classList.contains('closing');
+    },
+    prepare: () => {
+        if (_isMinimized) _restore();
+        _poppedOut = true;
+        _dodge = null;
+        _setDockReserved(true); // with _poppedOut set: gives the app its space back
+    },
+    restored: () => {
+        _poppedOut = false;
+        const p = document.getElementById('tut-engine-panel');
+        if (_ending || !_tutorial || !p || p.classList.contains('closing')) return;
+        if (_isMinimized) _renderMinimizedPill();
+        else _setDockReserved(true);
+    },
+    close: () => closeTutorialEngine(),
+    dragOut: () => !_isMinimized,
+};
+/** Set while the lesson itself ends, so the pop-out's « restored » does not place a guide
+ *  that is about to go. */
+let _ending = false;
+/** The lesson ends: its OS window goes with it, at once (the pop-out's watchdog would
+ *  notice too, a moment later). */
+function _closePopout(): void {
+    if (!_poppedOut && !isPoppedOut(POPOUT_ID)) return;
+    _ending = true;
+    try { closeWindow(POPOUT_ID); } finally { _ending = false; _poppedOut = false; }
+}
 const MODE_KEY = 'bmm.tutorial.guideMode';
 const POS_KEY = 'bmm.tutorial.guidePos';
 const FLOAT_SIZE_KEY = 'bmm.tutorial.guideSize';
@@ -222,6 +265,7 @@ export function startTutorialEngine(
  *          refusing to be dismissed. The X used to do exactly that, because every close
  *          path shared this function and it always fired the reopen callback. */
 export function closeTutorialEngine(reopenHub: boolean = false): void {
+    _closePopout();
     _unregisterKeyboard();
     _unregisterNavHint();
     _unregisterLangListener();
@@ -367,7 +411,7 @@ function _ensurePanel(): void {
 
 /** Pull a floating window back inside the app after it changed size. Not while dragging. */
 function _keepFloatInside(panel: HTMLElement): void {
-    if (_isDragging || panel.classList.contains('minimized') || !panel.classList.contains('tgw-float')) return;
+    if (_isDragging || _poppedOut || panel.classList.contains('minimized') || !panel.classList.contains('tgw-float')) return;
     const x = parseFloat(panel.style.left);
     const y = parseFloat(panel.style.top);
     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
@@ -519,6 +563,9 @@ function _makeWindowDraggable(handle: HTMLElement, panel: HTMLElement): void {
             if (!moved) return;
             _isDragging = false;
             panel.classList.remove('dragging');
+            // Let go outside BMM's window: the guide popped out (ui/popout.ts watches the
+            // same drag). The edge it crossed on the way is not a dock the reader chose.
+            if (_poppedOut) { _dodge = null; return; }
             if (snap !== 'float') { _setMode(snap); return; }
             _writeJson(POS_KEY, pos);
             _setMode('float');
@@ -664,6 +711,9 @@ function _makeDraggable(handle: HTMLElement, panel: HTMLElement): void {
 // ── Minimize ─────────────────────────────────────────────────────────────────
 
 function _minimize(): void {
+    // In its own window the guide minimises with that window's button; a pill inside it
+    // would only be a smaller window.
+    if (_poppedOut) return;
     _cleanup();
     _isMinimized = true;
     _renderMinimizedPill();
@@ -699,7 +749,7 @@ function _renderMinimizedPill(): void {
                 <span class="tut-min-sub" style="color:${tut.color}">${t(tut.title_key)} &middot; ${t('hub.step').replace('{current}', String(_stepIndex + 1)).replace('{total}', String(_totalSteps()))}</span>
             </div>
             <button class="tut-min-restore-btn" id="btn-tut-restore" data-tooltip="${t('common.resume')}">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="5 15 12 8 19 15"/></svg>
+                ${uiIcon('chevron-up', 12)}
             </button>
             <button class="tut-x-btn" id="btn-tut-close-min" data-tooltip="${t('hub.close')}">
                 ${uiIcon('close', 12)}
@@ -846,7 +896,7 @@ function _renderStep(): void {
 
     panel.innerHTML = `
         <div class="tut-card-topbar tgw-titlebar">
-            <span class="tgw-grip-ico" data-tooltip="${escAttr(t('tut.win.drag'))}">${uiIcon('grip', 14)}</span>
+            <span class="tgw-grip-ico" data-popout-hide data-tooltip="${escAttr(t('tut.win.drag'))}">${uiIcon('grip', 14)}</span>
             <button class="tut-back-hub-btn" id="btn-tut-back-hub">
                 ${uiIcon('chevron-left', 12)}
                 ${t('hub.back')}
@@ -857,13 +907,14 @@ function _renderStep(): void {
             </div>
 
             <div class="tut-topbar-right">
-                <button class="tut-min-btn" id="btn-tut-mode" aria-haspopup="menu" aria-expanded="false" data-tooltip="${escAttr(t('tut.win.mode'))}" aria-label="${escAttr(t('tut.win.mode'))}">
+                ${popoutButtonHtml('tut-min-btn', POPOUT_ID)}
+                <button class="tut-min-btn" id="btn-tut-mode" data-popout-hide aria-haspopup="menu" aria-expanded="false" data-tooltip="${escAttr(t('tut.win.mode'))}" aria-label="${escAttr(t('tut.win.mode'))}">
                     ${modeIcon(mode)}
                 </button>
-                <button class="tut-min-btn" id="btn-tut-minimize" data-tooltip="${escAttr(t('common.minimize'))}" aria-label="${escAttr(t('common.minimize'))}">
+                <button class="tut-min-btn" id="btn-tut-minimize" data-popout-hide data-tooltip="${escAttr(t('common.minimize'))}" aria-label="${escAttr(t('common.minimize'))}">
                     ${uiIcon('remove', 12)}
                 </button>
-                <button class="tut-x-btn" id="btn-tut-close" data-tooltip="${escAttr(t('hub.close'))}" aria-label="${escAttr(t('hub.close'))}">
+                <button class="tut-x-btn" id="btn-tut-close" data-popout-hide data-tooltip="${escAttr(t('hub.close'))}" aria-label="${escAttr(t('hub.close'))}">
                     ${uiIcon('close', 12)}
                 </button>
             </div>
@@ -946,6 +997,8 @@ function _renderStep(): void {
     /* ── The title bar moves the window ── */
     const topbar = panel.querySelector('.tut-card-topbar') as HTMLElement | null;
     if (topbar) _makeWindowDraggable(topbar, panel);
+    // « Pop out » and « drag the title bar out of BMM's window » (ui/popout.ts).
+    wirePopout(TUT_POPOUT, panel, topbar);
 
     /* ── Placement menu ── */
     const modeBtn = document.getElementById('btn-tut-mode');
@@ -1202,6 +1255,7 @@ function _renderStep(): void {
 }
 
 function _skipTutorial(): void {
+    _closePopout();
     _cleanup();
     _cleanupDemo();
     _unregisterLangListener();
@@ -1213,7 +1267,11 @@ function _skipTutorial(): void {
     const panel = document.getElementById('tut-engine-panel');
     if (panel) {
         panel.classList.add('closing');
-        panel.addEventListener('animationend', () => { _setDockReserved(false); panel.remove(); _panelLeft = null; _panelTop = null; }, { once: true });
+        const gone = () => { if (!panel.isConnected) return; _setDockReserved(false); panel.remove(); _panelLeft = null; _panelTop = null; };
+        panel.addEventListener('animationend', gone, { once: true });
+        // No animation runs on a panel that was not drawn (Reduce animations, a hidden
+        // panel): it still has to go.
+        setTimeout(gone, 400);
     }
     // Intentionally skip _onClose so the hub does not reopen
 }
@@ -1371,11 +1429,11 @@ function _finishTutorial(): void {
 // So the strings carry a TOKEN and the engine draws the icon. Translators see
 // `:warn:`, which is obviously not prose and obviously must survive; the drawing is
 // one place, in the app's own stroke style, on currentColor.
-const TUT_ICONS: Record<string, string> = {
-    tip:   '<path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/>',
-    warn:  '<path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
-    ok:    '<path d="M20 6L9 17l-5-5"/>',
-    heart: '<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/>',
+const TUT_ICONS: Record<string, IconName> = {
+    tip:   'lightbulb',
+    warn:  'warning',
+    ok:    'check',
+    heart: 'heart',
 };
 
 /** Replace `:tip:` / `:warn:` / `:ok:` / `:heart:` with an inline icon. An unknown
@@ -1383,7 +1441,7 @@ const TUT_ICONS: Record<string, string> = {
  *  should be visible, not silently erased. */
 export function expandTutIcons(text: string): string {
     return String(text ?? '').replace(/:(tip|warn|ok|heart):/g, (_m, k: string) =>
-        `<svg class="tut-ico tut-ico-${k}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TUT_ICONS[k]}</svg>`);
+        uiIcon(TUT_ICONS[k], 14, { cls: `tut-ico tut-ico-${k}` }));
 }
 
 function _startTypewriter(text: string): void {
@@ -1879,7 +1937,8 @@ function _setDockReserved(on: boolean): void {
     document.body.classList.remove('tut-docked', 'tut-min', 'tut-dock-right', 'tut-dock-left', 'tut-dock-side');
     const shell = document.querySelector('.app-shell') as HTMLElement | null;
     if (shell) { shell.style.paddingRight = ''; shell.style.paddingLeft = ''; }
-    if (!on || !panel) {
+    // Popped out, the guide is in a window of its own: BMM's window keeps all its room.
+    if (!on || !panel || _poppedOut) {
         document.body.classList.remove('tgw-open', 'tgw-left', 'tgw-right', 'tgw-bottom', 'tgw-float');
         document.body.style.removeProperty('--tut-dock-h');
         document.body.style.removeProperty('--tut-dock-w');
@@ -1950,7 +2009,7 @@ function _overlap(a: { left: number; top: number; right: number; bottom: number 
  */
 function _dodgeTarget(target: DOMRect): void {
     const panel = document.getElementById('tut-engine-panel');
-    if (!panel || panel.classList.contains('minimized') || _isDragging) return;
+    if (!panel || panel.classList.contains('minimized') || _isDragging || _poppedOut) return;
     const now = Date.now();
     if (now - _lastDodgeAt < 700) return;
     const host = _hostRect(panel);
@@ -2026,7 +2085,8 @@ function _showMe(navigated: boolean = false): void {
     ghost.style.color = color;
     ghost.innerHTML = `<svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor" stroke="#fff" stroke-width="1.3" stroke-linejoin="round"><path d="m4 2 6 16 2.3-6.4L18.8 9.2Z"/></svg>`;
     const panel = document.getElementById('tut-engine-panel');
-    const pr = panel?.getBoundingClientRect();
+    // Popped out, the panel here has no box: the cursor starts from the middle-bottom.
+    const pr = _poppedOut ? undefined : panel?.getBoundingClientRect();
     ghost.style.left = `${pr ? pr.left + 44 : window.innerWidth / 2}px`;
     ghost.style.top = `${pr ? pr.top + 24 : window.innerHeight - 180}px`;
     document.body.appendChild(ghost);

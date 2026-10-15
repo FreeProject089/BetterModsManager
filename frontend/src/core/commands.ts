@@ -21,7 +21,7 @@ const tr = (s: L): string => (getLang() === 'fr' ? s.fr : s.en);
 export interface Chord { ctrl?: boolean; shift?: boolean; alt?: boolean; key: string; }
 export interface Command {
   id: string;
-  category: 'nav' | 'mods' | 'profiles' | 'repo' | 'tools' | 'settings' | 'scheduler' | 'help';
+  category: 'nav' | 'mods' | 'profiles' | 'repo' | 'tools' | 'settings' | 'scheduler' | 'help' | 'custom';
   title: L;
   keywords?: string;
   run: () => void;
@@ -178,7 +178,7 @@ const CAT_LABEL: Record<Command['category'], L> = {
   nav: { en: 'Go to', fr: 'Aller à' }, mods: { en: 'Mods', fr: 'Mods' }, profiles: { en: 'Profiles', fr: 'Profils' },
   repo: { en: 'Server Repo', fr: 'Dépôt serveur' }, tools: { en: 'Tools', fr: 'Outils' },
   settings: { en: 'Settings', fr: 'Paramètres' }, scheduler: { en: 'Scheduler', fr: 'Planificateur' },
-  help: { en: 'Help', fr: 'Aide' },
+  help: { en: 'Help', fr: 'Aide' }, custom: { en: 'My shortcut', fr: 'Mon raccourci' },
 };
 function renderPalette() {
   const list = overlay?.querySelector('.cp-list') as HTMLElement | null;
@@ -271,67 +271,280 @@ export function closePalette(restoreFocus = false) {
   if (restoreFocus && back?.isConnected) { try { back.focus({ preventScroll: true }); } catch { /* gone */ } }
 }
 
+// ── Custom shortcuts: a key for one specific thing ───────────────────────────────
+// A registry command is a fixed action (« Go to Profiles »). A custom shortcut is an action with
+// its target chosen by the user: open THIS Settings card, switch to THIS profile, activate THIS
+// modpack, run THIS automation. Each one is registered as an ordinary command (category
+// 'custom'), so it is dispatched, listed in the palette and rebound by the same engine; only the
+// list of what they are lives apart (bmm_cmd_custom), and its key in the same overrides map as
+// every other binding. What they DO is in features/settings/custom-shortcuts.ts, loaded on use.
+export type CustomKind = 'settings' | 'profile' | 'modpack' | 'automation';
+export interface CustomShortcut {
+  id: string;            // 'custom.<random>'
+  kind: CustomKind;
+  target: string;        // card key, profile id, modpack id or automation id
+  label: string;         // shown in the list and the palette
+  scope: string;         // '' = everywhere, else a view name ('library', 'profiles'…)
+}
+const LS_CUSTOM = 'bmm_cmd_custom';
+const CUSTOM_KINDS: CustomKind[] = ['settings', 'profile', 'modpack', 'automation'];
+function validCustom(x: any): x is CustomShortcut {
+  return !!x && typeof x.id === 'string' && /^custom\.[\w-]{1,40}$/.test(x.id) && CUSTOM_KINDS.includes(x.kind)
+    && typeof x.target === 'string' && x.target.length > 0 && x.target.length < 300
+    && typeof x.label === 'string' && x.label.length < 200 && (x.scope === undefined || typeof x.scope === 'string');
+}
+export function readCustomShortcuts(): CustomShortcut[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(LS_CUSTOM) || '[]');
+    return Array.isArray(v) ? v.filter(validCustom).map((x) => ({ ...x, scope: x.scope || '' })) : [];
+  } catch { return []; }
+}
+function writeCustom(list: CustomShortcut[]): void { try { localStorage.setItem(LS_CUSTOM, JSON.stringify(list)); } catch { /* ignore */ } }
+
+/** The name a view has in the navbar (what the user calls it). */
+export function viewLabel(v: string): string {
+  const n = (typeof document !== 'undefined' ? document.querySelector(`.nav-item[data-view="${v}"] .nav-label`) : null) as HTMLElement | null;
+  return (n?.textContent || v).trim();
+}
+/** The view on screen (`#view-<name>.active`), '' when none. */
+export function currentView(): string {
+  const v = (typeof document !== 'undefined' ? document.querySelector('.view.active') : null) as HTMLElement | null;
+  return (v?.id || '').replace(/^view-/, '');
+}
+function registerCustom(cs: CustomShortcut): void {
+  registerCommand({
+    id: cs.id, category: 'custom', title: { en: cs.label, fr: cs.label }, keywords: `custom ${cs.kind} ${cs.label}`, defaultChord: null,
+    run: () => {
+      void import('../features/settings/custom-shortcuts.js')
+        .then((m) => m.runCustomShortcut(cs))
+        .catch((e) => { try { (window as any).toast?.(String(e), 'error'); } catch { /* ignore */ } });
+    },
+    when: cs.scope ? () => currentView() === cs.scope : undefined,
+  });
+}
+let _customLoaded = false;
+function ensureCustomRegistered(): void {
+  if (_customLoaded) return;
+  _customLoaded = true;
+  for (const cs of readCustomShortcuts()) registerCustom(cs);
+}
+/** Create or replace a custom shortcut, and give it `chord`. */
+export function saveCustomShortcut(cs: CustomShortcut, chord: Chord | null): void {
+  ensureCustomRegistered();
+  const list = readCustomShortcuts().filter((x) => x.id !== cs.id);
+  list.push(cs);
+  writeCustom(list);
+  registerCustom(cs);
+  setBinding(cs.id, chord);
+}
+export function deleteCustomShortcut(id: string): void {
+  writeCustom(readCustomShortcuts().filter((x) => x.id !== id));
+  _cmds.delete(id);
+  const o = loadOverrides();
+  delete o[id];
+  saveOverrides(o);
+}
+export function getCommand(id: string): Command | null { ensureCustomRegistered(); return _cmds.get(id) || null; }
+
+/** Everything the shortcuts page holds, for a file: the rebinds and the custom shortcuts. */
+export function exportShortcutData(): { format: string; version: number; bindings: Record<string, string>; custom: CustomShortcut[] } {
+  return { format: 'bmm-shortcuts', version: 1, bindings: loadOverrides(), custom: readCustomShortcuts() };
+}
+/** Merge a file made by exportShortcutData. Returns how many entries were taken, or -1 if it is not one. */
+export function importShortcutData(data: any): number {
+  if (!data || data.format !== 'bmm-shortcuts' || typeof data.bindings !== 'object' || !data.bindings) return -1;
+  ensureCustomRegistered();
+  let n = 0;
+  const custom = Array.isArray(data.custom) ? data.custom.filter(validCustom) : [];
+  if (custom.length) {
+    const byId = new Map(readCustomShortcuts().map((x) => [x.id, x]));
+    for (const cs of custom) { byId.set(cs.id, { ...cs, scope: cs.scope || '' }); registerCustom({ ...cs, scope: cs.scope || '' }); n++; }
+    writeCustom([...byId.values()]);
+  }
+  const o = loadOverrides();
+  for (const [id, v] of Object.entries(data.bindings)) {
+    if (typeof v !== 'string' || v.length > 40 || !/^[\w.-]{1,80}$/.test(id)) continue;
+    if (v && !parseChord(v)?.key) continue;
+    o[id] = v;
+    n++;
+  }
+  saveOverrides(o);
+  return n;
+}
+
+// Keys the shortcuts page refuses to take: the editing keys every text field needs, the
+// window's own (close, reload, devtools) and the ones BMM already gives a fixed meaning (the
+// palette, the page search). A command whose DEFAULT is one of them keeps it (the scheduler's
+// undo is Ctrl+Z, the palette is Ctrl+K).
+const RESERVED = new Set(['Ctrl+C', 'Ctrl+V', 'Ctrl+X', 'Ctrl+A', 'Ctrl+Z', 'Ctrl+Y', 'Ctrl+K', 'Ctrl+F', 'Ctrl+W', 'Ctrl+R',
+  'Ctrl+Shift+I', 'Ctrl+Tab', 'Alt+F4', 'Alt+Tab', 'F5', 'Ctrl+F5', 'F12', 'Escape', 'Tab', 'Shift+Tab', 'Enter', 'Backspace']);
+export function reservedChord(c: Chord | null, forId?: string): boolean {
+  if (!c || !RESERVED.has(chordToStr(c))) return false;
+  const def = forId ? _cmds.get(forId)?.defaultChord || null : null;
+  return !(def && chordEq(def, c));
+}
+
+/** Where a command's key applies: two commands only clash when they apply in the same place. */
+function scopeKey(c: Command): string {
+  if (!c.when) return 'global';
+  if (c.category === 'custom') return 'page:' + (readCustomShortcuts().find((x) => x.id === c.id)?.scope || '');
+  return 'scoped:' + c.id;    // a scoped built-in (the flow editor's keys) owns its own place
+}
+/** The other command that answers the same keys in the same place, if any. */
+export function clashWith(chord: Chord | null, scope: string, exceptId?: string): Command | null {
+  if (!chord) return null;
+  ensureCustomRegistered();
+  for (const c of _cmds.values()) {
+    if (c.id === exceptId || c.contextual) continue;
+    if (scopeKey(c) === scope && chordEq(bindingOf(c.id), chord)) return c;
+  }
+  return null;
+}
+export function scopeOf(id: string): string { const c = _cmds.get(id); return c ? scopeKey(c) : 'global'; }
+function hasOverride(id: string): boolean { return Object.prototype.hasOwnProperty.call(loadOverrides(), id); }
+
+/** A chord as keycaps. */
+export function keycapsHtml(c: Chord | null): string {
+  const pretty: Record<string, string> = { Arrowup: '↑', Arrowdown: '↓', Arrowleft: '←', Arrowright: '→', Escape: 'Esc', Delete: 'Del', Pageup: 'PgUp', Pagedown: 'PgDn' };
+  return chordToStr(c).split('+').filter(Boolean).map((k) => `<kbd class="sk-kbd">${esc(pretty[k] || k)}</kbd>`).join('');
+}
+
 // ── Settings: the rebindable shortcuts manager ────────────────────────────────────
+// A table: the action, its keys as keycaps, then reset / clear (or edit / delete for a custom
+// one). Groups are headings; a search above narrows the rows in place. « New shortcut » opens
+// features/settings/custom-shortcuts.ts. A clash is said on the row it concerns.
 let recording: { id: string; row: HTMLElement } | null = null;
+let _skQuery = '';
+let _skChanged = false;
+const SK_GROUPS: Command['category'][] = ['custom', 'nav', 'profiles', 'mods', 'repo', 'tools', 'settings', 'scheduler', 'help'];
+const SK_TITLE: Record<Command['category'], L> = {
+  nav: { en: 'Navigation', fr: 'Navigation' }, profiles: { en: 'Profiles', fr: 'Profils' }, mods: { en: 'Mods', fr: 'Mods' },
+  repo: { en: 'Server Repo', fr: 'Dépôt serveur' }, tools: { en: 'Tools', fr: 'Outils' },
+  settings: { en: 'Settings', fr: 'Paramètres' }, help: { en: 'Help', fr: 'Aide' },
+  scheduler: { en: 'Scheduler', fr: 'Planificateur' }, custom: { en: 'Your shortcuts', fr: 'Vos raccourcis' },
+};
+
+/** Show only the rows the search (and « Changed only ») keep; hide the headings left empty. */
+function applySkFilter(container: HTMLElement): void {
+  if (!container.querySelectorAll) return;
+  const q = _skQuery.trim().toLowerCase();
+  let shown = 0;
+  container.querySelectorAll<HTMLElement>('.sk-group').forEach((g) => {
+    let any = false;
+    g.querySelectorAll<HTMLElement>('.sk-row').forEach((r) => {
+      const hitQ = !q || (r.textContent || '').toLowerCase().includes(q);
+      const hitC = !_skChanged || r.dataset.changed === '1';
+      r.hidden = !(hitQ && hitC);
+      if (!r.hidden) { any = true; shown++; }
+    });
+    g.hidden = !any;
+  });
+  const empty = container.querySelector<HTMLElement>('.sk-empty');
+  if (empty) empty.hidden = shown > 0;
+}
+
 export function renderShortcutsManager(container: HTMLElement) {
-  ensurePaletteStyles();   // the .sk-* rules live in the same injected sheet as the palette
+  ensurePaletteStyles();   // the palette's sheet; the table itself is styled in css/settings-page.css
   refreshNavCommands();    // reflect the current navbar (custom pages, renames, reorders)
-  const groups: Command['category'][] = ['nav', 'profiles', 'mods', 'repo', 'tools', 'settings', 'scheduler', 'help'];
-  const catTitle: Record<Command['category'], L> = {
-    nav: { en: 'Navigation', fr: 'Navigation' }, profiles: { en: 'Profiles', fr: 'Profils' }, mods: { en: 'Mods', fr: 'Mods' },
-    repo: { en: 'Server Repo', fr: 'Dépôt serveur' }, tools: { en: 'Tools', fr: 'Outils' },
-    settings: { en: 'Settings', fr: 'Paramètres' }, help: { en: 'Help', fr: 'Aide' },
-    scheduler: { en: 'Scheduler — task editor (active while it is open)', fr: 'Planificateur — éditeur de tâche (actif quand il est ouvert)' },
-  };
+  ensureCustomRegistered();
+  const all = allCommands().filter((c) => !c.contextual);
+  let changed = 0;
   const rowFor = (c: Command) => {
     const ch = bindingOf(c.id);
-    return `<div class="sk-row" data-id="${c.id}">
-      <span class="sk-label">${tr(c.title)}</span>
-      <button class="sk-chord ${ch ? '' : 'sk-none'}" data-act="record">${ch ? chordToStr(ch) : tr({ en: 'Not set', fr: 'Non défini' })}</button>
-      <button class="sk-reset" data-act="reset" data-tooltip="${tr({ en: 'Reset to default', fr: 'Réinitialiser' })}">⟲</button>
-      <button class="sk-clear" data-act="clear" data-tooltip="${tr({ en: 'Clear', fr: 'Effacer' })}" aria-label="${tr({ en: 'Clear', fr: 'Effacer' })}">${uiIcon('close', 14)}</button>
+    const custom = c.category === 'custom';
+    const modified = !custom && hasOverride(c.id);
+    const clash = ch ? clashWith(ch, scopeKey(c), c.id) : null;
+    if (modified || custom) changed++;
+    const name = tr(c.title);
+    const scope = custom ? (readCustomShortcuts().find((x) => x.id === c.id)?.scope || '') : '';
+    const tag = modified ? `<span class="sk-tag">${esc(t('sk.modified'))}</span>`
+      : scope ? `<span class="sk-tag">${esc(t('sk.onlyOn', { page: viewLabel(scope) }))}</span>` : '';
+    const btn = (act: string, icon: Parameters<typeof uiIcon>[0], label: string, cls = '', off = false) =>
+      `<button type="button" class="sk-act ${cls}" data-act="${act}" data-tooltip="${esc(label)}" aria-label="${esc(label)}"${off ? ' disabled' : ''}>${uiIcon(icon, 14)}</button>`;
+    const acts = custom
+      ? btn('edit', 'edit', t('sk.edit')) + btn('delete', 'delete', t('sk.delete'), 'sk-del')
+      : btn('reset', 'reset', t('sk.resetOne'), '', !modified) + btn('clear', 'clear', t('sk.clear'), '', !ch);
+    return `<div class="sk-row" role="row" data-id="${esc(c.id)}" data-changed="${modified || custom || clash ? 1 : 0}">
+      <span class="sk-label" role="cell">${esc(name)}${tag}</span>
+      <button type="button" class="sk-chord ${ch ? '' : 'sk-none'}" data-act="record" aria-label="${esc(t('sk.changeFor', { name }))}">${ch ? keycapsHtml(ch) : esc(t('sk.notSet'))}</button>
+      <span class="sk-acts" role="cell">${acts}</span>
+      ${clash ? `<div class="sk-warn">${uiIcon('warning', 12)}<span>${esc(t('sk.alsoUsedBy', { name: tr(clash.title) }))}</span></div>` : ''}
     </div>`;
   };
-  container.innerHTML = groups.map((g) => {
-    const items = allCommands().filter((c) => c.category === g);
+  const groups = SK_GROUPS.map((g) => {
+    const items = all.filter((c) => c.category === g);
     if (!items.length) return '';
-    return `<div class="sk-group"><div class="sk-group-h">${tr(catTitle[g])}</div>${items.map(rowFor).join('')}</div>`;
-  }).join('') + `<div class="sk-hint">${tr({ en: 'Click a shortcut, then press the keys. Modifier combos (Ctrl/Shift/Alt) are recommended.', fr: 'Cliquez un raccourci puis appuyez sur les touches. Les combinaisons (Ctrl/Maj/Alt) sont recommandées.' })}</div>`;
+    const note = g === 'scheduler' ? `<span class="sk-group-note">${esc(t('sk.schedulerNote'))}</span>` : '';
+    return `<section class="sk-group" data-group="${g}" role="rowgroup"><h4 class="sk-group-h"><span>${esc(tr(SK_TITLE[g]))}</span>${note}<span class="sk-group-n">${items.length}</span></h4>${items.map(rowFor).join('')}</section>`;
+  }).join('');
+  container.innerHTML = `
+    <div class="sk-tools">
+      <label class="sk-search">${uiIcon('search', 14)}<input type="search" class="sk-q" value="${esc(_skQuery)}" placeholder="${esc(t('sk.searchPh'))}" aria-label="${esc(t('sk.searchPh'))}"></label>
+      <button type="button" class="btn btn-ghost btn-sm sk-filter" data-act="changed" aria-pressed="${_skChanged}">${esc(t('sk.changedOnly'))}</button>
+      <button type="button" class="btn btn-primary btn-sm sk-new" data-act="new">${uiIcon('add', 14)}<span>${esc(t('sk.new'))}</span></button>
+    </div>
+    <div class="sk-table" role="table" aria-label="${esc(t('settings.shortcutsTitle'))}">${groups}</div>
+    <div class="sk-empty" hidden>${esc(t('sk.noMatch'))}</div>
+    <div class="stg-foot sk-foot">
+      <span class="stg-foot-status">${esc(t('sk.count', { n: String(all.length), c: String(changed) }))}</span>
+      <button type="button" class="btn btn-ghost btn-sm" data-act="import">${uiIcon('import', 14)}<span>${esc(t('sk.import'))}</span></button>
+      <button type="button" class="btn btn-ghost btn-sm" data-act="export">${uiIcon('export', 14)}<span>${esc(t('sk.export'))}</span></button>
+      <button type="button" class="btn btn-ghost btn-sm sk-reset-all" data-act="reset-all">${uiIcon('reset', 14)}<span>${esc(t('sk.resetAll'))}</span></button>
+    </div>`;
+  applySkFilter(container);
+  const rerender = () => renderShortcutsManager(container);
+
+  const q = container.querySelector?.<HTMLInputElement>('.sk-q');
+  q?.addEventListener('input', () => { _skQuery = q.value; applySkFilter(container); });
 
   const stopRecording = () => { if (recording) { recording.row.classList.remove('sk-recording'); recording = null; } };
+  const tools = () => import('../features/settings/custom-shortcuts.js');
   container.onclick = (e) => {
-    const el = e.target as HTMLElement;
+    const el = (e.target as HTMLElement).closest('[data-act]') as HTMLElement | null;
+    if (!el || (el as HTMLButtonElement).disabled) return;
+    const act = el.getAttribute('data-act');
+    if (act === 'changed') { _skChanged = !_skChanged; el.setAttribute('aria-pressed', String(_skChanged)); applySkFilter(container); return; }
+    if (act === 'new') { void tools().then((m) => m.openShortcutEditor({ onDone: rerender })); return; }
+    if (act === 'export') { void tools().then((m) => m.exportShortcutsFile()); return; }
+    if (act === 'import') { void tools().then((m) => m.importShortcutsFile(rerender)); return; }
+    if (act === 'reset-all') { void tools().then((m) => m.confirmResetAll(rerender)); return; }
     const row = el.closest('.sk-row') as HTMLElement | null;
     if (!row) return;
     const id = row.getAttribute('data-id')!;
-    const act = el.getAttribute('data-act');
-    if (act === 'reset') { setBinding(id, undefined); renderShortcutsManager(container); return; }
-    if (act === 'clear') { setBinding(id, null); renderShortcutsManager(container); return; }
+    if (act === 'reset') { setBinding(id, undefined); rerender(); return; }
+    if (act === 'clear') { setBinding(id, null); rerender(); return; }
+    if (act === 'edit') { void tools().then((m) => m.openShortcutEditor({ editId: id, onDone: rerender })); return; }
+    if (act === 'delete') { void tools().then((m) => m.confirmDeleteCustom(id, rerender)); return; }
     if (act === 'record') {
       stopRecording();
       recording = { id, row };
       row.classList.add('sk-recording');
       const btn = row.querySelector('.sk-chord') as HTMLElement;
-      btn.textContent = tr({ en: 'Press keys…', fr: 'Appuyez…' });
+      btn.textContent = t('sk.pressKeys');
     }
   };
   // Capture the chord for the row being recorded.
   const onRec = (e: KeyboardEvent) => {
     if (!recording) return;
-    if (e.key === 'Escape') { stopRecording(); renderShortcutsManager(container); return; }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); stopRecording(); rerender(); return; }
     const ch = chordFromEvent(e);
     if (!ch) return; // waiting for a non-modifier key
-    e.preventDefault(); e.stopPropagation();
-    const clash = conflictFor(ch, recording.id);
+    e.preventDefault(); e.stopImmediatePropagation();
+    if (reservedChord(ch, recording.id)) {
+      const btn = recording.row.querySelector('.sk-chord') as HTMLElement;
+      btn.textContent = t('sk.reserved', { keys: chordToStr(ch) });
+      return; // still recording: another combination, or Escape
+    }
     setBinding(recording.id, ch);
     stopRecording();
-    renderShortcutsManager(container);
-    if (clash) { try { (window as any).toast?.(`${tr({ en: 'Also used by', fr: 'Aussi utilisé par' })}: ${tr(clash.title)}`, 'warning'); } catch { /* ignore */ } }
+    rerender();
   };
-  // one listener while this manager is mounted
-  (container as any)._skRec && document.removeEventListener('keydown', (container as any)._skRec, true);
+  // One listener while this manager is mounted. On window, capture phase: ahead of the global
+  // dispatcher (document, capture), so the keys being recorded do not also run their command.
+  const keyTarget: any = typeof window !== 'undefined' ? window : document;
+  (container as any)._skRec && keyTarget.removeEventListener('keydown', (container as any)._skRec, true);
   (container as any)._skRec = onRec;
-  document.addEventListener('keydown', onRec, true);
+  keyTarget.addEventListener('keydown', onRec, true);
 }
 
 // ── register BMM's commands + start the dispatcher ────────────────────────────────
@@ -512,6 +725,8 @@ registerSearchProvider('profiles', async (q): Promise<SearchHit[]> => {
 // is navigable by name instead of by scrolling.
 function flashElement(el: HTMLElement): void {
   try {
+    // A hit in a hidden pane or a folded « More options » block is shown first (settings-tabs.ts).
+    el.dispatchEvent(new CustomEvent('bmm:reveal', { bubbles: true }));
     el.scrollIntoView({ block: 'center', behavior: 'smooth' });
     el.classList.add('cp-flash');
     setTimeout(() => el.classList.remove('cp-flash'), 1400);
@@ -686,7 +901,9 @@ function registerCore() {
   // ── Library / mods actions ──────────────────────────────────────────────────
   registerCommand({ id: 'mods.scan', category: 'mods', title: { en: 'Scan mods folder', fr: 'Scanner le dossier de mods' }, keywords: 'scan rescan refresh detect library analyser', run: clickAfterNav('library', 'btn-scan-mods'), defaultChord: null });
   registerCommand({ id: 'mods.verify', category: 'mods', title: { en: 'Verify mod integrity', fr: 'Vérifier l’intégrité des mods' }, keywords: 'verify integrity hash checksum corrupt vérifier', run: clickAfterNav('library', 'btn-verify-integrity'), defaultChord: null });
-  registerCommand({ id: 'mods.history', category: 'mods', title: { en: 'Show mod history', fr: 'Afficher l’historique des mods' }, keywords: 'history log recent activity historique', run: clickAfterNav('library', 'btn-show-history'), defaultChord: null });
+  registerCommand({ id: 'mods.history', category: 'mods', title: { en: 'Show the history', fr: 'Afficher l’historique' }, keywords: 'history log recent activity changes undo timeline historique journal modifications annuler', run: callGlobal('openHistory'), defaultChord: null });
+  // « Translation sandbox » is the studio's old name: still a keyword, so the old habit finds it.
+  registerCommand({ id: 'tools.translationStudio', category: 'tools', title: { en: 'Translation studio', fr: 'Studio de traduction' }, keywords: 'translation translate language i18n sandbox locale traduction traduire langue bac à sable', run: callGlobal('openTranslationStudio'), defaultChord: null });
   registerCommand({ id: 'mods.enableAll', category: 'mods', title: { en: 'Enable all mods', fr: 'Activer tous les mods' }, keywords: 'enable all activate deploy tout activer', run: clickAfterNav('library', 'btn-enable-all'), defaultChord: null });
   registerCommand({ id: 'mods.disableAll', category: 'mods', title: { en: 'Disable all mods', fr: 'Désactiver tous les mods' }, keywords: 'disable all off remove tout désactiver', run: clickAfterNav('library', 'btn-disable-all-alt'), defaultChord: null });
   // ── Cancelling what is running ──────────────────────────────────────────────
@@ -841,6 +1058,7 @@ function registerCore() {
 /** Wire the command system: register commands + start the global keyboard dispatcher. */
 export function initCommands() {
   registerCore();
+  ensureCustomRegistered();
   document.addEventListener('keydown', onKeydown, true);
   // Run a command by id from a module that must not import this one (« Ask Laya » results:
   // features/ai/ai-ask.ts is itself loaded from here, so an import back would be a cycle).
@@ -894,20 +1112,6 @@ function ensurePaletteStyles() {
   .cp-empty{padding:26px;text-align:center;color:var(--bmm-text-muted,#7c8698);font-size:14px;}
   .cp-foot{padding:9px 16px;border-top:1px solid var(--bmm-border,#2a3242);font-size:11px;color:var(--bmm-text-muted,#7c8698);display:flex;gap:6px;align-items:center;}
   .cp-foot kbd{padding:1px 6px;}
-  /* Settings shortcuts manager */
-  .sk-group{margin-bottom:16px;}
-  .sk-group-h{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--bmm-text-muted,#7c8698);margin:0 0 8px;}
-  .sk-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;border:1px solid var(--bmm-border,#2a3242);
-    background:var(--bmm-bg-base,#0f1420);margin-bottom:6px;}
-  .sk-row.sk-recording{border-color:var(--bmm-accent,#3b82f6);box-shadow:0 0 0 3px var(--bmm-accent-glow,rgba(59,130,246,.18));}
-  .sk-label{flex:1;font-size:13.5px;color:var(--bmm-text-primary,#e6edf3);}
-  .sk-chord{min-width:110px;text-align:center;cursor:pointer;font-family:var(--bmm-font-mono,ui-monospace,monospace);font-size:12px;font-weight:700;
-    padding:6px 10px;border-radius:8px;border:1px solid var(--bmm-border,#2a3242);background:var(--bmm-bg-elevated,#1a2130);color:var(--bmm-text-primary,#e6edf3);}
-  .sk-chord.sk-none{color:var(--bmm-text-muted,#7c8698);font-weight:500;font-family:var(--bmm-font-sans,system-ui);}
-  .sk-reset,.sk-clear{cursor:pointer;width:30px;height:30px;border-radius:8px;border:1px solid var(--bmm-border,#2a3242);
-    background:transparent;color:var(--bmm-text-muted,#7c8698);font-size:13px;}
-  .sk-reset:hover,.sk-clear:hover{color:var(--bmm-text-primary,#e6edf3);border-color:var(--bmm-border-hover,#3a4556);}
-  .sk-hint{font-size:11.5px;color:var(--bmm-text-muted,#7c8698);margin-top:4px;line-height:1.5;}
   /* Flash a page element the palette jumped to (in-page 'element' hits). Global, not scoped to
      the overlay — the target lives out on the page. */
   .cp-flash{animation:cp-flash-kf 1.4s ease-out;border-radius:8px;}

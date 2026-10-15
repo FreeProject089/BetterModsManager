@@ -182,6 +182,16 @@ function activityStart(command: string, args: Record<string, unknown>): ((ok: bo
     try { return _activityHook(command, args); } catch { return null; }
 }
 
+// Told when a command SUCCEEDED, with its arguments and result: the history journal
+// (core/history-journal.ts) listens here. Any number of listeners; each filters by name itself
+// and must be cheap, since every command passes through.
+export type InvokeListener = (command: string, args: Record<string, unknown>, result: unknown) => void;
+const _listeners = new Set<InvokeListener>();
+export function addInvokeListener(fn: InvokeListener): () => void { _listeners.add(fn); return () => { _listeners.delete(fn); }; }
+function notifyListeners(command: string, args: Record<string, unknown>, result: unknown): void {
+    for (const fn of _listeners) { try { fn(command, args, result); } catch { /* a listener never breaks a call */ } }
+}
+
 export async function invoke(command: string, args: Record<string, unknown> = {}, opts?: { quiet?: boolean }): Promise<any> {
     if (!_invoke) {
         // Early boot call before loadTauri() finished — wait for the bridge (max 5s) instead
@@ -201,6 +211,7 @@ export async function invoke(command: string, args: Record<string, unknown> = {}
         const duration = Math.round(performance.now() - startTime);
         debugHub.recordIPC(command, args, 'success', res, duration);
         observe(command, args, true, res, duration);
+        if (_listeners.size) notifyListeners(command, args, res);
         if (_act) { try { _act(true, res); } catch { /* the activity centre never breaks a call */ } }
         return res;
     } catch (err) {

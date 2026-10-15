@@ -8,7 +8,7 @@ import { invoke } from '../../core/api.js';
 import { isBehaviourAttr } from '../../core/inline-actions.js';
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
-import { canonicalThemeId, isLightTheme as modelIsLight, isSafeCssValue, migrateTheme, rootVars, sanitizeVars } from './theme-model.js';
+import { brandMascotSrc, canonicalThemeId, isLightTheme as modelIsLight, isSafeCssValue, migrateTheme, rootVars, sanitizeVars } from './theme-model.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface BmmTheme {
@@ -27,6 +27,9 @@ export interface BmmTheme {
     custom_elements?: CustomElement[];
     html_swaps?: HtmlSwap[];    // replace matching elements' innerHTML (e.g. icon SVG)
     mode?: 'dark' | 'light';    // triggers contrast patches for light themes
+    /** What stands in for Tasky: 'tasky' (the default), 'logo' (the BMM logo) or 'badge' (the
+     *  « BMM » tile in the theme's accent). See theme-model's brandMascotSrc. */
+    brand?: { mark?: 'tasky' | 'logo' | 'badge' };
     catalog_url?: string;       // origin catalog (for attribution)
     /** Where the theme itself lives, when the catalog entry only POINTS at it rather than
      *  carrying it. Absolute, or relative to `_src`. See theme-catalog's resolveThemeBody. */
@@ -755,7 +758,11 @@ const MASCOT_SELECTORS = [
 ];
 function applyAssets(theme: BmmTheme): void {
     const a = theme.assets || {};
-    const mascot = a.mascot;
+    // The theme's own picture first; else the BMM logo when the theme asks for it (brand.mark:
+    // the tile on a dark canvas, the bare logo on a light one); else Tasky.
+    const mascot = a.mascot || brandMascotSrc(theme);
+    // The splash: the theme's own mascot, then its loader picture, then the brand logo.
+    const splash = a.mascot || a.loader || mascot;
     const setImg = (sel: string, val?: string) => {
         document.querySelectorAll(sel).forEach(node => {
             const el = node as HTMLImageElement;
@@ -766,13 +773,13 @@ function applyAssets(theme: BmmTheme): void {
     // The boot splash (#ld-logo; #loader-img was its old id) takes the loader image first.
     const LOADERS = new Set(['#loader-img', '#ld-logo']);
     const applyMascot = () => {
-        for (const sel of LOADERS) setImg(sel, mascot || a.loader);
+        for (const sel of LOADERS) setImg(sel, splash);
         for (const sel of MASCOT_SELECTORS) if (!LOADERS.has(sel)) setImg(sel, mascot);
         // A picture a previous theme swapped no longer matches its file-name selector (its src
         // is that theme's now): [data-bmm-orig] finds it, to take this theme's mascot or to go
         // back to its own picture.
         document.querySelectorAll<HTMLImageElement>('img[data-bmm-orig]').forEach((el) => {
-            if (el.id === 'loader-img' || el.id === 'ld-logo') { if (!mascot && !a.loader) el.src = el.dataset.bmmOrig || el.src; return; }
+            if (el.id === 'loader-img' || el.id === 'ld-logo') { if (!splash) el.src = el.dataset.bmmOrig || el.src; return; }
             const want = mascot || el.dataset.bmmOrig;
             if (want && el.getAttribute('src') !== want) el.src = want;
         });
@@ -780,7 +787,7 @@ function applyAssets(theme: BmmTheme): void {
     applyMascot();
     // Re-apply to mascots created later (e.g. the tutorial hub opens on demand).
     if (_assetObserver) { _assetObserver.disconnect(); _assetObserver = null; }
-    if (mascot || a.loader) {
+    if (splash) {
         _assetObserver = new MutationObserver(() => applyMascot());
         _assetObserver.observe(document.body, { childList: true, subtree: true });
     }

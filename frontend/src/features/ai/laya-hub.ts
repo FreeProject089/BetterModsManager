@@ -25,6 +25,7 @@ import { uiIcon } from '../../ui/icons.js';
 const CARD_ID = 'settings-ai-section';
 
 const IC = (uiIcon('ai', 16));
+const IC_BTN = (uiIcon('settings', 14));
 
 type Tab = 'general' | 'answers' | 'tasks' | 'api';
 const TABS: Tab[] = ['general', 'answers', 'tasks', 'api'];
@@ -185,16 +186,15 @@ function paintCard(): void {
         return `<button type="button" class="laya-sum-row" data-open="${k}"><span class="laya-sum-k">${escHtml(tabName(k))}</span><span class="laya-sum-v">${escHtml(v)}</span>${uiIcon('chevron-right', 14, { cls: 'laya-sum-go' })}</button>`;
     }).join('');
     // The title must be the card-title's FIRST span: main.css stretches `span:first-of-type`
-    // (the label) and a leading icon span took that slot, pushing the title to the far right.
+    // (the label). The icon is an <svg>, so it does not take that slot.
+    // One card anatomy (css/settings-page.css): icon + title + state pill, one help line, the
+    // summary rows, the button in the footer.
     card.innerHTML = `
-      <h3 class="card-title ai-card-title"><span>${escHtml(t('ai.hub.title'))}</span>
+      <h3 class="card-title ai-card-title">${IC}<span>${escHtml(t('ai.hub.title'))}</span>
         ${pill ? `<span class="ai-pill${on ? ' ai-pill-on' : ''}">${escHtml(pill.textContent || '')}</span>` : ''}</h3>
-      <div class="laya-hub-hero">
-        <span class="laya-hub-tile" aria-hidden="true">${IC}</span>
-        <p class="laya-hub-lead">${escHtml(t('ai.hub.lead'))}</p>
-        <button type="button" class="btn btn-primary btn-sm" id="laya-open" aria-haspopup="dialog">${escHtml(t('ai.hub.manage'))}</button>
-      </div>
-      <div class="laya-sum">${rows}</div>`;
+      <p class="stg-help laya-hub-lead">${escHtml(t('ai.hub.lead'))}</p>
+      <div class="laya-sum">${rows}</div>
+      <div class="stg-foot"><button type="button" class="btn btn-primary btn-sm" id="laya-open" aria-haspopup="dialog">${IC_BTN}<span>${escHtml(t('ai.hub.manage'))}</span></button></div>`;
     card.querySelector('#laya-open')?.addEventListener('click', () => openLaya());
     card.querySelectorAll<HTMLButtonElement>('[data-open]').forEach((b) => b.addEventListener('click', () => openLaya(b.dataset.open as Tab)));
     // Redrawn whole: fold again, or the card loses its chevron (see ai-settings.ts refold).
