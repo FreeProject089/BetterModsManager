@@ -229,6 +229,30 @@ Write the date, not just the time — that is what makes it exact, because it se
 side of a daylight-saving change the moment falls on. A value that cannot be read is shown
 exactly as you typed it, never as `Invalid Date`.
 
+### Show me buttons and tickable steps (guide pages)
+
+```
+[Show me](show:view/profiles)
+[Try it in the tutorial](show:tutorial/basics/profiles/s1)
+
+- [ ] **Open Profiles.** You see: an empty screen.
+- [ ] **Press New profile.**
+```
+
+In the app, a `show:` link is a button, and a list of `- [ ]` items is a checklist the reader can tick
+(remembered on this PC, with a « Start over »). Both exist **only on BMM's own bundled pages**: a
+README or a catalogue entry rendered through B.MD never gets them. An animated GIF is shown as a
+still with a play button until it is pressed.
+
+The button's name is looked up in a fixed list in `frontend/src/docs/doc-actions.ts`, never run as
+code: `view/<screen>` (library, profiles, modpacks, modlist, repo, plugins, mapper, apps, community,
+settings), `tutorial/<id>[/<part>[/<step>]]`, `settings[/updates|identity|security|feedback]`,
+`automations`, `palette`, `notes` (the release notes) and `doc/<page>`. A name that is not on the
+list is plain text. `tests/doc-actions.test.mjs` checks every `show:` link in these pages.
+
+On the website there is no app to drive: the link becomes a labelled chip, and the ticks work in
+the browser (`assets/guide.js`).
+
 ## Keyboard keys, either way
 
 Two spellings, both drawn on both surfaces:

@@ -821,6 +821,42 @@
       "label": "Click a named control",
       "needs": "navClick",
       "group": "nav"
+    },
+    {
+      "type": "pkg.install",
+      "label": "Install a file the automation carries",
+      "needs": "pkgInstall",
+      "group": "pkg"
+    },
+    {
+      "type": "pkg.verify",
+      "label": "Check a carried file is in place",
+      "needs": "pkgVerify",
+      "group": "pkg"
+    },
+    {
+      "type": "modlist.verify",
+      "label": "Check a mod list is active and intact",
+      "needs": "listVerify",
+      "group": "pkg"
+    },
+    {
+      "type": "gate.report",
+      "label": "Write the result for the server",
+      "needs": "gateReport",
+      "group": "pkg"
+    },
+    {
+      "type": "game.launch",
+      "label": "Start a game with arguments",
+      "needs": "gameLaunch",
+      "group": "pkg"
+    },
+    {
+      "type": "ui.ask",
+      "label": "Ask a question (yes / no)",
+      "needs": "uiAsk",
+      "group": "notify"
     }
   ]
 }

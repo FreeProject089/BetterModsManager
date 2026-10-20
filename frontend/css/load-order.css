@@ -416,9 +416,13 @@
 .lob-rivals { display: flex; flex-wrap: wrap; gap: var(--space-1); min-width: 0; }
 .lob-moves { display: flex; gap: 2px; }
 
-.lom-backdrop { position: fixed; inset: 0; z-index: 99998; background: transparent; }
+/* The library right-click menu (features/mods/lib-order.ts). It lives on <body>, which is
+   pointer-events: none (css/mascot.css, the transparent window): without the opt-in below every
+   click on it went through to the mod list behind. No backdrop: the document closes it. */
 .lom {
     position: fixed;
+    z-index: 99998;
+    pointer-events: auto;
     min-width: 230px;
     padding: var(--space-1);
     border: 1px solid var(--bmm-border-hover);

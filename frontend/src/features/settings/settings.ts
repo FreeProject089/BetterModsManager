@@ -3,13 +3,14 @@
  * settings.js — Settings UI (PAT, Discord, Shortcuts, Storage, Language, Tags)
  */
 
-import { invoke, getSettings, updateSettings, pickFile, saveFile, askConfirm } from '../../core/api.js';
+import { invoke, getSettings, updateSettings, pickFile, saveFile } from '../../core/api.js';
 import { calibrationDue, withCalibrated, readCalibMap, writeCalibMap } from './disk-calib.js';
 import { initStorageModal, refreshIfOpen, openStorageManager } from './storage-modal.js';
 import { initGraphicsSettings } from './graphics-settings.js';
 import { mountOldInstallsCard } from './old-installs.js';
 import { actAttrs } from '../../core/inline-actions.js';
 import { t } from '../../core/i18n.js';
+import { confirmAction } from '../../ui/verify.js';
 import { getLinks, bcRoot, bcTestMode, bcTestBase } from '../../core/links-config.js';
 import { bcLinkState, openAccountLinkFlow, forgetBcLinkState } from '../../core/bc-link.js';
 import type { KeyPinProblem } from '../../core/key-pin.js';
@@ -538,8 +539,8 @@ async function initLanguageSettings() {
                     e.stopPropagation();
                     const code = (btn as HTMLElement).dataset.langDel || '';
                     const name = (btn as HTMLElement).dataset.langName || code;
-                    const ok = confirm((t('settings.langRemoveConfirm') || 'Remove language "{name}" ({code})? This deletes its .json file.')
-                        .replace('{name}', name).replace('{code}', code.toUpperCase()));
+                    const ok = await confirmAction({ title: t('vfy.t.langRemove'), message: (t('settings.langRemoveConfirm') || 'Remove language "{name}" ({code})? This deletes its .json file.')
+                        .replace('{name}', name).replace('{code}', code.toUpperCase()), confirmLabel: t('common.remove'), tone: 'danger' });
                     if (!ok) return;
                     try {
                         // if the removed language is active, fall back to English first
@@ -1034,7 +1035,7 @@ async function renderCreatorKeyState(elCreatorId: HTMLElement | null) {
         btn.style.alignSelf = 'flex-start';
         btn.textContent = t('settings.creatorKey.resetBtn');
         btn.addEventListener('click', async () => {
-            const ok = await askConfirm(t('settings.creatorKey.resetBody'), { title: t('settings.creatorKey.resetTitle'), type: 'warning' });
+            const ok = await confirmAction({ title: t('settings.creatorKey.resetTitle'), message: t('settings.creatorKey.resetBody'), confirmLabel: t('common.reset'), tone: 'danger' });
             if (!ok) return;
             try {
                 const info = await invoke('creator_identity_reset', { confirm: CREATOR_KEY_RESET_CONFIRM }) as { cid?: string };
@@ -2420,7 +2421,7 @@ export async function initSettings() {
         importBtn.addEventListener('click', async () => {
             const srcPath = await pickFile([{ name: 'App Data Backup', extensions: ['json'] }]);
             if (srcPath) {
-                if (confirm(t('settings.dataImportConfirm'))) {
+                if (await confirmAction({ title: t('vfy.t.importData'), message: t('settings.dataImportConfirm'), confirmLabel: t('vfy.b.importData'), tone: 'danger' })) {
                     try {
                         const extras: any = await invoke('import_app_data', { srcPath });
                         // Restore frontend-only data (localStorage) bundled in the backup.

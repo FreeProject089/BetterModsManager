@@ -1,0 +1,3 @@
+{
+  "_info": "Native dialogs still in frontend/src. Empty: every confirmation and prompt is a BMM dialog (ui/verify.ts). Counts only go down."
+}

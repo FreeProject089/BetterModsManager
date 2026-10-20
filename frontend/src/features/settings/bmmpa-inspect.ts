@@ -19,7 +19,7 @@
  *  hands out English prose forces every view to print English, which is what the BCWEB
  *  copy of this actually did until its French moderation screen showed it. One client
  *  today is not a reason to build the shape that breaks with two. */
-export const RISK_KEYS = ['command', 'script', 'deeplink', 'stopProcess', 'delete', 'resources', 'tasks', 'network', 'ai', 'navigate'] as const;
+export const RISK_KEYS = ['command', 'script', 'deeplink', 'stopProcess', 'delete', 'resources', 'tasks', 'network', 'ai', 'navigate', 'files'] as const;
 
 /** What a task will be ALLOWED to do if it runs as it is — the question a "Run it now" button
  *  asks, as opposed to what a file asks for (the import strips that anyway).
@@ -71,6 +71,7 @@ const REACHING_ACTIONS = new Set([
     'custom.command', 'custom.script', 'app.stop', 'app.launch', 'http.request',
     'file.open', 'folder.open', 'open.url', 'restart', 'task.run',
     'webhook.send', 'discord.send', 'slack.send',
+    'pkg.install', 'gate.report', 'game.launch',
 ]);
 
 export interface StepSummary {

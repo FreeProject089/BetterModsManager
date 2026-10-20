@@ -287,10 +287,12 @@ const READ_ACTIONS = new Set([
     'data.validate', 'text.extract', 'log.print', 'notify', 'id.of', 'map.get', 'ai.status',
     'mods.verifyIntegrity', 'disk.report', 'storage.diskBenchmark', 'benchmark.run',
     'wait.http', 'wait.hook', 'plugin.compare',
+    'pkg.verify', 'modlist.verify',
 ]);
 const FLOW_ACTIONS = new Set([
     'var.set', 'var.clear', 'var.ternary', 'math.set', 'rule.table', 'task.stop',
     'list.set', 'list.push', 'list.clear', 'map.set', 'map.clear',
+    'ui.ask',
 ]);
 const DELETE_ACTIONS = new Set([
     'profile.delete', 'mod.remove', 'modpack.delete', 'plugin.delete', 'catalog.delete',
@@ -303,6 +305,7 @@ const NETWORK_ACTIONS = new Set([
 const EXTERNAL_ACTIONS = new Set([
     'app.launch', 'app.stop', 'file.open', 'folder.open', 'custom.command', 'custom.script',
     'launchpack.run', 'open.url', 'restart',
+    'game.launch',
 ]);
 
 export function effectOf(type: string, params: Record<string, unknown> = {}): Effect {
@@ -335,6 +338,8 @@ export function effectOf(type: string, params: Record<string, unknown> = {}): Ef
 export const DRY_MEASURED: readonly string[] = [
     'cache.clean', 'logs.rotate', 'catalog.updates', 'repos.checkFollowed',
     'repo.server',
+    // Read-only and quick: the dry run of the DCS join gate says whether the list would pass.
+    'modlist.verify', 'pkg.verify',
 ];
 
 // ── The plan ─────────────────────────────────────────────────────────────────────────────────

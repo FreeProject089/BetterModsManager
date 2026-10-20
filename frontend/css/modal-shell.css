@@ -426,3 +426,12 @@ body.bmm-no-anim :is(.modal-overlay, .modal-generic-overlay, .modal) { animation
     color: color-mix(in srgb, var(--bmm-danger) 62%, var(--bmm-text-primary));
 }
 .btn.btn-outline-danger:hover { background: var(--bmm-danger-dim); border-color: var(--bmm-danger); }
+/* ── BMM's own confirm / prompt dialogs (ui/verify.ts): replace window.confirm, alert, prompt ── */
+.vfy-modal .modal-body { display: flex; flex-direction: column; gap: 10px; }
+.vfy-msg { margin: 0; font-size: 13.5px; line-height: 1.6; color: var(--bmm-text-secondary); }
+.vfy-list { margin: 0 0 0 18px; padding: 0; font-size: 12.5px; line-height: 1.6; color: var(--bmm-text-primary); }
+.vfy-label { font-size: 12px; font-weight: 600; color: var(--bmm-text-secondary); }
+.vfy-input { width: 100%; box-sizing: border-box; }
+textarea.vfy-input { resize: vertical; min-height: 90px; font: inherit; }
+.vfy-err { margin: 0; font-size: 12px; color: color-mix(in srgb, var(--bmm-danger) 70%, var(--bmm-text-primary)); }
+.vfy-err[hidden] { display: none; }

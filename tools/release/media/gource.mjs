@@ -4,11 +4,14 @@
 //      ../BetterCommunity-v2 when it is there). Each line is « unix time|author name|A/M/D|path »:
 //      names only, gource's custom log has no e-mail field, and nothing is sent anywhere.
 //   2. Paths are prefixed with the repository name, the logs merged and sorted by time.
-//   3. Captions at each version bump of package.json (« BMM 1.0.0 », …).
+//   3. No captions and no version text: the picture is the file tree growing, with the file
+//      NAMES readable as they appear, the repository names as folder labels, and the BMM
+//      wordmark (frontend/assets/brand/bmm-wordmark-dark.svg, drawn to a PNG) as Gource's logo.
 //   4. Gource renders a PPM stream at a fixed size, speed, frame rate and hash seed; ffmpeg encodes
 //      it to H.264 (yuv420p, +faststart). From that MP4: a short palette-optimised GIF, a poster
 //      PNG, and the credits page background (frontend/assets/videos/credits_bg.mp4: muted,
-//      faded in and out so its loop has no jump).
+//      faded in and out so its loop has no jump). The release tool runs this step BEFORE the
+//      build, so the installer ships the new credits video.
 //
 // Avatars: only local images, matched by author name (frontend/assets/userpfp/<name>.png, and
 // the pictures contributors.json names). Unmatched authors get gource's default.
@@ -20,7 +23,8 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, statSync, r
 import { join, resolve, extname, basename } from 'node:path';
 import { ROOT, TOOL_DIR, releaseDir, readJson, fmtBytes } from '../lib/util.mjs';
 import { run, capture } from '../lib/exec.mjs';
-import { git, logRange } from '../lib/git.mjs';
+import { git } from '../lib/git.mjs';
+import { launch, svgToPng } from '../lib/browser.mjs';
 
 export const GOURCE_CANDIDATES = [process.env.GOURCE, 'C:/Program Files/Gource/gource.exe', 'C:/Program Files (x86)/Gource/gource.exe'];
 export const findGource = () => GOURCE_CANDIDATES.find((p) => p && existsSync(p)) ?? null;
@@ -57,20 +61,6 @@ export function mergeLogs(lists) {
 export function secondsPerDay(firstT, lastT, target) {
   const days = Math.max(1, (lastT - firstT) / 86400);
   return Math.max(0.01, +(target / days).toFixed(3));
-}
-
-/** Captions « BMM x.y.z » at each package.json version change of BMM (gource caption file). */
-export function versionCaptions(cwd = ROOT) {
-  const out = git(['log', '--reverse', '--format=%H %at', '-G', '"version": "', '--', 'package.json'], cwd) || '';
-  const seen = new Set();
-  const lines = [];
-  for (const row of out.split(/\r?\n/).filter(Boolean)) {
-    const [h, t] = row.split(' ');
-    let v = null;
-    try { v = JSON.parse(git(['show', `${h}:package.json`], cwd) || '{}').version; } catch { /* unreadable */ }
-    if (v && !seen.has(v)) { seen.add(v); lines.push(`${t}|BMM ${v}`); }
-  }
-  return lines;
 }
 
 /** Avatar folder: <author>.png for every local picture we can match by name. */
@@ -148,24 +138,22 @@ export async function renderGource(o) {
   const authors = new Set(merged.map((l) => l.split('|')[1]));
   const first = +merged[0].split('|')[0], last = +merged.at(-1).split('|')[0];
   const spd = secondsPerDay(first, last, seconds);
-  const captions = join(work, 'captions.txt');
-  writeFileSync(captions, versionCaptions().filter((l) => +l.split('|')[0] >= first).join('\n') + '\n');
   const avatars = await buildAvatars(join(work, 'avatars'), authors, ffmpeg, log);
 
-  const logoSrc = [join(ROOT, 'frontend', 'assets', 'BMm.png'), join(ROOT, '.Assets', 'AssetsoTH', 'BMMLogo.png')].find(existsSync);
   const logo = join(work, 'logo.png');
-  if (logoSrc) await run(ffmpeg, ['-y', '-v', 'error', '-i', logoSrc, '-vf', 'scale=96:-1', logo], { quiet: true, log });
+  const haveLogo = await drawLogo(logo, log);
   const font = ['C:/Windows/Fonts/segoeuib.ttf', 'C:/Windows/Fonts/segoeui.ttf'].find(existsSync);
 
+  // File names are shown (file-font-size, filename-time); no captions, no version in the title.
   const gArgs = [`-${width}x${height}`, '--output-framerate', String(fps), '--seconds-per-day', String(spd), '--auto-skip-seconds', '0.4',
-    '--max-file-lag', '0.2', '--hash-seed', '42', '--stop-at-end', '--disable-input', '--hide', 'filenames,mouse,progress',
-    '--dir-name-depth', '1', '--dir-font-size', '15', '--user-font-size', '13', '--font-size', '24', '--font-colour', 'E8EDF7',
-    '--background-colour', '0B0F19', '--bloom-multiplier', '0.6', '--bloom-intensity', '0.5', '--elasticity', '0.03',
-    '--file-idle-time', '0', '--user-scale', '1.2', '--max-user-speed', '400', '--highlight-users', '--highlight-colour', 'FFCC00',
-    '--date-format', '%d %B %Y', '--title', `Better Mods Manager ${version}  ·  BMM, BMM Docs, BetterInstaller, BCW${repos.some((r) => r.name === 'BetterCommunity-v2') ? ', BetterCommunity v2' : ''}`,
-    '--caption-file', captions, '--caption-size', '28', '--caption-colour', 'FFCC00', '--caption-duration', '4',
+    '--max-file-lag', '1.2', '--hash-seed', '42', '--padding', '1.25', '--stop-at-end', '--disable-input', '--hide', 'mouse,progress',
+    '--file-font-size', '14', '--filename-time', '2', '--filename-colour', 'FFFFFF',
+    '--dir-name-depth', '1', '--dir-font-size', '18', '--dir-colour', '8FA3C7', '--user-font-size', '15', '--font-size', '26', '--font-colour', 'F4F7FF',
+    '--background-colour', '0B0F19', '--bloom-multiplier', '0.5', '--bloom-intensity', '0.4', '--elasticity', '0.03',
+    '--file-idle-time', '0', '--user-scale', '1.0', '--max-user-speed', '400', '--highlight-users', '--highlight-colour', 'FFCC00',
+    '--date-format', '%d %B %Y', '--title', 'Better Mods Manager',
     '--multi-sampling', '--no-vsync', '--output-ppm-stream', '-', '--log-format', 'custom'];
-  if (existsSync(logo)) gArgs.push('--logo', logo);
+  if (haveLogo) gArgs.push('--logo', logo, '--logo-offset', '40x30');
   if (font) gArgs.push('--font-file', font);
   if (avatars.length) gArgs.push('--user-image-dir', join(work, 'avatars'));
   gArgs.push(logFile);
@@ -178,9 +166,10 @@ export async function renderGource(o) {
   if (p.ffmpeg !== 0 || !existsSync(mp4)) throw new Error(`render failed (gource ${p.gource}, ffmpeg ${p.ffmpeg}): ${p.err.slice(-400)}`);
   const info = probe(ffmpeg, mp4);
 
-  // Poster: a frame near the end (the whole tree is there).
+  // Poster: a frame two thirds in, when the tree is large and file names are on screen (the
+  // last seconds are idle: no names, only the tree).
   const poster = join(outDir, `gource-${version}-poster.png`);
-  await run(ffmpeg, ['-y', '-v', 'error', '-sseof', '-1.5', '-i', mp4, '-frames:v', '1', '-update', '1', poster], { quiet: true, log });
+  await run(ffmpeg, ['-y', '-v', 'error', '-ss', String(((info?.duration ?? 30) * 0.68).toFixed(2)), '-i', mp4, '-frames:v', '1', '-update', '1', poster], { quiet: true, log });
   // GIF: 3× faster, 640 px wide, 12 fps, 128-colour palette.
   const gif = join(outDir, `gource-${version}.gif`);
   await run(ffmpeg, ['-y', '-v', 'error', '-i', mp4, '-vf', 'setpts=PTS/3,fps=12,scale=640:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle', '-loop', '0', gif], { quiet: true, log });
@@ -191,6 +180,20 @@ export async function renderGource(o) {
 }
 
 /** Re-encode the render for the credits page: same path, muted, fade in/out, small. */
+/** The BMM wordmark (dark-background edition) as a transparent PNG for Gource's --logo. */
+async function drawLogo(dest, log) {
+  const svgFile = join(ROOT, 'frontend', 'assets', 'brand', 'bmm-wordmark-dark.svg');
+  if (!existsSync(svgFile)) { log?.warn('no frontend/assets/brand/bmm-wordmark-dark.svg: Gource renders without a logo'); return false; }
+  let browser;
+  try {
+    browser = await launch();
+    const svg = readFileSync(svgFile, 'utf8').replace(/<svg\b([^>]*?)\swidth="[^"]*"\sheight="[^"]*"/, '<svg$1 width="380" height="104"');
+    writeFileSync(dest, await svgToPng(browser, svg, 380, 104, { scale: 1, transparent: true }));
+    return true;
+  } catch (e) { log?.warn(`logo not drawn (${e.message}): Gource renders without a logo`); return false; }
+  finally { await browser?.close(); }
+}
+
 export async function creditsVideo(ffmpeg, mp4, info, log) {
   const before = existsSync(CREDITS_VIDEO) ? probe(ffmpeg, CREDITS_VIDEO) : null;
   const tmp = join(TOOL_DIR, '.cache', 'gource', 'credits_bg.mp4');

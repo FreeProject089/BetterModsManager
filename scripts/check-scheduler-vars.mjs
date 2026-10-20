@@ -26,8 +26,12 @@ const src = fs.readFileSync(FILE, 'utf8');
 // matched so this does not quietly stop seeing anything if some write is left behind.
 // When the shape changed, this check went loud rather than silently passing on zero
 // matches — which is why the pattern below is deliberately permissive about the prefix.
+// The package and game steps write their values in their own module (sched-pkg.ts), called
+// from runAction: those writes count as the runner's.
+const PKG = 'frontend/src/features/settings/sched-pkg.ts';
+const pkgSrc = fs.existsSync(PKG) ? fs.readFileSync(PKG, 'utf8') : '';
 const written = new Set(
-    [...src.matchAll(/ctx(?:\.nums)?\['([a-zA-Z0-9._]+)'\]\s*=/g)].map((m) => m[1]),
+    [...(src + pkgSrc).matchAll(/ctx(?:\.nums)?\['([a-zA-Z0-9._]+)'\]\s*=/g)].map((m) => m[1]),
 );
 if (written.size === 0) {
     console.error('✗ found no context writes at all — the pattern is stale. Refusing to report success.');

@@ -17,10 +17,14 @@ import { escHtml, escAttr } from '../../core/utils.js';
 import { toast } from '../../ui/app.js';
 import { bindingOf, chordToStr } from '../../core/commands.js';
 import {
-    buildGraph, snap, setNudge, stampOf, resolve, slotOf, insertStep, removeSteps, duplicateStep, moveStep,
+    buildGraph, snap, setNudge, stampOf, resolve, slotOf, insertStep, removeSteps, duplicateStep, moveStep, relocateStep,
     neighbour, marksForDraft, missingPerms, ACTION_PERMS, findPath, lanesOf, bodiesOf, countInside,
     NODE_W, NODE_H, type FlowGraph, type FlowNode, type FlowEdge, type FlowLayout, type AnyStep, type PermKey, type RunMark,
 } from './sched-flow-model.js';
+import {
+    normalizeUi, edgeKey, frameAround, insideFrame, hiddenBy, align, distribute, clipText, readClip, stepProblems,
+    FRAME_HEAD, TONES, type FlowUi, type FlowFrame, type Tone, type AlignHow, type Box,
+} from './sched-flow-ui.js';
 import { bindFlowKeys, FLOW_KEYS, type FlowScope } from './sched-flow-keys.js';
 import { varsOfStep } from './sched-debug-map.js';
 import { uiIcon } from '../../ui/icons.js';
@@ -35,7 +39,7 @@ type PickItem = { v: string; label: string; desc?: string; group: string };
 
 /** What the scheduler lends the flow. Everything that decides something stays over there. */
 export interface FlowHost {
-    getDraft(): { id?: string; steps: AnyStep[]; trigger: any; layout?: FlowLayout };
+    getDraft(): { id?: string; steps: AnyStep[]; trigger: any; layout?: FlowLayout; ui?: FlowUi };
     snapshot(): void;
     undo(): void;
     redo(): void;
@@ -65,6 +69,8 @@ export interface FlowHost {
     toggleBreakpoint(path: string): void;
     /** Run this one step now, isolated, and say how it went. */
     testStep(path: string): Promise<StepTestResult>;
+    /** The category an action belongs to (its registry group): the node's colour. */
+    actionGroup(type: string): string;
 }
 
 // ── State. Module-level on purpose: an undo re-renders the whole editor, and the view and the
@@ -101,6 +107,41 @@ let _dbg: FlowDebug | null = null;
 /** A one-step test in flight or just finished, per node: the pulse, then the verdict. */
 const _tests = new Map<string, 'testing' | 'ok' | 'fail'>();
 let _tipEl: HTMLElement | null = null;
+/** The frames layer, under the wires. */
+let _framesEl: HTMLElement | null = null;
+/** Nodes hidden by a folded frame, this render. */
+let _hidden = new Map<string, FlowFrame>();
+/** A frame picked with a click on its title bar (Delete removes the frame, never its nodes). */
+let _selFrame: string | null = null;
+/** Steps copied in the flow, for a paste when the system clipboard cannot be read. */
+let _clip: AnyStep[] | null = null;
+/** The open context menu or arrange menu. */
+let _menu: HTMLElement | null = null;
+/** Where the pointer last was over the canvas, in screen pixels (Tab opens the palette there). */
+let _lastPointer: { x: number; y: number } | null = null;
+/** Snap to the grid while dragging: on by default, remembered per person. */
+let _snapOn = readSnap();
+
+function readSnap(): boolean {
+    try { return localStorage.getItem('bmm.sched.flow.snap') !== '0'; } catch { return true; }
+}
+function writeSnap(on: boolean): void {
+    try { localStorage.setItem('bmm.sched.flow.snap', on ? '1' : '0'); } catch { /* private mode: this session only */ }
+}
+/** A dragged coordinate: on the grid when snapping is on. */
+const sn = (v: number): number => (_snapOn ? snap(v) : Math.round(v));
+
+/** The task's presentation block, never null. */
+function uiOf(): FlowUi {
+    return (_host?.getDraft().ui as FlowUi | undefined) || { v: 1 };
+}
+/** Store it back, checked; an empty block leaves no `ui` field at all. */
+function setUi(next: FlowUi): void {
+    const d = _host?.getDraft();
+    if (!d) return;
+    const n = normalizeUi(next);
+    if (n) d.ui = n; else delete d.ui;
+}
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const reduced = (): boolean => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } };
@@ -130,6 +171,7 @@ export function mountFlow(pane: HTMLElement, host: FlowHost): void {
     pane.innerHTML = `
         <div class="sflow-canvas" tabindex="0" role="application" aria-label="${escAttr(t('sched.flow.canvasAria'))}">
             <div class="sflow-world">
+                <div class="sflow-frames"></div>
                 <svg class="sflow-edges" xmlns="${SVGNS}" aria-hidden="true"></svg>
                 <div class="sflow-layer"></div>
             </div>
@@ -146,8 +188,13 @@ export function mountFlow(pane: HTMLElement, host: FlowHost): void {
                 ${uiIcon('add', 14)}</button>
             <button type="button" class="sflow-tb" data-act="fit" aria-label="${escAttr(t('sched.flow.fit'))}" data-tooltip="${escAttr(tip('sched.flow.fit', 'sched.flow.fit'))}">
                 ${uiIcon('maximize', 14)}</button>
-            <button type="button" class="sflow-tb" data-act="layout" aria-label="${escAttr(t('sched.flow.autoLayout'))}" data-tooltip="${escAttr(tip('sched.flow.autoLayout', 'sched.flow.autoLayout'))}">
-                ${uiIcon('layers', 14)}</button>
+            <span class="sflow-tb-sep"></span>
+            <button type="button" class="sflow-tb" data-act="arrange" aria-haspopup="menu" aria-label="${escAttr(t('sched.flow.arrange'))}" data-tooltip="${escAttr(t('sched.flow.arrange'))}">
+                ${uiIcon('layers', 14)}<span>${escHtml(t('sched.flow.arrange'))}</span>${uiIcon('chevron-down', 12)}</button>
+            <button type="button" class="sflow-tb" data-act="frame" aria-label="${escAttr(t('sched.flow.frame'))}" data-tooltip="${escAttr(tip('sched.flow.frame', 'sched.flow.frame'))}">
+                ${uiIcon('maximize', 14)}</button>
+            <button type="button" class="sflow-tb sflow-tb-toggle" data-act="snap" aria-pressed="${_snapOn ? 'true' : 'false'}" aria-label="${escAttr(t('sched.flow.snap'))}" data-tooltip="${escAttr(tip('sched.flow.snap', 'sched.flow.snap'))}">
+                ${uiIcon('grid', 14)}</button>
             <span class="sflow-tb-sep"></span>
             <button type="button" class="sflow-tb" data-act="keys" aria-label="${escAttr(t('sched.flow.keys'))}" data-tooltip="${escAttr(t('sched.flow.keys'))}">
                 ${uiIcon('keyboard', 14)}</button>
@@ -157,6 +204,7 @@ export function mountFlow(pane: HTMLElement, host: FlowHost): void {
         <aside class="sflow-insp" hidden aria-label="${escAttr(t('sched.flow.inspector'))}"></aside>`;
     _canvas = pane.querySelector('.sflow-canvas');
     _world = pane.querySelector('.sflow-world');
+    _framesEl = pane.querySelector('.sflow-frames');
     _svg = pane.querySelector('.sflow-edges');
     _layer = pane.querySelector('.sflow-layer');
     _insp = pane.querySelector('.sflow-insp');
@@ -199,6 +247,7 @@ function focusCanvasSoon(tries = 6): void {
 export function unmountFlow(): void {
     _tipEl?.remove();
     _tipEl = null;
+    closeMenu();
     _obs?.disconnect();
     _obs = null;
     _ro?.disconnect();
@@ -311,6 +360,16 @@ function bindKeys(): void {
         'sched.flow.fit': () => fit(1.25),
         'sched.flow.autoLayout': () => autoLayout(),
         'sched.flow.testNode': () => flowTestSelected(),
+        'sched.flow.palette': () => openPaletteAt({ ...defaultInsertPoint(), ...(_lastPointer || {}) }),
+        'sched.flow.copy': () => { void copySelection(false); },
+        'sched.flow.cut': () => { void copySelection(true); },
+        'sched.flow.paste': () => { void pasteClip(); },
+        'sched.flow.frame': () => addFrame(),
+        'sched.flow.snap': () => toggleSnap(),
+        'sched.flow.alignLeft': () => alignSelection('left'),
+        'sched.flow.alignTop': () => alignSelection('top'),
+        'sched.flow.distributeH': () => distributeSelection('h'),
+        'sched.flow.distributeV': () => distributeSelection('v'),
         'sched.mode.blocks': () => _modeSwitch('bricks'),
         'sched.mode.code': () => _modeSwitch('code'),
         'sched.mode.flow': () => _modeSwitch('flow'),
@@ -367,17 +426,32 @@ function render(): void {
         if (!list.includes(line)) list.push(line);
         needsAt.set(m.path, list);
     }
-    const W = g.width + 400;
-    const H = g.height + 300;
+    // A required field left empty is said on the node, before the run says it.
+    for (const n of g.nodes) {
+        if (n.type !== 'step') continue;
+        const probs = stepProblems(resolve(draft.steps, n.path!) as AnyStep);
+        if (!probs.length) continue;
+        const list = needsAt.get(n.id) || [];
+        for (const p of probs) list.push(t('sched.flow.needsField', { p }));
+        needsAt.set(n.id, list);
+    }
+    const ui = uiOf();
+    _hidden = hiddenBy(ui.frames, g.nodes.filter((n) => n.id !== 'trigger').map(boxOf));
+    if (_selFrame && !(ui.frames || []).some((f) => f.id === _selFrame)) _selFrame = null;
+    let W = g.width + 400;
+    let H = g.height + 300;
+    for (const f of ui.frames || []) { W = Math.max(W, f.x + f.w + 200); H = Math.max(H, f.y + f.h + 200); }
     _world.style.width = `${W}px`;
     _world.style.height = `${H}px`;
     _svg.setAttribute('width', String(W));
     _svg.setAttribute('height', String(H));
     _svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
     _svg.innerHTML = g.edges.map((e) => edgeSvg(g, e)).join('');
+    if (_framesEl) _framesEl.innerHTML = (ui.frames || []).map((f) => frameHtml(f, g)).join('');
 
     const html: string[] = [];
     for (const n of g.nodes) {
+        if (_hidden.has(n.id)) continue;
         if (n.type === 'join') {
             html.push(`<span class="sflow-join" style="left:${n.x}px;top:${n.y}px" data-tooltip="${escAttr(t('sched.flow.join'))}"></span>`);
             continue;
@@ -395,13 +469,14 @@ function render(): void {
         const a = g.nodes.find((n) => n.id === e.from)!;
         const b = g.nodes.find((n) => n.id === e.to)!;
         if (!a || !b) continue;
+        if (_hidden.has(a.id) || _hidden.has(b.id)) continue;
         if (e.kind === 'lane') {
             const st = resolve(draft.steps, e.from) as AnyStep | undefined;
             const label = laneLabel(st, e);
             const cond = e.lane === 'case' ? caseCond(st, (e.n || 1) - 1) : '';
             html.push(`<span class="sflow-lane" style="left:${b.x - 10}px;top:${b.y - 20}px"${cond ? ` data-tooltip="${escAttr(cond)}"` : ''}>${escHtml(label)}${cond ? `<i>${escHtml(cond)}</i>` : ''}</span>`);
         }
-        if (e.insert) {
+        if (e.insert && !ui.reroutes?.[edgeKey(e)]) {
             const [x1, y1] = outPort(a, e);
             const x2 = b.x;
             const y2 = b.y + b.h / 2;
@@ -410,6 +485,15 @@ function render(): void {
             html.push(`<button type="button" class="sflow-edgeadd" style="left:${mx - 10}px;top:${my - 10}px" data-slot="${escAttr(e.insert.slot)}" data-index="${e.insert.index}"
                 aria-label="${escAttr(t('sched.flow.addHere'))}" data-tooltip="${escAttr(t('sched.flow.addHere'))}">${uiIcon('add', 12)}</button>`);
         }
+    }
+    // Reroute points: drag to bend a wire, double-click to take the point away.
+    for (const [key, pts] of Object.entries(ui.reroutes || {})) {
+        const [from, to] = key.split('>');
+        if (_hidden.has(from) && _hidden.has(to)) continue;
+        pts.forEach(([x, y], i) => {
+            html.push(`<span class="sflow-reroute" data-rr="${escAttr(key)}" data-i="${i}" style="left:${x - 6}px;top:${y - 6}px"
+                role="button" tabindex="-1" aria-label="${escAttr(t('sched.flow.reroute'))}" data-tooltip="${escAttr(t('sched.flow.rerouteTip'))}"></span>`);
+        });
     }
     if (!(draft.steps || []).length) {
         html.push(`<div class="sflow-emptyhint" style="left:${NODE_W + 110}px;top:${NODE_H / 2 - 10}px">${escHtml(tip('sched.flow.empty', 'sched.flow.addNode'))}</div>`);
@@ -432,6 +516,7 @@ function nodeHtml(n: FlowNode, draft: ReturnType<FlowHost['getDraft']>, needs: s
     if (n.type === 'trigger') {
         return `<div class="sflow-node sflow-trigger${sel ? ' is-sel' : ''}" data-id="trigger" style="left:${n.x}px;top:${n.y}px;width:${n.w}px;height:${n.h}px"
             role="button" tabindex="-1" aria-label="${escAttr(t('sched.fTrigger') + ': ' + h.triggerTitle())}">
+            <span class="sflow-port is-out" data-port="trigger" data-tooltip="${escAttr(t('sched.flow.portOut'))}"></span>
             <span class="sflow-ic">${h.triggerIcon()}</span>
             <span class="sflow-txt"><span class="sflow-title">${escHtml(t('sched.fTrigger'))}</span><span class="sflow-sub">${escHtml(h.triggerTitle())}</span></span>
             ${needs.length ? `<span class="sflow-warn" data-tooltip="${escAttr(needs.join('\n'))}">!</span>` : ''}
@@ -451,7 +536,8 @@ function nodeHtml(n: FlowNode, draft: ReturnType<FlowHost['getDraft']>, needs: s
     const dbgCls = here ? (_dbg!.phase === 'failed' ? 'is-dbg-fail' : _dbg!.phase === 'paused' ? 'is-dbg-here' : 'is-dbg-run') : '';
     const test = _tests.get(n.path!);
     const bp = h.hasBreakpoint(n.path!);
-    const cls = ['sflow-node', `k-${kind}`, branchy ? 'is-branch' : '', loopy ? 'is-loop' : '', sel ? 'is-sel' : '', st.disabled ? 'is-off' : '', needs.length ? 'is-warn' : '',
+    const group = kind === 'action' ? h.actionGroup(String(st.action?.type || '')) : '';
+    const cls = ['sflow-node', `k-${kind}`, group ? `g-${group}` : '', branchy ? 'is-branch' : '', loopy ? 'is-loop' : '', sel ? 'is-sel' : '', st.disabled ? 'is-off' : '', needs.length ? 'is-warn' : '',
         dbgCls, test ? `is-test-${test}` : '', bp ? 'has-bp' : ''].filter(Boolean).join(' ');
     const runTip = run ? `${t('sched.flow.run.' + run.mark)}${run.error ? ` — ${run.error}` : ''}` : '';
     return `<div class="${cls}" data-id="${escAttr(n.id)}" style="left:${n.x}px;top:${n.y}px;width:${n.w}px;height:${n.h}px"
@@ -462,6 +548,8 @@ function nodeHtml(n: FlowNode, draft: ReturnType<FlowHost['getDraft']>, needs: s
         ${run ? `<span class="sflow-dot run-${run.mark}" data-tooltip="${escAttr(runTip)}" aria-label="${escAttr(runTip)}"></span>` : ''}
         <button type="button" class="sflow-bp" data-bp="${escAttr(n.path!)}" aria-pressed="${bp ? 'true' : 'false'}"
             aria-label="${escAttr(t(bp ? 'sched.bp.remove' : 'sched.bp.add'))}" data-tooltip="${escAttr(t(bp ? 'sched.bp.remove' : 'sched.bp.add'))}"></button>
+        <span class="sflow-port is-in" aria-hidden="true"></span>
+        <span class="sflow-port is-out" data-port="${escAttr(n.id)}" data-tooltip="${escAttr(t('sched.flow.portOut'))}"></span>
     </div>`;
 }
 
@@ -470,10 +558,58 @@ function outPort(a: FlowNode, _e: FlowEdge): [number, number] {
     return [a.x + a.w, a.y + a.h / 2];
 }
 
+/** A folded frame is a title bar: no wider than it needs to be. */
+function foldedW(f: FlowFrame): number {
+    return Math.min(f.w, 300);
+}
+
+/** A node as a box (frames, alignment). */
+function boxOf(n: FlowNode): Box {
+    return { id: n.id, x: n.x, y: n.y, w: n.w, h: n.h };
+}
+
+/** Where a wire ends: the node, or — when a folded frame hides it — that frame's title bar. */
+function endpointOf(g: FlowGraph, id: string): FlowNode | undefined {
+    const n = g.nodes.find((x) => x.id === id);
+    if (!n) return undefined;
+    const f = _hidden.get(id);
+    return f ? { ...n, x: f.x, y: f.y, w: foldedW(f), h: FRAME_HEAD } : n;
+}
+
+function frameHtml(f: FlowFrame, g: FlowGraph): string {
+    const inside = insideFrame(f, g.nodes.filter((n) => n.type === 'step').map(boxOf)).length;
+    const title = f.title || t('sched.flow.frameUntitled');
+    const fold = f.collapsed ? t('sched.flow.frameUnfold') : t('sched.flow.frameFold');
+    return `<div class="sflow-frame t-${f.tone}${f.collapsed ? ' is-folded' : ''}${_selFrame === f.id ? ' is-sel' : ''}" data-frame="${escAttr(f.id)}"
+        style="left:${f.x}px;top:${f.y}px;width:${f.collapsed ? foldedW(f) : f.w}px;height:${f.collapsed ? FRAME_HEAD : f.h}px">
+        <div class="sflow-frame-head" data-frame-drag="${escAttr(f.id)}">
+            <button type="button" class="sflow-frame-fold" data-frame-fold="${escAttr(f.id)}" aria-expanded="${f.collapsed ? 'false' : 'true'}"
+                aria-label="${escAttr(fold)}" data-tooltip="${escAttr(fold)}">${uiIcon(f.collapsed ? 'chevron-right' : 'chevron-down', 12)}</button>
+            <span class="sflow-frame-title" data-frame-title="${escAttr(f.id)}" data-tooltip="${escAttr(t('sched.flow.frameRename'))}">${escHtml(title)}</span>
+            <span class="sflow-frame-n">${escHtml(t('sched.flow.frameN', { n: String(inside) }))}</span>
+        </div>
+        ${f.collapsed ? '' : `<span class="sflow-frame-resize" data-frame-resize="${escAttr(f.id)}" aria-hidden="true"></span>`}
+    </div>`;
+}
+
+/** A wire bent through its reroute points, each leg a soft S like the straight ones. */
+function bentPath(pts: [number, number][]): string {
+    let d = `M${pts[0][0]} ${pts[0][1]}`;
+    for (let i = 1; i < pts.length; i++) {
+        const [px, py] = pts[i - 1];
+        const [qx, qy] = pts[i];
+        const dx = Math.max(16, Math.abs(qx - px) * 0.5);
+        d += ` C${px + dx} ${py} ${qx - dx} ${qy} ${qx} ${qy}`;
+    }
+    return d;
+}
+
 function edgeSvg(g: FlowGraph, e: FlowEdge): string {
-    const a = g.nodes.find((n) => n.id === e.from);
-    const b = g.nodes.find((n) => n.id === e.to);
+    const a = endpointOf(g, e.from);
+    const b = endpointOf(g, e.to);
     if (!a || !b) return '';
+    const fa = _hidden.get(e.from), fb = _hidden.get(e.to);
+    if (fa && fa === fb) return '';
     const hot = _sel.includes(e.from) || _sel.includes(e.to);
     const cls = `sflow-edge e-${e.kind}${hot ? ' is-hot' : ''}${e.lane === 'catch' ? ' is-catch' : ''}`;
     if (e.kind === 'loop') {
@@ -491,8 +627,16 @@ function edgeSvg(g: FlowGraph, e: FlowEdge): string {
     }
     const [x1, y1] = outPort(a, e);
     const x2 = b.x, y2 = b.y + b.h / 2;
-    const dx = Math.max(24, Math.abs(x2 - x1) * 0.5);
-    return `<path class="${cls}" d="M${x1} ${y1} C${x1 + dx} ${y1} ${x2 - dx} ${y2} ${x2} ${y2}"/>`;
+    const key = edgeKey(e);
+    const rr = uiOf().reroutes?.[key];
+    let d: string;
+    if (rr && rr.length) d = bentPath([[x1, y1], ...rr, [x2, y2]]);
+    else {
+        const dx = Math.max(24, Math.abs(x2 - x1) * 0.5);
+        d = `M${x1} ${y1} C${x1 + dx} ${y1} ${x2 - dx} ${y2} ${x2} ${y2}`;
+    }
+    // A wide invisible twin takes the pointer: double-click bends the wire, right-click offers it.
+    return `<path class="${cls}" d="${d}"/><path class="sflow-edge-hit" data-edge="${escAttr(key)}" d="${d}"/>`;
 }
 
 // ── Minimap ───────────────────────────────────────────────────────────────────────────────────
@@ -539,12 +683,29 @@ function zoomBy(f: number): void {
     if (!_canvas) return;
     zoomAt(_view.k * f, _canvas.clientWidth / 2, _canvas.clientHeight / 2);
 }
+/** What there is to see: the nodes and the frames (a frame's title sits above its nodes). */
+function extent(): { x0: number; y0: number; w: number; h: number } {
+    const g = _graph!;
+    // The nodes on screen: a folded frame's nodes are not, and must not stretch the view.
+    let x0 = 0, y0 = 0, x1 = 0, y1 = 0;
+    for (const n of g.nodes) {
+        if (_hidden.has(n.id)) continue;
+        x1 = Math.max(x1, n.x + n.w); y1 = Math.max(y1, n.y + n.h);
+        x0 = Math.min(x0, n.x); y0 = Math.min(y0, n.y);
+    }
+    for (const f of uiOf().frames || []) {
+        x0 = Math.min(x0, f.x); y0 = Math.min(y0, f.y);
+        x1 = Math.max(x1, f.x + (f.collapsed ? foldedW(f) : f.w)); y1 = Math.max(y1, f.y + (f.collapsed ? FRAME_HEAD : f.h));
+    }
+    return { x0, y0, w: x1 - x0, h: y1 - y0 };
+}
 function fit(maxK: number): void {
     if (!_canvas || !_graph) return;
     const cw = _canvas.clientWidth || 800, ch = _canvas.clientHeight || 500;
     const pad = 56;
-    const k = Math.max(0.3, Math.min(maxK, (cw - pad * 2) / Math.max(1, _graph.width), (ch - pad * 2) / Math.max(1, _graph.height + 20)));
-    _view = { k, x: Math.max(pad, (cw - _graph.width * k) / 2), y: Math.max(pad, (ch - _graph.height * k) / 2) };
+    const e = extent();
+    const k = Math.max(0.3, Math.min(maxK, (cw - pad * 2) / Math.max(1, e.w), (ch - pad * 2) / Math.max(1, e.h + 20)));
+    _view = { k, x: Math.max(pad, (cw - e.w * k) / 2) - e.x0 * k, y: Math.max(pad, (ch - e.h * k) / 2) - e.y0 * k };
     applyView();
 }
 /**
@@ -557,10 +718,11 @@ function firstView(): void {
     const cw = _canvas.clientWidth, ch = _canvas.clientHeight;
     if (!cw || !ch) { fit(1); return; }
     const pad = 56;
-    const k = Math.min(1, (cw - pad * 2) / Math.max(1, _graph.width), (ch - pad * 2) / Math.max(1, _graph.height + 20));
+    const e = extent();
+    const k = Math.min(1, (cw - pad * 2) / Math.max(1, e.w), (ch - pad * 2) / Math.max(1, e.h + 20));
     if (k >= 0.75) { fit(1); return; }
-    const kk = Math.max(0.75, Math.min(1, (ch - pad * 2) / Math.max(1, _graph.height + 20)));
-    _view = { k: kk, x: pad, y: Math.max(pad + 24, (ch - _graph.height * kk) / 2) };
+    const kk = Math.max(0.75, Math.min(1, (ch - pad * 2) / Math.max(1, e.h + 20)));
+    _view = { k: kk, x: pad - e.x0 * kk, y: Math.max(pad + 24, (ch - e.h * kk) / 2) - e.y0 * kk };
     applyView();
 }
 
@@ -634,6 +796,19 @@ function wireCanvas(): void {
             return;
         }
         c.focus({ preventScroll: true });
+        closeMenu();
+        if (e.button === 0 && !_space) {
+            const port = target.closest('[data-port]') as HTMLElement | null;
+            if (port) { e.stopPropagation(); startWire(e, port.dataset.port!); return; }
+            const fold = target.closest('[data-frame-fold]') as HTMLElement | null;
+            if (fold) { e.stopPropagation(); toggleFrameFold(fold.dataset.frameFold!); return; }
+            const rs = target.closest('[data-frame-resize]') as HTMLElement | null;
+            if (rs) { e.stopPropagation(); startFrameResize(e, rs.dataset.frameResize!); return; }
+            const fh = target.closest('[data-frame-drag]') as HTMLElement | null;
+            if (fh) { e.stopPropagation(); startFrameDrag(e, fh.dataset.frameDrag!); return; }
+            const rr = target.closest('.sflow-reroute') as HTMLElement | null;
+            if (rr) { e.stopPropagation(); startRerouteDrag(e, rr.dataset.rr!, Number(rr.dataset.i)); return; }
+        }
         const nodeEl = target.closest('.sflow-node') as HTMLElement | null;
         if (nodeEl && !_space && e.button === 0) { startNodeDrag(e, nodeEl.dataset.id!); return; }
         if (e.shiftKey && e.button === 0 && !_space) { startMarquee(e); return; }
@@ -647,9 +822,33 @@ function wireCanvas(): void {
         showTip(nodeEl);
     });
     c.addEventListener('pointerleave', hideTip);
+    c.addEventListener('pointermove', (e) => { _lastPointer = { x: e.clientX, y: e.clientY }; });
     c.addEventListener('dblclick', (e) => {
-        const nodeEl = (e.target as HTMLElement).closest('.sflow-node') as HTMLElement | null;
+        const target = e.target as HTMLElement;
+        const title = target.closest('[data-frame-title]') as HTMLElement | null;
+        if (title) { renameFrame(title.dataset.frameTitle!); return; }
+        const rr = target.closest('.sflow-reroute') as HTMLElement | null;
+        if (rr) { removeReroute(rr.dataset.rr!, Number(rr.dataset.i)); return; }
+        const hit = target.closest('.sflow-edge-hit') as SVGElement | null;
+        if (hit) { addReroute(hit.getAttribute('data-edge') || '', e.clientX, e.clientY); return; }
+        const nodeEl = target.closest('.sflow-node') as HTMLElement | null;
         if (nodeEl) openInspector(nodeEl.dataset.id!, true);
+    });
+    // Right-click: on empty canvas, the search-to-add palette where the pointer is; on a node, a
+    // frame or a wire, what can be done to it.
+    c.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        const target = e.target as HTMLElement;
+        const fr = target.closest('[data-frame]') as HTMLElement | null;
+        const frId = fr && target.closest('.sflow-frame-head') ? fr.dataset.frame! : '';
+        if (frId) { frameMenu(frId, e.clientX, e.clientY); return; }
+        const nodeEl = target.closest('.sflow-node') as HTMLElement | null;
+        if (nodeEl) { nodeMenu(nodeEl.dataset.id!, e.clientX, e.clientY); return; }
+        const hit = target.closest('.sflow-edge-hit') as SVGElement | null;
+        if (hit) { edgeMenu(hit.getAttribute('data-edge') || '', e.clientX, e.clientY); return; }
+        const rr = target.closest('.sflow-reroute') as HTMLElement | null;
+        if (rr) { removeReroute(rr.dataset.rr!, Number(rr.dataset.i)); return; }
+        openPaletteAt({ ...defaultInsertPoint(), x: e.clientX, y: e.clientY, drop: toWorld(e.clientX, e.clientY) });
     });
     _ro?.disconnect();
     _ro = new ResizeObserver(() => {
@@ -728,8 +927,8 @@ function startNodeDrag(e: PointerEvent, id: string): void {
         if (!dragging && Math.abs(dx) + Math.abs(dy) < 4 / _view.k) return;
         dragging = true;
         c.classList.add('is-dragging');
-        for (const el of els) if (el) el.style.transform = `translate(${snap(dx)}px, ${snap(dy)}px)`;
-        drawEdgesWith(moving, snap(dx), snap(dy));
+        for (const el of els) if (el) el.style.transform = `translate(${sn(dx)}px, ${sn(dy)}px)`;
+        drawEdgesWith(moving, sn(dx), sn(dy));
     };
     const up = () => {
         c.removeEventListener('pointermove', mv);
@@ -742,7 +941,7 @@ function startNodeDrag(e: PointerEvent, id: string): void {
         for (const mid of moving) {
             const n = _graph.nodes.find((x) => x.id === mid);
             if (!n) continue;
-            const fx = snap(n.x + snap(dx)), fy = snap(n.y + snap(dy));
+            const fx = sn(n.x + sn(dx)), fy = sn(n.y + sn(dy));
             const stamp = mid === 'trigger' ? 'trigger' : stampOf(resolve(draft.steps, mid));
             lay = setNudge(lay, mid, fx - n.ax, fy - n.ay, stamp);
         }
@@ -795,6 +994,9 @@ function wireToolbar(): void {
         else if (act === 'zoomOut') zoomBy(1 / 1.2);
         else if (act === 'fit') fit(1.25);
         else if (act === 'layout') autoLayout();
+        else if (act === 'arrange') { const r = b.getBoundingClientRect(); arrangeMenu(r.left, r.bottom + 4); }
+        else if (act === 'frame') addFrame();
+        else if (act === 'snap') toggleSnap();
         else if (act === 'keys') toggleKeysSheet(b);
     });
     _mini?.addEventListener('pointerdown', (e) => {
@@ -810,7 +1012,13 @@ function wireToolbar(): void {
 function autoLayout(): void {
     const d = _host?.getDraft();
     if (!d) return;
-    if (d.layout) { _host!.snapshot(); delete d.layout; }
+    const ui = uiOf();
+    if (d.layout || ui.reroutes) {
+        _host!.snapshot();
+        delete d.layout;
+        // The bends were drawn for the old places; they would point at nothing now.
+        if (ui.reroutes) setUi({ ...ui, reroutes: undefined });
+    }
     render();
     fit(1.25);
     toast(t('sched.flow.laidOut'), 'info', 1600);
@@ -849,13 +1057,18 @@ function defaultInsertPoint(): { slot: string; index: number; x?: number; y?: nu
     return { slot: '', index: (d.steps || []).length };
 }
 
-function insertKind(slot: string, index: number, kind: string): void {
+function insertKind(slot: string, index: number, kind: string, drop?: { x: number; y: number }): void {
     if (!_host) return;
     const d = _host.getDraft();
     _host.snapshot();
     const stepObj = _host.makeStep(kind);
     const r = insertStep(d.steps, d.layout, slot, index, stepObj);
     d.layout = r.layout;
+    // Where the person right-clicked or let go of a wire: the node lands there, not in the row.
+    if (drop) {
+        const n = buildGraph(d.steps, d.layout).nodes.find((x) => x.id === r.path);
+        if (n) d.layout = setNudge(d.layout, r.path, sn(drop.x - n.w / 2) - n.ax, sn(drop.y - n.h / 2) - n.ay, stampOf(stepObj));
+    }
     _sel = [r.path];
     render();
     openInspector(r.path, true);
@@ -867,6 +1080,7 @@ function insertKind(slot: string, index: number, kind: string): void {
 
 async function deleteSelection(): Promise<void> {
     if (!_host) return;
+    if (_selFrame && !_sel.some((id) => id !== 'trigger')) { deleteFrame(_selFrame); return; }
     const d = _host.getDraft();
     const targets = _sel.filter((id) => id !== 'trigger').map((id) => resolve(d.steps, id) as AnyStep).filter(Boolean);
     if (!targets.length) return;
@@ -938,7 +1152,7 @@ function closePalette(): void {
     _palette = null;
 }
 
-function openPaletteAt(at: { slot: string; index: number; x?: number; y?: number }): void {
+function openPaletteAt(at: { slot: string; index: number; x?: number; y?: number; drop?: { x: number; y: number } }): void {
     if (!_host || !_pane) return;
     closePalette();
     const h = _host;
@@ -1017,7 +1231,7 @@ function openPaletteAt(at: { slot: string; index: number; x?: number; y?: number
         const r = rows[i];
         if (!r) return;
         closePalette();
-        insertKind(at.slot, at.index, r.v);
+        insertKind(at.slot, at.index, r.v, at.drop);
     };
     q.addEventListener('input', () => { active = 0; draw(); });
     // The palette's own keys: a list widget's, not the app's shortcuts.
@@ -1082,9 +1296,12 @@ function notesHtml(id: string): string {
     const perm = miss.filter((m) => !seen.has(m.perm) && seen.add(m.perm)).map((m) => `<div class="sflow-note is-warn">
         <span>${escHtml(t('sched.permDenied').replace('{what}', h.permLabel(m.label)))}</span>
         <button type="button" class="btn btn-xs" data-grant="${escAttr(m.perm)}">${escHtml(t('sched.flow.grant'))}</button></div>`).join('');
+    const st = id !== 'trigger' ? resolve(d.steps || [], id) as AnyStep | undefined : undefined;
+    const probs = st ? stepProblems(st) : [];
+    const probNote = probs.length ? `<div class="sflow-note is-warn"><span>${escHtml(probs.map((p) => t('sched.flow.needsField', { p })).join(' · '))}</span></div>` : '';
     const run = id !== 'trigger' ? _marks.get(id) : undefined;
     const runNote = run ? `<div class="sflow-note run-${run.mark}"><span class="sflow-dot run-${run.mark}"></span><span>${escHtml(t('sched.flow.run.' + run.mark))}${run.error ? ` — ${escHtml(run.error)}` : ''}</span></div>` : '';
-    return perm + runNote;
+    return probNote + perm + runNote;
 }
 
 function openInspector(id: string, focus: boolean): void {
@@ -1160,6 +1377,512 @@ function onInspectorClick(e: Event): void {
     if (el.closest('[data-trigger]')) { _host?.focusSidebar('#sched-trigger'); return; }
     // A click can change what the step is without typing (a checkbox, a picker), so redraw.
     scheduleRender();
+}
+
+// ── Blueprint tools: wires, frames, reroutes, arranging, the clipboard ───────────────────────
+
+/** Screen pixels to world units. */
+function toWorld(cx: number, cy: number): { x: number; y: number } {
+    const r = _canvas!.getBoundingClientRect();
+    return { x: (cx - r.left - _view.x) / _view.k, y: (cy - r.top - _view.y) / _view.k };
+}
+
+function toggleSnap(): void {
+    _snapOn = !_snapOn;
+    writeSnap(_snapOn);
+    _pane?.querySelector('[data-act="snap"]')?.setAttribute('aria-pressed', _snapOn ? 'true' : 'false');
+    toast(t(_snapOn ? 'sched.flow.snapOn' : 'sched.flow.snapOff'), 'info', 1400);
+}
+
+/**
+ * Drag a wire out of a node's output. Let go on another node: it moves to run right after this
+ * one (the tree has no loose wires, so connecting IS ordering). Let go on empty canvas: the
+ * palette opens there, and what is picked is added after this node, where the wire ended.
+ */
+function startWire(e: PointerEvent, from: string): void {
+    const c = _canvas!;
+    const n = _graph?.nodes.find((x) => x.id === from);
+    if (!n || !_svg) return;
+    const x1 = n.x + n.w, y1 = n.y + n.h / 2;
+    const temp = document.createElementNS(SVGNS, 'path');
+    temp.setAttribute('class', 'sflow-wire-temp');
+    _svg.appendChild(temp);
+    c.setPointerCapture(e.pointerId);
+    c.classList.add('is-wiring');
+    const mv = (ev: PointerEvent) => {
+        const w = toWorld(ev.clientX, ev.clientY);
+        const dx = Math.max(24, Math.abs(w.x - x1) * 0.5);
+        temp.setAttribute('d', `M${x1} ${y1} C${x1 + dx} ${y1} ${w.x - dx} ${w.y} ${w.x} ${w.y}`);
+    };
+    const up = (ev: PointerEvent) => {
+        c.removeEventListener('pointermove', mv);
+        c.removeEventListener('pointerup', up);
+        c.classList.remove('is-wiring');
+        temp.remove();
+        if (!_host) return;
+        const hitEl = document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null;
+        const target = hitEl?.closest('.sflow-node') as HTMLElement | null;
+        const to = target?.dataset.id;
+        if (to && to !== from && to !== 'trigger') { wireTo(from, to); return; }
+        if (target) return;
+        const w = toWorld(ev.clientX, ev.clientY);
+        if (Math.hypot(w.x - x1, w.y - y1) < 24) return;
+        const at = from === 'trigger' ? { slot: '', index: 0 } : (() => { const s = slotOf(from); return { slot: s.slot, index: s.index + 1 }; })();
+        openPaletteAt({ ...at, x: ev.clientX, y: ev.clientY, drop: w });
+    };
+    c.addEventListener('pointermove', mv);
+    c.addEventListener('pointerup', up);
+}
+
+function wireTo(from: string, to: string): void {
+    const h = _host!;
+    const d = h.getDraft();
+    const moving = resolve(d.steps, to) as AnyStep | undefined;
+    if (!moving) return;
+    h.snapshot();
+    let path: string | null = null;
+    if (from === 'trigger') {
+        // After the trigger: first in the task.
+        const { slot, index } = slotOf(to);
+        if (slot === '' && index === 0) return;
+        d.layout = removeSteps(d.steps, d.layout, [moving]);
+        const r = insertStep(d.steps, d.layout, '', 0, moving);
+        d.layout = r.layout;
+        path = r.path;
+    } else {
+        const r = relocateStep(d.steps, d.layout, to, from);
+        if (!r) { toast(t('sched.flow.wireRefused'), 'info', 2400); return; }
+        d.layout = r.layout;
+        path = r.path;
+    }
+    select([path]);
+    reveal(path);
+}
+
+// ── Frames ──
+
+function framesOf(): FlowFrame[] { return [...(uiOf().frames || [])]; }
+function saveFrames(frames: FlowFrame[]): void { setUi({ ...uiOf(), frames }); }
+
+/** A frame around the selection, or an empty one in the middle of the view. */
+function addFrame(): void {
+    if (!_host || !_graph || !_canvas) return;
+    const picked = _graph.nodes.filter((n) => _sel.includes(n.id) && (n.type === 'step' || n.type === 'trigger')).map(boxOf);
+    const id = `f${Date.now().toString(36)}`;
+    let f: FlowFrame;
+    if (picked.length) f = frameAround(picked, id, '', 'accent');
+    else {
+        const mid = toWorld(_canvas.getBoundingClientRect().left + _canvas.clientWidth / 2, _canvas.getBoundingClientRect().top + _canvas.clientHeight / 2);
+        f = { id, title: '', tone: 'accent', x: sn(mid.x - 180), y: sn(mid.y - 90), w: 360, h: 180 };
+    }
+    _host.snapshot();
+    saveFrames([...framesOf(), f]);
+    _selFrame = id;
+    render();
+    renameFrame(id);
+}
+
+function deleteFrame(id: string): void {
+    if (!_host) return;
+    _host.snapshot();
+    saveFrames(framesOf().filter((f) => f.id !== id));
+    _selFrame = null;
+    render();
+}
+
+function toggleFrameFold(id: string): void {
+    if (!_host) return;
+    _host.snapshot();
+    saveFrames(framesOf().map((f) => (f.id === id ? { ...f, collapsed: !f.collapsed } : f)));
+    render();
+}
+
+function setFrameTone(id: string, tone: Tone): void {
+    if (!_host) return;
+    _host.snapshot();
+    saveFrames(framesOf().map((f) => (f.id === id ? { ...f, tone } : f)));
+    render();
+}
+
+/** Edit a frame's title in place: Enter or leaving the field keeps it, Escape does not. */
+function renameFrame(id: string): void {
+    const el = _framesEl?.querySelector(`[data-frame-title="${CSS.escape(id)}"]`) as HTMLElement | null;
+    const f = framesOf().find((x) => x.id === id);
+    if (!el || !f || !_host) return;
+    const input = document.createElement('input');
+    input.className = 'sflow-frame-input';
+    input.value = f.title;
+    input.maxLength = 80;
+    input.placeholder = t('sched.flow.frameUntitled');
+    input.setAttribute('aria-label', t('sched.flow.frameRename'));
+    el.replaceWith(input);
+    input.focus();
+    input.select();
+    let done = false;
+    const finish = (keep: boolean) => {
+        if (done) return;
+        done = true;
+        if (keep && input.value.trim() !== f.title) {
+            _host!.snapshot();
+            saveFrames(framesOf().map((x) => (x.id === id ? { ...x, title: input.value.trim() } : x)));
+        }
+        render();
+        _canvas?.focus({ preventScroll: true });
+    };
+    input.addEventListener('keydown', (ev) => {
+        ev.stopPropagation();
+        if (ev.key === 'Enter') { ev.preventDefault(); finish(true); }
+        else if (ev.key === 'Escape') { ev.preventDefault(); finish(false); }
+    });
+    input.addEventListener('blur', () => finish(true));
+    input.addEventListener('pointerdown', (ev) => ev.stopPropagation());
+}
+
+/** Drag a frame by its title bar: the nodes inside it when the drag started come along. */
+function startFrameDrag(e: PointerEvent, id: string): void {
+    const c = _canvas!;
+    const f = framesOf().find((x) => x.id === id);
+    if (!f || !_graph || !_host) return;
+    _selFrame = id;
+    const inside = insideFrame(f, _graph.nodes.filter((n) => n.type === 'step' || n.type === 'trigger').map(boxOf));
+    const frameEl = _framesEl?.querySelector(`[data-frame="${CSS.escape(id)}"]`) as HTMLElement | null;
+    frameEl?.classList.add('is-sel');
+    const els = inside.map((nid) => _layer!.querySelector(`.sflow-node[data-id="${CSS.escape(nid)}"]`) as HTMLElement | null);
+    const x0 = e.clientX, y0 = e.clientY;
+    let dx = 0, dy = 0, moved = false;
+    c.setPointerCapture(e.pointerId);
+    const mv = (ev: PointerEvent) => {
+        dx = sn((ev.clientX - x0) / _view.k);
+        dy = sn((ev.clientY - y0) / _view.k);
+        if (!moved && Math.abs(dx) + Math.abs(dy) < 4) return;
+        moved = true;
+        c.classList.add('is-dragging');
+        if (frameEl) frameEl.style.transform = `translate(${dx}px, ${dy}px)`;
+        for (const el of els) if (el) el.style.transform = `translate(${dx}px, ${dy}px)`;
+        drawEdgesWith(inside, dx, dy);
+    };
+    const up = () => {
+        c.removeEventListener('pointermove', mv);
+        c.removeEventListener('pointerup', up);
+        c.classList.remove('is-dragging');
+        if (!moved || !_host || !_graph) { render(); return; }
+        const d = _host.getDraft();
+        _host.snapshot();
+        let lay = d.layout;
+        for (const nid of inside) {
+            const n = _graph.nodes.find((x) => x.id === nid);
+            if (!n) continue;
+            lay = setNudge(lay, nid, n.x + dx - n.ax, n.y + dy - n.ay, nid === 'trigger' ? 'trigger' : stampOf(resolve(d.steps, nid)));
+        }
+        d.layout = lay;
+        saveFrames(framesOf().map((x) => (x.id === id ? { ...x, x: x.x + dx, y: x.y + dy } : x)));
+        render();
+    };
+    c.addEventListener('pointermove', mv);
+    c.addEventListener('pointerup', up);
+}
+
+function startFrameResize(e: PointerEvent, id: string): void {
+    const c = _canvas!;
+    const f = framesOf().find((x) => x.id === id);
+    const frameEl = _framesEl?.querySelector(`[data-frame="${CSS.escape(id)}"]`) as HTMLElement | null;
+    if (!f || !frameEl || !_host) return;
+    const x0 = e.clientX, y0 = e.clientY;
+    let w = f.w, h = f.h;
+    c.setPointerCapture(e.pointerId);
+    const mv = (ev: PointerEvent) => {
+        w = Math.max(160, sn(f.w + (ev.clientX - x0) / _view.k));
+        h = Math.max(FRAME_HEAD + 40, sn(f.h + (ev.clientY - y0) / _view.k));
+        frameEl.style.width = `${w}px`;
+        frameEl.style.height = `${h}px`;
+    };
+    const up = () => {
+        c.removeEventListener('pointermove', mv);
+        c.removeEventListener('pointerup', up);
+        if (w === f.w && h === f.h) return;
+        _host!.snapshot();
+        saveFrames(framesOf().map((x) => (x.id === id ? { ...x, w, h } : x)));
+        render();
+    };
+    c.addEventListener('pointermove', mv);
+    c.addEventListener('pointerup', up);
+}
+
+// ── Reroutes ──
+
+function addReroute(key: string, cx: number, cy: number): void {
+    if (!key || !_host) return;
+    const ui = uiOf();
+    const w = toWorld(cx, cy);
+    const pts = [...(ui.reroutes?.[key] || [])];
+    let at = pts.findIndex((p) => p[0] > w.x);
+    if (at < 0) at = pts.length;
+    pts.splice(at, 0, [sn(w.x), sn(w.y)]);
+    _host.snapshot();
+    setUi({ ...ui, reroutes: { ...(ui.reroutes || {}), [key]: pts } });
+    render();
+}
+
+function removeReroute(key: string, i: number): void {
+    if (!_host) return;
+    const ui = uiOf();
+    const pts = [...(ui.reroutes?.[key] || [])];
+    if (!pts.length) return;
+    pts.splice(i, 1);
+    const rr = { ...(ui.reroutes || {}) };
+    if (pts.length) rr[key] = pts; else delete rr[key];
+    _host.snapshot();
+    setUi({ ...ui, reroutes: rr });
+    render();
+}
+
+function startRerouteDrag(e: PointerEvent, key: string, i: number): void {
+    const c = _canvas!;
+    const ui = uiOf();
+    const pts = [...(ui.reroutes?.[key] || [])];
+    if (!pts[i] || !_host || !_graph) return;
+    const start = pts[i];
+    const x0 = e.clientX, y0 = e.clientY;
+    let moved = false;
+    c.setPointerCapture(e.pointerId);
+    const dot = e.target as HTMLElement;
+    const mv = (ev: PointerEvent) => {
+        const nx = sn(start[0] + (ev.clientX - x0) / _view.k), ny = sn(start[1] + (ev.clientY - y0) / _view.k);
+        if (!moved && Math.abs(ev.clientX - x0) + Math.abs(ev.clientY - y0) < 3) return;
+        if (!moved) _host!.snapshot();
+        moved = true;
+        pts[i] = [nx, ny];
+        dot.style.left = `${nx - 6}px`;
+        dot.style.top = `${ny - 6}px`;
+        setUi({ ...uiOf(), reroutes: { ...(uiOf().reroutes || {}), [key]: pts } });
+        if (_graph && _svg) _svg.innerHTML = _graph.edges.map((ed) => edgeSvg(_graph!, ed)).join('');
+    };
+    const up = () => {
+        c.removeEventListener('pointermove', mv);
+        c.removeEventListener('pointerup', up);
+        if (moved) render();
+    };
+    c.addEventListener('pointermove', mv);
+    c.addEventListener('pointerup', up);
+}
+
+// ── Arranging ──
+
+/** The selected nodes that can be placed by hand, as boxes. */
+function selectedBoxes(): Box[] {
+    return (_graph?.nodes || []).filter((n) => _sel.includes(n.id) && (n.type === 'step' || n.type === 'trigger') && !_hidden.has(n.id)).map(boxOf);
+}
+
+function placeBoxes(moves: Record<string, { x: number; y: number }>): void {
+    if (!_host || !_graph || !Object.keys(moves).length) return;
+    const d = _host.getDraft();
+    _host.snapshot();
+    let lay = d.layout;
+    for (const [id, p] of Object.entries(moves)) {
+        const n = _graph.nodes.find((x) => x.id === id);
+        if (!n) continue;
+        lay = setNudge(lay, id, sn(p.x) - n.ax, sn(p.y) - n.ay, id === 'trigger' ? 'trigger' : stampOf(resolve(d.steps, id)));
+    }
+    d.layout = lay;
+    render();
+}
+
+function alignSelection(how: AlignHow): void {
+    const boxes = selectedBoxes();
+    if (boxes.length < 2) { toast(t('sched.flow.pickTwo'), 'info', 2000); return; }
+    placeBoxes(align(boxes, how));
+}
+
+function distributeSelection(axis: 'h' | 'v'): void {
+    const boxes = selectedBoxes();
+    if (boxes.length < 3) { toast(t('sched.flow.pickThree'), 'info', 2000); return; }
+    placeBoxes(distribute(boxes, axis));
+}
+
+// ── Clipboard ──
+
+/** The selected steps, outermost only (a step inside a selected block travels with it), in order. */
+function topSelected(): string[] {
+    const ids = _sel.filter((id) => id !== 'trigger' && !id.includes('#'));
+    const order = _graph?.order || [];
+    return ids.filter((id) => !ids.some((o) => o !== id && id.startsWith(o + '.')))
+        .sort((a, b) => order.indexOf(a) - order.indexOf(b));
+}
+
+async function copySelection(cut: boolean): Promise<void> {
+    if (!_host) return;
+    const d = _host.getDraft();
+    const ids = topSelected();
+    const steps = ids.map((id) => resolve(d.steps, id)).filter(Boolean).map((s) => JSON.parse(JSON.stringify(s)) as AnyStep);
+    if (!steps.length) return;
+    _clip = steps;
+    try { await navigator.clipboard.writeText(clipText(steps)); } catch { /* the flow's own copy still pastes */ }
+    if (cut) { await deleteSelection(); return; }
+    toast(t('sched.flow.copied', { n: String(steps.length) }), 'info', 1600);
+}
+
+async function pasteClip(): Promise<void> {
+    if (!_host) return;
+    let steps: AnyStep[] | null = null;
+    try { steps = readClip(await navigator.clipboard.readText()) as AnyStep[] | null; } catch { steps = null; }
+    if (!steps && _clip) steps = JSON.parse(JSON.stringify(_clip)) as AnyStep[];
+    if (!steps || !steps.length) { toast(t('sched.flow.nothingToPaste'), 'info', 1800); return; }
+    const d = _host.getDraft();
+    const at = defaultInsertPoint();
+    _host.snapshot();
+    const paths: string[] = [];
+    let i = at.index;
+    for (const st of steps) {
+        const r = insertStep(d.steps, d.layout, at.slot, i++, st);
+        d.layout = r.layout;
+        paths.push(r.path);
+    }
+    select(paths, paths.length === 1);
+    toast(t('sched.flow.pasted', { n: String(paths.length) }), 'success', 1600);
+}
+
+// ── Menus ──
+
+interface MenuItem { label: string; icon?: string; run?: () => void; danger?: boolean; sep?: boolean; key?: string; swatches?: { tone: Tone; on: boolean; run: () => void }[] }
+
+/** A frame colour, in words (one literal key each, so the dictionaries are checked). */
+function toneLabel(tone: Tone): string {
+    switch (tone) {
+        case 'accent': return t('sched.flow.tone.accent');
+        case 'info': return t('sched.flow.tone.info');
+        case 'success': return t('sched.flow.tone.success');
+        case 'warning': return t('sched.flow.tone.warning');
+        case 'danger': return t('sched.flow.tone.danger');
+        default: return t('sched.flow.tone.neutral');
+    }
+}
+
+function closeMenu(): void {
+    _menu?.remove();
+    _menu = null;
+}
+
+/** A small menu at a screen point, kept inside the pane. Arrow keys move, Enter runs, Escape closes. */
+function openMenu(cx: number, cy: number, items: MenuItem[], label: string): void {
+    if (!_pane) return;
+    closeMenu();
+    const el = document.createElement('div');
+    el.className = 'sflow-menu';
+    el.setAttribute('role', 'menu');
+    el.setAttribute('aria-label', label);
+    el.innerHTML = items.map((it, i) => {
+        if (it.sep) return '<div class="sflow-menu-sep" role="separator"></div>';
+        if (it.swatches) {
+            return `<div class="sflow-menu-sw" role="group" aria-label="${escAttr(it.label)}">${it.swatches.map((s, j) =>
+                `<button type="button" class="sflow-sw t-${s.tone}${s.on ? ' is-on' : ''}" role="menuitemradio" aria-checked="${s.on}" data-i="${i}" data-j="${j}"
+                    aria-label="${escAttr(toneLabel(s.tone))}" data-tooltip="${escAttr(toneLabel(s.tone))}"></button>`).join('')}</div>`;
+        }
+        const ch = it.key ? bindingOf(it.key) : null;
+        return `<button type="button" class="sflow-menu-item${it.danger ? ' is-danger' : ''}" role="menuitem" data-i="${i}">
+            <span class="sflow-menu-ic">${it.icon || ''}</span><span class="sflow-menu-l">${escHtml(it.label)}</span>${ch ? `<kbd>${escHtml(chordToStr(ch))}</kbd>` : ''}</button>`;
+    }).join('');
+    _pane.appendChild(el);
+    _menu = el;
+    const pr = _pane.getBoundingClientRect();
+    const w = el.offsetWidth || 220, h = el.offsetHeight || 200;
+    el.style.left = `${Math.max(8, Math.min(pr.width - w - 8, cx - pr.left))}px`;
+    el.style.top = `${Math.max(8, Math.min(pr.height - h - 8, cy - pr.top))}px`;
+    el.addEventListener('click', (ev) => {
+        const b = (ev.target as HTMLElement).closest('[data-i]') as HTMLElement | null;
+        if (!b) return;
+        const it = items[Number(b.dataset.i)];
+        closeMenu();
+        if (b.dataset.j !== undefined) it?.swatches?.[Number(b.dataset.j)]?.run();
+        else it?.run?.();
+        if (!document.activeElement || document.activeElement === document.body) _canvas?.focus({ preventScroll: true });
+    });
+    el.addEventListener('keydown', (ev) => {
+        const all = Array.from(el.querySelectorAll<HTMLElement>('button'));
+        const at = all.indexOf(document.activeElement as HTMLElement);
+        if (ev.key === 'ArrowDown') { ev.preventDefault(); all[(at + 1) % all.length]?.focus(); }
+        else if (ev.key === 'ArrowUp') { ev.preventDefault(); all[(at - 1 + all.length) % all.length]?.focus(); }
+        else if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); closeMenu(); _canvas?.focus({ preventScroll: true }); }
+    });
+    const away = (ev: PointerEvent) => {
+        if (_menu === el && el.contains(ev.target as Node)) return;
+        document.removeEventListener('pointerdown', away, true);
+        if (_menu === el) closeMenu();
+    };
+    document.addEventListener('pointerdown', away, true);
+    (el.querySelector('button') as HTMLElement | null)?.focus();
+}
+
+function arrangeItems(): MenuItem[] {
+    return [
+        { label: t('sched.flow.alignLeft'), icon: uiIcon('chevron-left', 14), run: () => alignSelection('left'), key: 'sched.flow.alignLeft' },
+        { label: t('sched.flow.alignHCenter'), icon: uiIcon('menu', 14), run: () => alignSelection('hcenter') },
+        { label: t('sched.flow.alignRight'), icon: uiIcon('chevron-right', 14), run: () => alignSelection('right') },
+        { label: t('sched.flow.alignTop'), icon: uiIcon('chevron-up', 14), run: () => alignSelection('top'), key: 'sched.flow.alignTop' },
+        { label: t('sched.flow.alignVCenter'), icon: uiIcon('menu', 14), run: () => alignSelection('vcenter') },
+        { label: t('sched.flow.alignBottom'), icon: uiIcon('chevron-down', 14), run: () => alignSelection('bottom') },
+        { sep: true, label: '' },
+        { label: t('sched.flow.distributeH'), icon: uiIcon('sliders', 14), run: () => distributeSelection('h'), key: 'sched.flow.distributeH' },
+        { label: t('sched.flow.distributeV'), icon: uiIcon('sliders', 14), run: () => distributeSelection('v'), key: 'sched.flow.distributeV' },
+        { sep: true, label: '' },
+        { label: t('sched.flow.autoLayout'), icon: uiIcon('layers', 14), run: () => autoLayout(), key: 'sched.flow.autoLayout' },
+    ];
+}
+
+function arrangeMenu(cx: number, cy: number): void {
+    openMenu(cx, cy, arrangeItems(), t('sched.flow.arrange'));
+}
+
+function nodeMenu(id: string, cx: number, cy: number): void {
+    if (!_sel.includes(id)) select([id], false);
+    const isStep = id !== 'trigger';
+    const many = _sel.length > 1;
+    const items: MenuItem[] = [
+        { label: t('sched.flow.edit'), icon: uiIcon('edit', 14), run: () => openInspector(id, true), key: 'sched.flow.edit' },
+    ];
+    if (isStep) {
+        items.push(
+            { label: t('sched.flow.testNode'), icon: uiIcon('play', 14), run: () => { void runNodeTest(id); }, key: 'sched.flow.testNode' },
+            { sep: true, label: '' },
+            { label: t('sched.flow.copy'), icon: uiIcon('copy', 14), run: () => { void copySelection(false); }, key: 'sched.flow.copy' },
+            { label: t('sched.flow.cut'), icon: uiIcon('copy', 14), run: () => { void copySelection(true); }, key: 'sched.flow.cut' },
+            { label: t('sched.flow.duplicate'), icon: uiIcon('copy', 14), run: () => duplicateSelection(), key: 'sched.flow.duplicate' },
+        );
+    }
+    items.push({ label: t('sched.flow.paste'), icon: uiIcon('import', 14), run: () => { void pasteClip(); }, key: 'sched.flow.paste' });
+    items.push({ sep: true, label: '' }, { label: t('sched.flow.frame'), icon: uiIcon('maximize', 14), run: () => addFrame(), key: 'sched.flow.frame' });
+    if (many) items.push(...arrangeItems().slice(0, 9));
+    if (isStep) items.push({ sep: true, label: '' }, { label: t('sched.flow.deleteSel'), icon: uiIcon('delete', 14), danger: true, run: () => { void deleteSelection(); }, key: 'sched.flow.delete' });
+    openMenu(cx, cy, items, t('sched.flow.nodeMenu'));
+}
+
+function frameMenu(id: string, cx: number, cy: number): void {
+    const f = framesOf().find((x) => x.id === id);
+    if (!f) return;
+    _selFrame = id;
+    render();
+    openMenu(cx, cy, [
+        { label: t('sched.flow.frameRename'), icon: uiIcon('edit', 14), run: () => renameFrame(id) },
+        { label: f.collapsed ? t('sched.flow.frameUnfold') : t('sched.flow.frameFold'), icon: uiIcon(f.collapsed ? 'chevron-right' : 'chevron-down', 14), run: () => toggleFrameFold(id) },
+        { label: t('sched.flow.frameTone'), swatches: TONES.map((tone) => ({ tone, on: f.tone === tone, run: () => setFrameTone(id, tone) })) },
+        { sep: true, label: '' },
+        { label: t('sched.flow.frameDelete'), icon: uiIcon('delete', 14), danger: true, run: () => deleteFrame(id) },
+    ], t('sched.flow.frameMenu'));
+}
+
+function edgeMenu(key: string, cx: number, cy: number): void {
+    const has = !!uiOf().reroutes?.[key]?.length;
+    const items: MenuItem[] = [{ label: t('sched.flow.rerouteAdd'), icon: uiIcon('add', 14), run: () => addReroute(key, cx, cy) }];
+    if (has) {
+        items.push({ label: t('sched.flow.rerouteClear'), icon: uiIcon('clear', 14), run: () => {
+            const ui = uiOf();
+            const rr = { ...(ui.reroutes || {}) };
+            delete rr[key];
+            _host?.snapshot();
+            setUi({ ...ui, reroutes: rr });
+            render();
+        } });
+    }
+    openMenu(cx, cy, items, t('sched.flow.edgeMenu'));
 }
 
 // ── Last run ──────────────────────────────────────────────────────────────────────────────────

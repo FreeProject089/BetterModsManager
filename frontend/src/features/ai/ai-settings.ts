@@ -7,16 +7,20 @@
 // Keys are write-only from here: the field sends a key to `ai_set_secret` and is emptied; the
 // card only ever learns WHERE a key is stored (DPAPI / keyring / this session only), never
 // the key.
-import { invoke, listen, askConfirm } from '../../core/api.js';
+import { invoke, listen } from '../../core/api.js';
+import { confirmAction } from '../../ui/verify.js';
 import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { fmtBytes, embState, fmtSpeed, fmtEta, parseNoSpace, type AiSettings, type EmbLive, type EmbState } from './ai-model.js';
 import { ensureAiCss, loadAiView, reasonText, bcAuthArgs, openAiDocs, type AiView } from './ai-shared.js';
 import { initCollapsibleSettingsCards } from '../../ui/settings-fold.js';
 import { uiIcon } from '../../ui/icons.js';
+import { GEN_PRESETS, normalizeBase, presetOfUrl, probeKeys, sortModels, pickModel, type Probe } from './ai-gen-model.js';
 
 // Lives in the « Laya » dialog (laya-hub.ts); Settings keeps one summary card.
 const CARD_ID = 'laya-general-card';
+const PROV_ID = 'laya-providers-card';
+const PRIV_ID = 'laya-privacy-card';
 
 const IC = (uiIcon('ai', 20));
 /** A book: the « How AI works in BMM » link-button. */
@@ -122,21 +126,27 @@ function keyWhere(where: string): string {
     }
 }
 
-/** Put the card (once) in `host` — a pane of the Laya dialog — then fill it. */
-export async function mountAiSettings(host: HTMLElement): Promise<void> {
+/** Put the three cards (once) in the Laya dialog's panes — Overview, Providers, Privacy — then fill them. */
+export async function mountAiSettings(host: HTMLElement, providersHost?: HTMLElement | null, privacyHost?: HTMLElement | null): Promise<void> {
     ensureAiCss();
-    let card = document.getElementById(CARD_ID);
-    if (!card) {
-        card = document.createElement('div');
-        card.className = 'ai-card laya-pane-card';
-        card.id = CARD_ID;
-        host.appendChild(card);
-    }
+    const make = (id: string, where: HTMLElement | null | undefined): HTMLElement | null => {
+        if (!where) return null;
+        let el = document.getElementById(id);
+        if (!el) {
+            el = document.createElement('div');
+            el.className = 'ai-card laya-pane-card';
+            el.id = id;
+            where.appendChild(el);
+        }
+        return el;
+    };
+    const general = make(CARD_ID, host) as HTMLElement;
+    _cards = { general, providers: make(PROV_ID, providersHost), privacy: make(PRIV_ID, privacyHost) };
     const view = await loadAiView();
-    render(card, view);
-    if (!(card as any)._aiLangWired) {
-        (card as any)._aiLangWired = true;
-        document.addEventListener('langChanged', () => { if (card?.isConnected) void loadAiView().then((v) => render(card as HTMLElement, v)); });
+    render(view);
+    if (!(general as any)._aiLangWired) {
+        (general as any)._aiLangWired = true;
+        document.addEventListener('langChanged', () => { if (general.isConnected) void loadAiView().then((v) => render(v)); });
     }
 }
 
@@ -164,36 +174,69 @@ export function statusLine(s: AiSettings, st: any): string {
     return parts.join(' · ');
 }
 
+/** « LM Studio · qwen2.5-7b » / « api.openai.com · gpt-4o-mini » / « Off »: who writes the drafts. */
+export function writerLine(s: AiSettings): string {
+    if (s.generative === 'local') {
+        const p = presetOfUrl(s.gen_local_url || '');
+        const name = t(`ai.gen.preset.${p}`);
+        return s.gen_local_model ? `${name} · ${s.gen_local_model}` : name;
+    }
+    if (s.generative === 'external') {
+        let host = '';
+        try { host = new URL(normalizeBase(s.external_url)).host; } catch { host = s.external_url; }
+        return s.external_model ? `${host} · ${s.external_model}` : host;
+    }
+    return t('ai.gen.writerOff');
+}
+
 /** One feature toggle: a short label and a one-line hint. */
 function toggle(id: string, on: boolean, label: string, hint: string, disabled = false): string {
     return `<label class="ai-toggle"><input type="checkbox" id="${id}" ${on ? 'checked' : ''} ${disabled ? 'disabled' : ''}>
         <span><b>${escHtml(label)}</b><small>${escHtml(hint)}</small></span></label>`;
 }
 
-function render(card: HTMLElement, view: AiView | null): void {
+/** The status line + Save at the foot of a card (each card that edits settings has one). */
+function actionsRow(statusId: string, testable: boolean, on: boolean): string {
+    return `<div class="ai-actions">
+        <span class="ai-muted ai-status-line" id="${statusId}" aria-live="polite"></span>
+        ${testable ? `<button type="button" class="btn btn-ghost btn-sm" id="ai-test" ${on ? '' : 'disabled'}>${escHtml(t('ai.settings.test'))}</button>` : ''}
+        <button type="button" class="btn btn-primary btn-sm" data-ai-save>${escHtml(t('common.save'))}</button>
+      </div>`;
+}
+
+/** The three cards this module fills: Overview, Providers, Privacy (panes of the Laya dialog). */
+interface Cards { general: HTMLElement; providers: HTMLElement | null; privacy: HTMLElement | null }
+let _cards: Cards | null = null;
+/** The last « Find models » / « Test connection » result, kept across redraws (and shown in Privacy → diagnostics). */
+let _probe: Probe | null = null;
+let _probeKind: 'local' | 'external' = 'local';
+
+function render(view: AiView | null): void {
+    const cards = _cards;
+    if (!cards) return;
     const s: AiSettings | null = view?.settings || null;
     const st = view?.status || {};
     if (!s) {
-        card.innerHTML = `<h3 class="card-title ai-card-title">${IC}<span>${escHtml(t('ai.settings.title'))}</span></h3><p class="ai-muted">${escHtml(t('ai.settings.unavailable'))}</p>`;
+        cards.general.innerHTML = `<h3 class="card-title ai-card-title">${IC}<span>${escHtml(t('ai.settings.title'))}</span></h3><p class="ai-muted">${escHtml(t('ai.settings.unavailable'))}</p>`;
+        if (cards.providers) cards.providers.innerHTML = '';
+        if (cards.privacy) cards.privacy.innerHTML = '';
         refold();
         return;
     }
     const killed = !!st.killSwitch;
     const on = !!s.enabled && !killed;
     const pill = killed ? t('ai.settings.pillKilled') : on ? t('ai.settings.pillOn') : t('ai.settings.pillOff');
-    const opt = (v: string, cur: string, label: string) => `<option value="${escAttr(v)}"${v === cur ? ' selected' : ''}>${escHtml(label)}</option>`;
     const cls = s.classifier || 'off';
     const gen = s.generative || 'off';
-    // The overview's chips: the model, and what leaves this PC (the same rule as the status line).
     const emb = embState0(st);
     const modelOn = emb === 'installed' || emb === 'loaded';
     const modelWord = modelOn ? (emb === 'loaded' ? t('ai.emb.stLoaded') : t('ai.emb.installed')) : t('ai.emb.absent');
     const leaves = on && !st?.offline;
     const heroTitle = killed ? t('ai.hub2.heroKilled') : on ? t('ai.hub2.heroOn') : t('ai.hub2.heroOff');
-    // A setup that is not the default (another engine, a writing model) is shown open: hiding
-    // what is in use would be the wrong kind of simple.
-    const custom = (cls !== 'embedded' && cls !== 'off') || gen !== 'off';
-    card.innerHTML = `
+    const writer = writerLine(s);
+    cards.general.dataset.headModel = modelWord;
+    cards.general.dataset.headWriter = writer;
+    cards.general.innerHTML = `
       <section class="laya-hero${on ? ' is-on' : ''}" aria-labelledby="ai-hero-title">
         <div class="laya-hero-main">
           <div class="laya-hero-ic" aria-hidden="true">${IC}</div>
@@ -209,6 +252,7 @@ function render(card: HTMLElement, view: AiView | null): void {
         <div class="laya-hero-chips">
           <span class="ai-pill${on ? ' ai-pill-on' : ''}" id="ai-pill" hidden>${escHtml(pill)}</span>
           <span class="bms-chip${modelOn ? ' bms-chip--ok' : ''}"><span class="bms-dot"></span>${escHtml(t('ai.hub2.model', { state: modelWord }))}</span>
+          <span class="bms-chip${gen !== 'off' ? ' bms-chip--ok' : ''}"><span class="bms-dot"></span>${escHtml(t('ai.gen.writerChip', { v: writer }))}</span>
           <span class="bms-chip${on ? (leaves ? ' bms-chip--warn' : ' bms-chip--ok') : ''}"><span class="bms-dot"></span>${escHtml(on ? (leaves ? t('ai.hub2.mayLeave') : t('ai.hub2.private')) : t('ai.hub2.nothingSent'))}</span>
         </div>
         <p class="laya-hero-hint" id="ai-hero-hint">${escHtml(t('ai.set2.masterHint'))}</p>
@@ -224,110 +268,162 @@ function render(card: HTMLElement, view: AiView | null): void {
             ${toggle('ai-f-mod', s.mod_suggest, t('ai.set2.fMod'), t('ai.set2.fModHint'))}
             ${toggle('ai-f-report', s.report_triage, t('ai.set2.fReport'), t('ai.set2.fReportHint'))}
             ${toggle('ai-f-ask', s.ask !== false, t('ai.set2.fAsk'), t('ai.set2.fAskHint'))}
-            ${toggle('ai-f-draft', s.description_drafts, t('ai.set2.fDraft'), t('ai.set2.fDraftHint'))}
+            ${toggle('ai-f-draft', s.description_drafts, t('ai.gen.fDraft'), t('ai.gen.fDraftHint'))}
             ${toggle('ai-f-askgen', !!s.ask_generate, t('ai.set2.fAskGen'), t('ai.set2.fAskGenHint'))}
           </div>
         </section>
-        <section class="laya-sec" aria-labelledby="ai-where-h">
+        <section class="laya-sec" aria-labelledby="ai-emb-h">
           <header class="laya-sec-h">
-            <h4 class="laya-sec-title" id="ai-where-h">${escHtml(t('ai.hub2.whereTitle'))}</h4>
-            <p class="laya-sec-lead">${escHtml(t('ai.hub2.whereLead'))}</p>
+            <h4 class="laya-sec-title" id="ai-emb-h">${escHtml(t('ai.gen.embTitle'))}</h4>
+            <p class="laya-sec-lead">${escHtml(t('ai.gen.embLead'))}</p>
           </header>
-          <div id="ai-emb-wrap" ${cls === 'embedded' || cls === 'off' ? '' : 'hidden'}>${embeddedHtml(st)}</div>
-          <details class="ai-more laya-adv" id="ai-adv"${custom ? ' open' : ''}>
-            <summary>${escHtml(t('ai.hub2.advanced'))}</summary>
-            <div class="ai-prov">
-              <div class="ai-grid">
-                <label class="ai-lbl" for="ai-classifier">${escHtml(t('ai.set2.cls'))}</label>
-                <select id="ai-classifier" class="form-input">
-                  ${opt('embedded', cls, t('ai.set2.clsEmbedded'))}
-                  ${opt('local', cls, t('ai.set2.clsLocal'))}
-                  ${opt('bettercommunity', cls, t('ai.set2.clsBc'))}
-                  ${opt('off', cls, t('ai.set2.clsOff'))}
-                </select>
-                <span></span><small class="ai-hint1" id="ai-cls-hint">${escHtml(clsHint(cls))}</small>
-              </div>
-              <div class="ai-block" id="ai-bc-block" ${cls === 'bettercommunity' ? '' : 'hidden'}>
-                <label class="ai-check"><input type="checkbox" id="ai-bc-consent" ${s.bc_consent ? 'checked' : ''}> <span>${escHtml(t('ai.settings.bcConsent'))}</span></label>
-                <details class="ai-more"><summary>${escHtml(t('ai.set2.whatSent'))}</summary><p class="ai-muted">${escHtml(t('ai.settings.bcWhat'))}</p></details>
-              </div>
-              <div class="ai-block" id="ai-local-block" ${cls === 'local' ? '' : 'hidden'}>
-                <div class="ai-grid">
-                  <label class="ai-lbl" for="ai-local-url">${escHtml(t('ai.settings.localUrl'))}</label>
-                  <input id="ai-local-url" class="form-input" value="${escAttr(s.local_url)}" spellcheck="false" autocomplete="off">
-                  <label class="ai-lbl" for="ai-local-key">${escHtml(t('ai.set2.key'))}</label>
-                  <span class="ai-keyrow"><input id="ai-local-key" type="password" class="form-input" autocomplete="off" placeholder="${escAttr(t('ai.settings.keyPh'))}">
-                  <button type="button" class="btn btn-ghost btn-sm" data-save-key="local_key">${escHtml(t('ai.settings.saveKey'))}</button></span>
-                  <span></span><span class="ai-muted" id="ai-local-key-where">${escHtml(keyWhere(st.keys?.local || ''))}</span>
-                </div>
-                <label class="ai-check"><input type="checkbox" id="ai-local-remote" ${s.local_allow_remote ? 'checked' : ''}> <span>${escHtml(t('ai.settings.localRemote'))}</span></label>
-                <div class="ai-warn" id="ai-local-warn" hidden></div>
-                <details class="ai-more"><summary>${escHtml(t('ai.set2.howTo'))}</summary><p class="ai-muted">${escHtml(t('ai.settings.localWhat'))}</p></details>
-              </div>
-            </div>
-            <div class="ai-prov">
-              <div class="ai-grid">
-                <label class="ai-lbl" for="ai-generative">${escHtml(t('ai.set2.gen'))}</label>
-                <select id="ai-generative" class="form-input">
-                  ${opt('off', gen, t('ai.set2.genOff'))}
-                  ${opt('local', gen, t('ai.set2.genLocalOpt'))}
-                  ${opt('external', gen, t('ai.set2.genExternalOpt'))}
-                </select>
-                <span></span><small class="ai-hint1" id="ai-gen-hint">${escHtml(genHint(gen))}</small>
-              </div>
-              <div class="ai-block" id="ai-genlocal-block" ${gen === 'local' ? '' : 'hidden'}>
-                <div class="ai-grid">
-                  <label class="ai-lbl" for="ai-gen-url">${escHtml(t('ai.settings.localUrl'))}</label>
-                  <input id="ai-gen-url" class="form-input" value="${escAttr(s.gen_local_url || 'http://127.0.0.1:11434/v1')}" spellcheck="false" autocomplete="off">
-                  <label class="ai-lbl" for="ai-gen-model">${escHtml(t('ai.settings.externalModel'))}</label>
-                  <span class="ai-keyrow"><input id="ai-gen-model" class="form-input" list="ai-gen-models" value="${escAttr(s.gen_local_model || '')}" placeholder="llama3.1:8b" spellcheck="false" autocomplete="off">
-                  <button type="button" class="btn btn-ghost btn-sm" id="ai-gen-find">${escHtml(t('ai.set2.findModels'))}</button></span>
-                  <datalist id="ai-gen-models"></datalist>
-                </div>
-                <div class="ai-warn" id="ai-gen-warn" hidden></div>
-                <details class="ai-more"><summary>${escHtml(t('ai.set2.howTo'))}</summary><p class="ai-muted">${escHtml(t('ai.set2.genLocalHow'))}</p></details>
-              </div>
-              <div class="ai-block" id="ai-ext-block" ${gen === 'external' ? '' : 'hidden'}>
-                <div class="ai-grid">
-                  <label class="ai-lbl" for="ai-ext-url">${escHtml(t('ai.settings.externalUrl'))}</label>
-                  <input id="ai-ext-url" class="form-input" value="${escAttr(s.external_url)}" placeholder="${escAttr(t('ai.settings.externalUrlPh'))}" spellcheck="false" autocomplete="off">
-                  <label class="ai-lbl" for="ai-ext-model">${escHtml(t('ai.settings.externalModel'))}</label>
-                  <input id="ai-ext-model" class="form-input" value="${escAttr(s.external_model)}" spellcheck="false" autocomplete="off">
-                  <label class="ai-lbl" for="ai-ext-key">${escHtml(t('ai.settings.externalKey'))}</label>
-                  <span class="ai-keyrow"><input id="ai-ext-key" type="password" class="form-input" autocomplete="off" placeholder="${escAttr(t('ai.settings.keyPh'))}">
-                  <button type="button" class="btn btn-ghost btn-sm" data-save-key="external_key">${escHtml(t('ai.settings.saveKey'))}</button></span>
-                  <span></span><span class="ai-muted" id="ai-ext-key-where">${escHtml(keyWhere(st.keys?.external || ''))}</span>
-                </div>
-                <div class="ai-warn">${escHtml(t('ai.set2.extWarn'))}</div>
-              </div>
-            </div>
-          </details>
+          <div id="ai-emb-wrap">${embeddedHtml(st)}</div>
         </section>
-        <details class="ai-more" id="ai-learn">
-          <summary>${escHtml(t('ai.set2.more'))}</summary>
-          <p class="ai-muted">${escHtml(t('ai.set2.aboutLaya'))}</p>
-          ${s.installer_choice != null ? `<p class="ai-muted">${escHtml(s.installer_choice ? t('ai.settings.installerOn') : t('ai.settings.installerOff'))}</p>` : ''}
-          <ul class="ai-list">
-            <li>${escHtml(t('ai.settings.sent0'))}</li>
-            <li>${escHtml(t('ai.settings.sent1'))}</li>
-            <li>${escHtml(t('ai.settings.sent2'))}</li>
-            <li>${escHtml(t('ai.set2.sentGen'))}</li>
-            <li>${escHtml(t('ai.settings.sent3'))}</li>
-            <li>${escHtml(t('ai.settings.sent4'))}</li>
-          </ul>
-          <button type="button" class="btn btn-ghost btn-sm ai-docs-btn" id="ai-docs">${DOC_IC}<span>${escHtml(t('ai.docsLink'))}</span></button>
-        </details>
       </div>
-      <div class="ai-actions">
-        <span class="ai-muted" id="ai-status" aria-live="polite"></span>
-        <button type="button" class="btn btn-ghost btn-sm" id="ai-test" ${on ? '' : 'disabled'}>${escHtml(t('ai.settings.test'))}</button>
-        <button type="button" class="btn btn-primary btn-sm" id="ai-save">${escHtml(t('common.save'))}</button>
-      </div>`;
-    wire(card, s, st);
+      ${actionsRow('ai-status', false, on)}`;
+    if (cards.providers) cards.providers.innerHTML = providersHtml(s, st, on);
+    if (cards.privacy) cards.privacy.innerHTML = privacyHtml(s, st, on);
+    wire(s, st);
     refold();
     // Other features add their own block to this card (the local API): the card is redrawn
     // whole, so they are told each time.
-    try { document.dispatchEvent(new CustomEvent('bmm:ai-card-rendered', { detail: { card } })); } catch { /* no DOM events */ }
+    try { document.dispatchEvent(new CustomEvent('bmm:ai-card-rendered', { detail: { card: cards.general } })); } catch { /* no DOM events */ }
+}
+
+/** Providers: who sorts (the classifier) and who writes (« Rédaction »), with model lists and a connection test. */
+function providersHtml(s: AiSettings, st: any, on: boolean): string {
+    const opt = (v: string, cur: string, label: string) => `<option value="${escAttr(v)}"${v === cur ? ' selected' : ''}>${escHtml(label)}</option>`;
+    const cls = s.classifier || 'off';
+    const gen = s.generative || 'off';
+    const genUrl = s.gen_local_url || GEN_PRESETS[1].url;
+    const preset = presetOfUrl(genUrl);
+    const kind = (v: string, label: string, hint: string) => `<label class="ai-seg-opt"><input type="radio" name="ai-gen-kind" value="${v}" ${gen === v ? 'checked' : ''}><span><b>${escHtml(label)}</b><small>${escHtml(hint)}</small></span></label>`;
+    const presetBtn = (p: typeof GEN_PRESETS[number]) => `<button type="button" class="ai-chipbtn${preset === p.id ? ' is-on' : ''}" data-gen-preset="${p.id}" aria-pressed="${preset === p.id}">${escHtml(t(`ai.gen.preset.${p.id}`))}</button>`;
+    return `
+      <header class="laya-page-h">
+        <h3 class="card-title">${escHtml(t('ai.gen.provTitle'))}</h3>
+        <p class="ai-muted" id="ai-prov-summary">${escHtml(t('ai.gen.provSummary', { cls: classifierName(cls), gen: writerLine(s) }))}</p>
+      </header>
+      <section class="laya-sec" aria-labelledby="ai-gen-h">
+        <header class="laya-sec-h">
+          <h4 class="laya-sec-title" id="ai-gen-h">${escHtml(t('ai.gen.writerTitle'))}</h4>
+          <p class="laya-sec-lead">${escHtml(t('ai.gen.writerLead'))}</p>
+        </header>
+        <div class="ai-seg" role="radiogroup" aria-labelledby="ai-gen-h">
+          ${kind('off', t('ai.gen.kindOff'), t('ai.gen.kindOffHint'))}
+          ${kind('local', t('ai.gen.kindLocal'), t('ai.gen.kindLocalHint'))}
+          ${kind('external', t('ai.gen.kindExternal'), t('ai.gen.kindExternalHint'))}
+        </div>
+        <div class="ai-genbox" id="ai-genlocal-block" ${gen === 'local' ? '' : 'hidden'}>
+          <div class="ai-chipbtns" role="group" aria-label="${escAttr(t('ai.gen.serverAria'))}">${GEN_PRESETS.map(presetBtn).join('')}</div>
+          <div class="ai-grid">
+            <label class="ai-lbl" for="ai-gen-url">${escHtml(t('ai.gen.address'))}</label>
+            <span class="ai-keyrow"><input id="ai-gen-url" class="form-input" value="${escAttr(genUrl)}" spellcheck="false" autocomplete="off">
+            <button type="button" class="btn btn-ghost btn-sm" id="ai-gen-find">${escHtml(t('ai.set2.findModels'))}</button></span>
+            <span></span><small class="ai-hint1" id="ai-gen-uses"></small>
+            <label class="ai-lbl" for="ai-gen-model">${escHtml(t('ai.gen.model'))}</label>
+            <input id="ai-gen-model" class="form-input" value="${escAttr(s.gen_local_model || '')}" placeholder="${escAttr(t('ai.gen.modelPh'))}" spellcheck="false" autocomplete="off">
+          </div>
+          <div class="ai-models" id="ai-gen-models" role="radiogroup" aria-label="${escAttr(t('ai.gen.modelsAria'))}" hidden></div>
+          <div class="ai-warn" id="ai-gen-warn" hidden></div>
+          <details class="ai-more"><summary>${escHtml(t('ai.set2.howTo'))}</summary><p class="ai-muted">${escHtml(t('ai.gen.howLocal'))}</p></details>
+        </div>
+        <div class="ai-genbox" id="ai-ext-block" ${gen === 'external' ? '' : 'hidden'}>
+          <div class="ai-grid">
+            <label class="ai-lbl" for="ai-ext-url">${escHtml(t('ai.settings.externalUrl'))}</label>
+            <span class="ai-keyrow"><input id="ai-ext-url" class="form-input" value="${escAttr(s.external_url)}" placeholder="${escAttr(t('ai.settings.externalUrlPh'))}" spellcheck="false" autocomplete="off">
+            <button type="button" class="btn btn-ghost btn-sm" id="ai-ext-find" ${on ? '' : 'disabled'}>${escHtml(t('ai.set2.findModels'))}</button></span>
+            <label class="ai-lbl" for="ai-ext-model">${escHtml(t('ai.gen.model'))}</label>
+            <input id="ai-ext-model" class="form-input" value="${escAttr(s.external_model)}" spellcheck="false" autocomplete="off">
+            <label class="ai-lbl" for="ai-ext-key">${escHtml(t('ai.settings.externalKey'))}</label>
+            <span class="ai-keyrow"><input id="ai-ext-key" type="password" class="form-input" autocomplete="off" placeholder="${escAttr(t('ai.settings.keyPh'))}">
+            <button type="button" class="btn btn-ghost btn-sm" data-save-key="external_key">${escHtml(t('ai.settings.saveKey'))}</button></span>
+            <span></span><span class="ai-muted" id="ai-ext-key-where">${escHtml(keyWhere(st.keys?.external || ''))}</span>
+          </div>
+          <div class="ai-models" id="ai-ext-models" role="radiogroup" aria-label="${escAttr(t('ai.gen.modelsAria'))}" hidden></div>
+          <div class="ai-warn">${escHtml(t('ai.set2.extWarn'))}</div>
+        </div>
+        <div class="ai-probe" id="ai-gen-report" aria-live="polite" hidden></div>
+        <div class="ai-actions ai-actions--inline" ${gen === 'off' ? 'hidden' : ''} id="ai-gen-actions">
+          <button type="button" class="btn btn-ghost btn-sm" id="ai-gen-test">${escHtml(t('ai.gen.test'))}</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="ai-gen-try">${escHtml(t('ai.gen.tryDraft'))}</button>
+        </div>
+      </section>
+      <section class="laya-sec" aria-labelledby="ai-cls-h">
+        <header class="laya-sec-h">
+          <h4 class="laya-sec-title" id="ai-cls-h">${escHtml(t('ai.gen.clsTitle'))}</h4>
+          <p class="laya-sec-lead">${escHtml(t('ai.gen.clsLead'))}</p>
+        </header>
+        <div class="ai-grid">
+          <label class="ai-lbl" for="ai-classifier">${escHtml(t('ai.set2.cls'))}</label>
+          <select id="ai-classifier" class="form-input">
+            ${opt('embedded', cls, t('ai.set2.clsEmbedded'))}
+            ${opt('local', cls, t('ai.set2.clsLocal'))}
+            ${opt('bettercommunity', cls, t('ai.set2.clsBc'))}
+            ${opt('off', cls, t('ai.set2.clsOff'))}
+          </select>
+          <span></span><small class="ai-hint1" id="ai-cls-hint">${escHtml(clsHint(cls))}</small>
+        </div>
+        <div class="ai-genbox" id="ai-bc-block" ${cls === 'bettercommunity' ? '' : 'hidden'}>
+          <label class="ai-check"><input type="checkbox" id="ai-bc-consent" ${s.bc_consent ? 'checked' : ''}> <span>${escHtml(t('ai.settings.bcConsent'))}</span></label>
+          <details class="ai-more"><summary>${escHtml(t('ai.set2.whatSent'))}</summary><p class="ai-muted">${escHtml(t('ai.settings.bcWhat'))}</p></details>
+        </div>
+        <div class="ai-genbox" id="ai-local-block" ${cls === 'local' ? '' : 'hidden'}>
+          <div class="ai-grid">
+            <label class="ai-lbl" for="ai-local-url">${escHtml(t('ai.settings.localUrl'))}</label>
+            <input id="ai-local-url" class="form-input" value="${escAttr(s.local_url)}" spellcheck="false" autocomplete="off">
+            <label class="ai-lbl" for="ai-local-key">${escHtml(t('ai.set2.key'))}</label>
+            <span class="ai-keyrow"><input id="ai-local-key" type="password" class="form-input" autocomplete="off" placeholder="${escAttr(t('ai.settings.keyPh'))}">
+            <button type="button" class="btn btn-ghost btn-sm" data-save-key="local_key">${escHtml(t('ai.settings.saveKey'))}</button></span>
+            <span></span><span class="ai-muted" id="ai-local-key-where">${escHtml(keyWhere(st.keys?.local || ''))}</span>
+          </div>
+          <label class="ai-check"><input type="checkbox" id="ai-local-remote" ${s.local_allow_remote ? 'checked' : ''}> <span>${escHtml(t('ai.settings.localRemote'))}</span></label>
+          <div class="ai-warn" id="ai-local-warn" hidden></div>
+          <details class="ai-more"><summary>${escHtml(t('ai.set2.howTo'))}</summary><p class="ai-muted">${escHtml(t('ai.settings.localWhat'))}</p></details>
+        </div>
+      </section>
+      ${actionsRow('ai-status-prov', true, on)}`;
+}
+
+/** Privacy: what leaves this PC with the current setup, the full list, and the last connection check. */
+function privacyHtml(s: AiSettings, st: any, on: boolean): string {
+    const lines: string[] = [];
+    if (!on) lines.push(t('ai.gen.privOff'));
+    else {
+        lines.push(s.classifier === 'bettercommunity' ? t('ai.gen.privClsBc') : s.classifier === 'local' ? t('ai.gen.privClsLocal') : t('ai.gen.privClsNone'));
+        lines.push(s.generative === 'external' ? t('ai.gen.privGenExt', { v: writerLine(s) }) : s.generative === 'local' ? t('ai.gen.privGenLocal') : t('ai.gen.privGenNone'));
+    }
+    const leaves = on && !st?.offline;
+    return `
+      <header class="laya-page-h">
+        <h3 class="card-title">${escHtml(t('ai.gen.privTitle'))}</h3>
+        <p class="ai-muted" id="ai-privacy-summary">${escHtml(leaves ? t('ai.hub2.mayLeave') : on ? t('ai.hub2.private') : t('ai.hub2.nothingSent'))}</p>
+      </header>
+      <section class="laya-sec">
+        <ul class="ai-list ai-list--now">${lines.map((l) => `<li>${escHtml(l)}</li>`).join('')}</ul>
+      </section>
+      <section class="laya-sec" aria-labelledby="ai-sent-h">
+        <header class="laya-sec-h"><h4 class="laya-sec-title" id="ai-sent-h">${escHtml(t('ai.gen.privAllTitle'))}</h4></header>
+        <p class="ai-muted">${escHtml(t('ai.set2.aboutLaya'))}</p>
+        ${s.installer_choice != null ? `<p class="ai-muted">${escHtml(s.installer_choice ? t('ai.settings.installerOn') : t('ai.settings.installerOff'))}</p>` : ''}
+        <ul class="ai-list">
+          <li>${escHtml(t('ai.settings.sent0'))}</li>
+          <li>${escHtml(t('ai.settings.sent1'))}</li>
+          <li>${escHtml(t('ai.settings.sent2'))}</li>
+          <li>${escHtml(t('ai.set2.sentGen'))}</li>
+          <li>${escHtml(t('ai.gen.sentDraft'))}</li>
+          <li>${escHtml(t('ai.settings.sent3'))}</li>
+          <li>${escHtml(t('ai.settings.sent4'))}</li>
+        </ul>
+        <div><button type="button" class="btn btn-ghost btn-sm ai-docs-btn" id="ai-docs">${DOC_IC}<span>${escHtml(t('ai.docsLink'))}</span></button></div>
+      </section>
+      <section class="laya-sec" aria-labelledby="ai-diag-h">
+        <header class="laya-sec-h">
+          <h4 class="laya-sec-title" id="ai-diag-h">${escHtml(t('ai.gen.diagTitle'))}</h4>
+          <p class="laya-sec-lead">${escHtml(t('ai.gen.diagLead'))}</p>
+        </header>
+        <div id="ai-diag-steps">${_probe ? stepsHtml(_probe) : `<p class="ai-muted">${escHtml(t('ai.gen.diagNone'))}</p>`}</div>
+      </section>`;
 }
 
 function clsHint(v: string): string {
@@ -336,13 +432,6 @@ function clsHint(v: string): string {
         case 'local': return t('ai.set2.clsLocalHint');
         case 'bettercommunity': return t('ai.set2.clsBcHint');
         default: return t('ai.set2.clsOffHint');
-    }
-}
-function genHint(v: string): string {
-    switch (v) {
-        case 'local': return t('ai.set2.genLocalHint');
-        case 'external': return t('ai.set2.genExternalHint');
-        default: return t('ai.set2.genOffHint');
     }
 }
 
@@ -356,21 +445,32 @@ function refold(): void {
     try { initCollapsibleSettingsCards(); } catch { /* the page without a Settings view */ }
 }
 
-function read(card: HTMLElement, base: AiSettings): AiSettings {
-    const q = <T extends HTMLElement>(id: string) => card.querySelector<T>('#' + id);
+/** Ids are unique across the three cards: look in all of them. */
+function q<T extends HTMLElement = HTMLElement>(id: string): T | null {
+    const c = _cards;
+    if (!c) return null;
+    for (const root of [c.general, c.providers, c.privacy]) {
+        const el = root?.querySelector<T>('#' + id);
+        if (el) return el;
+    }
+    return null;
+}
+
+function read(base: AiSettings): AiSettings {
     const checked = (id: string) => !!q<HTMLInputElement>(id)?.checked;
     const val = (id: string) => (q<HTMLInputElement>(id)?.value || '').trim();
+    const kind = (_cards?.providers?.querySelector<HTMLInputElement>('input[name="ai-gen-kind"]:checked')?.value) || base.generative || 'off';
     return {
         ...base,
         enabled: checked('ai-enabled'),
-        classifier: val('ai-classifier') || 'off',
-        generative: val('ai-generative') || 'off',
+        classifier: val('ai-classifier') || base.classifier || 'off',
+        generative: kind,
         bc_consent: checked('ai-bc-consent'),
-        local_url: val('ai-local-url') || 'http://127.0.0.1:8000',
+        local_url: val('ai-local-url') || base.local_url || 'http://127.0.0.1:8000',
         local_allow_remote: checked('ai-local-remote'),
         external_url: val('ai-ext-url'),
         external_model: val('ai-ext-model'),
-        gen_local_url: val('ai-gen-url') || 'http://127.0.0.1:11434/v1',
+        gen_local_url: val('ai-gen-url') || base.gen_local_url || GEN_PRESETS[1].url,
         gen_local_model: val('ai-gen-model'),
         mod_suggest: checked('ai-f-mod'),
         report_triage: checked('ai-f-report'),
@@ -380,16 +480,99 @@ function read(card: HTMLElement, base: AiSettings): AiSettings {
     };
 }
 
-function wire(card: HTMLElement, s: AiSettings, st: any): void {
-    const q = <T extends HTMLElement>(id: string) => card.querySelector<T>('#' + id);
-    const status = q('ai-status');
-    const say = (msg: string, tone: '' | 'ok' | 'err' = '') => { if (status) { status.textContent = msg; status.className = `ai-muted${tone ? ` ai-${tone}` : ''}`; } };
+function say(msg: string, tone: '' | 'ok' | 'err' = ''): void {
+    const c = _cards;
+    if (!c) return;
+    for (const root of [c.general, c.providers]) {
+        root?.querySelectorAll<HTMLElement>('.ai-status-line').forEach((el) => { el.textContent = msg; el.className = `ai-muted ai-status-line${tone ? ` ai-${tone}` : ''}`; });
+    }
+}
+
+// ── The probe report ────────────────────────────────────────────────────────
+
+function stepName(step: string): string {
+    return t(`ai.gen.step.${['address', 'models', 'lmstudio', 'ollama', 'chat'].includes(step) ? step : 'models'}`);
+}
+
+/** The steps, one line each: what was asked, where, and how it went. */
+function stepsHtml(p: Probe): string {
+    const rows = (p.steps || []).map((s) => {
+        const res = s.ok ? t('ai.gen.stepOk', { ms: String(s.ms) }) : s.error ? stepError(s.error, s.status) : '';
+        return `<li class="ai-step${s.ok ? ' is-ok' : s.optional ? ' is-opt' : ' is-bad'}">
+            <span class="ai-step-dot" aria-hidden="true"></span>
+            <span class="ai-step-k">${escHtml(stepName(s.step))}</span>
+            <code class="ai-step-url">${escHtml(s.url)}</code>
+            <span class="ai-step-v">${escHtml(res)}${s.detail ? ` · ${escHtml(s.detail)}` : ''}</span>
+          </li>`;
+    }).join('');
+    return `<ol class="ai-steps">${rows}</ol>`;
+}
+
+function stepError(code: string, status: number | null): string {
+    if (code.startsWith('ai.url.')) return t(code);
+    if (code.startsWith('http_')) return t('ai.gen.code.http', { status: String(status ?? code.slice(5)) });
+    const known = ['refused', 'timeout', 'unreachable', 'wrong_path', 'bad_response', 'no_models', 'model_error'];
+    return known.includes(code) ? t(`ai.gen.code.${code}`) : code;
+}
+
+function paintProbe(p: Probe | null, busy = false): void {
+    const box = q('ai-gen-report');
+    if (!box) return;
+    if (busy) {
+        box.hidden = false;
+        box.className = 'ai-probe is-busy';
+        box.innerHTML = `<p class="ai-probe-head"><span class="ai-dot" aria-hidden="true"></span>${escHtml(t('ai.gen.probing'))}</p>`;
+        return;
+    }
+    if (!p) { box.hidden = true; return; }
+    const k = probeKeys(p);
+    const server = p.server ? t(`ai.gen.server.${['lmstudio', 'ollama', 'openai'].includes(p.server) ? p.server : 'openai'}`) : '';
+    box.hidden = false;
+    box.className = `ai-probe is-${k.tone}`;
+    const changed = p.typed && normalizeBase(p.typed) !== p.typed ? `<p class="ai-muted">${escHtml(t('ai.gen.usedBase', { base: p.base }))}</p>` : '';
+    box.innerHTML = `
+      <p class="ai-probe-head">${escHtml(t(k.head, k.vars))}${server ? ` <span class="bms-chip">${escHtml(server)}</span>` : ''}</p>
+      ${k.hint ? `<p class="ai-muted">${escHtml(t(k.hint, k.vars))}</p>` : ''}
+      ${!p.ok && k.vars.detail ? `<p class="ai-muted ai-probe-said">${escHtml(t('ai.gen.serverSays', { detail: k.vars.detail }))}</p>` : ''}
+      ${changed}
+      <details class="ai-more"><summary>${escHtml(t('ai.gen.details'))}</summary>${stepsHtml(p)}</details>`;
+    const diag = q('ai-diag-steps');
+    if (diag) diag.innerHTML = stepsHtml(p);
+}
+
+/** The model rows: click one to use it. Loaded first; an embedding model cannot write and says so. */
+function paintModels(listId: string, inputId: string, p: Probe | null): void {
+    const list = q(listId);
+    const input = q<HTMLInputElement>(inputId);
+    if (!list) return;
+    const models = p ? sortModels(p.models || []) : [];
+    if (!models.length) { list.hidden = true; list.innerHTML = ''; return; }
+    const cur = input?.value.trim() || '';
+    list.hidden = false;
+    list.innerHTML = models.slice(0, 40).map((m) => {
+        const badges = [
+            m.loaded === true ? `<span class="bms-chip bms-chip--ok">${escHtml(t('ai.gen.loaded'))}</span>` : '',
+            m.kind === 'embedding' ? `<span class="bms-chip">${escHtml(t('ai.gen.embedding'))}</span>` : '',
+        ].join('');
+        const sel = m.id === cur;
+        return `<button type="button" class="ai-model${sel ? ' is-on' : ''}" role="radio" aria-checked="${sel}" data-model="${escAttr(m.id)}" ${m.kind === 'embedding' ? 'disabled' : ''}>
+            <span class="ai-model-dot" aria-hidden="true"></span><span class="ai-model-id">${escHtml(m.id)}</span>${badges}</button>`;
+    }).join('');
+    list.querySelectorAll<HTMLButtonElement>('[data-model]').forEach((b) => b.addEventListener('click', () => {
+        if (input) input.value = b.dataset.model || '';
+        list.querySelectorAll('.ai-model').forEach((x) => { x.classList.toggle('is-on', x === b); x.setAttribute('aria-checked', String(x === b)); });
+        say(t('ai.lt.unsaved'));
+    }));
+}
+
+function wire(s: AiSettings, st: any): void {
+    const c = _cards;
+    if (!c) return;
     const save = async (): Promise<boolean> => {
         try {
-            const v = await invoke('ai_save_settings', { settings: read(card, s) }) as AiView;
-            render(card, v);
-            const st = card.querySelector('#ai-status');
-            if (st) { st.textContent = t('ai.settings.saved'); st.className = 'ai-muted ai-ok'; }
+            const v = await invoke('ai_save_settings', { settings: read(s) }) as AiView;
+            render(v);
+            say(t('ai.settings.saved'), 'ok');
             return true;
         } catch (e) {
             say(reasonText(String((e as Error)?.message || e)), 'err');
@@ -400,30 +583,35 @@ function wire(card: HTMLElement, s: AiSettings, st: any): void {
     q<HTMLInputElement>('ai-enabled')?.addEventListener('change', () => { void save(); });
     // Everything else waits for Save: say so as soon as something changed, so a toggle flipped
     // and the dialog closed is not mistaken for a saved one.
-    card.querySelector('#ai-body')?.addEventListener('change', (e) => {
-        const el = e.target as HTMLElement | null;
-        if (!el || el.matches('input[type="password"]')) return;
-        say(t('ai.lt.unsaved'));
-    });
+    for (const root of [c.general, c.providers]) {
+        root?.addEventListener('change', (e) => {
+            const el = e.target as HTMLElement | null;
+            if (!el || el.id === 'ai-enabled' || el.matches('input[type="password"]')) return;
+            say(t('ai.lt.unsaved'));
+        });
+        root?.querySelectorAll<HTMLButtonElement>('[data-ai-save]').forEach((b) => b.addEventListener('click', () => { void save(); }));
+    }
     q<HTMLSelectElement>('ai-classifier')?.addEventListener('change', (e) => {
         const v = (e.target as HTMLSelectElement).value;
         q('ai-bc-block')?.toggleAttribute('hidden', v !== 'bettercommunity');
         q('ai-local-block')?.toggleAttribute('hidden', v !== 'local');
-        q('ai-emb-wrap')?.toggleAttribute('hidden', !(v === 'embedded' || v === 'off'));
         const h = q('ai-cls-hint'); if (h) h.textContent = clsHint(v);
     });
-    q<HTMLSelectElement>('ai-generative')?.addEventListener('change', (e) => {
-        const v = (e.target as HTMLSelectElement).value;
+    c.providers?.querySelectorAll<HTMLInputElement>('input[name="ai-gen-kind"]').forEach((r) => r.addEventListener('change', () => {
+        const v = r.value;
         q('ai-ext-block')?.toggleAttribute('hidden', v !== 'external');
         q('ai-genlocal-block')?.toggleAttribute('hidden', v !== 'local');
-        const h = q('ai-gen-hint'); if (h) h.textContent = genHint(v);
-    });
+        q('ai-gen-actions')?.toggleAttribute('hidden', v === 'off');
+        paintProbe(null);
+    }));
     // A hint while typing: the same rules Rust applies on save.
     const checkUrl = async (input: string, warnId: string, kind: 'local' | 'gen_local', remoteBox?: string) => {
         const warn = q(warnId);
         if (!warn) return;
+        let url = q<HTMLInputElement>(input)?.value || '';
+        if (kind === 'gen_local') url = normalizeBase(url);
         try {
-            const r: any = await invoke('ai_check_url', { url: q<HTMLInputElement>(input)?.value || '', kind, allowRemote: remoteBox ? !!q<HTMLInputElement>(remoteBox)?.checked : false });
+            const r: any = await invoke('ai_check_url', { url, kind, allowRemote: remoteBox ? !!q<HTMLInputElement>(remoteBox)?.checked : false });
             warn.hidden = r?.warning !== 'remote';
             warn.textContent = r?.warning === 'remote' ? t('ai.settings.remoteWarn') : '';
         } catch (e) {
@@ -433,25 +621,71 @@ function wire(card: HTMLElement, s: AiSettings, st: any): void {
     };
     q('ai-local-url')?.addEventListener('change', () => void checkUrl('ai-local-url', 'ai-local-warn', 'local', 'ai-local-remote'));
     q('ai-local-remote')?.addEventListener('change', () => void checkUrl('ai-local-url', 'ai-local-warn', 'local', 'ai-local-remote'));
+    // « Will use http://127.0.0.1:1234/v1 »: the address as Rust will read it.
+    const uses = () => {
+        const out = q('ai-gen-uses');
+        const raw = q<HTMLInputElement>('ai-gen-url')?.value || '';
+        const base = normalizeBase(raw);
+        if (out) out.textContent = base && base !== raw.trim().replace(/\/+$/, '') ? t('ai.gen.willUse', { base }) : t('ai.gen.addressHint');
+        const p = presetOfUrl(raw);
+        c.providers?.querySelectorAll<HTMLButtonElement>('[data-gen-preset]').forEach((b) => { const onP = b.dataset.genPreset === p; b.classList.toggle('is-on', onP); b.setAttribute('aria-pressed', String(onP)); });
+    };
+    uses();
+    q('ai-gen-url')?.addEventListener('input', uses);
     q('ai-gen-url')?.addEventListener('change', () => void checkUrl('ai-gen-url', 'ai-gen-warn', 'gen_local'));
-    // « Trouver les modèles »: save, then ask the local server for its model list (GET /models).
-    q('ai-gen-find')?.addEventListener('click', async () => {
-        if (!(await save())) return;
-        const c = document.getElementById(CARD_ID) || card;
-        const out = c.querySelector<HTMLElement>('#ai-status');
+    c.providers?.querySelectorAll<HTMLButtonElement>('[data-gen-preset]').forEach((b) => b.addEventListener('click', () => {
+        const p = GEN_PRESETS.find((x) => x.id === b.dataset.genPreset);
+        const input = q<HTMLInputElement>('ai-gen-url');
+        if (!p || !input) return;
+        if (p.url) input.value = p.url; else { input.focus(); input.select(); }
+        uses();
+        paintProbe(null);
+        paintModels('ai-gen-models', 'ai-gen-model', null);
+        say(t('ai.lt.unsaved'));
+    }));
+    // « Find models » / « Test connection »: the TYPED address, nothing saved first. Rust
+    // normalises it, lists the models (LM Studio's and Ollama's own lists too) and says which
+    // step failed. The local probe works with the master switch off: nothing leaves the PC.
+    const runProbe = async (kind: 'local' | 'external', chat: boolean) => {
+        const url = q<HTMLInputElement>(kind === 'local' ? 'ai-gen-url' : 'ai-ext-url')?.value || '';
+        const modelInput = q<HTMLInputElement>(kind === 'local' ? 'ai-gen-model' : 'ai-ext-model');
+        const btns = ['ai-gen-find', 'ai-ext-find', 'ai-gen-test'].map((id) => q<HTMLButtonElement>(id)).filter(Boolean) as HTMLButtonElement[];
+        btns.forEach((b) => { b.disabled = true; });
+        paintProbe(null, true);
         try {
-            const r: any = await invoke('ai_test_connection', { target: 'gen_local' });
-            const models: string[] = Array.isArray(r?.models) ? r.models : [];
-            const dl = c.querySelector('#ai-gen-models');
-            if (dl) dl.innerHTML = models.map((m) => `<option value="${escAttr(m)}"></option>`).join('');
-            const input = c.querySelector<HTMLInputElement>('#ai-gen-model');
-            if (input && !input.value && models[0]) input.value = models[0];
-            if (out) { out.textContent = models.length ? t('ai.set2.modelsFound', { n: String(models.length) }) : t('ai.set2.modelsNone'); out.className = 'ai-muted ai-ok'; }
+            const p = await invoke('ai_gen_probe', { url, kind, model: modelInput?.value.trim() || null, chat }) as Probe;
+            _probe = p;
+            _probeKind = kind;
+            if (modelInput && p.models?.length) modelInput.value = pickModel(p.models, modelInput.value, p.suggested);
+            if (kind === 'local' && p.base) { const u = q<HTMLInputElement>('ai-gen-url'); if (u && p.ok) { u.value = p.base; uses(); } }
+            paintModels(kind === 'local' ? 'ai-gen-models' : 'ai-ext-models', kind === 'local' ? 'ai-gen-model' : 'ai-ext-model', p);
+            paintProbe(p);
+            if (p.ok) say(t('ai.gen.saveToKeep'));
         } catch (e) {
-            if (out) { out.textContent = reasonText(String((e as Error)?.message || e)); out.className = 'ai-muted ai-err'; }
+            paintProbe(null);
+            say(reasonText(String((e as Error)?.message || e)), 'err');
+        } finally {
+            btns.forEach((b) => { b.disabled = false; });
+            const ext = q<HTMLButtonElement>('ai-ext-find'); if (ext && !(s.enabled && !st?.killSwitch)) ext.disabled = true;
         }
+    };
+    q('ai-gen-find')?.addEventListener('click', () => void runProbe('local', false));
+    q('ai-ext-find')?.addEventListener('click', () => void runProbe('external', false));
+    q('ai-gen-test')?.addEventListener('click', () => {
+        const kind = (c.providers?.querySelector<HTMLInputElement>('input[name="ai-gen-kind"]:checked')?.value) === 'external' ? 'external' : 'local';
+        void runProbe(kind, true);
     });
-    card.querySelectorAll<HTMLButtonElement>('[data-save-key]').forEach((b) => {
+    q('ai-gen-try')?.addEventListener('click', async () => {
+        if (!(await save())) return;
+        // laya-hub.ts listens (an event, not an import: the hub already imports this module).
+        document.dispatchEvent(new CustomEvent('bmm:open-laya', { detail: { tab: 'drafting' } }));
+    });
+    // A probe from before the redraw (a Save) stays on screen.
+    if (_probe) {
+        paintModels(_probeKind === 'local' ? 'ai-gen-models' : 'ai-ext-models', _probeKind === 'local' ? 'ai-gen-model' : 'ai-ext-model', _probe);
+        paintProbe(_probe);
+    }
+    c.providers?.querySelectorAll<HTMLButtonElement>('[data-save-key]').forEach((b) => {
         b.addEventListener('click', async () => {
             const name = b.dataset.saveKey || '';
             const input = q<HTMLInputElement>(name === 'local_key' ? 'ai-local-key' : 'ai-ext-key');
@@ -460,28 +694,24 @@ function wire(card: HTMLElement, s: AiSettings, st: any): void {
             // Save the URL first: Rust binds the key to the SAVED provider address, and a later
             // change of address clears it.
             if (!(await save())) return;
-            const c = document.getElementById(CARD_ID) || card;
             try {
                 const where = String(await invoke('ai_set_secret', { name, value }));
-                const out = c.querySelector(name === 'local_key' ? '#ai-local-key-where' : '#ai-ext-key-where');
+                const out = q(name === 'local_key' ? 'ai-local-key-where' : 'ai-ext-key-where');
                 if (out) out.textContent = keyWhere(where);
             } catch (e) {
-                const out = c.querySelector<HTMLElement>('#ai-status');
-                if (out) { out.textContent = reasonText(String((e as Error)?.message || e)); out.className = 'ai-muted ai-err'; }
+                say(reasonText(String((e as Error)?.message || e)), 'err');
             }
         });
     });
-    q('ai-save')?.addEventListener('click', () => { void save(); });
-    wireEmbedded(card, st);
+    wireEmbedded(c.general, st);
     q('ai-docs')?.addEventListener('click', () => openAiDocs());
     q('ai-test')?.addEventListener('click', async () => {
-        const cur = read(card, s);
+        const cur = read(s);
         const targets: string[] = [];
         if (cur.classifier === 'local' || cur.classifier === 'bettercommunity' || cur.classifier === 'embedded') targets.push(cur.classifier);
         if (cur.generative === 'external' || cur.generative === 'local') targets.push('generator');
         if (!targets.length) { say(t('ai.reason.noProvider'), 'err'); return; }
         if (!(await save())) return;
-        const st = (document.getElementById(CARD_ID) || card).querySelector<HTMLElement>('#ai-status');
         const lines: string[] = [];
         for (const target of targets) {
             const name = target === 'generator' ? t('ai.set2.gen') : classifierName(target);
@@ -493,7 +723,7 @@ function wire(card: HTMLElement, s: AiSettings, st: any): void {
                 lines.push(`${name}: ${reasonText(String((e as Error)?.message || e))}`);
             }
         }
-        if (st) { st.textContent = lines.join(' · '); st.className = 'ai-muted'; }
+        say(lines.join(' · '));
     });
 }
 
@@ -508,7 +738,7 @@ function wireEmbedded(card: HTMLElement, st: any): void {
         wireEmbedded(card, status);
         paintLive(card);
     };
-    const refresh = async () => { const v = await loadAiView(); if (card.isConnected) render(card, v); };
+    const refresh = async () => { const v = await loadAiView(); if (card.isConnected) render(v); };
     q('ai-emb-install')?.addEventListener('click', async () => {
         _live = { phase: 'download' };
         _prog = null;
@@ -535,7 +765,7 @@ function wireEmbedded(card: HTMLElement, st: any): void {
             const ns = parseNoSpace(raw);
             _live = { error: ns ? t('ai.emb.noSpace', { need: fmtBytes(ns.needed), free: fmtBytes(ns.free) }) : reasonText(raw) };
             const v = await loadAiView();
-            if (card.isConnected) render(card, v);
+            if (card.isConnected) render(v);
         }
     });
     q('ai-emb-pause')?.addEventListener('click', () => { void invoke('ai_embedded_cancel', { discard: false }); });
@@ -563,7 +793,7 @@ function wireEmbedded(card: HTMLElement, st: any): void {
         if (b) b.disabled = false;
     });
     q('ai-emb-remove')?.addEventListener('click', async () => {
-        if (!(await askConfirm(t('ai.emb.removeConfirm')))) return;
+        if (!(await confirmAction({ title: t('ai.emb.removeTitle'), message: t('ai.emb.removeConfirm'), confirmLabel: t('ai.emb.remove'), tone: 'danger' }))) return;
         try {
             const r: any = await invoke('ai_embedded_remove');
             await refresh();

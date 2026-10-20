@@ -461,6 +461,11 @@ Paramètres → IA **et** choisissez un fournisseur réseau, et alors seulement 
 - **Ce qui est envoyé** pour un mod : nom, auteur, description, extraits du readme ou du manifeste,
   jusqu'à 40 noms de fichiers et les noms de vos tags, masqués d'abord, 4 000 caractères au plus ; pour
   un indice de rapport, le texte masqué du rapport. Le dialogue montre le texte exact envoyé.
+- **Rédaction** (*Rédiger avec Laya*, avec un rédacteur que vous avez configuré) : le texte, les
+  infos et la demande affichés sous *Ce qui sera envoyé*, seulement quand vous cliquez *Générer*. Un
+  rédacteur sur ce PC (LM Studio, Ollama, llama.cpp) le reçoit en boucle locale et rien ne quitte
+  votre PC ; avec une API externe, les données personnelles sont d'abord masquées et le texte ne va
+  qu'à cette API.
 - **À qui :** *BetterCommunity* (avec votre Creator ID, sa preuve signée et, si elle est enregistrée,
   votre clé d'API, après que vous avez coché la case de consentement) ; *votre propre serveur Laya*
   (sur ce PC par défaut) ; ou *une API externe* que vous configurez, selon ses propres conditions.

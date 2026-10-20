@@ -4,6 +4,7 @@ import { collectWebviewEnv } from './webview-env.js';
 import { appState } from '../../core/state.js';
 import { invoke } from '../../core/api.js';
 import { t, applyTranslations } from '../../core/i18n.js';
+import { confirmAction } from '../../ui/verify.js';
 import { getDebugSections, watchDebugSections } from './debug-sections.js';
 import { uiIcon } from '../../ui/icons.js';
 
@@ -578,8 +579,8 @@ class DebugUI {
             }, 2000);
         };
 
-        this.crashOverlay.querySelector('#crash-dismiss').onclick = () => {
-            if (confirm(t('dev.crash.dismissConfirm'))) {
+        this.crashOverlay.querySelector('#crash-dismiss').onclick = async () => {
+            if (await confirmAction({ title: t('vfy.t.dismissCrash'), message: t('dev.crash.dismissConfirm'), confirmLabel: t('vfy.b.dismissCrash'), tone: 'danger' })) {
                 this.crashOverlay.classList.remove('active');
             }
         };

@@ -34,7 +34,9 @@ const HOSTILE = {
   enabled: true,
   osSchedule: true,
   allowCustomCommands: true,
-  perms: { command: true, script: true, deeplink: true, stopProcess: true, delete: true, resources: true, tasks: true, network: true, navigate: true },
+  perms: { command: true, script: true, deeplink: true, stopProcess: true, delete: true, resources: true, tasks: true, network: true, navigate: true, files: true },
+  // A package link from the FILE: it would point at somebody else's files in this PC's store.
+  pkg: { id: '0123456789abcdef01234567', name: 'not yours', signature: 'valid' },
   trigger: { type: 'interval', everyMinutes: 1 },
   steps: [{ kind: 'action', action: { type: 'custom.command', params: { program: 'calc.exe', args: '' } } }],
 };
@@ -46,7 +48,7 @@ describe('sanitiseImportedTask', () => {
 
   test('every outside-BMM capability is taken away', () => {
     const { task } = sanitiseImportedTask(HOSTILE);
-    assert.deepEqual(task.perms, { command: false, script: false, deeplink: false, stopProcess: false, delete: false, resources: false, tasks: false, network: false, ai: false, navigate: false });
+    assert.deepEqual(task.perms, { command: false, script: false, deeplink: false, stopProcess: false, delete: false, resources: false, tasks: false, network: false, ai: false, navigate: false, files: false });
     assert.equal(task.allowCustomCommands, false, 'the legacy flag is a grant too');
   });
 
@@ -54,9 +56,13 @@ describe('sanitiseImportedTask', () => {
     assert.equal(sanitiseImportedTask(HOSTILE).task.osSchedule, false);
   });
 
+  test('a package link never comes from the file: only the package importer sets it', () => {
+    assert.equal(sanitiseImportedTask(HOSTILE).task.pkg, undefined);
+  });
+
   test('it REPORTS what was asked for, so the person is not left wondering', () => {
     const { strippedPerms, wasEnabled } = sanitiseImportedTask(HOSTILE);
-    assert.deepEqual([...strippedPerms].sort(), ['command', 'deeplink', 'delete', 'navigate', 'network', 'resources', 'script', 'stopProcess', 'tasks']);
+    assert.deepEqual([...strippedPerms].sort(), ['command', 'deeplink', 'delete', 'files', 'navigate', 'network', 'resources', 'script', 'stopProcess', 'tasks']);
     assert.equal(wasEnabled, true);
   });
 

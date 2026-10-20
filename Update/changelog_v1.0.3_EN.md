@@ -2,6 +2,8 @@
 
 1.0.3 brings a notification centre, a Conflicts view that shows which mod wins each shared file, panels that pop out into their own window, seven more BMM Tools, following a repo by its address or plain IP, a rebuilt SSH servers dialog, one list for every catalogue source, a guided plugin creator and a rebuilt theme editor. It is also the first build able to link to BetterCommunity v2 later on: that link ships switched off, and nothing changes until it is announced.
 
+> 1.0.3 builds on the 1.0 release. The story of 1.0 as a whole is pinned at the top of the version list: **What's new in 1.0**. Start there if you are new to BMM, or if you skipped 1.0.0 to 1.0.2.
+
 ## [NEW] Notification centre
 - One place for every message, with one unread count (also on the taskbar icon). Messages are grouped by where they come from: Updates, Followed repos, Scheduler, Background jobs, BetterCommunity and BMM itself.
 - Open a message when it leads somewhere (an available update, a followed repo), snooze it (1 hour, 4 hours, tomorrow 9:00) or dismiss it. A snoozed message comes back unread when its time comes.

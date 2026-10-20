@@ -2,6 +2,12 @@
 
 Trois étapes. Dans l'ordre — la deuxième est celle qu'on saute, et c'est celle qui compte.
 
+:::tip[Tu préfères une tâche à la fois ?]
+La section **Pas à pas** a une page par tâche, chacune avec une image et un bouton Montre-moi :
+[Créer un profil](doc-page:guide/create-profile), [Installer ton premier mod](doc-page:guide/install-first-mod),
+[Régler un conflit](doc-page:guide/fix-a-conflict). Pars de la [liste des tâches](doc-page:guide/index).
+:::
+
 
 <!-- story:new-game -->
 ![Installer un nouveau jeu](assets/docs/media/gifs/new-game.gif)

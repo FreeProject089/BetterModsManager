@@ -29,13 +29,13 @@ The summary always runs.
 | 1 | `preflight` | git branch and state (a dirty tree is a warning), previous version and the commit its history ends at, toolchain versions (node, npm, rustc, cargo, Tauri CLI, bpkg, gh, python, hyperfine, ffmpeg, Gource, Chrome), `check-release-versions`, curated changelog present, machine busy or not. `--gates` runs `npm run ci`, `--tests` runs `npm test`, `--cargo-test` runs `cargo test` (asked interactively) | log |
 | 2 | `version` | shows the version of every source (package.json, package-lock.json, tauri.conf.json, Cargo.toml, Cargo.lock, BetterInstaller installer.toml), asks the new one (`x.y.z`, `patch`, `minor`, `major`, `pre`), rewrites only the version bytes (UTF-8 without BOM; refuses a rewrite that would change any accent or the line count), runs `check-release-versions` | the 6 files |
 | 3 | `changelog` | `git log <previous>..HEAD` grouped into security / features / fixes / docs / CI / chore / other (Conventional prefixes win, else keywords), with hashes, dates and author **names** (never e-mails); plus the log of each gitlink (BMM Docs, BetterInstaller, BCW) between the commit recorded at the previous version and now. Warns when `Update/changelog_v<version>_{EN,FR}.md` (human-written) is missing | `COMMITS.md` |
-| 4 | `build` | waits for an idle machine, runs `BetterInstaller/examples/bmm/release.ps1 -Version <v>` (no `-Publish`): bump check, `npm run build`, package, sign, stamp `BMM-Setup.exe`, delta, signed `update.json`, signed `update-manifest.json`. Then `npx tauri build --bundles nsis,msi` for the classic installers | `BMM-Setup.exe`, `bmm.bpkg`, `update.json`, `update-manifest.json`, `lang-*.json`, `links.json`, `extras/` (NSIS + MSI, **not for GitHub**) |
-| 5 | `verify` | `bpkg info` (version), `bpkg verify --key` (signature), `bpkg verify-manifest --setup` (setup ↔ manifest), update.json lists `BMM-Setup.exe` with the right SHA-256, update-manifest.json lists exactly that installer, expiry dates printed (warns under 6 days), the 0.9.11 asset rules (one installer named `BMM-Setup.exe`, no .msi, no .zip), `check-release-versions --artifacts` (when `Release/` root still holds this build), checksums | `SHA256SUMS.txt` |
-| 6 | `docs` | BMM Docs English and French PDFs without WeasyPrint/GTK: a private venv (`tools/release/.cache/docs-venv`) with the docs' hashed `requirements.txt` + `mkdocs-print-site-plugin`, one single-language site per language built into the cache from the docs' own `mkdocs.pdf-chrome.yml` (`docs/lang_config.py`: with the i18n plugin the French pass overwrote the one print page, so the « English » book came out French), then headless Chrome prints each `print_page/` once every Mermaid diagram has drawn | `docs/BMM-Docs-EN.pdf`, `docs/BMM-Docs-FR.pdf` |
-| 7 | `media` | release cards from `tools/release/media/cards.mjs` (text from `cards.<version>.json`), screenshots of the real interface with demo data, **composed like BMM on a desktop**: the whole rounded window on a transparent canvas and Tasky floating over its top-left corner (`--no-tasky` to leave him out), the README hero; each visual also as an editable layered SVG and a layered PSD | `media/*.png`, `media/source/*.svg + .psd`, `media/screenshots/…`, `.github/screenshots/*.png`, `.github/screenshots/layers/`, `.github/screenshots/source/*.svg` |
-| 8 | `readme` | README.md / README_EN.md / README_FR.md: version badge, hero alt text, « What's new in X » and the changelog links (links only move when the new changelog exists; « new in 1.0.2 » next to a feature is history and stays) | the 3 READMEs |
-| 9 | `bench` | waits for an idle machine, runs Criterion, the memory collector, the JS micro-benchmarks and hyperfine, stores `benchmarks/results/<version>/summary.json` (committed) + `raw/` (ignored), compares with the newest earlier version, writes the report | `bench/BENCHMARK.md`, `BENCHMARK_FR.md`, `BENCHMARK.html`, `comparison.json`, `charts/*.png|svg`, `charts/overview.gif` |
-| 10 | `gource` | history video of BMM + BMM Docs + BetterInstaller + BCW (+ `../BetterCommunity-v2` when present), one merged log, captions at each version bump, fixed size/speed/seed, BMM look; MP4 (H.264, yuv420p, +faststart), a light GIF and a poster; re-encodes `frontend/assets/videos/credits_bg.mp4` from it (muted, fades for a clean loop, never larger than before) | `media/gource-<v>.mp4`, `.gif`, `-poster.png`, credits video |
+| 4 | `gource` | runs BEFORE the build, so the installer ships the new credits video. History video of BMM + BMM Docs + BetterInstaller + BCW (+ `../BetterCommunity-v2` when present), one merged log, **no captions and no version text**: readable file names, the BMM logo (`frontend/assets/brand/bmm-wordmark-dark.svg` drawn to PNG, `--logo`), dark background; MP4 (H.264, yuv420p, +faststart), a light GIF and a poster; re-encodes `frontend/assets/videos/credits_bg.mp4` from it (muted, fades for a clean loop, never larger than before). The build warns when the credits video is older than the latest commit | `media/gource-<v>.mp4`, `.gif`, `-poster.png`, credits video |
+| 5 | `build` | waits for an idle machine, runs `BetterInstaller/examples/bmm/release.ps1 -Version <v>` (no `-Publish`): bump check, `npm run build`, package, sign, stamp `BMM-Setup.exe`, delta, signed `update.json`, signed `update-manifest.json`. Then `npx tauri build --bundles nsis,msi` for the classic installers | `BMM-Setup.exe`, `bmm.bpkg`, `update.json`, `update-manifest.json`, `lang-*.json`, `links.json`, `extras/` (NSIS + MSI, **not for GitHub**) |
+| 6 | `verify` | `bpkg info` (version), `bpkg verify --key` (signature), `bpkg verify-manifest --setup` (setup ↔ manifest), update.json lists `BMM-Setup.exe` with the right SHA-256, update-manifest.json lists exactly that installer, expiry dates printed (warns under 6 days), the 0.9.11 asset rules (one installer named `BMM-Setup.exe`, no .msi, no .zip), `check-release-versions --artifacts` (when `Release/` root still holds this build), checksums | `SHA256SUMS.txt` |
+| 7 | `docs` | BMM Docs English and French PDFs without WeasyPrint/GTK: a private venv (`tools/release/.cache/docs-venv`) with the docs' hashed `requirements.txt` (it pins the print-site plugin and pypdf already: a plain install, no `--no-deps`), one single-language site per language built by BMM Docs' OWN `language_config` (`docs/lang_config.py` calls it; no local copy any more), then headless Chrome dresses each `print_page/` as a book (`docs/print-style.mjs`): cover (logo, title, version, date), table of contents with page links and page numbers (read from the bookmarks of a first print), dark text on white at WCAG AA (measured), readable code, bordered tables, GIFs replaced by one still frame, replays replaced by a link, running header (BMM name, version) and footer (page x / y), PDF bookmarks | `docs/BMM-Docs-EN.pdf`, `docs/BMM-Docs-FR.pdf` |
+| 8 | `media` | compiles the frontend first (`npx tsc --project frontend`) and **fails** when a compiled file is older than its source or the sources do not say the version being released (the pictures show the app as it is now, served from `frontend/`: the same files Tauri bundles, so no build is needed; `--no-compile` skips tsc); release cards from `tools/release/media/cards.mjs` (text from `cards.<version>.json`), screenshots of the real interface with demo data, **composed like BMM on a desktop**: the whole rounded window on a transparent canvas and Tasky floating over its top-left corner (`--no-tasky` to leave him out), the README hero; each visual also as an editable layered SVG and a layered PSD | `media/*.png`, `media/source/*.svg + .psd`, `media/screenshots/…`, `.github/screenshots/*.png`, `.github/screenshots/layers/`, `.github/screenshots/source/*.svg` |
+| 9 | `readme` | README.md / README_EN.md / README_FR.md: version badge, hero alt text, « What's new in X » and the changelog links (links only move when the new changelog exists; « new in 1.0.2 » next to a feature is history and stays) | the 3 READMEs |
+| 10 | `bench` | waits for an idle machine, runs Criterion, the memory collector, the JS micro-benchmarks and hyperfine, stores `benchmarks/results/<version>/summary.json` (committed) + `raw/` (ignored), compares with the newest earlier version, writes the report | `bench/BENCHMARK.md`, `BENCHMARK_FR.md`, `BENCHMARK.html`, `comparison.json`, `charts/*.png|svg`, `charts/overview.gif` |
 | 11 | `notes` | `github-release.md`: the maintainer-notes comment (title, tag, order, assets, signing, verify), the curated changelog as the body, downloads table, SHA-256 table, links; `github-release.body.md` without the comment, for `--notes-file`. Prints the `gh release create` command. A hand-edited `github-release.md` is never overwritten (the draft goes to `github-release.generated.md`) | the two files |
 | 12 | summary | always: table of steps, durations, outputs; refreshes `SHA256SUMS.txt` | `RELEASE-SUMMARY.md` |
 
@@ -58,9 +58,9 @@ Run `release.bat --help` for the list. The useful ones:
 | `--skip-bmm-build` | build: reuse the built exe (`release.ps1 -SkipBmmBuild`) |
 | `--no-bundles` | build: no NSIS/MSI extras |
 | `--lenient-artifacts` | verify: `check-release-versions --artifacts` failing is a warning |
-| `--no-screenshots`, `--no-tasky`, `--tasky app|br|off`, `--gifs` | media options (`--gifs`: also record the usage clips) |
+| `--no-compile`, `--no-screenshots`, `--no-tasky`, `--tasky app|br|off`, `--gifs` | media options (`--gifs`: also record the usage clips) |
 | `--bench-skip-run`, `--bench-only rust,js,hyperfine,mem` | benchmark options |
-| `--gource-seconds N`, `--no-credits` | Gource options |
+| `--gource-seconds N`, `--no-credits` | Gource options (the step sits before `build`; `--steps` always runs in step order) |
 | `--no-wait`, `--force` | do not wait for an idle machine; run anyway |
 | `--max-cpu N`, `--wait-minutes N` | bench: « idle » also means other programs use at most N % CPU (default 10: a game or a video call counts as busy); how long to wait |
 
@@ -136,6 +136,10 @@ pictures matched by name (`frontend/assets/userpfp/<name>.png`, the pictures `co
 names). Gource opens a window while it renders. `node tools/release/media/gource.mjs --version X`
 runs the step alone.
 
+The picture has no captions and no version text: file names (readable size, shown for 2 s), the repository
+names as folder labels, the BMM wordmark as the logo, a dark background. The step runs **before** `build`:
+the credits video it writes (`frontend/assets/videos/credits_bg.mp4`) is bundled into the installer.
+
 ## Tests
 
 ```bash
@@ -153,13 +157,13 @@ tools/release/
   release.bat          entry point (UTF-8 console, then node release.mjs)
   release.mjs          menu, options, runner, summary
   steps.mjs            the eleven steps
-  lib/                 util, exec (logged commands), version, git, commits, checksums, readme,
+  lib/                 fresh (compile + staleness), contrast (WCAG), util, exec (logged commands), version, git, commits, checksums, readme,
                        notes, idle (busy-machine check), browser (puppeteer-core, static server),
                        png (decoder), psd (layered writer)
   bench/               collect, compare, metrics (explanations EN/FR), charts, report, run
   media/               cards, cards-text, cards.<version>.json, gource
   screenshots/         shoot, scenes, fixtures (demo data), hero, themes (THEMES.md previews), gifs + gif-scenes (usage clips)
-  docs/                pdf.mjs (BMM Docs PDFs through Chrome), lang_config.py (one-language site config)
+  docs/                pdf.mjs (BMM Docs PDFs through Chrome), lang_config.py (calls BMM Docs' language_config), print-style.mjs (the book's CSS, cover, header/footer), outline_pages.py
   test/                node --test
   .cache/              (ignored) docs venv, docs site, Gource work files
 ```

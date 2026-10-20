@@ -15,10 +15,24 @@ import { launch, svgToPng } from '../lib/browser.mjs';
 import { decodePng } from '../lib/png.mjs';
 import { writePsd } from '../lib/psd.mjs';
 import { writeFileSync } from 'node:fs';
+import { ratio, blend, AA } from '../lib/contrast.mjs';
 
-export const C = { bg: '#121315', bg2: '#1b1c20', yellow: '#ffcc00', ink: '#f4f4f5', muted: '#a1a1aa', faint: '#3f3f46', tile: '#ececec' };
+export const C = { bg: '#121315', bg2: '#1b1c20', yellow: '#ffcc00', ink: '#f4f4f5', muted: '#c9c9d2', faint: '#3f3f46', tile: '#ececec' };
 export const FONT = "'Segoe UI Variable Display','Segoe UI',Inter,'Helvetica Neue',Arial,sans-serif";
 export const FONT_NOTE = 'Fonts: Segoe UI Variable Display / Segoe UI (Windows), fallback Inter, Helvetica Neue, Arial. Weights 500, 600, 700, 800.';
+
+// Every text colour of a card, with the colour it sits on (the glow and the translucent panels
+// are blended in), so the tests and the step can measure WCAG contrast instead of trusting the eye.
+export const TEXT_PAIRS = [
+  ['title and kicker', C.ink, C.bg2], ['version', C.yellow, blend(C.yellow, C.bg2, 0.16)],
+  ['subtitle, footer, feature text', C.muted, blend('#ffffff', C.bg, 0.06)], ['subtitle on the field', C.muted, C.bg2],
+  ['chip text', C.ink, blend(C.yellow, C.bg, 0.16)], ['feature title', C.ink, blend('#ffffff', C.bg, 0.06)],
+];
+/** { min, rows: [{ what, ratio }] } over TEXT_PAIRS. AA for body text is 4.5. */
+export function cardContrast() {
+  const rows = TEXT_PAIRS.map(([what, fg, bg]) => ({ what, ratio: +ratio(fg, bg).toFixed(2), ok: ratio(fg, bg) >= AA }));
+  return { min: Math.min(...rows.map((r) => r.ratio)), rows };
+}
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -60,8 +74,8 @@ function chipsBody(x, y, list, fs, center, maxW) {
   const f = fitChips(list, fs, maxW);
   let cx = center ? x - f.total / 2 : x;
   return f.items.map((c, i) => {
-    const s = `<rect x="${cx}" y="${y}" width="${f.widths[i]}" height="${f.h}" rx="${f.h / 2}" fill="${C.yellow}" fill-opacity="0.12" stroke="${C.yellow}" stroke-opacity="0.45"/>
-    <text x="${cx + f.widths[i] / 2}" y="${y + f.h * 0.66}" text-anchor="middle" fill="${C.ink}" font-size="${fs}" font-weight="600">${esc(c)}</text>`;
+    const s = `<rect x="${cx}" y="${y}" width="${f.widths[i]}" height="${f.h}" rx="${f.h / 2}" fill="${C.yellow}" fill-opacity="0.16" stroke="${C.yellow}" stroke-opacity="0.75"/>
+    <text x="${cx + f.widths[i] / 2}" y="${y + f.h * 0.66}" text-anchor="middle" fill="${C.ink}" font-size="${fs}" font-weight="700">${esc(c)}</text>`;
     cx += f.widths[i] + f.gap;
     return s;
   }).join('');
@@ -78,9 +92,9 @@ export function cardLayers(spec, t, href) {
     return [background(w, h, tx + tile / 2, cy), logoTile(tx, ty, tile, href),
       layer('title', 'Title', txt(x, cy - h * 0.15, C.ink, Math.round(h * 0.075 * s.text), 600, esc(t.kicker))),
       layer('version', 'Version', txt(x - 4, cy + h * 0.11, C.yellow, Math.round(h * 0.27 * s.text), 800, esc(t.version), 'letter-spacing="-2"')),
-      layer('subtitle', 'Subtitle', txt(x, cy + h * 0.215, C.muted, Math.round(h * 0.042 * s.text), 500, esc(t.sub))),
+      layer('subtitle', 'Subtitle', txt(x, cy + h * 0.215, C.muted, Math.round(h * 0.044 * s.text), 600, esc(t.sub))),
       layer('chips', 'Chips', chipsBody(x, cy + h * 0.265, t.chips, Math.round(h * 0.03), false, w - x - Math.round(w * s.left))),
-      layer('footer', 'Footer', `${txt(Math.round(w * s.left), h - Math.round(h * 0.07), C.muted, Math.round(h * 0.032), 400, esc(t.foot), 'opacity="0.85"')}
+      layer('footer', 'Footer', `${txt(Math.round(w * s.left), h - Math.round(h * 0.07), C.muted, Math.round(h * 0.032), 600, esc(t.foot))}
         <rect x="${Math.round(w * s.left)}" y="${h - Math.round(h * 0.125)}" width="${w - 2 * Math.round(w * s.left)}" height="1" fill="${C.faint}"/>`)];
   }
   if (spec.layout === 'square') {
@@ -89,9 +103,9 @@ export function cardLayers(spec, t, href) {
     return [background(size, size, cx, ty + tile / 2), logoTile(tx, ty, tile, href),
       layer('title', 'Title', txt(cx, size * 0.6, C.ink, Math.round(size * 0.052), 600, esc(t.kicker), mid)),
       layer('version', 'Version', txt(cx, size * 0.775, C.yellow, Math.round(size * 0.17), 800, esc(t.version), `${mid} letter-spacing="-2"`)),
-      layer('subtitle', 'Subtitle', txt(cx, size * 0.84, C.muted, Math.round(size * 0.03), 500, esc(t.sub), mid)),
+      layer('subtitle', 'Subtitle', txt(cx, size * 0.84, C.muted, Math.round(size * 0.032), 600, esc(t.sub), mid)),
       layer('chips', 'Chips', chipsBody(cx, size * 0.865, t.chips.slice(0, 3), Math.round(size * 0.02), true, size * 0.9)),
-      layer('footer', 'Footer', txt(cx, size * 0.96, C.muted, Math.round(size * 0.022), 400, esc(t.foot), `${mid} opacity="0.85"`))];
+      layer('footer', 'Footer', txt(cx, size * 0.96, C.muted, Math.round(size * 0.024), 600, esc(t.foot), mid))];
   }
   // features
   const m = Math.round(w * 0.06), tile = Math.round(h * 0.15);
@@ -99,13 +113,13 @@ export function cardLayers(spec, t, href) {
   const cw = (w - 2 * m - gap) / cols, ch = (h - top - m * 1.2 - gap * (rows - 1)) / rows;
   const cells = t.features.map(([title, desc], i) => {
     const x = m + (i % cols) * (cw + gap), y = top + Math.floor(i / cols) * (ch + gap);
-    return `<rect x="${x}" y="${y}" width="${cw}" height="${ch}" rx="14" fill="#ffffff" fill-opacity="0.035" stroke="${C.faint}"/>
+    return `<rect x="${x}" y="${y}" width="${cw}" height="${ch}" rx="14" fill="#ffffff" fill-opacity="0.06" stroke="#52525b"/>
     <rect x="${x}" y="${y + ch * 0.22}" width="4" height="${ch * 0.56}" rx="2" fill="${C.yellow}"/>
     ${txt(x + 24, y + ch * 0.45, C.ink, Math.round(h * 0.038), 700, esc(title))}
-    ${txt(x + 24, y + ch * 0.75, C.muted, Math.round(h * 0.027), 500, esc(desc))}`;
+    ${txt(x + 24, y + ch * 0.75, C.muted, Math.round(h * 0.029), 600, esc(desc))}`;
   }).join('');
   return [background(w, h, w * 0.15, h * 0.1), logoTile(m, m, tile, href),
-    layer('version', 'Version', `<text x="${m + tile + 22}" y="${m + tile * 0.42}" fill="${C.muted}" font-size="${Math.round(h * 0.032)}" font-weight="600">${esc(t.kicker)} <tspan fill="${C.yellow}" font-weight="800">${esc(t.version)}</tspan></text>`),
+    layer('version', 'Version', `<text x="${m + tile + 22}" y="${m + tile * 0.42}" fill="${C.muted}" font-size="${Math.round(h * 0.034)}" font-weight="700">${esc(t.kicker)} <tspan fill="${C.yellow}" font-weight="800">${esc(t.version)}</tspan></text>`),
     layer('title', 'Title', txt(m + tile + 22, m + tile * 0.9, C.ink, Math.round(h * 0.06), 800, esc(t.whatsNew))),
     layer('features', 'Features', cells)];
 }

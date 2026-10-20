@@ -1,5 +1,9 @@
 # Profiles
 
+:::tip[Prefer it step by step?]
+The task version of this page is [Create a profile](doc-page:guide/create-profile): short steps, what you should see, a picture and a Show me button.
+:::
+
 
 A profile is a saved answer to "which mods are on, in what order, for this game". It's the
 screen everything else leans on — BMM's own onboarding calls it *your starting point*.

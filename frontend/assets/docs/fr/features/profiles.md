@@ -1,5 +1,9 @@
 # Profils
 
+:::tip[Tu préfères pas à pas ?]
+La version « tâche » de cette page est [Créer un profil](doc-page:guide/create-profile) : de courtes étapes, ce que tu dois voir, une image et un bouton Montre-moi.
+:::
+
 
 Un profil est une réponse enregistrée à « quels mods sont actifs, dans quel ordre, pour ce
 jeu ». C'est l'écran sur lequel tout le reste s'appuie — l'onboarding de BMM l'appelle

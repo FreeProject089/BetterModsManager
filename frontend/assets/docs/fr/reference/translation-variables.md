@@ -33,11 +33,11 @@ la compilation quand une traduction et le code ne sont pas d’accord. Elle ne p
 | `{label}` | un titre court |
 | `{path}` | un chemin de fichier ou de dossier |
 | `{version}` | un numéro de version |
+| `{host}` | un nom de serveur |
 | `{profile}` | un nom de profil |
+| `{file}` | un nom de fichier |
 | `{mod}` | un nom de mod |
 | `{error}` | un message d’erreur |
-| `{file}` | un nom de fichier |
-| `{host}` | un nom de serveur |
 | `{url}` | une adresse web |
 | `{x}` | une liste ou un détail inséré par le code |
 | `{time}` | une heure |
@@ -73,7 +73,7 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 
 ## Toutes les clés avec variables
 
-1210 clés, regroupées par leur premier segment. Le texte est le texte français, raccourci.
+1275 clés, regroupées par leur premier segment. Le texte est le texte français, raccourci.
 
 ### activity
 
@@ -111,6 +111,12 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `ai.ask2.byLocal` | `{model}` | par {model}, sur ce PC |
 | `ai.ask2.byRemote` | `{model}` | par {model} (API distante) |
 | `ai.ask2.checked` | `{p}` | vérifiée par Laya {p} % |
+| `ai.draft.for` | `{field}` | Pour : {field} |
+| `ai.draft.goesExternal` | `{host}` `{model}` | Va à {host}, modèle {model}. Ce texte quitte ce PC. |
+| `ai.draft.goesLocal` | `{host}` `{model}` | Va à {host} sur ce PC, modèle {model}. Rien ne quitte ce PC. |
+| `ai.draft.masked` | `{n}` | {n} donnée(s) personnelle(s) masquée(s) avant l'envoi. |
+| `ai.draft.sentTo` | `{host}` | Envoyé à {host} |
+| `ai.draft.tabDiffN` | `{a}` `{r}` | Changements +{a} −{r} |
 | `ai.emb.disk` | `{free}` `{need}` | Nécessite {need} d'espace disque ; {free} libres. |
 | `ai.emb.diskNeed` | `{need}` | Nécessite {need} d'espace disque. |
 | `ai.emb.eta` | `{eta}` | {eta} restantes |
@@ -126,6 +132,18 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `ai.emb.update` | `{size}` | Mettre à jour le modèle ({size}) |
 | `ai.emb.where` | `{dir}` `{size}` | {size} dans {dir} |
 | `ai.first.install` | `{size}` | Installer Laya ({size}) |
+| `ai.gen.code.http` | `{status}` | HTTP {status} |
+| `ai.gen.errHttp` | `{status}` | Le serveur a répondu par une erreur (HTTP {status}). |
+| `ai.gen.okChat` | `{ms}` | Connecté, et le modèle répond ({ms} ms). |
+| `ai.gen.okModels` | `{n}` | Connecté : {n} modèle(s) trouvé(s). |
+| `ai.gen.privGenExt` | `{v}` | La rédaction envoie le texte choisi à {v}. |
+| `ai.gen.provSummary` | `{cls}` `{gen}` | Classement : {cls} · Rédaction : {gen} |
+| `ai.gen.serverSays` | `{detail}` | Le serveur dit : {detail} |
+| `ai.gen.stepOk` | `{ms}` | OK, {ms} ms |
+| `ai.gen.usedBase` | `{base}` | Adresse utilisée : {base} |
+| `ai.gen.willUse` | `{base}` | Utilisera {base} |
+| `ai.gen.writerChip` | `{v}` | Rédaction : {v} |
+| `ai.hub.headState` | `{model}` `{writer}` | Modèle : {model} · Rédaction : {writer} |
 | `ai.hub2.model` | `{state}` | Modèle : {state} |
 | `ai.hub2.nOwn` | `{n}` | {n} avec leurs propres réglages |
 | `ai.hub2.tasksPill` | `{n}` `{on}` | {n} tâche(s), {on} active(s) |
@@ -537,6 +555,13 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `i18n.phExtra` | `{name}` | {name} absent de la source |
 | `i18n.phMissing` | `{name}` | {name} manquant |
 | `i18n.progress` | `{done}` `{lang}` `{pct}` `{total}` | {lang} · {done}/{total} traduites ({pct} %) |
+
+### iconpack
+
+| Clé | Variables | Texte |
+|---|---|---|
+| `iconpack.imported` | `{0}` | {0} icône(s) ajoutée(s) à Mes icônes |
+| `iconpack.skipped` | `{0}` | Ignoré (image inutilisable ou de plus de 128 Ko) : {0} |
 
 ### kofi
 
@@ -1208,6 +1233,14 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `sched.dbg.trailN` | `{n}` | {n} valeur(s) |
 | `sched.dcsHookOff` | `{n}` | Surveillance DCS retirée de {n} dossier(s). |
 | `sched.dcsHookOk` | `{n}` | Surveillance DCS installée dans {n} dossier(s). |
+| `sched.dg.hookMissing` | `{name}` | Le hook de la porte n’est pas en place : {name} ne vous laisserait pas entrer. |
+| `sched.dg.joinHow` | `{server}` | DCS démarre. Dans Multijoueur, Connexion par IP, collez {server} (il est dans le presse-papiers). |
+| `sched.dg.notReadyTitle` | `{name}` | Pas prêt pour {name} |
+| `sched.dg.ownHookSet` | `{f}` | Hook depuis : {f} |
+| `sched.dg.readyTitle` | `{name}` | Prêt pour {name} |
+| `sched.dg.stopped` | `{name}` | Non rejoint : la liste de mods pour {name} n’est pas prête. |
+| `sched.dg.taskDesc` | `{name}` | Vérifie la liste de mods pour {name}, puis lance DCS. Sinon, propose de corriger. |
+| `sched.dg.taskName` | `{name}` | Porte DCS : {name} |
 | `sched.dl.status` | `{s}` | Le serveur a répondu {s}. |
 | `sched.dl.steps` | `{n}` | {n} étape(s) |
 | `sched.dr.measureFailed` | `{e}` | Mesure impossible : {e} |
@@ -1228,14 +1261,19 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `sched.filter.n` | `{n}` `{total}` | {n} sur {total} |
 | `sched.filter.total` | `{total}` | {total} tâches |
 | `sched.flag.denied` | `{k}` `{list}` | « {k} » n’est pas un réglage de stockage qu’une tâche peut changer. Autorisés : {list}. |
+| `sched.flow.copied` | `{n}` | {n} étape(s) copiée(s). |
 | `sched.flow.delMany` | `{n}` | Supprimer ces {n} étapes, et tout ce qu’elles contiennent ? |
 | `sched.flow.folded` | `{n}` | {n} à l’intérieur, replié |
+| `sched.flow.frameN` | `{n}` | {n} étape(s) |
 | `sched.flow.lastRun` | `{when}` | Dernière exécution {when} |
 | `sched.flow.nBranches` | `{n}` | {n} branche(s) |
 | `sched.flow.nCases` | `{n}` | {n} cas |
 | `sched.flow.needs` | `{what}` | demande « {what} » |
+| `sched.flow.needsField` | `{p}` | Champ obligatoire vide : {p} |
+| `sched.flow.pasted` | `{n}` | {n} étape(s) collée(s). |
 | `sched.gen.done` | `{n}` | Dépôt écrit dans {n} |
 | `sched.gen.errGone` | `{n}` | Profil(s) absent(s) de cette machine : {n} |
+| `sched.gl.copied` | `{v}` | Copié : {v} |
 | `sched.gw.found` | `{f}` `{n}` | {n} trouvé(s), {f} retenu |
 | `sched.gw.ready` | `{f}` | surveille {f} |
 | `sched.http.badUrl` | `{u}` | Ce n’est pas une adresse http(s) : {u} |
@@ -1254,10 +1292,18 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `sched.iv.line` | `{a}` `{m}` `{name}` `{x}` | {name} : {m} modifié(s), {x} manquant(s), {a} ajouté(s) |
 | `sched.key.exists` | `{k}` | « {k} » est déjà sur le trousseau, laissée telle quelle |
 | `sched.key.made` | `{k}` | clé d'identité « {k} » créée |
+| `sched.list.folderN` | `{n}` `{on}` | {n} · {on} active(s) |
 | `sched.listApply.done` | `{new}` `{on}` | {on} mod(s) activé(s), {new} installé(s). |
 | `sched.listApply.missing` | `{n}` | {n} mod(s) introuvable(s) |
 | `sched.lr.done` | `{d}` `{r}` `{size}` | {r} journal(aux) tourné(s), {d} fichier(s) supprimé(s), {size} libéré(s) |
 | `sched.lr.would` | `{d}` `{r}` `{size}` | Ferait tourner {r} journal(aux) et supprimerait {d} fichier(s) ({size}) |
+| `sched.lv.altered` | `{n}` | {n} fichier(s) modifié(s) ou absent(s) |
+| `sched.lv.extra` | `{n}` | {n} autre(s) mod(s) activé(s) |
+| `sched.lv.inactive` | `{n}` | {n} désactivé(s) |
+| `sched.lv.missing` | `{n}` | {n} non installé(s) |
+| `sched.lv.nMods` | `{n}` | {n} mod(s) |
+| `sched.lv.okSum` | `{fp}` `{n}` | Liste prête : {n} mod(s), empreinte {fp}. |
+| `sched.lv.undeployed` | `{n}` | {n} fichier(s) absent(s) du dossier du jeu |
 | `sched.net.badHeader` | `{s}` | L’en-tête « {s} » a un nom ou une valeur inutilisable. |
 | `sched.net.error` | `{s}` | Erreur réseau : {s} |
 | `sched.net.refused` | `{why}` | Refusé avant l’envoi : {why}. |
@@ -1285,6 +1331,20 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `sched.pg.permsNeed` | `{p}` | Nécessite {p}. Laissée décochée : accordez-la après avoir lu les étapes. |
 | `sched.pg.steps` | `{n}` | {n} étape(s) |
 | `sched.pg.sub` | `{n}` | {n} tâches prêtes à l’emploi. Chacune est complète et fait quelque chose d’utile telle quelle ; choisissez-en… |
+| `sched.pkg.askBody` | `{file}` `{n}` `{pkg}` `{size}` `{task}` `{where}` | « {task} » veut copier {file} ({size}, {n} fichier(s)) du paquet « {pkg} » dans {where}. |
+| `sched.pkg.dcsAll` | `{n}` | Tous ({n} trouvés) |
+| `sched.pkg.exported` | `{n}` `{size}` | Paquet écrit : {n} élément(s), {size}. Non signé. |
+| `sched.pkg.exportedSigned` | `{n}` `{size}` | Paquet écrit et signé : {n} élément(s), {size}. |
+| `sched.pkg.from` | `{p}` | Du paquet « {p} » |
+| `sched.pkg.imported` | `{n}` `{p}` | {n} automatisation(s) importée(s) depuis « {p} ». |
+| `sched.pkg.installed` | `{n}` | {n} fichier(s) placé(s). |
+| `sched.pkg.nFiles` | `{n}` | {n} fichiers |
+| `sched.pkg.revFiles` | `{n}` | Fichiers ({n}) |
+| `sched.pkg.revTasks` | `{n}` | Automatisations ({n}) |
+| `sched.pkg.revTitle` | `{p}` | Importer le paquet « {p} » ? |
+| `sched.pkg.sigValid` | `{a}` | Signé par {a}…, inchangé depuis. |
+| `sched.pkg.verifyBad` | `{n}` | {n} fichier(s) absent(s) ou différent(s). |
+| `sched.pkg.verifyOk` | `{n}` | {n} fichier(s) en place, identique(s). |
 | `sched.presetd.sharedvar` | `{sharedNote}` | Écrit une variable partagée que toutes les autres tâches peuvent lire par {sharedNote}. Une brique de constru… |
 | `sched.presetReplaceBody` | `{n}` | Un préréglage remplace cette tâche : {n} étape(s), son nom, son déclencheur et ses permissions. L'annulation… |
 | `sched.prev.lede` | `{c}` `{n}` | {c} étape(s) sur {n} changeraient réellement quelque chose. |
@@ -1419,6 +1479,7 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `sk.alsoUsedBy` | `{name}` | Mêmes touches que « {name} » : un seul des deux s'exécute. |
 | `sk.changeFor` | `{name}` | Changer les touches de {name} |
 | `sk.count` | `{c}` `{n}` | {n} raccourcis, {c} modifiés ou à vous |
+| `sk.dev.button` | `{n}` | Bouton de souris {n} |
 | `sk.onlyOn` | `{page}` | seulement sur {page} |
 | `sk.reserved` | `{keys}` | {keys} est réservé à Windows ou à BMM. Essayez-en un autre. |
 
@@ -1428,8 +1489,15 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 |---|---|---|
 | `skd.clash` | `{name}` | Déjà utilisé par « {name} ». Enregistrer déplace les touches ici. |
 | `skd.deleteConfirm` | `{name}` | Supprimer le raccourci {name} ? |
+| `skd.elGone` | `{name}` | « {name} » : le contrôle qu'il clique n'est plus à l'écran. |
+| `skd.elRefused` | `{name}` `{why}` | « {name} » n'a pas cliqué : {why} |
+| `skd.imp.done` | `{k}` `{n}` | {n} entrées importées, {k} gardées désactivées. |
+| `skd.imp.reassignedTo` | `{name}` | Les touches lancent maintenant « {name} ». |
+| `skd.imp.reassignNote` | `{name}` | Raccourci importé « {name} » : choisissez ce que ses touches doivent faire maintenant. |
+| `skd.imp.sub` | `{n}` | {n} entrées de ce fichier visent quelque chose que ce BMM n'a pas. |
 | `skd.imported` | `{n}` | {n} entrées de raccourcis importées. |
 | `skd.lbl.automation` | `{name}` | Lancer l'automatisation {name} |
+| `skd.lbl.element` | `{name}` | Cliquer sur « {name} » |
 | `skd.lbl.modpack` | `{name}` | Activer le modpack {name} |
 | `skd.lbl.profile` | `{name}` | Passer au profil {name} |
 | `skd.lbl.settings` | `{name}` | Ouvrir les Paramètres : {name} |
@@ -1631,6 +1699,8 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `tstudio.importInstalled` | `{lang}` | {lang} installée comme nouvelle langue |
 | `tstudio.liveOtherLang` | `{app}` `{lang}` | En direct : brouillons {lang} sur une app affichée en {app} |
 | `tstudio.nlCreated` | `{lang}` | {lang} créée |
+| `tstudio.placeNoNav` | `{where}` | {where} n’est pas dans votre barre de navigation. Remettez-le dans Personnaliser la navigation. |
+| `tstudio.placeNotNow` | `{where}` | Pas à l’écran pour l’instant. Ouvrez {where}, puis la fenêtre ou le panneau qui le contient. |
 | `tstudio.progressOf` | `{lang}` `{pct}` | {lang} : {pct} % traduit |
 | `tstudio.progressTip` | `{done}` `{total}` | {done} clés sur {total}. Cliquez pour traduire cette langue |
 | `tstudio.revertAllConfirm` | `{n}` | Recliquez pour abandonner {n} brouillons |

@@ -23,6 +23,7 @@ import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
 import { type OrderedMod, type Rival, moveId, sameOrder } from '../profiles/load-order-model.js';
 import { bindLibOrderKeys } from '../profiles/load-order-keys.js';
 import { uiIcon } from '../../ui/icons.js';
+import { raiseAboveAll } from '../../ui/layer.js';
 
 type Where = -1 | 1 | 'top' | 'bottom';
 
@@ -184,7 +185,25 @@ export function mountOrderSection(panel: HTMLElement, mod: any): void {
 }
 
 // ── Right-click on a mod card ────────────────────────────────────────────────────
-function closeMenu(): void { document.getElementById('lib-order-menu-backdrop')?.remove(); }
+// A floating menu, no backdrop. It used to sit on a full-window transparent backdrop appended
+// to <body>, and html/body are `pointer-events: none` (css/mascot.css: the window is
+// transparent around the app, so clicks there fall through to the desktop). The backdrop and
+// the menu both inherited it: a click on a menu item went straight through to the mod list
+// behind, and a click in empty space never reached the backdrop to close it. Now the menu opts
+// back in (`pointer-events: auto`, css/load-order.css), is raised above whatever is painted
+// (ui/layer.ts), and the document listens for what closes it:
+//   - a press inside the menu is the menu's own;
+//   - a press anywhere else (empty space, the toolbar, another card) closes it and carries on
+//     to what was under it;
+//   - a right-click on another mod moves the menu there (the contextmenu handler below);
+//   - Esc, Tab, the wheel outside it or a resize closes it.
+let _menuCleanup: (() => void) | null = null;
+function closeMenu(): void {
+    const fn = _menuCleanup;
+    _menuCleanup = null;
+    fn?.();
+    document.getElementById('lib-order-menu')?.remove();
+}
 
 function showMenu(x: number, y: number, modId: string): void {
     closeMenu();
@@ -197,10 +216,13 @@ function showMenu(x: number, y: number, modId: string): void {
     const last = !on || i === n - 1;
     const item = (cls: string, icon: string, key: string, off: boolean) =>
         `<button type="button" role="menuitem" class="lom-item ${cls}" ${off ? 'disabled' : ''}>${icon}<span>${escHtml(t(key))}</span></button>`;
-    const backdrop = document.createElement('div');
-    backdrop.id = 'lib-order-menu-backdrop';
-    backdrop.className = 'lom-backdrop';
-    backdrop.innerHTML = `<div class="lom" role="menu" aria-label="${escAttr(t('order.title'))}">
+    const menu = document.createElement('div');
+    menu.id = 'lib-order-menu';
+    menu.className = 'lom';
+    menu.setAttribute('role', 'menu');
+    menu.setAttribute('aria-label', t('order.title'));
+    menu.dataset.modId = modId;
+    menu.innerHTML = `
         <div class="lom-head">${escHtml(t('order.title'))}${on ? ` <span class="lob-pos">${escHtml(fill('order.lib.position', { n: i + 1, t: n }))}</span>` : ''}</div>
         ${on ? '' : `<div class="lom-note">${escHtml(t('order.lib.inactive'))}</div>`}
         ${item('lob-top', I.top, 'order.moveTop', first)}
@@ -208,30 +230,49 @@ function showMenu(x: number, y: number, modId: string): void {
         ${item('lob-down', I.down, 'order.moveDown', last)}
         ${item('lob-bottom', I.bottom, 'order.moveBottom', last)}
         <div class="lom-sep"></div>
-        ${item('lob-open', I.list, 'order.lib.openFull', false)}
-      </div>`;
+        ${item('lob-open', I.list, 'order.lib.openFull', false)}`;
     // On <body>, not in #app-window-outer: that frame has contain: paint, which makes it the
     // containing block of fixed children and clips them, so a menu near the bottom was cut off.
-    document.body.appendChild(backdrop);
-    const menu = backdrop.querySelector('.lom') as HTMLElement;
+    document.body.appendChild(menu);
+    raiseAboveAll(menu, 99900);
     const r = menu.getBoundingClientRect();
-    const wantX = Math.max(8, Math.min(x, window.innerWidth - r.width - 8));
-    const wantY = Math.max(8, Math.min(y, window.innerHeight - r.height - 8));
-    menu.style.left = `${wantX}px`;
-    menu.style.top = `${wantY}px`;
-    (menu.querySelector('.lom-item:not([disabled])') as HTMLElement | null)?.focus();
+    menu.style.left = `${Math.max(8, Math.min(x, window.innerWidth - r.width - 8))}px`;
+    menu.style.top = `${Math.max(8, Math.min(y, window.innerHeight - r.height - 8))}px`;
+    (menu.querySelector('.lom-item:not([disabled])') as HTMLElement | null)?.focus({ preventScroll: true });
 
-    backdrop.addEventListener('mousedown', (e) => { if (e.target === backdrop) closeMenu(); });
-    backdrop.addEventListener('contextmenu', (e) => { e.preventDefault(); closeMenu(); });
-    backdrop.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') { e.stopPropagation(); closeMenu(); return; }
+    // Capture phase: decided before the list (or anything else) sees the press.
+    const onDown = (e: PointerEvent) => {
+        if (menu.contains(e.target as Node)) return;
+        if (e.button === 2) return;           // a right-click: the contextmenu handler moves or closes
+        closeMenu();
+    };
+    const onKey = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeMenu(); return; }
+        if (!menu.contains(document.activeElement)) return;
+        if (e.key === 'Tab') { e.preventDefault(); closeMenu(); return; }
         if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
         e.preventDefault();
+        e.stopPropagation();
         const items = [...menu.querySelectorAll<HTMLButtonElement>('.lom-item:not([disabled])')];
         const at = items.indexOf(document.activeElement as HTMLButtonElement);
         items[(at + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus();
-    });
+    };
+    const onWheel = (e: Event) => { if (!menu.contains(e.target as Node)) closeMenu(); };
+    const onGone = () => closeMenu();
+    document.addEventListener('pointerdown', onDown, true);
+    document.addEventListener('keydown', onKey, true);
+    document.addEventListener('wheel', onWheel, { capture: true, passive: true });
+    window.addEventListener('resize', onGone);
+    _menuCleanup = () => {
+        document.removeEventListener('pointerdown', onDown, true);
+        document.removeEventListener('keydown', onKey, true);
+        document.removeEventListener('wheel', onWheel, true);
+        window.removeEventListener('resize', onGone);
+    };
+
+    menu.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); });
     menu.addEventListener('click', (e) => {
+        e.stopPropagation();
         const btn = (e.target as HTMLElement).closest('.lom-item') as HTMLButtonElement | null;
         if (!btn || btn.disabled) return;
         closeMenu();
@@ -273,10 +314,13 @@ export function initLibOrder(notify: Notify): void {
     // Right-click on a card. While mod operations run, the cancel menu (mods-list.ts, capture
     // phase) owns the right-click and stops it before it gets here.
     document.addEventListener('contextmenu', (e) => {
-        if (!libraryOnScreen() || (S.processingMods && S.processingMods.size > 0)) return;
-        const card = (e.target as HTMLElement).closest<HTMLElement>('#view-library .mod-card');
-        if (!card?.dataset.id || (e.target as HTMLElement).closest('input, textarea, select, .mod-detail-panel')) return;
+        if (!libraryOnScreen() || (S.processingMods && S.processingMods.size > 0)) { closeMenu(); return; }
+        const target = e.target as HTMLElement;
+        if (target.closest('#lib-order-menu')) return;
+        const card = target.closest<HTMLElement>('#view-library .mod-card');
+        if (!card?.dataset.id || target.closest('input, textarea, select')) { closeMenu(); return; }
         e.preventDefault();
+        // Another mod: the menu moves to it (showMenu closes the old one first).
         showMenu(e.clientX, e.clientY, card.dataset.id);
     });
 
@@ -293,7 +337,7 @@ export function initLibOrder(notify: Notify): void {
         'library.order.moveBottom': () => { const id = selectedActive(); if (id) void libMove(id, 'bottom'); },
     }, () => {
         if (!libraryOnScreen() || !selectedActive()) return false;
-        if (document.querySelector('.modal-overlay.open, #lib-order-menu-backdrop')) return false;
+        if (document.querySelector('.modal-overlay.open, #lib-order-menu')) return false;
         const a = document.activeElement as HTMLElement | null;
         return !(a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT' || a.isContentEditable));
     });

@@ -9,16 +9,16 @@
 import { fmtValue, pct } from './compare.mjs';
 
 export const THEME = {
-  light: { surface: '#fcfcfb', ink: '#0b0b0b', ink2: '#52514e', muted: '#898781', grid: '#e1e0d9', axis: '#c3c2b7', prev: '#a8a69f', cur: '#2a78d6', good: '#0ca30c', bad: '#d03b3b', same: '#c3c2b7', goodText: '#006300' },
-  dark: { surface: '#1a1a19', ink: '#ffffff', ink2: '#c3c2b7', muted: '#898781', grid: '#2c2c2a', axis: '#383835', prev: '#6b6a65', cur: '#3987e5', good: '#0ca30c', bad: '#e66767', same: '#5a5955', goodText: '#0ca30c' },
+  light: { surface: '#fcfcfb', ink: '#0b0b0b', ink2: '#52514e', muted: '#63615b', grid: '#e1e0d9', axis: '#c3c2b7', prev: '#8c8a83', cur: '#2a78d6', good: '#0ca30c', bad: '#c42d2d', same: '#8c8a83', goodText: '#006300' },
+  dark: { surface: '#1a1a19', ink: '#ffffff', ink2: '#c3c2b7', muted: '#a8a69f', grid: '#2c2c2a', axis: '#383835', prev: '#7f7e78', cur: '#3987e5', good: '#0ca30c', bad: '#e66767', same: '#7f7e78', goodText: '#0ca30c' },
 };
 
 /** CSS for chart classes, from CSS variables (page) or fixed values (standalone PNG). */
 export function chartCss(t) {
   const v = (k) => (t ? t[k] : `var(--c-${k})`);
   return `.cv-bg{fill:${v('surface')}}.cv-t{fill:${v('ink')};font:600 15px system-ui,-apple-system,'Segoe UI',sans-serif}
-.cv-l{fill:${v('ink2')};font:12px system-ui,-apple-system,'Segoe UI',sans-serif}.cv-m{fill:${v('muted')};font:11px system-ui,-apple-system,'Segoe UI',sans-serif;font-variant-numeric:tabular-nums}
-.cv-v{fill:${v('ink2')};font:11px system-ui,-apple-system,'Segoe UI',sans-serif;font-variant-numeric:tabular-nums}
+.cv-l{fill:${v('ink2')};font:13px system-ui,-apple-system,'Segoe UI',sans-serif}.cv-m{fill:${v('muted')};font:12px system-ui,-apple-system,'Segoe UI',sans-serif;font-variant-numeric:tabular-nums}
+.cv-v{fill:${v('ink2')};font:12px system-ui,-apple-system,'Segoe UI',sans-serif;font-variant-numeric:tabular-nums}
 .cv-grid{stroke:${v('grid')};stroke-width:1}.cv-axis{stroke:${v('axis')};stroke-width:1}
 .cv-prev{fill:${v('prev')}}.cv-cur{fill:${v('cur')}}.cv-ci{stroke:${v('ink2')};stroke-width:1.2}
 .cv-good{fill:${v('good')}}.cv-bad{fill:${v('bad')}}.cv-same{fill:${v('same')}}

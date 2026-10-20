@@ -429,6 +429,10 @@ The **network providers are off by default**. Nothing leaves your PC unless you 
 - **What is sent** for a mod: its name, author, description, readme or manifest excerpts, up to 40
   file names and your tag names, masked first, at most 4 000 characters; for a report hint, the
   masked report text. The dialog shows the exact text sent.
+- **Drafting** (*Draft with Laya*, with a writer you set up): the text, the facts and the request
+  shown under *What will be sent*, only when you click *Generate*. A writer on this PC (LM Studio,
+  Ollama, llama.cpp) receives it over loopback and nothing leaves your PC; with an external API,
+  personal data is masked first and the text goes to that API only.
 - **To whom:** *BetterCommunity* (with your Creator ID, its signed proof and, if stored, your API key,
   after you tick the consent box); *your own Laya server* (on this PC by default); or *an external
   API* you configure, under its own terms.

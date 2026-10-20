@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    137 actions · 47 conditions · 85 values · 8 loop sources
+    143 actions · 47 conditions · 99 values · 8 loop sources
 
 > Generated from BMM's own registry, so it cannot describe a version of the app that does not exist. If an action is in the block editor, it is in this list.
 
@@ -144,6 +144,7 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `discord.send` | Post a message to a Discord channel through its webhook address. | — |
 | `slack.send` | Post a message to a Slack channel through an incoming webhook. | `url` · `message` · `username` · `retries` |
 | `feed.publish` | Add an entry to an Atom feed file this task keeps: any RSS reader can follow it. | `path` · `feedTitle` · `title` · `body` · `link` · `max` |
+| `ui.ask` | A BMM dialog with two buttons. The answer is ask.yes (1 or 0). | `dryRun` |
 
 ### System & flow
 
@@ -201,6 +202,16 @@ Written `do <name>(param: value, …)`. An action with no parameters takes empty
 | `nav.message` | A card with a title and a text, near an element or at the bottom; can wait for OK. | `title` · `message` · `target` · `waitOk` · `okLabel` · `seconds` |
 | `nav.modal` | One of the listed dialogs (Tools, Storage, Hashing…), through its own opener. Needs Navigate and click. | `modal` |
 | `nav.click` | Only listed controls (checks, refreshes); never a delete, a consent or a field. Needs Navigate and click. | `control` |
+
+### Packages & games
+
+| Action | What it does | Parameters |
+|---|---|---|
+| `pkg.install` | Copies a file or folder of the package into DCS Saved Games, the game or the mods folder, after your yes. | `dryRun` |
+| `pkg.verify` | Is it there, identical (SHA-256)? Sets pkg.ok. | — |
+| `modlist.verify` | Installed, switched on, deployed, files matching the list’s hashes. Changes nothing. | — |
+| `gate.report` | A signed file in Saved Games\DCS\Config that the join-gate hook sends to the server. | `dryRun` |
+| `game.launch` | Starts an .exe with your arguments, without a shell. Needs the command permission. | `dryRun` |
 
 ## Conditions
 
@@ -272,7 +283,11 @@ Written by an action into the task, and readable afterwards in a comparison or a
     ` · `, ` · `, ` · `,
     // Whether the last navigation step found what it was pointed at (1/0), for a step told to
     // carry on when its target is missing.
-    `
+    ` · `,
+    // Packages and games (sched-pkg.ts): the person` · `s answer.
+    ` · `, ` · `, ` · `, ` · `,
+    ` · `, ` · `, ` · `, ` · `, ` · `,
+    ` · `, ` · `, ` · `, `
 
 A value nothing has written yet reads as zero. `lasttask.ok` is 1 or 0, and only means anything after a `run`.
 

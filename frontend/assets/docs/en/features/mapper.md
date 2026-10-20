@@ -1,5 +1,9 @@
 # Mapper
 
+:::tip[Prefer it step by step?]
+The task version of this page is [Fix a mod the game ignores](doc-page:guide/fix-a-mod): short steps, what you should see, a picture and a Show me button.
+:::
+
 
 Some mods are packaged wrong. The files are fine; the folders around them aren't. The Mapper
 fixes that without you unzipping anything by hand.

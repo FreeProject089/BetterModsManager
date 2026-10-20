@@ -1,5 +1,9 @@
 # Modpacks
 
+:::tip[Tu préfères pas à pas ?]
+La version « tâche » de cette page est [Partager un modpack](doc-page:guide/share-a-modpack) : de courtes étapes, ce que tu dois voir, une image et un bouton Montre-moi.
+:::
+
 
 Un modpack est un **lot de mods nommé, activable en un clic**. Là où un
 [profil](doc-page:features/profiles) répond à « ma configuration pour ce jeu », un modpack répond à « ce

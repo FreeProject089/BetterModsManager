@@ -4,7 +4,7 @@
 
 import { invoke } from '../core/api.js';
 import { t } from '../core/i18n.js';
-import { askConfirm } from '../core/api.js';
+import { confirmAction } from './verify.js';
 import { ensureModalShellCss, installGlobalModalKeys } from './modal-shell.js';
 
 interface ConfirmOptions {
@@ -87,7 +87,7 @@ window.confirmCustom = (title: string, message: string, type: string = 'danger',
             // command, never window.confirm. In the Tauri webview the latter returns
             // immediately without asking anybody, so this branch used to cancel whatever the
             // caller was doing while looking like the user had declined.
-            askConfirm(`${title}\n\n${message}`, { title }).then(resolve).catch(() => resolve(false));
+            confirmAction({ title, message: message.replace(/<[^>]*>/g, ' ').replace(/s+/g, ' ').trim(), tone: type === 'danger' ? 'danger' : 'warn' }).then(resolve).catch(() => resolve(false));
             return;
         }
 

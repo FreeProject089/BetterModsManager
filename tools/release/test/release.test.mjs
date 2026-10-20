@@ -329,3 +329,69 @@ describe('story clips (stories)', () => {
     assert.equal(JSON.parse(same).a, big);
   });
 });
+
+describe('contrast (WCAG AA)', () => {
+  test('ratio math', async () => {
+    const { ratio, blend } = await import('../lib/contrast.mjs');
+    assert.equal(+ratio('#000000', '#ffffff').toFixed(2), 21);
+    assert.equal(+ratio('#777777', '#ffffff').toFixed(2), 4.48);
+    assert.equal(blend('#ffffff', '#000000', 0.5), '#808080');
+  });
+  test('release cards: every text pair is AA', async () => {
+    const { cardContrast } = await import('../media/cards.mjs');
+    const c = cardContrast();
+    assert.ok(c.min >= 4.5, JSON.stringify(c.rows.filter((r) => !r.ok)));
+  });
+  test('README hero: every text pair is AA', async () => {
+    const { HERO_PAIRS } = await import('../screenshots/hero.mjs');
+    const { ratio } = await import('../lib/contrast.mjs');
+    for (const [what, fg, bg] of HERO_PAIRS) assert.ok(ratio(fg, bg) >= 4.5, what);
+  });
+  test('benchmark charts and report: text AA, data marks 3:1, in both themes', async () => {
+    const { THEME } = await import('../bench/charts.mjs');
+    const { ratio } = await import('../lib/contrast.mjs');
+    for (const [mode, t] of Object.entries(THEME)) {
+      const page = mode === 'light' ? '#f9f9f7' : '#0d0d0d';
+      for (const k of ['ink', 'ink2', 'muted', 'bad', 'goodText']) for (const bg of [t.surface, page]) assert.ok(ratio(t[k], bg) >= 4.5, `${mode} ${k} on ${bg}`);
+      for (const k of ['prev', 'cur', 'same', 'good']) assert.ok(ratio(t[k], t.surface) >= 3, `${mode} ${k}`);
+    }
+  });
+  test('PDF palette: body, links, code tokens, tables, callouts, cover are AA', async () => {
+    const { paletteProblems } = await import('../docs/print-style.mjs');
+    assert.deepEqual(paletteProblems(), []);
+  });
+});
+
+describe('release order and media freshness', () => {
+  test('gource (credits video) runs before build, so the installer ships the new video', async () => {
+    const { STEPS } = await import('../steps.mjs');
+    const ids = STEPS.map((s) => s.id);
+    assert.ok(ids.indexOf('gource') < ids.indexOf('build'), ids.join(','));
+    assert.ok(ids.indexOf('build') < ids.indexOf('verify'));
+  });
+  test('gource has no captions and shows file names', () => {
+    const src = readFileSync(new URL('../media/gource.mjs', import.meta.url), 'utf8');
+    assert.ok(!/--caption/.test(src) && !/versionCaptions/.test(src));
+    assert.ok(!/'--hide',\s*'[^']*filenames/.test(src));
+    assert.match(src, /--file-font-size/);
+    assert.match(src, /--logo/);
+  });
+  test('staleOutputs: a missing or older compiled file is reported', async () => {
+    const { staleOutputs } = await import('../lib/fresh.mjs');
+    const { utimesSync } = await import('node:fs');
+    const d = mkdtempSync(join(tmpdir(), 'bmm-fresh-'));
+    const src = join(d, 'src'), out = join(d, 'js');
+    mkdirSync(join(src, 'a'), { recursive: true }); mkdirSync(join(out, 'a'), { recursive: true });
+    writeFileSync(join(src, 'a', 'x.ts'), 'export {}'); writeFileSync(join(src, 'y.ts'), 'export {}');
+    writeFileSync(join(out, 'a', 'x.js'), '');
+    utimesSync(join(out, 'a', 'x.js'), new Date(Date.now() - 60000), new Date(Date.now() - 60000));
+    const s = staleOutputs(src, out);
+    assert.deepEqual(s.map((x) => x.why).sort(), ['not compiled', 'older than its source']);
+    utimesSync(join(out, 'a', 'x.js'), new Date(), new Date()); writeFileSync(join(out, 'y.js'), '');
+    assert.deepEqual(staleOutputs(src, out), []);
+  });
+  test('the pictures refuse a version the sources do not say', async () => {
+    const { assertSourceVersion } = await import('../lib/fresh.mjs');
+    assert.throws(() => assertSourceVersion('9.9.9'), /sources do not/);
+  });
+});

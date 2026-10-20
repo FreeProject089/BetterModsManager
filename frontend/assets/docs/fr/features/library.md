@@ -1,5 +1,9 @@
 # Bibliothèque
 
+:::tip[Tu préfères pas à pas ?]
+La version « tâche » de cette page est [Installer ton premier mod](doc-page:guide/install-first-mod) : de courtes étapes, ce que tu dois voir, une image et un bouton Montre-moi.
+:::
+
 
 La **Bibliothèque**, c'est là que vit chacun de tes mods — installé ou non, quelle que soit
 sa provenance. Si tu ne devais apprendre qu'un seul écran de BMM, prends celui-là : tout le

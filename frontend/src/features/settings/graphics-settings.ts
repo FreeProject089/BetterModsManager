@@ -10,8 +10,9 @@
 //   · "Reduce animations": the theme engine's own kill-switch (body.bmm-no-anim, which a theme
 //     sets with --bmm-anim-speed: 0), made an app-wide choice that holds whatever the theme.
 // And, folded, the hardware BMM detected (hw_detect.rs).
-import { invoke, askConfirm } from '../../core/api.js';
+import { invoke } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
+import { confirmAction } from '../../ui/verify.js';
 import { learnMore } from '../../core/learn-more.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { describeRenderer, gpuAdvice } from './resources-spark.js';
@@ -219,7 +220,7 @@ async function fillGraphics(host: HTMLElement): Promise<void> {
         }
     });
     restart?.addEventListener('click', async () => {
-        const ok = await askConfirm(tr('stm.gfx.restartAsk', 'Restart BMM now? Anything it is doing (a deploy, an install) stops.'), { type: 'warning' });
+        const ok = await confirmAction({ title: t('vfy.t.restart'), message: tr('stm.gfx.restartAsk', 'Restart BMM now? Anything it is doing (a deploy, an install) stops.'), confirmLabel: t('vfy.b.restart'), tone: 'warn' });
         if (ok) await invoke('app_restart').catch((err: unknown) => toast(String(err), 'error'));
     });
 

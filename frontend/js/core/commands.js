@@ -13,6 +13,7 @@ import { learnMore, LEARN_MORE_EVENT } from './learn-more.js';
 import { FLOW_KEYS, flowKeyActive, flowKeyRun } from '../features/settings/sched-flow-keys.js';
 import { ORDER_KEYS, orderKeysActive, orderKeyRun, LIB_ORDER_KEYS, libOrderKeysActive, libOrderKeyRun } from '../features/profiles/load-order-keys.js';
 import { uiIcon } from '../ui/icons.js';
+import { deviceOf, deviceReserved, mouseRecordable, mouseKey, wheelKey, padKey, padButtons, padLabel, mouseButton, wheelDir, validBindingString, validCommandId, PAD_MAX, SHORTCUTS_FILE_VERSION, } from './shortcut-model.js';
 const tr = (s) => (getLang() === 'fr' ? s.fr : s.en);
 // ── chord helpers ──────────────────────────────────────────────────────────────
 const MOD_KEYS = new Set(['control', 'shift', 'alt', 'meta', 'os']);
@@ -33,6 +34,41 @@ export function chordToStr(c) {
     if (c.alt)
         p.push('Alt');
     p.push(c.key.length === 1 ? c.key.toUpperCase() : c.key.replace(/^\w/, (m) => m.toUpperCase()));
+    return p.join('+');
+}
+/** What a device key is called on screen: « Middle button », « Wheel up », « A+RB ». */
+function deviceText(key) {
+    const d = deviceOf(key);
+    if (d === 'mouse') {
+        const b = mouseButton(key);
+        if (b === 1)
+            return t('sk.dev.middle');
+        if (b === 3)
+            return t('sk.dev.back');
+        if (b === 4)
+            return t('sk.dev.forward');
+        return t('sk.dev.button', { n: String(b + 1) });
+    }
+    if (d === 'wheel')
+        return t(wheelDir(key) === 'up' ? 'sk.dev.wheelUp' : 'sk.dev.wheelDown');
+    if (d === 'pad')
+        return padLabel(key);
+    return key;
+}
+/** A chord as people read it, for a toast or a palette row: « Ctrl+Back button », « Ctrl+K ». */
+export function chordLabel(c) {
+    if (!c || !c.key)
+        return '';
+    if (deviceOf(c.key) === 'key')
+        return chordToStr(c);
+    const p = [];
+    if (c.ctrl)
+        p.push('Ctrl');
+    if (c.shift)
+        p.push('Shift');
+    if (c.alt)
+        p.push('Alt');
+    p.push(deviceText(c.key));
     return p.join('+');
 }
 function chordEq(a, b) {
@@ -57,16 +93,30 @@ const _cmds = new Map();
 export function registerCommand(cmd) { _cmds.set(cmd.id, cmd); }
 export function allCommands() { return [..._cmds.values()]; }
 const LS = 'bmm_cmd_bindings';
-function loadOverrides() { try {
-    return JSON.parse(localStorage.getItem(LS) || '{}');
+// Read once and kept: the wheel and the gamepad ask for every binding many times a second, and
+// parsing localStorage on each of those was the keyboard's cost multiplied by sixty. A copy is
+// handed out, so a caller that edits it changes nothing until it saves.
+let _ovCache = null;
+function loadOverrides() {
+    if (!_ovCache) {
+        try {
+            const v = JSON.parse(localStorage.getItem(LS) || '{}');
+            _ovCache = v && typeof v === 'object' ? v : {};
+        }
+        catch {
+            _ovCache = {};
+        }
+    }
+    return { ..._ovCache };
 }
-catch {
-    return {};
-} }
-function saveOverrides(o) { try {
-    localStorage.setItem(LS, JSON.stringify(o));
+function saveOverrides(o) {
+    _ovCache = { ...o };
+    try {
+        localStorage.setItem(LS, JSON.stringify(o));
+    }
+    catch { /* ignore */ }
+    syncDeviceListeners();
 }
-catch { /* ignore */ } }
 /** Effective chord for a command: a user override (may be "" = intentionally unbound) wins over the default. */
 export function bindingOf(id) {
     const o = loadOverrides();
@@ -110,14 +160,15 @@ function isTyping(el) {
     const tag = n.tagName;
     return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || n.isContentEditable;
 }
-function onKeydown(e) {
-    // Let the palette handle its own keys when open.
-    if (paletteOpen)
-        return;
-    const typing = isTyping(e.target);
-    // Two passes: the commands scoped to where the focus is first, then the global ones. A scoped
-    // command whose scope is not active is skipped entirely.
+/**
+ * The command a binding test picks, or null. Two passes: the commands scoped to where the focus
+ * is first, then the global ones; a scoped command whose scope is not active is skipped.
+ * `best` ranks several hits (the gamepad prefers the combination with the most buttons).
+ */
+function findBound(test, typing, best) {
     for (const scoped of [true, false]) {
+        let pick = null;
+        let score = -1;
         for (const c of _cmds.values()) {
             if (c.contextual || !!c.when !== scoped)
                 continue;
@@ -126,19 +177,271 @@ function onKeydown(e) {
             const ch = bindingOf(c.id);
             if (!ch)
                 continue;
-            // While typing, only fire chords that use a modifier (so plain letters don't hijack typing).
-            if (typing && !ch.ctrl && !ch.alt)
+            // While typing, only fire keyboard chords that use a modifier (plain letters stay typing).
+            if (typing && deviceOf(ch.key) === 'key' && !ch.ctrl && !ch.alt)
                 continue;
-            if (matches(e, ch)) {
-                e.preventDefault();
-                try {
-                    c.run();
-                }
-                catch { /* ignore */ }
-                return;
+            if (!test(ch))
+                continue;
+            if (!best)
+                return c;
+            const s = best(ch);
+            if (s > score) {
+                score = s;
+                pick = c;
             }
         }
+        if (pick)
+            return pick;
     }
+    return null;
+}
+function runCmd(c) { try {
+    c.run();
+}
+catch { /* the command reports its own errors */ } }
+function onKeydown(e) {
+    // Let the palette handle its own keys when open.
+    if (paletteOpen)
+        return;
+    const c = findBound((ch) => deviceOf(ch.key) === 'key' && matches(e, ch), isTyping(e.target));
+    if (c) {
+        e.preventDefault();
+        runCmd(c);
+    }
+}
+// ── Mouse buttons, the wheel and gamepads ─────────────────────────────────────────
+// The same registry and the same dispatcher rule (scoped first, then global), fed by three more
+// sources. Each listens only while a binding of its kind exists: a non-passive wheel listener
+// costs every scroll, and a gamepad has no events for its buttons, only polling — which runs on
+// animation frames, while the window has the focus, and stops the moment it loses it.
+const modsMatch = (e, c) => (e.ctrlKey || e.metaKey) === !!c.ctrl && e.shiftKey === !!c.shift && e.altKey === !!c.alt;
+const _dev = { mouse: false, wheel: false, pad: false };
+/** > 0 while a recorder owns the devices (the Settings table, the New shortcut dialog). */
+let _recording = 0;
+let _devStarted = false;
+function onMouseDown(e) {
+    if (!_dev.mouse || _recording || paletteOpen || !mouseRecordable(e.button))
+        return;
+    const key = mouseKey(e.button);
+    const c = findBound((ch) => ch.key === key && modsMatch(e, ch), false);
+    if (!c)
+        return;
+    // The browser's own meaning of the button (autoscroll, back, forward) is cancelled for this
+    // press, down AND up: Chromium navigates on the release of the back button.
+    e.preventDefault();
+    e.stopPropagation();
+    swallowRelease(e.button);
+    runCmd(c);
+}
+let _swallowBtn = -1;
+let _swallowTimer = null;
+function swallowRelease(button) {
+    _swallowBtn = button;
+    if (_swallowTimer)
+        clearTimeout(_swallowTimer);
+    _swallowTimer = setTimeout(() => { _swallowBtn = -1; }, 800);
+}
+function onMouseRelease(e) {
+    if (e.button !== _swallowBtn)
+        return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'auxclick')
+        _swallowBtn = -1;
+}
+let _wheelQuietUntil = 0;
+/** The wheel's vertical turn. Chromium turns Shift+wheel into a sideways one: read that too. */
+const wheelDelta = (e) => e.deltaY || (e.shiftKey ? e.deltaX : 0);
+function onWheel(e) {
+    if (_recording || paletteOpen)
+        return;
+    if (!e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey)
+        return; // the wheel alone scrolls
+    const d = wheelDelta(e);
+    if (!d)
+        return;
+    const key = wheelKey(d);
+    const c = findBound((ch) => ch.key === key && modsMatch(e, ch), false);
+    if (!c)
+        return;
+    e.preventDefault();
+    // One turn is a burst of events: the first runs the command, the rest of the burst only
+    // keeps it from scrolling. A pause of a quarter second starts a new turn.
+    const now = performance.now();
+    const fresh = now >= _wheelQuietUntil;
+    _wheelQuietUntil = now + 250;
+    if (fresh)
+        runCmd(c);
+}
+const _padSubs = new Set();
+let _padRaf = 0;
+let _padPrev = new Set();
+function padPressed() {
+    const s = new Set();
+    let pads = [];
+    try {
+        pads = navigator.getGamepads ? navigator.getGamepads() : [];
+    }
+    catch { /* blocked by policy */ }
+    for (const p of pads) {
+        if (!p || !p.connected)
+            continue;
+        p.buttons.forEach((b, i) => { if (b.pressed || b.value > 0.5)
+            s.add(i); });
+    }
+    return s;
+}
+const sameSet = (a, b) => a.size === b.size && [...a].every((x) => b.has(x));
+function padShouldRun() {
+    return (_padSubs.size > 0 || _dev.pad) && typeof navigator !== 'undefined' && typeof navigator.getGamepads === 'function'
+        && typeof document !== 'undefined' && document.hasFocus();
+}
+function padTick() {
+    _padRaf = 0;
+    if (!padShouldRun()) {
+        _padPrev = new Set();
+        return;
+    }
+    const now = padPressed();
+    if (!sameSet(now, _padPrev)) {
+        for (const f of [..._padSubs]) {
+            try {
+                f(now, _padPrev);
+            }
+            catch { /* a recorder's own problem */ }
+        }
+        padDispatch(now, _padPrev);
+    }
+    _padPrev = now;
+    _padRaf = requestAnimationFrame(padTick);
+}
+function syncPadPoll() {
+    if (!_padRaf && padShouldRun())
+        _padRaf = requestAnimationFrame(padTick);
+}
+/** Edge detection: a combination runs on the frame it becomes complete, never while held. */
+function padDispatch(now, prev) {
+    if (!_dev.pad || _recording || paletteOpen)
+        return;
+    const complete = (s, ch) => { const b = padButtons(ch.key); return b.length > 0 && b.every((x) => s.has(x)); };
+    const c = findBound((ch) => deviceOf(ch.key) === 'pad' && complete(now, ch) && !complete(prev, ch), false, (ch) => padButtons(ch.key).length);
+    if (c)
+        runCmd(c);
+}
+/** Recompute which device sources have a binding, and listen to those only. */
+function syncDeviceListeners() {
+    if (typeof document === 'undefined')
+        return;
+    const o = _ovCache || loadOverrides();
+    const kinds = new Set(Object.values(o).map((v) => deviceOf((String(v).split('+').pop() || '').toLowerCase())));
+    _dev.mouse = kinds.has('mouse');
+    _dev.pad = kinds.has('pad');
+    const wheel = kinds.has('wheel');
+    if (!_devStarted)
+        return; // initCommands attaches the rest
+    if (wheel !== _dev.wheel) {
+        if (wheel)
+            document.addEventListener('wheel', onWheel, { capture: true, passive: false });
+        else
+            document.removeEventListener('wheel', onWheel, { capture: true });
+    }
+    _dev.wheel = wheel;
+    syncPadPoll();
+}
+function startDeviceDispatch() {
+    if (_devStarted || typeof document === 'undefined')
+        return;
+    _devStarted = true;
+    document.addEventListener('mousedown', onMouseDown, true);
+    document.addEventListener('mouseup', onMouseRelease, true);
+    document.addEventListener('auxclick', onMouseRelease, true);
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+        window.addEventListener('focus', syncPadPoll);
+        window.addEventListener('gamepadconnected', syncPadPoll);
+    }
+    _dev.wheel = false;
+    syncDeviceListeners();
+}
+/**
+ * Listen for one binding from any device until stopped. Keys and buttons being recorded never
+ * reach the dispatcher nor the page: on window, capture phase, ahead of the global dispatcher and
+ * of a dialog's Escape. The left and right buttons pass (they are how you click elsewhere), and
+ * the wheel without a modifier still scrolls. A gamepad combination is taken when every button
+ * is released: holding A, then pressing B and letting go of both, records A+B.
+ * Returns the function that stops it.
+ */
+export function startChordRecorder(o) {
+    _recording++;
+    let stopped = false;
+    const onKey = (e) => {
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            o.onCancel();
+            return;
+        }
+        const ch = chordFromEvent(e);
+        if (!ch)
+            return; // a modifier alone: wait for the rest
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        o.onChord(ch);
+    };
+    const onDown = (e) => {
+        if (!mouseRecordable(e.button))
+            return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        swallowRelease(e.button);
+        o.onChord({ ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey, alt: e.altKey, key: mouseKey(e.button) });
+    };
+    let wheelUntil = 0;
+    const onWh = (e) => {
+        if (!e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey)
+            return;
+        const d = wheelDelta(e);
+        if (!d)
+            return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        const now = performance.now();
+        const fresh = now >= wheelUntil;
+        wheelUntil = now + 400;
+        if (fresh)
+            o.onChord({ ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey, alt: e.altKey, key: wheelKey(d) });
+    };
+    const held = new Set();
+    const onPad = (now) => {
+        if (now.size) {
+            now.forEach((b) => held.add(b));
+            return;
+        }
+        if (!held.size)
+            return;
+        const key = held.size <= PAD_MAX ? padKey(held) : null;
+        held.clear();
+        if (key)
+            o.onChord({ key });
+    };
+    window.addEventListener('keydown', onKey, true);
+    window.addEventListener('mousedown', onDown, true);
+    window.addEventListener('mouseup', onMouseRelease, true);
+    window.addEventListener('auxclick', onMouseRelease, true);
+    window.addEventListener('wheel', onWh, { capture: true, passive: false });
+    _padSubs.add(onPad);
+    syncPadPoll();
+    return () => {
+        if (stopped)
+            return;
+        stopped = true;
+        _recording = Math.max(0, _recording - 1);
+        window.removeEventListener('keydown', onKey, true);
+        window.removeEventListener('mousedown', onDown, true);
+        window.removeEventListener('mouseup', onMouseRelease, true);
+        window.removeEventListener('auxclick', onMouseRelease, true);
+        window.removeEventListener('wheel', onWh, { capture: true });
+        _padSubs.delete(onPad);
+    };
 }
 // ── the command palette (Ctrl/⌘+K) ───────────────────────────────────────────────
 let overlay = null;
@@ -213,7 +516,7 @@ function renderPalette() {
       <span class="cp-cat cp-kind-${h.kind}">${esc(h.kind === 'command' ? (h.sub || '') : tr(KIND_LABEL[h.kind] || KIND_LABEL.command))}</span>
       <span class="cp-title">${esc(h.title)}</span>
       ${h.kind !== 'command' && h.sub ? `<span class="cp-sub">${esc(h.sub)}</span>` : ''}
-      ${ch ? `<kbd class="cp-kbd">${chordToStr(ch)}</kbd>` : ''}
+      ${ch ? `<kbd class="cp-kbd">${esc(chordLabel(ch))}</kbd>` : ''}
     </button>`;
     }).join('');
     const act = list.querySelector('.cp-item.on');
@@ -241,6 +544,12 @@ function runActive() {
         catch { /* ignore */ }
     }
 }
+// The Help hub opens the palette through this global instead of importing this module: commands.ts
+// already imports docs-hub, and an import back (even a dynamic one) is one more import cycle.
+try {
+    window.bmmOpenCommandPalette = () => openCommandPalette();
+}
+catch { /* no window in tests */ }
 export function openCommandPalette() {
     if (paletteOpen)
         return;
@@ -339,10 +648,14 @@ export function closePalette(restoreFocus = false) {
     }
 }
 const LS_CUSTOM = 'bmm_cmd_custom';
-const CUSTOM_KINDS = ['settings', 'profile', 'modpack', 'automation'];
+const CUSTOM_KINDS = ['settings', 'profile', 'modpack', 'automation', 'element'];
 function validCustom(x) {
     return !!x && typeof x.id === 'string' && /^custom\.[\w-]{1,40}$/.test(x.id) && CUSTOM_KINDS.includes(x.kind)
         && typeof x.target === 'string' && x.target.length > 0 && x.target.length < 300
+        // A selector is data from a file: no markup, no rule blocks (sched-nav-model selectorProblem).
+        && (x.kind !== 'element' || !/[<>{}]/.test(x.target))
+        && (x.view === undefined || (typeof x.view === 'string' && /^[\w-]{0,60}$/.test(x.view)))
+        && (x.disabled === undefined || typeof x.disabled === 'boolean')
         && typeof x.label === 'string' && x.label.length < 200 && (x.scope === undefined || typeof x.scope === 'string');
 }
 export function readCustomShortcuts() {
@@ -379,7 +692,7 @@ function registerCustom(cs) {
             }
             catch { /* ignore */ } });
         },
-        when: cs.scope ? () => currentView() === cs.scope : undefined,
+        when: cs.disabled ? () => false : cs.scope ? () => currentView() === cs.scope : undefined,
     });
 }
 let _customLoaded = false;
@@ -394,9 +707,14 @@ function ensureCustomRegistered() {
 export function saveCustomShortcut(cs, chord) {
     ensureCustomRegistered();
     const list = readCustomShortcuts().filter((x) => x.id !== cs.id);
-    list.push(cs);
+    const clean = { ...cs };
+    if (!clean.disabled)
+        delete clean.disabled;
+    if (!clean.view)
+        delete clean.view;
+    list.push(clean);
     writeCustom(list);
-    registerCustom(cs);
+    registerCustom(clean);
     setBinding(cs.id, chord);
 }
 export function deleteCustomShortcut(id) {
@@ -407,29 +725,49 @@ export function deleteCustomShortcut(id) {
     saveOverrides(o);
 }
 export function getCommand(id) { ensureCustomRegistered(); return _cmds.get(id) || null; }
-/** Everything the shortcuts page holds, for a file: the rebinds and the custom shortcuts. */
+/**
+ * Everything the shortcuts page holds, for a file: the rebinds and the custom shortcuts.
+ * Version 2: a binding may name a mouse button, the wheel or gamepad buttons (shortcut-model.ts);
+ * a version 1 file is a version 2 file that happens to hold only keys.
+ */
 export function exportShortcutData() {
-    return { format: 'bmm-shortcuts', version: 1, bindings: loadOverrides(), custom: readCustomShortcuts() };
+    return { format: 'bmm-shortcuts', version: SHORTCUTS_FILE_VERSION, bindings: loadOverrides(), custom: readCustomShortcuts() };
+}
+/** Is this parsed JSON a shortcuts file this BMM can read (any version up to its own)? */
+export function isShortcutFile(data) {
+    if (!data || data.format !== 'bmm-shortcuts' || typeof data.bindings !== 'object' || !data.bindings)
+        return false;
+    const v = data.version === undefined ? 1 : Number(data.version);
+    return Number.isInteger(v) && v >= 1 && v <= SHORTCUTS_FILE_VERSION;
+}
+/** The custom shortcuts of a file that pass validation, scope filled in. */
+export function shortcutFileCustom(data) {
+    return (Array.isArray(data?.custom) ? data.custom.filter(validCustom) : []).map((x) => ({ ...x, scope: x.scope || '' }));
 }
 /** Merge a file made by exportShortcutData. Returns how many entries were taken, or -1 if it is not one. */
-export function importShortcutData(data) {
-    if (!data || data.format !== 'bmm-shortcuts' || typeof data.bindings !== 'object' || !data.bindings)
+export function importShortcutData(data, decisions = {}) {
+    if (!isShortcutFile(data))
         return -1;
     ensureCustomRegistered();
     let n = 0;
-    const custom = Array.isArray(data.custom) ? data.custom.filter(validCustom) : [];
+    const custom = shortcutFileCustom(data).filter((cs) => decisions[cs.id] !== 'skip');
     if (custom.length) {
         const byId = new Map(readCustomShortcuts().map((x) => [x.id, x]));
-        for (const cs of custom) {
-            byId.set(cs.id, { ...cs, scope: cs.scope || '' });
-            registerCustom({ ...cs, scope: cs.scope || '' });
+        for (const raw of custom) {
+            const cs = { ...raw };
+            if (decisions[cs.id] === 'disable')
+                cs.disabled = true;
+            else
+                delete cs.disabled;
+            byId.set(cs.id, cs);
+            registerCustom(cs);
             n++;
         }
         writeCustom([...byId.values()]);
     }
     const o = loadOverrides();
     for (const [id, v] of Object.entries(data.bindings)) {
-        if (typeof v !== 'string' || v.length > 40 || !/^[\w.-]{1,80}$/.test(id))
+        if (!validCommandId(id) || !validBindingString(v) || decisions[id] === 'skip')
             continue;
         if (v && !parseChord(v)?.key)
             continue;
@@ -446,6 +784,9 @@ export function importShortcutData(data) {
 const RESERVED = new Set(['Ctrl+C', 'Ctrl+V', 'Ctrl+X', 'Ctrl+A', 'Ctrl+Z', 'Ctrl+Y', 'Ctrl+K', 'Ctrl+F', 'Ctrl+W', 'Ctrl+R',
     'Ctrl+Shift+I', 'Ctrl+Tab', 'Alt+F4', 'Alt+Tab', 'F5', 'Ctrl+F5', 'F12', 'Escape', 'Tab', 'Shift+Tab', 'Enter', 'Backspace']);
 export function reservedChord(c, forId) {
+    // The wheel alone, Ctrl+wheel (zoom), Shift+wheel, the left and right buttons: never.
+    if (c && deviceReserved(c))
+        return true;
     if (!c || !RESERVED.has(chordToStr(c)))
         return false;
     const def = forId ? _cmds.get(forId)?.defaultChord || null : null;
@@ -474,10 +815,18 @@ export function clashWith(chord, scope, exceptId) {
 }
 export function scopeOf(id) { const c = _cmds.get(id); return c ? scopeKey(c) : 'global'; }
 function hasOverride(id) { return Object.prototype.hasOwnProperty.call(loadOverrides(), id); }
-/** A chord as keycaps. */
+/** A chord as keycaps. A mouse, wheel or gamepad key wears its device's icon. */
 export function keycapsHtml(c) {
     const pretty = { Arrowup: '↑', Arrowdown: '↓', Arrowleft: '←', Arrowright: '→', Escape: 'Esc', Delete: 'Del', Pageup: 'PgUp', Pagedown: 'PgDn' };
-    return chordToStr(c).split('+').filter(Boolean).map((k) => `<kbd class="sk-kbd">${esc(pretty[k] || k)}</kbd>`).join('');
+    if (!c || !c.key)
+        return '';
+    const dev = deviceOf(c.key);
+    if (dev === 'key')
+        return chordToStr(c).split('+').filter(Boolean).map((k) => `<kbd class="sk-kbd">${esc(pretty[k] || k)}</kbd>`).join('');
+    const mods = [c.ctrl && 'Ctrl', c.shift && 'Shift', c.alt && 'Alt'].filter(Boolean);
+    const icon = uiIcon(dev === 'pad' ? 'game' : 'mouse', 12);
+    return mods.map((k) => `<kbd class="sk-kbd">${k}</kbd>`).join('')
+        + `<kbd class="sk-kbd sk-kbd-dev">${icon}<span>${esc(deviceText(c.key))}</span></kbd>`;
 }
 // ── Settings: the rebindable shortcuts manager ────────────────────────────────────
 // A table: the action, its keys as keycaps, then reset / clear (or edit / delete for a custom
@@ -520,6 +869,10 @@ export function renderShortcutsManager(container) {
     ensurePaletteStyles(); // the palette's sheet; the table itself is styled in css/settings-page.css
     refreshNavCommands(); // reflect the current navbar (custom pages, renames, reorders)
     ensureCustomRegistered();
+    // A re-render ends a recording in progress: its row is about to be replaced.
+    _stopRowRec?.();
+    _stopRowRec = null;
+    recording = null;
     const all = allCommands().filter((c) => !c.contextual);
     let changed = 0;
     const rowFor = (c) => {
@@ -530,9 +883,11 @@ export function renderShortcutsManager(container) {
         if (modified || custom)
             changed++;
         const name = tr(c.title);
-        const scope = custom ? (readCustomShortcuts().find((x) => x.id === c.id)?.scope || '') : '';
+        const mine = custom ? readCustomShortcuts().find((x) => x.id === c.id) : undefined;
+        const scope = mine?.scope || '';
         const tag = modified ? `<span class="sk-tag">${esc(t('sk.modified'))}</span>`
-            : scope ? `<span class="sk-tag">${esc(t('sk.onlyOn', { page: viewLabel(scope) }))}</span>` : '';
+            : mine?.disabled ? `<span class="sk-tag sk-tag-off">${esc(t('sk.disabledTag'))}</span>`
+                : scope ? `<span class="sk-tag">${esc(t('sk.onlyOn', { page: viewLabel(scope) }))}</span>` : '';
         const btn = (act, icon, label, cls = '', off = false) => `<button type="button" class="sk-act ${cls}" data-act="${act}" data-tooltip="${esc(label)}" aria-label="${esc(label)}"${off ? ' disabled' : ''}>${uiIcon(icon, 14)}</button>`;
         const acts = custom
             ? btn('edit', 'edit', t('sk.edit')) + btn('delete', 'delete', t('sk.delete'), 'sk-del')
@@ -569,10 +924,14 @@ export function renderShortcutsManager(container) {
     const rerender = () => renderShortcutsManager(container);
     const q = container.querySelector?.('.sk-q');
     q?.addEventListener('input', () => { _skQuery = q.value; applySkFilter(container); });
-    const stopRecording = () => { if (recording) {
-        recording.row.classList.remove('sk-recording');
-        recording = null;
-    } };
+    const stopRecording = () => {
+        _stopRowRec?.();
+        _stopRowRec = null;
+        if (recording) {
+            recording.row.classList.remove('sk-recording');
+            recording = null;
+        }
+    };
     const tools = () => import('../features/settings/custom-shortcuts.js');
     container.onclick = (e) => {
         const el = e.target.closest('[data-act]');
@@ -629,40 +988,39 @@ export function renderShortcutsManager(container) {
             row.classList.add('sk-recording');
             const btn = row.querySelector('.sk-chord');
             btn.textContent = t('sk.pressKeys');
+            // Keys, a mouse button, a modified wheel turn or gamepad buttons (startChordRecorder): on
+            // window, capture phase, so what is being recorded does not also run its command.
+            const stopRec = startChordRecorder({
+                onCancel: () => { stopRecording(); rerender(); },
+                onChord: (ch) => {
+                    if (!recording)
+                        return;
+                    if (reservedChord(ch, recording.id)) {
+                        btn.textContent = t('sk.reserved', { keys: chordLabel(ch) });
+                        return; // still recording: another combination, or Escape
+                    }
+                    setBinding(recording.id, ch);
+                    stopRecording();
+                    rerender();
+                },
+            });
+            // A left click anywhere else ends the recording, the keys unchanged. The row is put back
+            // in place rather than re-rendered: the click may be on another row's keys, and replacing
+            // the table under the pointer would swallow it.
+            const onOutside = (ev) => {
+                if (ev.button !== 0 || row.contains(ev.target))
+                    return;
+                const ch = bindingOf(id);
+                stopRecording();
+                btn.innerHTML = ch ? keycapsHtml(ch) : esc(t('sk.notSet'));
+            };
+            window.addEventListener('mousedown', onOutside, true);
+            _stopRowRec = () => { stopRec(); window.removeEventListener('mousedown', onOutside, true); };
         }
     };
-    // Capture the chord for the row being recorded.
-    const onRec = (e) => {
-        if (!recording)
-            return;
-        if (e.key === 'Escape') {
-            e.preventDefault();
-            e.stopImmediatePropagation();
-            stopRecording();
-            rerender();
-            return;
-        }
-        const ch = chordFromEvent(e);
-        if (!ch)
-            return; // waiting for a non-modifier key
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        if (reservedChord(ch, recording.id)) {
-            const btn = recording.row.querySelector('.sk-chord');
-            btn.textContent = t('sk.reserved', { keys: chordToStr(ch) });
-            return; // still recording: another combination, or Escape
-        }
-        setBinding(recording.id, ch);
-        stopRecording();
-        rerender();
-    };
-    // One listener while this manager is mounted. On window, capture phase: ahead of the global
-    // dispatcher (document, capture), so the keys being recorded do not also run their command.
-    const keyTarget = typeof window !== 'undefined' ? window : document;
-    container._skRec && keyTarget.removeEventListener('keydown', container._skRec, true);
-    container._skRec = onRec;
-    keyTarget.addEventListener('keydown', onRec, true);
 }
+/** The recorder of the table row being recorded, if any (one at a time, across re-renders). */
+let _stopRowRec = null;
 // ── register BMM's commands + start the dispatcher ────────────────────────────────
 const clickNav = (view) => () => document.querySelector(`.nav-item[data-view="${view}"]`)?.click();
 const clickAfterNav = (view, btnId, delay = 60) => () => {
@@ -1205,6 +1563,8 @@ export function initCommands() {
     registerCore();
     ensureCustomRegistered();
     document.addEventListener('keydown', onKeydown, true);
+    // Mouse buttons, the wheel and gamepads: each source listens only while one of its kind is bound.
+    startDeviceDispatch();
     // Run a command by id from a module that must not import this one (« Ask Laya » results:
     // features/ai/ai-ask.ts is itself loaded from here, so an import back would be a cycle).
     document.addEventListener('bmm:command:run', (e) => {

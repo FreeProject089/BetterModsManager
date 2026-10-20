@@ -4,6 +4,7 @@ import { copyIdButtons, wireCopyIds } from '../../core/copy-id.js';
 import { invoke, pickFile, saveFile, pickFolder, convertFileSrc, apiBase, apiRunning } from '../../core/api.js';
 import { toast, fetchProfileIconPaths, updateSelectProfileIcon, decorateProfileOptions, toastSaved, openExternal } from '../../ui/app.js';
 import { t, getLang } from '../../core/i18n.js';
+import { promptText } from '../../ui/verify.js';
 import { permDomains, scopeRisk, maxScopeRisk } from './plugin-perms.js';
 import { openFolderContent, folderFacts, humanSize } from './plugin-inspect.js';
 import { openKeyManager } from '../../core/settings-link.js';
@@ -3217,7 +3218,7 @@ async function openSmartQuickTest(m, p, rawBody) {
             toast(t('plugins.curlCopied'), 'success');
         }
         catch {
-            window.prompt(t('plugins.curlCopyManual'), curl);
+            void promptText({ title: t('vfy.t.curl'), label: t('plugins.curlCopyManual'), value: curl, multiline: true, confirmLabel: t('common.close') });
         }
     });
     // ── Create Modpack helpers ────────────────────────────────────────────────

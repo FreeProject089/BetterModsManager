@@ -183,7 +183,7 @@ une minuterie et devient utile. Les conditions :
 
 ### 3. Action — quoi
 
-Il y a ~137 actions réparties en onze groupes :
+Il y a ~143 actions réparties en onze groupes :
 
 | Groupe | Quelques actions |
 |---|---|
@@ -245,7 +245,7 @@ alors… » n'avait aucun moyen d'être exprimé.
 
 ## Les permissions
 
-Chaque tâche accorde dix choses séparément, et chacune dit ce qu'elle débloque :
+Chaque tâche accorde onze choses séparément, et chacune dit ce qu'elle débloque :
 
 | Autorisation | Ce qu'elle permet |
 |---|---|
@@ -259,8 +259,9 @@ Chaque tâche accorde dix choses séparément, et chacune dit ce qu'elle débloq
 | **Réseau** | Envoyer des webhooks et des messages Discord ou Slack, et lire un flux pour le déclencheur `rss` — http(s) uniquement, jamais une adresse privée sauf si l'étape autorise le réseau local ([plus bas](#prevenir-le-monde-exterieur-webhooks-discord-slack-flux)) |
 | **Laya (IA)** | Interroger Laya sur ce PC : chaque étape `ai.*` (classer un texte, classer un mod, vérifier la bibliothèque, trouver les causes des crashs…) et la condition `aiAvailable` ([plus bas](#laya-dans-une-tache)) |
 | **Naviguer et cliquer** | Ouvrir une fenêtre listée ou appuyer sur un contrôle listé des écrans de BMM (`nav.modal`, `nav.click`, [plus bas](#naviguer-dans-bmm-depuis-une-tache)). Afficher une page, une carte ou un message ne demande rien |
+| **Placer les fichiers du paquet** | Copier un fichier que le paquet de l'automatisation transporte dans les dossiers Saved Games de DCS, le dossier du jeu ou celui des mods (`pkg.install`), et y écrire le rapport de la porte d'accès (`gate.report`). Chaque placement reste demandé une fois, dans une fenêtre BMM, avec un reçu ([plus bas](#paquets-dautomatisation)) |
 
-Les dix sont désactivées tant que tu ne les actives pas, et une étape dont la permission
+Les onze sont désactivées tant que tu ne les actives pas, et une étape dont la permission
 manque échoue avec un message indiquant laquelle accorder — elle ne s'exécute jamais en
 silence.
 
@@ -523,6 +524,34 @@ dernier mode utilisé.
   dernière exécution : un point vert si elle a réussi, rouge si elle a échoué (survole-le pour
   l'erreur), un point vide pour une étape jamais atteinte. Un bloc prend le pire de ce qui a tourné
   dedans.
+- **Les fils.** Chaque nœud a une entrée à gauche et une sortie à droite. Fais glisser une sortie
+  sur une autre étape : cette étape passe juste après celle-ci (une tâche est une suite, relier deux
+  nœuds *c'est* les ordonner ; une étape ne peut pas aller dans elle-même). Lâche dans le vide et la
+  recherche s'ouvre là : ce que tu choisis est ajouté après le nœud, à l'endroit où le fil s'arrête.
+- **Chercher et ajouter, là où tu es.** Clic droit sur le canevas, ou :kbd[Tab] avec le pointeur
+  dessus, ouvre la même recherche sous le pointeur ; le nouveau nœud se pose où tu as cliqué.
+- **Les couleurs.** La bande et l'icône d'une action prennent la couleur de sa catégorie (mods,
+  dépôt, applis, paquets et jeux, notifications, logique…) : une longue tâche se lit d'un coup d'œil.
+- **Les cadres.** :kbd[C], ou **Encadrer la sélection** dans la barre, dessine une boîte titrée
+  autour des nœuds sélectionnés, comme un commentaire de Blueprint. Double-clic sur le titre pour le
+  renommer ; clic droit sur sa barre de titre pour changer sa couleur (six couleurs du thème) ou le
+  retirer (ses étapes restent). Fais glisser la barre de titre et les nœuds dedans suivent ; le coin
+  le redimensionne ; la flèche le replie sur sa barre, les fils s'y arrêtent.
+- **Les points de passage.** Double-clic sur un fil (ou clic droit) pour ajouter un point ; fais
+  glisser le point pour courber le fil ; double-clic dessus pour l'enlever.
+- **Ranger.** Sélectionne plusieurs nœuds (:kbd[Maj] + glisser, ou :kbd[Ctrl] + clic), puis
+  **Ranger** : aligner à gauche, les centres, à droite, en haut, les milieux ou en bas, répartir de
+  gauche à droite ou de haut en bas, ou redisposer toute la tâche. **Aimanter à la grille** (:kbd[G])
+  se coupe pour placer librement.
+- **Copier, coller.** :kbd[Ctrl+C], :kbd[Ctrl+X] et :kbd[Ctrl+V] copient, coupent et collent des
+  étapes (avec tout ce qu'elles contiennent) après la sélection, dans cette tâche ou une autre. Une
+  étape collée n'a aucun droit : les permissions de la tâche décident, comme pour une étape tapée.
+- **Vérifications en direct.** Une étape qui ne peut pas tourner parce qu'un champ obligatoire est
+  vide dit lequel, sur le nœud et en haut de son panneau, avant toute exécution.
+
+Les cadres, les points de passage, le dossier et les étiquettes de la liste sont gardés dans le
+bloc `ui` de la tâche (versionné, présentation seulement, jamais lu par une exécution). Une
+automatisation enregistrée avant n'en a pas et s'ouvre disposée automatiquement, comme avant.
 
 !!! warning "Les permissions décident toujours"
 
@@ -551,6 +580,12 @@ flux n'agissent que quand le canevas a le focus : taper dans un champ n'est jama
 | Zoomer · Dézoomer | :kbd[Ctrl+=] · :kbd[Ctrl+-] |
 | Ajuster toute la tâche à la vue | :kbd[F] |
 | Disposition automatique (oublier les positions manuelles) | :kbd[Maj+L] |
+| Chercher et ajouter un nœud sous le pointeur | :kbd[Tab] |
+| Copier la sélection · Couper la sélection · Coller après la sélection | :kbd[Ctrl+C] · :kbd[Ctrl+X] · :kbd[Ctrl+V] |
+| Encadrer la sélection (commentaire) | :kbd[C] |
+| Aimanter à la grille, oui ou non | :kbd[G] |
+| Aligner la sélection à gauche · Aligner la sélection en haut | :kbd[Alt+Maj+←] · :kbd[Alt+Maj+↑] |
+| Répartir la sélection, de gauche à droite · Répartir la sélection, de haut en bas | :kbd[Alt+Maj+H] · :kbd[Alt+Maj+V] |
 | Mode Blocs · Mode Code · Mode Flux | :kbd[Alt+1] · :kbd[Alt+2] · :kbd[Alt+3] |
 | Enregistrer la tâche (et continuer) | :kbd[Ctrl+S] |
 | Tester une fois l’étape sélectionnée | :kbd[T] |
@@ -566,7 +601,8 @@ pendant une pause).
 
 À la souris : glisse le fond, maintiens :kbd[Espace] en glissant, ou fais défiler, pour te déplacer ;
 :kbd[Ctrl] + molette (ou un pincement) pour zoomer ; :kbd[Maj] + glisser pour sélectionner plusieurs
-nœuds, :kbd[Ctrl] + clic pour en ajouter un à la sélection.
+nœuds, :kbd[Ctrl] + clic pour en ajouter un à la sélection. Clic droit sur un nœud, la barre de
+titre d'un cadre ou un fil pour ce qu'on peut en faire.
 
 ## Laya dans une tâche
 
@@ -721,6 +757,13 @@ brouillon *non enregistré*, et le panneau latéral montre les dernières exécu
 durée). Pendant l'édition, :kbd[Ctrl+Z] / :kbd[Ctrl+Y] annulent et rétablissent, et chaque étape a
 son propre bouton *lancer juste cette étape*.
 
+**Dossiers et étiquettes.** Dans le panneau latéral de l'éditeur, sous le nom, donne à une tâche un
+**dossier** (un seul niveau, par exemple *DCS*) et des **étiquettes**. La liste regroupe alors les
+tâches par dossier (clic sur un dossier pour le replier ; le compte dit combien sont actives),
+montre les étiquettes sur chaque ligne et les propose comme filtres au-dessus ; la recherche lit les
+noms, descriptions, dossiers et étiquettes. Une tâche qui transporte des fichiers montre une puce
+**Paquet**.
+
 ## Partir d'un modèle
 
 Une nouvelle tâche s'ouvre avec un bouton **Parcourir les modèles…** (le nombre à côté est
@@ -809,6 +852,117 @@ seule — donc tout ce qui lit un .bmmpa lit l'un comme l'autre.
     demandait, pour que tu accordes ce que tu veux vraiment plutôt que de chercher pourquoi une
     tâche importée ne fait rien. **Charger l'exemple** dépose une tâche prête (et désactivée)
     que tu peux décortiquer.
+
+## Paquets d'automatisation
+
+Un `.bmmpa` transporte des étapes. Un **paquet** transporte les étapes **et les fichiers sur
+lesquels elles agissent** : un script à mettre dans un jeu, la liste de mods à vérifier, un petit
+mod, n'importe quel fichier à placer.
+
+**Joindre des fichiers.** Dans le panneau latéral de l'éditeur, **Fichiers** liste ce que la tâche
+transporte : **Ajouter un fichier** ou **Ajouter un dossier**. Ils sont copiés dans le magasin de
+paquets de BMM (à côté de ses données, un dossier par version de l'ensemble, nommé par son
+empreinte), si bien qu'une tâche enregistrée avant pointe toujours exactement vers ses fichiers. Les
+étapes choisissent ensuite un fichier *du paquet* dans une liste.
+
+**Exporter.** **Exporter** dans l'éditeur propose **Paquet (.bmmbundle)** : l'automatisation et ses
+fichiers en un seul fichier signé. **En importer un** (Automatisations, Importer) le montre d'abord :
+qui l'a signé (ou que rien ne prouve qui l'a fait), ses fichiers, ses automatisations et les
+permissions qu'elles demandent. Elles arrivent désactivées, sans aucune permission, comme tout
+import, et reliées à la copie vérifiée du paquet.
+
+### Le format
+
+Ce n'est pas un nouveau conteneur. Un paquet est un `.bmmbundle`, le zip que BMM utilise déjà pour
+un catalogue qui transporte ses fichiers :
+
+| Entrée | Ce que c'est |
+|---|---|
+| `bmm_signature.json` | La liste signée de chaque entrée et de son SHA-256 (le même bloc qu'un `.mm`, un `.bmmplug` ou un `.bmmtheme`). |
+| `automation.bmmpa` | L'automatisation, `version: 2`, elle-même signée, avec un bloc `package` qui liste chaque fichier, son SHA-256 et sa taille. |
+| `catalog.json` | Un preset qui pointe vers `automation.bmmpa`, pour qu'un lecteur de catalogue voie une automatisation à installer. |
+| `files/…` | Les fichiers. |
+
+L'ouverture est refusée quand la signature ne correspond plus aux entrées, quand un fichier n'est
+pas celui que le document liste (ou n'est pas listé), ou quand un nom tente de sortir de
+`files/`. Il est extrait par le même code qu'une archive de mod (zip-slip refusé, budget de
+taille), et pèse au plus 512 Mo : les gros mods viennent du catalogue ou d'un dépôt, avec leurs
+propres vérifications. Un `.bmmpa` version 1 s'ouvre toujours partout ; une version 2 ouverte comme
+simple fichier importe ses étapes, et ses étapes de fichiers disent que le paquet manque.
+
+### Les étapes
+
+| Étape | Ce qu'elle fait | Demande |
+|---|---|---|
+| **Installer un fichier du paquet** (`pkg.install`) | Copie un fichier ou un dossier du paquet dans les dossiers Saved Games de DCS (tous, ou un), le dossier du jeu du profil actif ou son dossier de mods, dans un sous-dossier que tu nommes (relatif, sans `..`, sans lecteur). Avant toute copie, une fenêtre BMM montre le fichier, sa taille, le paquet, s'il est signé, et sa destination ; *Afficher le fichier* montre un script. La réponse est gardée comme reçu et redemandée seulement pour une autre version du paquet (ou à chaque fois, si tu le coches). Remplit `pkg.consent`, `pkg.installed`. | **Placer les fichiers du paquet** |
+| **Vérifier qu'un fichier du paquet est en place** (`pkg.verify`) | Est-il là, identique (SHA-256), dans chaque dossier visé ? Remplit `pkg.ok`, `pkg.missing`, `{pkg.report}`. | rien |
+| **Vérifier qu'une liste de mods est active et intacte** (`modlist.verify`) | Pour un `.mm` (un chemin, ou celui du paquet) : chaque mod installé et activé, aucun autre activé avec *Seulement ces mods*, chaque fichier déployé par un mod toujours dans le dossier du jeu, chaque fichier que la liste empreinte identique dans le mod. Ne change rien. Remplit `list.ok`, `list.missing`, `list.inactive`, `list.altered`, `list.extra`, `{list.report}`, `{list.path}` et `{list.fingerprint}` (16 caractères, les mêmes pour la même liste sur chaque machine). | rien |
+| **Écrire le résultat pour le serveur** (`gate.report`) | Écrit `Config\bmm-joingate.json` dans chaque dossier DCS d'après la dernière vérification de liste, signé avec ta clé BMM. L'endroit est fixe : une tâche choisit ce qui est rapporté, jamais où. | **Placer les fichiers du paquet** |
+| **Lancer un jeu avec des arguments** (`game.launch`) | Lance un `.exe` avec une liste d'arguments (sans shell, rien n'est réinterprété) et ne l'attend pas ; peut d'abord copier un texte dans le presse-papiers. Remplit `game.pid`. | **Lancer des programmes externes** |
+| **Poser une question** (`ui.ask`) | Une fenêtre BMM à deux boutons ; `ask.yes` vaut 1 pour le premier. Branche avec un **Si**. | rien |
+
+Les deux vérifications et **Poser une question** ne demandent rien ; placer un fichier et lancer
+un programme demandent leur autorisation, et une tâche importée n'arrive jamais avec.
+
+## La porte d'accès à un serveur DCS
+
+Un modèle fait de réponses : **Modèles → DCS : porte d'accès au serveur**, puis un court formulaire.
+
+1. **Le formulaire demande** l'adresse du serveur, son nom (pour les messages), la liste de mods du
+   serveur (`.mm`, son empreinte s'affiche dès que tu la choisis), *Seulement ces mods*, si **le
+   serveur vérifie les joueurs** (liste blanche active), où est `DCS.exe` (deviné depuis ton profil
+   DCS) et les arguments de lancement. Deux cases non cochées accordent **Placer les fichiers du
+   paquet** et **Lancer des programmes externes** : coche-les, sinon les étapes s'arrêtent en disant
+   laquelle manque.
+2. **Simulation** montre chaque étape, ce qu'elle ferait et ce qui lui serait refusé, et *mesure*
+   les deux vérifications : si ta liste passerait maintenant, et si le hook est en place.
+3. **Créer** construit le paquet (le hook, le script serveur et la liste) et met l'automatisation
+   dans l'éditeur, en trois cadres : *Hook*, *Vérifier les mods*, *Rejoindre, ou corriger*.
+   Enregistre-la.
+
+À l'exécution :
+
+- **Hook** (seulement si le serveur vérifie les joueurs) : `pkg.install` te demande, puis copie
+  `BMM-JoinGate.lua` dans `Saved Games\DCS*\Scripts\Hooks` ; `pkg.verify` vérifie qu'il est là,
+  identique. Absent : elle le dit et s'arrête.
+- **Vérifier les mods** : `modlist.verify`, puis (serveur qui vérifie) `gate.report` écrit le
+  résultat.
+- **Ça passe** : DCS démarre avec tes arguments et l'adresse du serveur est dans le presse-papiers.
+  DCS n'a pas d'option de ligne de commande prise en charge pour rejoindre un serveur, donc BMM n'en
+  invente pas : dans DCS, ouvre **Multijoueur**, **Connexion par IP**, colle.
+- **Ça ne passe pas** : DCS ne démarre pas. Une fenêtre liste ce qui ne va pas (non installé,
+  désactivé, fichiers modifiés, autres mods actifs) et propose **Corriger** : BMM active la liste et
+  installe ce qui manque depuis les sources qu'elle nomme (`modlist.apply`), vérifie à nouveau,
+  écrit le nouveau résultat et demande s'il faut lancer DCS. **Pas maintenant** termine sans
+  rejoindre.
+
+### Pour les admins de serveur : l'appliquer
+
+L'exclusion appartient au serveur, jamais à BMM. Le paquet transporte `BMM-JoinGate-Server.lua` ;
+**Afficher le script serveur** dans le formulaire le montre.
+
+1. Copie-le dans `Saved Games\DCS.server\Scripts\Hooks\` de ton serveur dédié et redémarre.
+2. Mets l'empreinte de ta liste dans `fingerprints` (garde aussi l'ancienne le temps que les
+   joueurs se mettent à jour).
+3. Laisse `enforce = false` le temps d'une session : `dcs.log` montre `[BMMGATE] passed`,
+   `not passing` ou `would kick` pour chaque joueur. Puis mets `enforce = true`.
+
+Le principe : quand la mission d'un joueur démarre, le hook client envoie une ligne de discussion
+commençant par `[BMMGATE]` (résultat, empreinte, heure). Le script serveur cache cette ligne à
+tout le monde, accepte un résultat qui passe avec une empreinte que tu as listée et assez récent
+(`max_age`), et exclut, avec ton `message`, un joueur qui n'en a envoyé aucun dans les `grace`
+secondes. `exempt` liste les UCID qu'il ne touche jamais.
+
+!!! warning "Une vérification de confort, pas un anti-triche"
+
+    La ligne est écrite par le PC du joueur, et un joueur déterminé peut la falsifier. La porte
+    s'assure que les joueurs honnêtes arrivent avec les bons mods et reçoivent un message clair
+    sinon ; le contrôle d'intégrité de DCS reste ton outil pour le reste. Rien ici ne touche le
+    serveur depuis BMM ni ne contourne DCS ou les règles d'un serveur.
+
+Pour donner la porte à tes joueurs, ouvre l'automatisation et **Exporter → Paquet (.bmmbundle)** :
+ils importent un fichier, lisent ce que c'est, indiquent où est DCS et accordent eux-mêmes les deux
+permissions.
 
 ## Publier ton propre catalogue
 

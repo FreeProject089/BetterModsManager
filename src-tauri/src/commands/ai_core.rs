@@ -148,12 +148,14 @@ impl AiSettings {
         if self.local_url.is_empty() {
             self.local_url = DEFAULT_LOCAL_URL.into();
         }
-        self.gen_local_url = bounded(self.gen_local_url.trim(), 300);
+        // The generator's address as an OpenAI-compatible base: LM Studio shows its root
+        // (`http://127.0.0.1:1234`), people paste `…/v1/models`; both become `…/v1`.
+        self.gen_local_url = bounded(&normalize_gen_base(&self.gen_local_url), 300);
         if self.gen_local_url.is_empty() {
             self.gen_local_url = DEFAULT_GEN_LOCAL_URL.into();
         }
         self.gen_local_model = bounded(self.gen_local_model.trim(), 120);
-        self.external_url = bounded(self.external_url.trim(), 300);
+        self.external_url = bounded(&normalize_gen_base(&self.external_url), 300);
         self.external_model = bounded(self.external_model.trim(), 120);
         self.laya = self.laya.sanitized();
         self
@@ -451,7 +453,7 @@ pub struct HttpTransport;
 const MAX_RESPONSE: u64 = 1024 * 1024;
 
 impl HttpTransport {
-    fn client(timeout_ms: u64, url: &str) -> Result<reqwest::blocking::Client, String> {
+    pub(crate) fn client(timeout_ms: u64, url: &str) -> Result<reqwest::blocking::Client, String> {
         let mut b = reqwest::blocking::Client::builder()
             .timeout(std::time::Duration::from_millis(timeout_ms))
             .redirect(reqwest::redirect::Policy::none())
@@ -826,6 +828,55 @@ pub fn bc_base_allowed(base: &str, test_base: Option<&str>) -> Result<String, St
         return Ok(clean.to_string().trim_end_matches('/').to_string());
     }
     Err(refused())
+}
+
+/// Path endings people paste after a generator's base; stripped (repeatedly) before `/v1` is decided.
+const GEN_SUFFIXES: &[&str] = &["/chat/completions", "/completions", "/embeddings", "/models", "/api/v0", "/api/tags", "/api/chat", "/api/generate"];
+
+/// The OpenAI-compatible base (`…/v1`, no trailing slash) for an address as typed. A missing
+/// scheme is `http://`; `0.0.0.0` (what a server prints when it listens everywhere) is read as
+/// `127.0.0.1`; known endpoint paths are removed; an empty path becomes `/v1`. A URL with a query
+/// string is left as typed (some hosted APIs need theirs). Not a validation: [`validate_url`]
+/// still decides whether the address may be used.
+pub fn normalize_gen_base(raw: &str) -> String {
+    let t = raw.trim();
+    if t.is_empty() {
+        return String::new();
+    }
+    let with_scheme = if t.contains("://") { t.to_string() } else { format!("http://{}", t) };
+    let Ok(mut u) = reqwest::Url::parse(&with_scheme) else { return t.to_string() };
+    if u.scheme() != "http" && u.scheme() != "https" {
+        return t.to_string();
+    }
+    u.set_fragment(None);
+    if u.query().is_some() {
+        return u.to_string();
+    }
+    match u.host_str() {
+        Some("0.0.0.0") => {
+            let _ = u.set_host(Some("127.0.0.1"));
+        }
+        Some("[::]") => {
+            let _ = u.set_host(Some("[::1]"));
+        }
+        _ => {}
+    }
+    let mut path = u.path().trim_end_matches('/').to_string();
+    loop {
+        let lower = path.to_ascii_lowercase();
+        match GEN_SUFFIXES.iter().find(|s| lower.ends_with(*s)) {
+            Some(s) => {
+                path.truncate(path.len() - s.len());
+                path = path.trim_end_matches('/').to_string();
+            }
+            None => break,
+        }
+    }
+    if path.is_empty() {
+        path = "/v1".into();
+    }
+    u.set_path(&path);
+    u.to_string().trim_end_matches('/').to_string()
 }
 
 /// A request to a server on this PC goes around any system proxy.
@@ -2284,8 +2335,8 @@ pub fn classify_mod_in(ctx: &Ctx, text: &str, vocab: &Vocab, area: crate::comman
 }
 
 fn external_url(ctx: &Ctx, path: &str) -> Result<String, String> {
-    let u = validate_url(&ctx.settings.external_url, EndpointKind::External, false)?;
-    let base = u.url.trim_end_matches("/chat/completions").trim_end_matches('/').to_string();
+    let u = validate_url(&normalize_gen_base(&ctx.settings.external_url), EndpointKind::External, false)?;
+    let base = u.url.trim_end_matches('/').to_string();
     Ok(format!("{}{}", base, path))
 }
 
@@ -2315,12 +2366,12 @@ pub fn gen_target(ctx: &Ctx, feature: Feature) -> Result<GenTarget, String> {
     let provider = gate(ctx.settings, feature, ctx.killed).map_err(|w| format!("generative:{}", w))?;
     let (url, model, headers) = match provider {
         Provider::LocalGen => (
-            validate_url(&ctx.settings.gen_local_url, EndpointKind::LocalGen, false).map_err(|e| format!("generative:{}", e))?.url,
+            validate_url(&normalize_gen_base(&ctx.settings.gen_local_url), EndpointKind::LocalGen, false).map_err(|e| format!("generative:{}", e))?.url,
             ctx.settings.gen_local_model.clone(),
             Vec::new(),
         ),
         Provider::External => (
-            validate_url(&ctx.settings.external_url, EndpointKind::External, false).map_err(|e| format!("generative:{}", e))?.url,
+            validate_url(&normalize_gen_base(&ctx.settings.external_url), EndpointKind::External, false).map_err(|e| format!("generative:{}", e))?.url,
             ctx.settings.external_model.clone(),
             external_headers(ctx),
         ),
@@ -2350,6 +2401,11 @@ pub fn chat(ctx: &Ctx, target: &GenTarget, system: &str, user: &str, max_tokens:
     });
     let who = if target.provider == Provider::LocalGen { "local" } else { "api" };
     let v = ctx.transport.post_json(&url, &target.headers, &body, ctx.settings.timeout_ms).map_err(|e| format!("{}:{}", who, short_reason(&e)))?;
+    // An `{error}` body with HTTP 200 (LM Studio: no model loaded, unknown path) is a failure,
+    // not an empty answer.
+    if v.get("error").is_some() && v.get("choices").is_none() {
+        return Err(format!("{}:model_error", who));
+    }
     Ok(v.pointer("/choices/0/message/content").and_then(|c| c.as_str()).map(str::trim).unwrap_or("").chars().take(8000).collect())
 }
 
@@ -2471,12 +2527,17 @@ pub fn test_connection(ctx: &Ctx, target: &str) -> Result<Value, String> {
             // hosted APIs all answer; the model ids come back so the card can suggest one.
             let local = target == "gen_local" || (target == "generator" && ctx.settings.generative == "local");
             let (url, headers) = if local {
-                let u = validate_url(&ctx.settings.gen_local_url, EndpointKind::LocalGen, false)?;
-                (format!("{}/models", u.url.trim_end_matches("/chat/completions").trim_end_matches('/')), Vec::new())
+                let u = validate_url(&normalize_gen_base(&ctx.settings.gen_local_url), EndpointKind::LocalGen, false)?;
+                (format!("{}/models", u.url), Vec::new())
             } else {
                 (external_url(ctx, "/models")?, external_headers(ctx))
             };
             let v = ctx.transport.get_json(&url, &headers, ctx.settings.timeout_ms)?;
+            // LM Studio answers a path it does not know with HTTP 200 and `{error}`: that is not
+            // « connected, no models ».
+            if v.get("error").is_some() && v.get("data").is_none() && v.get("models").is_none() {
+                return Err("wrong_path".into());
+            }
             let models: Vec<String> = v
                 .get("data")
                 .or_else(|| v.get("models"))

@@ -113,7 +113,7 @@ function htmlReport(prev, next, rows, groups, svgs, mdEn) {
   const mi = (s) => `<dl>${Object.entries(s.machine ?? {}).filter(([, v]) => v != null).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>BMM ${next.version} benchmarks</title><style>
-:root{color-scheme:light;${css(THEME.light)};--page:#f9f9f7;--card:#fcfcfb;--line:#e1e0d9}
+:root{color-scheme:light;${css(THEME.light)};--page:#f9f9f7;--card:#fcfcfb;--line:#c9c8bf}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;${css(THEME.dark)};--page:#0d0d0d;--card:#1a1a19;--line:#2c2c2a}}
 :root[data-theme="dark"]{color-scheme:dark;${css(THEME.dark)};--page:#0d0d0d;--card:#1a1a19;--line:#2c2c2a}
 ${chartCss(null)}

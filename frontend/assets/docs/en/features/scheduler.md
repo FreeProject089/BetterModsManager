@@ -168,7 +168,7 @@ timer and starts being useful. Conditions:
 
 ### 3. Action — what
 
-There are ~137 actions across eleven groups:
+There are ~143 actions across eleven groups:
 
 | Group | A few of the actions |
 |---|---|
@@ -227,7 +227,7 @@ had no way to be expressed.
 
 ## Permissions
 
-Each task grants ten things separately, and each says what it unlocks:
+Each task grants eleven things separately, and each says what it unlocks:
 
 | Grant | What it allows |
 |---|---|
@@ -241,8 +241,9 @@ Each task grants ten things separately, and each says what it unlocks:
 | **Network** | Send webhooks and Discord or Slack messages, and read a feed for the `rss` trigger — http(s) only, never a private address unless the step allows the local network ([below](#telling-the-outside-world-webhooks-discord-slack-feeds)) |
 | **Laya (AI)** | Ask Laya on this PC: every `ai.*` step (sort a text, tag a mod, check the library, label crashes…) and the `aiAvailable` condition ([below](#laya-in-a-task)) |
 | **Navigate and click** | Open a listed dialog or press a listed control on BMM's screens (`nav.modal`, `nav.click`, [below](#navigating-bmm-from-a-task)). Showing a page, a card or a message needs nothing |
+| **Place packaged files** | Copy a file the automation's package carries into the DCS Saved Games folders, the game folder or the mods folder (`pkg.install`), and write the join-gate report there (`gate.report`). Each placement is still asked once, in a BMM dialog, with a receipt ([below](#automation-packages)) |
 
-All ten are off until you turn them on, and a step whose permission is missing fails with a
+All eleven are off until you turn them on, and a step whose permission is missing fails with a
 message naming the one to grant — it never runs quietly.
 
 **Delete things** is the odd one out. Four of the others are about reaching *outside* BMM; this
@@ -464,6 +465,34 @@ next time.
 - **Last run.** For a saved task, each action shows how the last run went: a green dot for done, red
   for failed (hover it for the error), a hollow dot for a step the run never reached. A block takes
   the worst of what ran inside it.
+- **Wires.** Every node has an input on its left and an output on its right. Drag from an output
+  onto another step and that step moves to run right after this one (a task is a sequence, so
+  connecting two nodes *is* ordering them; a step cannot go inside itself). Let go on empty canvas
+  instead and the search opens there: what you pick is added after the node, where the wire ended.
+- **Search to add, where you are.** Right-click the canvas, or press :kbd[Tab] with the pointer over
+  it, to open the same search at the pointer; the new node lands where you clicked.
+- **Colours.** An action's stripe and icon take the colour of its category (mods, repo, apps,
+  packages and games, notifications, logic…), so a long task reads at a glance.
+- **Frames.** :kbd[C], or **Frame the selection** in the toolbar, draws a titled box around the
+  selected nodes, like a comment in a Blueprint. Double-click the title to rename it; right-click its
+  title bar to change its colour (six theme colours) or remove it (its steps stay). Drag the title
+  bar and the nodes inside come along; drag the corner to resize; the arrow folds it to its title bar,
+  with the wires ending on it.
+- **Reroute points.** Double-click a wire (or right-click it) to add a point; drag the point to bend
+  the wire round something; double-click it to take it away.
+- **Arrange.** Select several nodes (:kbd[Shift] + drag, or :kbd[Ctrl] + click), then **Arrange**:
+  align left, centres, right, top, middles or bottom, spread them evenly left to right or top to
+  bottom, or lay the whole task out again. **Snap to the grid** (:kbd[G]) can be switched off for
+  free placement.
+- **Copy and paste.** :kbd[Ctrl+C], :kbd[Ctrl+X] and :kbd[Ctrl+V] copy, cut and paste steps (with
+  everything inside them) after the selection, in this task or another one. A pasted step is granted
+  nothing: the task's permissions decide, as for a typed one.
+- **Inline checks.** A step that cannot run because a required field is empty says which one, on
+  the node and at the top of its panel, before any run does.
+
+Frames, reroute points and the list's folder and tags are kept in the task's `ui` block
+(versioned, presentation only, never read by a run). An automation saved before they existed has
+none and opens laid out automatically, exactly as before.
 
 !!! warning "Permissions still decide"
 
@@ -492,6 +521,12 @@ while the canvas has the focus, so typing in a field is never taken over.
 | Zoom in · Zoom out | :kbd[Ctrl+=] · :kbd[Ctrl+-] |
 | Fit the whole task in view | :kbd[F] |
 | Auto-layout (forget hand-placed positions) | :kbd[Shift+L] |
+| Search and add a node where the pointer is | :kbd[Tab] |
+| Copy the selection · Cut the selection · Paste after the selection | :kbd[Ctrl+C] · :kbd[Ctrl+X] · :kbd[Ctrl+V] |
+| Frame the selection (comment) | :kbd[C] |
+| Snap to the grid on or off | :kbd[G] |
+| Align the selection on the left · Align the selection on the top | :kbd[Alt+Shift+←] · :kbd[Alt+Shift+↑] |
+| Spread the selection evenly, left to right · Spread the selection evenly, top to bottom | :kbd[Alt+Shift+H] · :kbd[Alt+Shift+V] |
 | Blocks mode · Code mode · Flow mode | :kbd[Alt+1] · :kbd[Alt+2] · :kbd[Alt+3] |
 | Save the task (and keep editing) | :kbd[Ctrl+S] |
 | Test the selected step once | :kbd[T] |
@@ -500,7 +535,8 @@ while the canvas has the focus, so typing in a field is never taken over.
 
 With the mouse: drag the background, hold :kbd[Space] and drag, or scroll, to move around;
 :kbd[Ctrl] + wheel (or a pinch) to zoom; :kbd[Shift] + drag to select several nodes, :kbd[Ctrl] + click
-to add one to the selection.
+to add one to the selection. Right-click a node, a frame's title bar or a wire for what can be done
+to it.
 
 ## Laya in a task
 
@@ -649,6 +685,12 @@ trigger), **Duplicate** (a copy is created **disabled** so it can't double-fire)
 panel shows the last runs (time · OK/ERR · duration). While editing, :kbd[Ctrl+Z] / :kbd[Ctrl+Y]
 undo and redo, and any single step has its own *run just this step* button.
 
+**Folders and tags.** In the editor's sidebar, under the name, give a task a **folder** (one level,
+for example *DCS*) and **tags**. The list then groups tasks by folder (click a folder to fold it; the
+count says how many are on), shows the tags on each row, and offers them as filters above the list;
+the search reads names, descriptions, folders and tags. A task carrying files shows a **Package**
+chip.
+
 ## Starting from a template
 
 A new task opens with a **Browse templates…** button (the count beside it is how many there
@@ -732,6 +774,109 @@ reads either.
     removed, and never registers an OS-level scheduled task. BMM then says what the file had
     asked for, so you can grant what you actually want rather than working out why an imported
     task does nothing. **Load example** drops in a ready-made (disabled) task you can dissect.
+
+## Automation packages
+
+A `.bmmpa` carries steps. A **package** carries the steps **and the files they act on**: a script
+to put in a game, the mod list to check against, a small mod, any file to place.
+
+**Attaching files.** In the editor's sidebar, **Files** lists what the task carries: **Add a file**
+or **Add a folder**. They are copied into BMM's package store (next to its data, one folder per
+version of the set, named by its hash), so a task saved earlier keeps pointing at exactly the files
+it was saved with. Steps then pick a file *of the package* from a list.
+
+**Exporting.** **Export** in the editor offers **Package (.bmmbundle)**: the automation and its
+files in one signed file. **Importing** one (Automations, Import) shows it first: who signed it (or
+that nothing proves who made it), its files, its automations and the permissions they ask for. They
+arrive switched off with every permission taken away, like any import, and linked to the verified
+copy of the package.
+
+### The format
+
+It is not a new container. A package is a `.bmmbundle`, the zip BMM already uses for a catalogue
+that carries its own files:
+
+| Entry | What it is |
+|---|---|
+| `bmm_signature.json` | The signed list of every entry and its SHA-256 (the same block a `.mm`, a `.bmmplug` or a `.bmmtheme` carries). |
+| `automation.bmmpa` | The automation, `version: 2`, itself signed, with a `package` block listing every payload file, its SHA-256 and its size. |
+| `catalog.json` | One preset pointing at `automation.bmmpa`, so a catalogue reader sees an automation it can install. |
+| `files/…` | The payloads. |
+
+Opening one is refused when the signature no longer matches the entries, when a file is not the
+one the document lists (or is not listed at all), or when a name tries to leave `files/`. It is
+extracted by the same code as a mod archive (zip-slip refused, size budget), and is at most 512 MB:
+big mods come from the catalogue or a repo, with their own checks. A `.bmmpa` version 1 still opens
+everywhere it did; a version 2 opened as a plain file imports its steps, and its file steps say
+the package is missing.
+
+### The steps
+
+| Step | What it does | Needs |
+|---|---|---|
+| **Install a file the automation carries** (`pkg.install`) | Copies a file or folder of the package into the DCS Saved Games folders (all, or one), the active profile's game folder or its mods folder, at a sub-folder you name (relative, no `..`, no drive). Before anything is copied, a BMM dialog shows the file, its size, the package, whether it is signed, and where it goes; *Show the file* displays a script. The answer is kept as a receipt and asked again only for a different version of the package (or every time, if you tick it). Sets `pkg.consent`, `pkg.installed`. | **Place packaged files** |
+| **Check a carried file is in place** (`pkg.verify`) | Is it there, identical (SHA-256), in every folder it covers? Sets `pkg.ok`, `pkg.missing`, `{pkg.report}`. | nothing |
+| **Check a mod list is active and intact** (`modlist.verify`) | For a `.mm` (a path, or the one the package carries): every mod installed and switched on, nothing else on with *Only these mods*, every file a mod deployed still in the game folder, every file the list hashes identical in the mod. Changes nothing. Sets `list.ok`, `list.missing`, `list.inactive`, `list.altered`, `list.extra`, `{list.report}`, `{list.path}` and `{list.fingerprint}` (16 characters, the same for the same list on every machine). | nothing |
+| **Write the result for the server** (`gate.report`) | Writes `Config\bmm-joingate.json` under each DCS folder from the last list check, signed with your BMM key. The place is fixed: a task chooses what is reported, never where. | **Place packaged files** |
+| **Start a game with arguments** (`game.launch`) | Starts an `.exe` with an argument list (no shell, nothing re-parsed) and does not wait for it; can put a text on the clipboard first. Sets `game.pid`. | **Run external programs** |
+| **Ask a question** (`ui.ask`) | A BMM dialog with two buttons; `ask.yes` is 1 for the first. Branch with an **If**. | nothing |
+
+The two file checks and **Ask** need nothing; placing a file and starting a program need their
+grants, and an imported task never arrives holding them.
+
+## The DCS server join gate
+
+A template made from answers: **Templates → DCS: server join gate**, then a short form.
+
+1. **The form asks** the server address, its name (for the messages), the server's mod list
+   (`.mm`, its fingerprint shows as soon as you pick it), *Only these mods*, whether **the server
+   checks players** (whitelist on), where `DCS.exe` is (guessed from your DCS profile) and launch
+   arguments. Two unticked boxes grant **Place packaged files** and **Run external programs**: tick
+   them, or the steps stop and say which is missing.
+2. **Dry run** shows every step, what it would do and what it would be refused, and *measures* the
+   two checks: whether your list would pass right now, and whether the hook is in place.
+3. **Create** builds the package (the hook, the server script and the list) and puts the
+   automation in the editor, in three frames: *Hook*, *Check the mods*, *Join, or fix*. Save it.
+
+When you run it:
+
+- **Hook** (only when the server checks players): `pkg.install` asks you, then copies
+  `BMM-JoinGate.lua` into `Saved Games\DCS*\Scripts\Hooks`; `pkg.verify` checks it is there,
+  identical. Not there: it says so and stops.
+- **Check the mods**: `modlist.verify`, then (server checks players) `gate.report` writes the result.
+- **Passing**: DCS starts with your arguments and the server address is on the clipboard. DCS has
+  no supported command-line option to join a server, so BMM does not invent one: in DCS, open
+  **Multiplayer**, **Connect by IP**, paste.
+- **Failing**: DCS does not start. A dialog lists what is wrong (not installed, switched off,
+  changed files, other mods on) and offers **Fix it**: BMM switches the list on and installs what is
+  missing from the sources the list names (`modlist.apply`), checks again, writes the new result,
+  and asks whether to start DCS. **Not now** ends the run without joining.
+
+### For server admins: enforcing it
+
+The kick is the server's, never BMM's. The package carries `BMM-JoinGate-Server.lua`; **Show the
+server script** in the form displays it.
+
+1. Copy it into your dedicated server's `Saved Games\DCS.server\Scripts\Hooks\` and restart.
+2. Put your list's fingerprint in `fingerprints` (keep the old one too while players update).
+3. Leave `enforce = false` for a session: `dcs.log` shows `[BMMGATE] passed`, `not passing` or
+   `would kick` for each player. Then set `enforce = true`.
+
+How it works: when a player's mission starts, the client hook sends one chat line starting with
+`[BMMGATE]` (result, fingerprint, time). The server script hides that line from everyone, accepts
+a passing result with a fingerprint you listed that is recent enough (`max_age`), and kicks, with
+your `message`, a player who sent none within `grace` seconds. `exempt` lists UCIDs it never
+acts on.
+
+!!! warning "A convenience check, not anti-cheat"
+
+    The line is written by the player's own PC and a determined player can forge it. The gate
+    makes sure honest players arrive with the right mods and get a clear message when they do not;
+    DCS's own integrity check stays your tool for the rest. Nothing here touches the server from
+    BMM or works around DCS or a server's rules.
+
+To hand the gate to your players, open the automation and **Export → Package (.bmmbundle)**: they
+import one file, read what it is, fill in where DCS is, and grant the two permissions themselves.
 
 ## Publish a catalogue of your own
 

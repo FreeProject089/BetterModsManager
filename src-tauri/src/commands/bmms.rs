@@ -1264,11 +1264,11 @@ impl P {
                     let tok = self.peek().clone();
                     let p = self.word("a permission")?;
                     match p.as_str() {
-                        "command" | "script" | "deeplink" | "stopProcess" | "delete" | "resources" | "tasks" | "network" | "ai" | "navigate" => { perms.insert(p, Value::Bool(true)); }
+                        "command" | "script" | "deeplink" | "stopProcess" | "delete" | "resources" | "tasks" | "network" | "ai" | "navigate" | "files" => { perms.insert(p, Value::Bool(true)); }
                         other => {
                             return Err(Diagnostic::at(
                                 &tok,
-                                format!("`{}` is not a permission. They are: command, script, deeplink, stopProcess, delete, resources, tasks, network, ai, navigate.", other),
+                                format!("`{}` is not a permission. They are: command, script, deeplink, stopProcess, delete, resources, tasks, network, ai, navigate, files.", other),
                             ))
                         }
                     }
@@ -2342,7 +2342,7 @@ pub fn bmms_decompile(task: Value) -> String {
     // `perms` would silently drop permissions it really has.
     let mut granted: Vec<&str> = Vec::new();
     if let Some(p) = task.get("perms").and_then(|x| x.as_object()) {
-        for k in ["command", "script", "deeplink", "stopProcess", "delete", "resources", "tasks", "network", "ai", "navigate"] {
+        for k in ["command", "script", "deeplink", "stopProcess", "delete", "resources", "tasks", "network", "ai", "navigate", "files"] {
             if p.get(k) == Some(&Value::Bool(true)) {
                 granted.push(k);
             }

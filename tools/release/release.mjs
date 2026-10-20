@@ -33,6 +33,7 @@ const HELP = `BMM release tool
   --skip-bmm-build     build: pass -SkipBmmBuild to release.ps1 (reuse the built exe)
   --no-bundles         build: no Tauri NSIS/MSI extras
   --lenient-artifacts  verify: a failed check-release-versions --artifacts is a warning
+  --no-compile         media: do not run tsc first (the compiled files must still be newer than the sources)
   --no-screenshots     media: cards only
   --tasky app|br|off   media: Tasky in screenshots (default app: top-left over the window's corner, as in BMM)
   --no-tasky           media: screenshots without Tasky
@@ -41,7 +42,7 @@ const HELP = `BMM release tool
   --bench-skip-run     bench: rebuild the report from results on disk
   --bench-only rust,js,hyperfine,mem
   --gource-seconds N   gource: target length (default 75)
-  --no-credits         gource: leave frontend/assets/videos/credits_bg.mp4 alone
+  --no-credits         gource: leave frontend/assets/videos/credits_bg.mp4 alone (gource runs BEFORE build so the installer ships the new one)
   --no-wait            do not wait for an idle machine (skip heavy steps when busy, unless --force)
   --force              run heavy steps even when the machine is busy
   --max-cpu N          bench: other programs may use at most N % CPU (default 10; a game is « busy »)
@@ -78,6 +79,7 @@ function parseArgs(argv) {
       case '--gifs': o.gifs = true; break;
       case '--bench-skip-run': o.benchSkipRun = true; break;
       case '--bench-only': o.benchOnly = next().split(','); break;
+      case '--no-compile': o.noCompile = true; break;
       case '--gource-seconds': o.gourceSeconds = +next(); break;
       case '--no-credits': o.noCredits = true; break;
       case '--no-wait': o.noWait = true; break;
@@ -90,13 +92,15 @@ function parseArgs(argv) {
   return o;
 }
 
+/** The steps asked for, in the order of STEPS (never the order typed: gource must precede build). */
 function resolveSteps(list) {
-  return list.map((s) => {
+  const picked = list.map((s) => {
     const byNum = /^\d+$/.test(s) ? STEPS[+s - 1] : null;
     const st = byNum ?? STEPS.find((x) => x.id === s.toLowerCase());
     if (!st) throw new Error(`unknown step « ${s} » (${STEPS.map((x) => x.id).join(', ')})`);
     return st;
   });
+  return STEPS.filter((s) => picked.includes(s));
 }
 
 async function main() {
