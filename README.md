@@ -1,10 +1,10 @@
 <div align="center">
 
-  <img src=".github/screenshots/hero.png" alt="Better Mod Manager 1.0.2" width="100%" />
+  <img src=".github/screenshots/hero.png" alt="Better Mod Manager 1.0.3" width="100%" />
 
   # Better Mod Manager
 
-  ![Version](https://img.shields.io/badge/version-1.0.2-blue.svg?style=flat-square)
+  ![Version](https://img.shields.io/badge/version-1.0.3-blue.svg?style=flat-square)
   ![License](https://img.shields.io/badge/license-GPL--3.0-green.svg?style=flat-square)
   ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-important?style=flat-square)
 
@@ -18,7 +18,7 @@ always be turned off cleanly. Modpacks, `.MM` lists, Server Repo sync and hostin
 Catalog, optional offline AI (Laya), a scheduler, plugins, themes, and a CLI, MCP server and
 local API.
 
-**[Read the README in English](README_EN.md)** · [What's new in 1.0.2](Update/changelog_v1.0.2_EN.md)
+**[Read the README in English](README_EN.md)** · [What's new in 1.0.3](Update/changelog_v1.0.3_EN.md)
 
 ## Français
 
@@ -28,7 +28,7 @@ contrôle SHA-256, pour pouvoir toujours le désactiver proprement. Modpacks, li
 synchronisation et hébergement Serveur Repo, Catalogue d'applications, IA hors ligne facultative
 (Laya), planificateur, plugins, thèmes, ainsi qu'une CLI, un serveur MCP et une API locale.
 
-**[Lire le README en français](README_FR.md)** · [Nouveautés de la 1.0.2](Update/changelog_v1.0.2_FR.md)
+**[Lire le README en français](README_FR.md)** · [Nouveautés de la 1.0.3](Update/changelog_v1.0.3_FR.md)
 
 ---
 
