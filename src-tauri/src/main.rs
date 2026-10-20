@@ -713,8 +713,6 @@ fn main() {
             commands::settings::import_language,
             commands::settings::import_language_data,
             commands::settings::get_resource_debug_info,
-            commands::settings::get_tutorial_assets_path,
-            commands::settings::export_tutorial_assets,
             commands::settings::exit_app,
             commands::mods::open_folder,
             commands::mods::open_external,

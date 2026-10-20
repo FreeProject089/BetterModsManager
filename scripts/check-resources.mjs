@@ -46,7 +46,6 @@ const DECLARED = [
     { path: 'TOS.md', by: 'settings.rs — get_eula_text' },
     { path: 'TOS_FR.md', by: 'settings.rs — get_eula_text, format!("TOS_{LANG}.md")' },
     { path: 'Lang/en.json', by: 'settings.rs — get_available_languages' },
-    { path: 'assets/tutorial-assets', by: 'settings.rs — tutorial asset lookup' },
     { path: 'frontend/assets/links.json', by: 'discord.rs — Discord RPC ids' },
     { path: 'builtin-themes', by: 'themes.rs — list_builtin_themes' },
     // get_eula_text also tries EULA_{LANG}.md and EULA.md, but only AFTER TOS.md, which is

@@ -229,10 +229,6 @@
     "fs::copy": {
       "count": 2,
       "why": "TODO(G7): triage; small or one-shot, confirm exempt"
-    },
-    "fs_extra::": {
-      "count": 2,
-      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
     }
   },
   "src/commands/sched_net.rs": {
