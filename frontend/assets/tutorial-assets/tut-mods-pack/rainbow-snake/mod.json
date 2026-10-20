@@ -1,7 +1,0 @@
-{
-  "name": "Rainbow Snake",
-  "target": "snake-game",
-  "version": "1.0.0",
-  "main": "rainbow.js",
-  "description": "Cycles the snake's color through every hue of the rainbow as it moves."
-}

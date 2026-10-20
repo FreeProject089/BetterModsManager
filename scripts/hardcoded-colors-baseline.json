@@ -1,6 +1,4 @@
 [
-  "frontend/assets/tutorial-assets/flappy-game/game.html::html, body { margin: 0; height: 100%; background: #0b1220; color: #fff; font-family: system-ui, sans-serif; overflow: hidden; }",
-  "frontend/assets/tutorial-assets/snake-game/game.html::html, body { margin: 0; height: 100%; background: #0b1220; color: #fff; font-family: system-ui, sans-serif; overflow: hidden; }",
   "frontend/css/community.css::.community-lightbox-close { position: fixed; top: 18px; right: 22px; background: rgba(0, 0, 0, .4); border: 1px solid rgba(255, 255, 255, .18); color: #fff; width: 34px; height: 34px; border-radius: 50%; font-size: 16px; cursor: pointer; line-height: 1; }",
   "frontend/css/main.css::.credit-icon-box-discord { background: rgba(88,101,242,0.1); color: #5865F2; }",
   "frontend/css/main.css::.credit-title-discord { color: #8b9dfa; font-size: 15px; }",
