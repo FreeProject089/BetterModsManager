@@ -3,9 +3,10 @@
  * Handles bmm:// protocol links for one-click mod installation.
  */
 
-import { invoke, apiBase, pickFolder, pickFolderAt, askConfirm } from './api.js';
+import { invoke, apiBase, pickFolder, pickFolderAt } from './api.js';
 import { toast } from '../ui/app.js';
 import { t } from './i18n.js';
+import { confirmAction } from '../ui/verify.js';
 import { refreshMods } from '../features/mods/mods.js';
 import { escHtml } from './utils.js';
 import type { Profile } from '../types/models.js';
@@ -524,10 +525,12 @@ async function handleDeepLink(urlStr: string, originIn: LinkOrigin = 'unknown'):
             const dir = parsedUrl.searchParams.get('dir') || '';
             if (!dir) { toast(t('repo.ssh.pickExportFirst'), 'error'); return; }
             const { pullStoredTarget } = await import('../features/repo/repo-ssh.js');
-            const ok = await askConfirm(
-                t('repo.ssh.pullConfirm').replace('{dir}', dir),
-                { title: t('repo.ssh.pull'), type: 'warning' },
-            );
+            const ok = await confirmAction({
+                title: t('repo.ssh.pull'),
+                message: t('repo.ssh.pullConfirm').replace('{dir}', dir),
+                confirmLabel: t('vfy.b.fetch'),
+                tone: 'warn',
+            });
             if (!ok) return;
             toast(t('repo.ssh.testing'), 'info');
             try {
@@ -1033,10 +1036,12 @@ async function handleDeepLink(urlStr: string, originIn: LinkOrigin = 'unknown'):
         // again in a second.
         if (action === 'catalog/delete') {
             const kind = parsedUrl.searchParams.get('type') || 'app';
-            const ok = await askConfirm(
-                (t('cat.deleteAsk') || 'Delete the {k} catalogue you author on this machine?').replace('{k}', kind),
-                { title: t('cat.deleteTitle') || 'Delete a catalogue', type: 'warning' },
-            );
+            const ok = await confirmAction({
+                title: t('cat.deleteTitle') || 'Delete a catalogue',
+                message: (t('cat.deleteAsk') || 'Delete the {k} catalogue you author on this machine?').replace('{k}', kind),
+                confirmLabel: t('common.delete'),
+                tone: 'danger',
+            });
             if (!ok) return;
             try {
                 await invoke('catalog_drop', { kind });

@@ -92,6 +92,11 @@ export function reasonText(note: string): string {
         rate_limited: t('ai.reason.rateLimited'),
         unavailable: t('ai.reason.unavailable'),
         unreachable: t('ai.reason.unreachable'),
+        // The generator (commands/ai_gen.rs, ai_core::test_connection): what exactly failed.
+        refused: t('ai.gen.code.refused'),
+        wrong_path: t('ai.gen.code.wrong_path'),
+        no_models: t('ai.gen.code.no_models'),
+        model_error: t('ai.gen.code.model_error'),
         timeout: t('ai.reason.timeout'),
         insufficient: t('ai.reason.insufficient'),
         no_model: t('ai.reason.noModel'),

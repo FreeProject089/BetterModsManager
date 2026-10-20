@@ -1,5 +1,9 @@
 # Server Repo
 
+:::tip[Prefer it step by step?]
+The task version of this page is [Follow a repo](doc-page:guide/follow-a-repo): short steps, what you should see, a picture and a Show me button.
+:::
+
 
 A **Server Repo** is a shared, versioned collection of mods. Two things flow through it: you
 **sync** mods *from* a repo into a profile, and BMM uses the repo to tell you when those mods

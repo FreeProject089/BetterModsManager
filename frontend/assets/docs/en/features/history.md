@@ -51,7 +51,7 @@ with this filter*.
 **Release notes** (from the update window, or *Show what's new* in the command palette) has two
 tabs:
 
-- **Versions**: every version's notes in one list, newest first. Each version carries counts (*n
+- **Versions**: **What's new in 1.0** is pinned above the list: the major release told as one story (profiles, order, sharing, plugins, Laya, updates), which matters more than any patch. Under it, every version's notes in one list, newest first. Every version's header has a **What's new in 1.0** button too. Each version carries counts (*n
   new, n improved, n fixed*) and a tag: **Installed** for yours, **Newer** for versions above it.
   The search box finds the versions that mention a word, and says *No version mentions this* when
   none does. Where there are several documents for one version (changelog, release notes, GitHub

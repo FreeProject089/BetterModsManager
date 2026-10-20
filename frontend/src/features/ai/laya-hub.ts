@@ -5,11 +5,15 @@
 // short card — the master state and one line per part — and « Gérer Laya » opens a dialog.
 //
 // The dialog is organised by what a person wants to do, not by which module owns the setting:
-//   · Aperçu            — is Laya on (the one switch), is its model there, where it runs, what
-//                         leaves this PC; then what it does for you; the engines behind « Avancé ».
+//   · Aperçu            — is Laya on (the one switch), what it does for you, the built-in model.
+//   · Fournisseurs      — who writes (« Rédaction »: LM Studio, Ollama, llama.cpp, an online API:
+//                         find models, test the connection step by step) and who sorts.
+//   · Rédaction         — the drafting workbench (laya-draft.ts).
 //   · Exigence          — how sure Laya must be (presets first, fine numbers behind « Avancé »).
 //   · Mes tâches        — the user's own labels (ai-tuning.ts renders this pane too).
 //   · Pour les programmes — the local API.
+//   · Confidentialité   — what leaves this PC with this setup, and the last connection check.
+// The header says the state at a glance: on/off, the model, the writer.
 // The cards are mounted once, into the dialog's panes, and re-render there on their own.
 //
 // The summary card keeps the old AI card's id, so a saved card order, the Ask index and the
@@ -27,10 +31,15 @@ const CARD_ID = 'settings-ai-section';
 const IC = (uiIcon('ai', 16));
 const IC_BTN = (uiIcon('settings', 14));
 
-type Tab = 'general' | 'answers' | 'tasks' | 'api';
-const TABS: Tab[] = ['general', 'answers', 'tasks', 'api'];
+export type Tab = 'general' | 'providers' | 'drafting' | 'answers' | 'tasks' | 'api' | 'privacy';
+const TABS: Tab[] = ['general', 'providers', 'drafting', 'answers', 'tasks', 'api', 'privacy'];
+/** The rows of the Settings summary card (Privacy is one click away in the dialog). */
+const SUMMARY: Tab[] = ['general', 'providers', 'drafting', 'answers', 'tasks', 'api'];
 /** Where each tab's figures are read from, in the mounted cards (their own pills). */
-const SOURCE: Record<Tab, string> = { general: '#ai-statusline', answers: '#lt-pill', tasks: '#lt-tasks-pill', api: '#ai-api-pill' };
+const SOURCE: Record<Tab, string> = {
+    general: '#ai-statusline', providers: '#ai-prov-summary', drafting: '#ai-draft-summary', answers: '#lt-pill',
+    tasks: '#lt-tasks-pill', api: '#ai-api-pill', privacy: '#ai-privacy-summary',
+};
 
 let _overlay: HTMLElement | null = null;
 let _opener: HTMLElement | null = null;
@@ -39,6 +48,9 @@ let _tab: Tab = 'general';
 function tabName(tab: Tab): string {
     switch (tab) {
         case 'general': return t('ai.hub.tabGeneral');
+        case 'providers': return t('ai.hub.tabProviders');
+        case 'drafting': return t('ai.hub.tabDrafting');
+        case 'privacy': return t('ai.hub.tabPrivacy');
         case 'answers': return t('ai.hub.tabAnswers');
         case 'tasks': return t('ai.hub.tabTasks');
         default: return t('ai.hub.tabApi');
@@ -59,7 +71,7 @@ function overlay(): HTMLElement {
     // The house anatomy: icon tile, title + one-line state, the on/off chip, the ×; the tabs
     // as a segmented rail in the toolbar band; the panes scroll in the body.
     o.innerHTML = `
-      <div class="modal bms modal--lg modal--tall laya-modal" role="dialog" aria-modal="true" aria-labelledby="laya-title">
+      <div class="modal bms modal--xl modal--tall laya-modal" role="dialog" aria-modal="true" aria-labelledby="laya-title">
         <div class="modal-header">
           <div class="bms-icon" aria-hidden="true">${IC}</div>
           <div class="bms-titles">
@@ -122,8 +134,10 @@ function paintShell(): void {
 function paintHead(): void {
     const o = _overlay;
     if (!o) return;
+    // « Model: installed · Writer: LM Studio · qwen2.5 »: read from the Overview card.
     const sub = o.querySelector('#laya-sub');
-    if (sub) sub.textContent = t('ai.hub.lead');
+    const g = o.querySelector<HTMLElement>('#laya-general-card');
+    if (sub) sub.textContent = g?.dataset.headModel ? t('ai.hub.headState', { model: g.dataset.headModel || '', writer: g.dataset.headWriter || '' }) : t('ai.hub.lead');
     const pill = o.querySelector('#ai-pill');
     const chip = o.querySelector<HTMLElement>('#laya-head-chip');
     if (chip) {
@@ -149,6 +163,8 @@ function select(tab: Tab, focus = false): void {
     }
     const body = o.querySelector<HTMLElement>('.laya-body');
     if (body) body.scrollTop = 0;
+    // Seven tabs can be wider than the rail: keep the chosen one in sight.
+    try { o.querySelector<HTMLElement>(`#laya-tab-${tab}`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch { /* old engines */ }
     if (focus) o.querySelector<HTMLElement>(`#laya-tab-${tab}`)?.focus();
 }
 
@@ -181,7 +197,7 @@ function paintCard(): void {
     if (!card) return;
     const pill = _overlay?.querySelector('#ai-pill');
     const on = !!pill?.classList.contains('ai-pill-on');
-    const rows = TABS.map((k) => {
+    const rows = SUMMARY.map((k) => {
         const v = textOf(SOURCE[k]) || t('ai.settings.unavailable');
         return `<button type="button" class="laya-sum-row" data-open="${k}"><span class="laya-sum-k">${escHtml(tabName(k))}</span><span class="laya-sum-v">${escHtml(v)}</span>${uiIcon('chevron-right', 14, { cls: 'laya-sum-go' })}</button>`;
     }).join('');
@@ -220,7 +236,8 @@ export async function mountLayaHub(): Promise<void> {
     }
     const o = overlay();
     const pane = (k: Tab) => o.querySelector<HTMLElement>(`#laya-pane-${k}`) as HTMLElement;
-    try { await (await import('./ai-settings.js')).mountAiSettings(pane('general')); } catch (e) { /* card shows nothing */ }
+    try { await (await import('./ai-settings.js')).mountAiSettings(pane('general'), pane('providers'), pane('privacy')); } catch (e) { /* card shows nothing */ }
+    try { const d = await import('./laya-draft.js'); await d.mountDraftPane(pane('drafting')); d.installDraftHooks(); } catch (e) { /* idem */ }
     try { await (await import('./ai-tuning.js')).mountLayaTuning(pane('answers'), pane('tasks')); } catch (e) { /* idem */ }
     try { await (await import('../settings/ai-api-card.js')).mountAiApiCard(pane('api')); } catch (e) { /* idem */ }
     paintCard();
@@ -236,5 +253,7 @@ export async function mountLayaHub(): Promise<void> {
             queueMicrotask(() => { pending = false; paintCard(); paintHead(); });
         }).observe(o.querySelector('.laya-body') as HTMLElement, { childList: true, subtree: true, characterData: true });
         document.addEventListener('langChanged', () => { paintShell(); paintCard(); });
+        // The panes ask for another tab this way (ai-settings « Try drafting », laya-draft « Set up »).
+        document.addEventListener('bmm:open-laya', (e) => { const tab = (e as CustomEvent).detail?.tab as Tab; openLaya(TABS.includes(tab) ? tab : undefined); });
     }
 }

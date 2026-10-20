@@ -185,6 +185,7 @@ const GLYPHS = {
     'align-justify': ['align-justify', '<path d="M3 5h18"/><path d="M3 12h18"/><path d="M3 19h18"/>'],
     // Settings card headers (one glyph per card subject, css/settings-page.css).
     keyboard: ['keyboard', '<path d="M10 8h.01"/><path d="M12 12h.01"/><path d="M14 8h.01"/><path d="M16 12h.01"/><path d="M18 8h.01"/><path d="M6 8h.01"/><path d="M7 16h10"/><path d="M8 12h.01"/><rect width="20" height="16" x="2" y="4" rx="2"/>'],
+    mouse: ['mouse', '<rect x="5" y="2" width="14" height="20" rx="7"/><path d="M12 6v4"/>'],
     scan: ['scan-search', '<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="3"/><path d="m16 16-1.9-1.9"/>'],
     volume: ['volume2', '<path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.364 18.364a9 9 0 0 0 0-12.728"/>'],
     record: ['circle-dot', '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1"/>'],

@@ -917,3 +917,70 @@ button.doc-card-title:hover { color: var(--bmm-accent, #3b82f6); }
   color: color-mix(in srgb, var(--bmm-accent) 72%, var(--bmm-text-primary));
 }
 .dh-ask:hover { background: color-mix(in srgb, var(--bmm-accent) 18%, transparent); }
+
+/* ── guide pages: « Show me » buttons, tickable steps, click-to-play GIFs (doc-guide-ui.ts) ── */
+.dh-show {
+    display: inline-flex; align-items: center; gap: 6px; margin: 2px 2px 2px 0; padding: 5px 12px;
+    border-radius: 999px; cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 700; line-height: 1.3;
+    background: var(--bmm-accent, #3b82f6); color: var(--bmm-text-on-accent, #fff);
+    border: 1px solid transparent; vertical-align: baseline;
+    transition: transform .14s, box-shadow .14s;
+}
+.dh-show:hover { transform: translateY(-1px); box-shadow: var(--bmm-shadow-card, 0 8px 20px -10px rgba(0,0,0,.6)); }
+.dh-show:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: 2px; }
+.dh-show > svg { flex: none; }
+
+.dh-ck-count { margin: 10px 0 4px; font-size: 12px; font-weight: 700; letter-spacing: .02em; color: var(--bmm-text-muted, #7c8698); }
+.dh-ck-count.is-done { color: var(--bmm-success); }
+.dh-tasks { list-style: none; margin: 0 0 6px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.dh-task > label {
+    display: flex; align-items: flex-start; gap: 11px; padding: 10px 12px; cursor: pointer;
+    border-radius: 10px; border: 1px solid var(--bmm-border, #2a3242); background: var(--bmm-bg-elevated, #1a2130);
+    transition: border-color .14s, background .14s;
+}
+.dh-task > label:hover { border-color: var(--bmm-border-hover, #3a4556); }
+.dh-task input[type="checkbox"] { flex: none; width: 17px; height: 17px; margin: 2px 0 0; accent-color: var(--bmm-accent, #3b82f6); cursor: pointer; }
+.dh-task > label > span { min-width: 0; line-height: 1.5; }
+.dh-task.is-done > label { background: color-mix(in srgb, var(--bmm-success) 8%, var(--bmm-bg-elevated, #1a2130)); }
+.dh-task.is-done > label > span { color: var(--bmm-text-secondary, #a3adba); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--bmm-text-secondary) 55%, transparent); }
+.dh-ck-reset { margin: 4px 0 14px; padding: 3px 0; border: 0; background: none; cursor: pointer; font: inherit; font-size: 12px; color: var(--bmm-text-muted, #7c8698); text-decoration: underline; text-underline-offset: 3px; }
+.dh-ck-reset:hover { color: var(--bmm-text-primary, #e6edf3); }
+
+.dh-gif-fig { margin: 6px 0 18px; }
+.dh-gif-fig > figcaption { margin-top: 6px; font-size: 12px; color: var(--bmm-text-muted, #7c8698); }
+.dh-gifcard {
+    position: relative; display: block; width: 100%; padding: 0; cursor: pointer; overflow: hidden; line-height: 0;
+    border-radius: var(--bmm-radius-card, 12px); border: 1px solid var(--bmm-border, #2a3242); background: var(--bmm-bg-base, #0f1420);
+}
+.dh-gifcard:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: 2px; }
+.dh-gifcard canvas, .dh-gifcard img { display: block; width: 100%; height: auto; }
+.dh-gifcard img.dh-md-img { margin: 0; border: 0; border-radius: 0; }
+.dh-gif-badge {
+    position: absolute; left: 12px; bottom: 12px; display: inline-flex; align-items: center; gap: 7px; padding: 6px 13px 6px 10px;
+    border-radius: 999px; font-size: 12.5px; font-weight: 700; line-height: 1.2;
+    background: var(--bmm-accent, #3b82f6); color: var(--bmm-text-on-accent, #fff); box-shadow: 0 6px 18px -6px rgba(0,0,0,.6);
+    transition: transform .14s;
+}
+.dh-gifcard:hover .dh-gif-badge { transform: scale(1.05); }
+.dh-gifcard.is-playing .dh-gif-badge { display: none; }
+@media (prefers-reduced-motion: reduce) { .dh-show, .dh-gif-badge { transition: none; } }
+
+/* « I want to… » on the User guide landing. */
+.dh-guide-band { margin: 0 0 22px; padding: 16px 16px 14px; border-radius: var(--bmm-radius-card, 16px); border: 1px solid var(--bmm-border, #2a3242); background: var(--bmm-bg-elevated, #1a2130); }
+.dh-guide-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.dh-guide-h h3 { margin: 0; padding: 0; border: 0; font-size: 17px; font-weight: 800; letter-spacing: -0.01em; }
+.dh-guide-all { display: inline-flex; align-items: center; gap: 5px; padding: 3px 0; border: 0; background: none; cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--bmm-text-secondary, #a3adba); }
+.dh-guide-all:hover { color: var(--bmm-text-primary, #e6edf3); }
+.dh-guide-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; }
+.dh-guide-i {
+    display: flex; flex-direction: column; gap: 4px; align-items: flex-start; text-align: left; cursor: pointer; padding: 11px 13px;
+    border-radius: 11px; border: 1px solid var(--bmm-border, #2a3242); background: var(--bmm-bg-base, #0f1420); color: inherit; font-family: inherit;
+    transition: border-color .14s, transform .14s;
+}
+.dh-guide-i:hover { border-color: var(--bmm-border-accent, var(--bmm-accent, #3b82f6)); transform: translateY(-1px); }
+.dh-guide-t { font-size: 14px; font-weight: 700; }
+.dh-guide-s { font-size: 12px; line-height: 1.4; color: var(--bmm-text-secondary, #a3adba); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.dh-guide-m { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 600; color: var(--bmm-text-muted, #7c8698); }
+.dh-content ul.dh-tasks { padding-left: 0; }
+.dh-content ul.dh-tasks > li { padding-left: 0; margin-bottom: 0; color: var(--bmm-text-primary, #e6edf3); }
+.dh-content ul.dh-tasks > li::before { content: none; }

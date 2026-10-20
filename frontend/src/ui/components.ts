@@ -211,7 +211,7 @@ export function getModCardHTML(mod, ctx) {
     `;
 }
 
-// The mod details moved to a side drawer: features/mods/mod-drawer-view.ts (markup) and
+// The mod details open in a dialog over the library: features/mods/mod-detail-view.ts (markup) and
 // mods-details.ts (wiring).
 
 // Two menu entries have to close the dropdown before they act, or the modal they open is

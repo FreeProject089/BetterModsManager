@@ -1,5 +1,9 @@
 # Install BMM
 
+:::tip[Prefer it step by step?]
+The task version of this page is [Update BMM](doc-page:guide/update-bmm): short steps, what you should see, a picture and a Show me button.
+:::
+
 BMM is a **Windows** application. Installing it takes three steps:
 
 1. Download **`BMM-Setup.exe`** from the latest release:

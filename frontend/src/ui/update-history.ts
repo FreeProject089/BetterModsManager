@@ -71,7 +71,13 @@ export async function mountVersionHistory(modal: HTMLElement, notes: NoteFile[],
     const listEl = modal.querySelector('#un-vlist') as HTMLElement | null;
     const notesEl = modal.querySelector('#un-vnotes') as HTMLElement | null;
     const search = modal.querySelector('#un-vsearch') as HTMLInputElement | null;
+    // The 1.0 story (Update/whats-new-1.0_<LANG>.md): not a version of its own, so it is pinned
+    // above the list. The major release matters more than any patch, and a reader who opens the
+    // window should see it before the patch counts.
+    const big = notes.find((n) => /^whats-new-1.0_/i.test(n.filename));
+    const BIG = '__whats-new-1.0';
     let sel = versions.find((v) => v.version === installed)?.version || versions[0]?.version || '';
+    if (big && !installed) sel = BIG;
     let query = '';
 
     const showTab = (tab: 'versions' | 'docs') => {
@@ -90,7 +96,17 @@ export async function mountVersionHistory(modal: HTMLElement, notes: NoteFile[],
         c.fixed ? `<span class="un-count is-fixed">${escHtml(t('update.countFixed', { n: String(c.fixed) }))}</span>` : '',
     ].join('');
 
+    const pinEl = big && listEl ? document.createElement('button') : null;
+    if (pinEl && listEl) {
+        pinEl.type = 'button';
+        pinEl.className = 'un-pin';
+        pinEl.innerHTML = `${uiIcon('star', 14)}<span class="un-pin-t"><span class="un-pin-n">${escHtml(t('update.whatsNew1'))}</span><span class="un-pin-s">${escHtml(t('update.whatsNew1Sub'))}</span></span>`;
+        listEl.parentElement?.insertBefore(pinEl, listEl);
+        pinEl.addEventListener('click', () => { sel = BIG; renderList(); void renderSel(); });
+    }
+
     const renderList = () => {
+        pinEl?.classList.toggle('is-sel', sel === BIG);
         if (!listEl) return;
         const shown = versions.filter((v) => !query || v.version.includes(query) || v.main.content.toLowerCase().includes(query));
         if (!shown.length) {
@@ -113,11 +129,23 @@ export async function mountVersionHistory(modal: HTMLElement, notes: NoteFile[],
 
     const renderSel = async () => {
         if (!notesEl) return;
+        if (sel === BIG && big) {
+            notesEl.innerHTML = `<header class="un-nhead">
+                    <span class="un-nver">${escHtml(t('update.whatsNew1'))}</span>
+                    <span class="un-tag is-major">${escHtml(t('update.whatsNew1Tag'))}</span>
+                    <button type="button" class="btn btn-ghost btn-xs un-open-doc" data-un-doc="${escAttr(big.path)}">${uiIcon('file', 12)}<span>${escHtml(t('update.openFile'))}</span></button>
+                </header>
+                <div class="dh-content un-md"></div>`;
+            notesEl.scrollTop = 0;
+            await renderNotes(notesEl.querySelector('.un-md') as HTMLElement, big.content);
+            return;
+        }
         const v = versions.find((x) => x.version === sel);
         if (!v) { notesEl.innerHTML = `<p class="un-empty">${escHtml(t('update.noVersions'))}</p>`; return; }
         notesEl.innerHTML = `<header class="un-nhead">
                 <span class="un-nver">${escHtml(t('update.versionN', { v: v.version }))}</span>
                 <span class="un-vkind">${escHtml(kindLabel(v.kind))}</span>
+                ${big ? `<button type="button" class="btn btn-ghost btn-xs un-to-big" data-un-big>${uiIcon('star', 12)}<span>${escHtml(t('update.whatsNew1'))}</span></button>` : ''}
                 <button type="button" class="btn btn-ghost btn-xs un-open-doc" data-un-doc="${escAttr(v.main.path)}">${uiIcon('file', 12)}<span>${escHtml(t('update.openFile'))}</span></button>
             </header>
             ${v.others.length ? `<div class="un-others"><span>${escHtml(t('update.alsoFor'))}</span>${v.others.map((o) => `<button type="button" class="btn btn-ghost btn-xs" data-un-doc="${escAttr(o.path)}">${escHtml(kindLabel(kindOf(o.filename)!))}</button>`).join('')}</div>` : ''}
@@ -145,6 +173,7 @@ export async function mountVersionHistory(modal: HTMLElement, notes: NoteFile[],
         (listEl.querySelector('.un-vrow.is-sel') as HTMLElement | null)?.focus();
     });
     notesEl?.addEventListener('click', (e) => {
+        if ((e.target as HTMLElement).closest('[data-un-big]')) { e.preventDefault(); pinEl?.click(); return; }
         const b = (e.target as HTMLElement).closest<HTMLElement>('[data-un-doc]');
         if (!b?.dataset.unDoc) return;
         e.preventDefault();

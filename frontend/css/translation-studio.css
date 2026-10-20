@@ -243,6 +243,24 @@
 .tst-uline:hover { background: var(--bmm-s05); }
 .tst-ufile { font-family: var(--bmm-font-mono); font-size: 11.5px; font-weight: 600; overflow-wrap: anywhere; }
 .tst-uln { color: var(--bmm-text-secondary); font-family: var(--bmm-font-mono); font-size: 11px; font-variant-numeric: tabular-nums; }
+
+/* Every place a key is used: a view, what sits there, and a button that goes to it. */
+.tst-uhead { display: flex; align-items: center; gap: 6px; margin: 8px 0 3px; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--bmm-text-secondary); }
+.tst-uhead:first-child { margin-top: 0; }
+.tst-place { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 7px 8px; border-radius: 8px; border: 1px solid var(--bmm-border); background: var(--bmm-s02); }
+.tst-place + .tst-place { margin-top: 4px; }
+.tst-place-main { min-width: 0; flex: 1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+.tst-place-view { font-size: 12px; font-weight: 700; color: var(--bmm-text-primary); }
+.tst-place-ctx { min-width: 0; font-size: 12px; color: var(--bmm-text-secondary); overflow-wrap: anywhere; }
+.tst-place-tag { font-size: 10.5px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: var(--bmm-s05); color: var(--bmm-text-secondary); }
+.tst-place-loc { border: 0; background: none; padding: 0; cursor: pointer; font-family: var(--bmm-font-mono); font-size: 11px; color: var(--bmm-text-secondary); }
+.tst-place-loc:hover { color: var(--bmm-accent); text-decoration: underline; }
+.tst-place-note { flex-basis: 100%; font-size: 11.5px; line-height: 1.45; color: var(--bmm-text-secondary); }
+.tst-place > .btn { flex-shrink: 0; }
+
+/* The ring that says « here »: accent, soft, and it settles after three beats. */
+.tst-pulse { outline: 2px solid var(--bmm-accent) !important; outline-offset: 3px !important; border-radius: 6px; animation: tstPulse 1s ease-out 3; }
+@keyframes tstPulse { from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--bmm-accent) 55%, transparent); } to { box-shadow: 0 0 0 14px transparent; } }
 .tst-usnip { min-width: 0; font-family: var(--bmm-font-mono); font-size: 11px; color: var(--bmm-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tst-muted, .tst-hint { margin: 0; font-size: 12px; line-height: 1.55; color: var(--bmm-text-secondary); }
 
@@ -295,5 +313,6 @@ body.tst-picking, body.tst-picking * { cursor: crosshair !important; }
 
 @media (prefers-reduced-motion: reduce) {
     .tst.is-open, .tst-flash { animation: none; }
+    .tst-pulse { animation: none; }
     .tst-more > summary::before { transition: none; }
 }

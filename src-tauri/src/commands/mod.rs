@@ -4,6 +4,7 @@ pub mod task_output;
 pub mod sched_runs;
 pub mod sched_net;
 pub mod sched_maint;
+pub mod sched_pkg;
 pub mod resources;
 pub mod resources_live;
 pub mod resources_rules;
@@ -123,3 +124,5 @@ mod ai_eval;
 pub mod ai;
 // Laya in the feedback dialog, the crash manager and the debug menu.
 pub mod ai_assist;
+// « Rédaction »: the generator's address, model list, connection probe and streamed drafts.
+pub mod ai_gen;

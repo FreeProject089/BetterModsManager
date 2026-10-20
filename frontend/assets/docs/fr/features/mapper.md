@@ -1,5 +1,9 @@
 # Mapper
 
+:::tip[Tu préfères pas à pas ?]
+La version « tâche » de cette page est [Réparer un mod que le jeu ignore](doc-page:guide/fix-a-mod) : de courtes étapes, ce que tu dois voir, une image et un bouton Montre-moi.
+:::
+
 
 Certains mods sont mal empaquetés. Les fichiers sont bons ; les dossiers autour, non. Le
 Mapper corrige ça sans que tu dézippes quoi que ce soit à la main.

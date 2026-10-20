@@ -5,6 +5,7 @@
 import { invoke } from '../../core/api.js';
 import { toast, fetchProfileIconPaths, updateSelectProfileIcon, decorateProfileOptions } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
+import { confirmAction } from '../../ui/verify.js';
 import { dispatchBmmAction, BMM_ACTIONS, onBmmAction } from '../../ui/tutorial-events.js';
 import { escHtml } from '../../core/utils.js';
 import { bindModal } from '../../ui/modal-shell.js';
@@ -132,7 +133,7 @@ export async function initMapper() {
     previewBtn?.addEventListener('click', showMapperPreview);
     refreshBtn?.addEventListener('click', async () => {
         if (pendingChangeCount() > 0) {
-            if (!confirm(t("mapper.confirmRefresh")))
+            if (!(await confirmAction({ title: t('vfy.t.mapperRefresh'), message: t('mapper.confirmRefresh'), confirmLabel: t('vfy.b.refreshAnyway'), tone: 'warn' })))
                 return;
         }
         // All three: the confirm says the unsaved changes go, and a deletion or a new folder

@@ -16,6 +16,7 @@ import { t } from '../core/i18n.js';
 import { openModal } from './modal-shell.js';
 import { escAttr, escHtml } from '../core/utils.js';
 import { ISO_NAMES, isoIconUrl } from '../core/icon-cdn.js';
+import { savedIcons, renameIcon, forgetIcons, importIconFiles, exportIcons } from './icon-mine.js';
 let _lucide = null;
 let _simple = null;
 let _lucideP = null;
@@ -181,7 +182,7 @@ export function renderPackIcon(ref, size = 16, color) {
     return '';
 }
 // ── The picker ───────────────────────────────────────────────────────────────
-const PAGE = 240; // grid cells rendered per "show more" — 5000 nodes at once is jank
+const PAGE = 120; // cells appended per scroll step: the grid grows as you reach its end, 5000 nodes at once is jank
 /** Open the icon picker. Resolves to a ref ("lucide:x" | "si:x" | "data:...") or
  *  null (cancelled). `current` pre-fills the search with the current ref's name. */
 /** Words people type for icons that are filed under a different name.
@@ -242,53 +243,7 @@ function scoreIcon(name, label, tokens) {
     // A short name that matched is a closer answer than a long one that also matched.
     return score * 1000 - n.length;
 }
-// ── Your own icons ───────────────────────────────────────────────────────────
-//
-// An uploaded image used to be handed straight back and forgotten, so using the same icon
-// on a second button meant finding the file and uploading it again. They are kept here
-// instead, and become a third source in the picker.
-//
-// localStorage, not a file: an icon is already stored INSIDE whatever uses it (a data URL on
-// the tag, the profile, the nav item), so this is a convenience list, not the copy of record.
-// Losing it costs a re-upload and breaks nothing that already uses one.
-const MINE_KEY = 'bmm_icon_library';
-const MINE_MAX = 40; // a picker, not an asset manager
-const MINE_MAX_BYTES = 2_000_000; // localStorage is small and shared with the whole app
-export function savedIcons() {
-    try {
-        const raw = JSON.parse(localStorage.getItem(MINE_KEY) || '[]');
-        return Array.isArray(raw) ? raw.filter((x) => x && typeof x.data === 'string') : [];
-    }
-    catch {
-        return [];
-    } // corrupt storage must not take the picker down
-}
-/** Remember one uploaded icon. Returns the ref the caller should use. */
-export function saveIcon(name, dataUrl) {
-    const list = savedIcons();
-    // Same bytes twice is the same icon — uploading a file you already have should not
-    // fill the list with copies of it.
-    const existing = list.find((x) => x.data === dataUrl);
-    if (existing)
-        return existing.data;
-    const entry = { id: dataUrl, name: name.replace(/\.[a-z0-9]+$/i, '').slice(0, 40) || 'icon', data: dataUrl, at: Date.now() };
-    let next = [entry, ...list].slice(0, MINE_MAX);
-    // And a hard byte ceiling, because one 128 KB icon times forty is a quota error that
-    // would surface as some unrelated setting failing to save.
-    while (next.length > 1 && next.reduce((n, x) => n + x.data.length, 0) > MINE_MAX_BYTES)
-        next.pop();
-    try {
-        localStorage.setItem(MINE_KEY, JSON.stringify(next));
-    }
-    catch { /* full — the icon still works, it just is not remembered */ }
-    return dataUrl;
-}
-export function forgetIcon(id) {
-    try {
-        localStorage.setItem(MINE_KEY, JSON.stringify(savedIcons().filter((x) => x.id !== id)));
-    }
-    catch { /* ignore */ }
-}
+export { savedIcons, saveIcon, forgetIcon } from './icon-mine.js';
 export function openIconPicker(opts = {}) {
     return new Promise((resolve) => {
         document.getElementById('bmm-icon-picker')?.remove();
@@ -299,11 +254,11 @@ export function openIconPicker(opts = {}) {
                         <button class="ipk-tab active" data-src="lucide">Lucide</button>
                         <button class="ipk-tab" data-src="si">${t('iconpack.brands') || 'Brands'}</button>
                         <button class="ipk-tab" data-src="iso">${t('iconpack.iso') || 'Isometric'}</button>
-                        <button class="ipk-tab" data-src="mine">${t('iconpack.mine') || 'Yours'}</button>
+                        <button class="ipk-tab" data-src="mine">${t('iconpack.mineTab') || 'My icons'}</button>
                         <label class="ipk-tab ipk-tab-upload" for="ipk-upload">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M5 20h14"/></svg>
-                            ${t('iconpack.upload') || 'Upload…'}
-                            <input type="file" id="ipk-upload" accept="image/png,image/jpeg,image/svg+xml,image/webp,image/gif" hidden></label>`;
+                            ${t('iconpack.upload') || 'Import…'}
+                            <input type="file" id="ipk-upload" multiple accept="image/png,image/jpeg,image/svg+xml,image/webp,image/gif,application/json,.json,.zip,application/zip" hidden></label>`;
         // The house shell (openModal): the sources ride in the header between the title and
         // the ×, the search is a toolbar band that never scrolls, the grid is the one scroller.
         // openModal measures the stack itself, so a picker opened from the tutorial creator
@@ -329,8 +284,7 @@ export function openIconPicker(opts = {}) {
                             <input type="checkbox" id="ipk-tint-on"> ${escHtml(t('iconpack.tint') || 'Colour')}
                         </label>
                         <input type="color" id="ipk-tint" value="#3b82f6" disabled>
-                    </div>
-                    <button class="btn btn-ghost btn-sm" id="ipk-more" style="display:none">${t('iconpack.more') || 'Show more'}</button>`,
+                    </div>`,
             onClose: () => resolve(picked),
         });
         m.footer?.classList.add('ipk-foot');
@@ -341,13 +295,26 @@ export function openIconPicker(opts = {}) {
                     <input id="ipk-search" placeholder="${escAttr(t('iconpack.search') || 'Search 5000+ icons…')}" autocomplete="off" spellcheck="false">
                 </div>`;
         m.header.after(toolbar);
+        const mineBar = document.createElement('div');
+        mineBar.className = 'modal-toolbar ipk-minebar';
+        mineBar.hidden = true;
+        mineBar.innerHTML = `<button type="button" class="btn btn-ghost btn-sm" id="ipk-m-select">${escHtml(t('iconpack.select') || 'Select')}</button>
+                    <button type="button" class="btn btn-ghost btn-sm" id="ipk-m-import">${escHtml(t('iconpack.importMany') || 'Import files…')}</button>
+                    <button type="button" class="btn btn-ghost btn-sm" id="ipk-m-json">${escHtml(t('iconpack.exportJson') || 'Export JSON')}</button>
+                    <button type="button" class="btn btn-ghost btn-sm" id="ipk-m-zip">${escHtml(t('iconpack.exportZip') || 'Export zip')}</button>
+                    <button type="button" class="btn btn-ghost btn-sm ipk-danger" id="ipk-m-del" hidden>${escHtml(t('iconpack.deleteSel') || 'Delete selected')}</button>
+                    <span class="ipk-drophint">${escHtml(t('iconpack.dropHint') || 'Drop SVG or PNG files anywhere to add them')}</span>`;
+        toolbar.after(mineBar);
         const overlay = m.overlay;
         const grid = overlay.querySelector('#ipk-grid');
         const search = overlay.querySelector('#ipk-search');
         const countEl = overlay.querySelector('#ipk-count');
-        const moreBtn = overlay.querySelector('#ipk-more');
         let src = 'lucide';
         let shown = PAGE;
+        let curAll = [];
+        let selecting = false;
+        const picks = new Set();
+        let mineMeta = new Map();
         const done = (ref) => { picked = ref; m.close(); };
         const names = () => {
             if (src === 'ours') {
@@ -358,6 +325,7 @@ export function openIconPicker(opts = {}) {
             if (src === 'mine') {
                 const q = search.value.trim().toLowerCase();
                 const mine = savedIcons();
+                mineMeta = new Map(mine.map((x) => [x.id, { name: x.name }]));
                 return q ? mine.filter((x) => x.name.toLowerCase().includes(q)).map((x) => x.id) : mine.map((x) => x.id);
             }
             const pool = src === 'lucide' ? Object.keys(_lucide || {}) : src === 'iso' ? [...ISO_NAMES] : Object.keys(_simple || {});
@@ -390,25 +358,64 @@ export function openIconPicker(opts = {}) {
                     + `${renderPackIcon(`iso:${n}`, 26)}<span class="ipk-name">${escHtml(n)}</span></button>`;
             }
             if (src === 'mine') {
-                // `n` IS the data URL — a saved icon has no pack prefix, because what the
-                // caller stores is the image itself. Colour does not apply: tinting somebody
-                // else's PNG is not something this can honestly offer.
-                const meta = savedIcons().find((x) => x.id === n);
-                const label = meta?.name || 'icon';
-                return `<button type="button" class="ipk-cell ipk-cell-mine" data-ref="${escAttr(n)}" title="${escAttr(label)}">`
-                    + `<img src="${escAttr(n)}" width="20" height="20" alt="">`
+                // `n` IS the data URL: a saved icon has no pack prefix, what the caller stores is the
+                // image itself. Colour does not apply to somebody else's image.
+                const label = mineMeta.get(n)?.name || 'icon';
+                return `<button type="button" class="ipk-cell ipk-cell-mine${picks.has(n) ? ' ipk-selected' : ''}" data-ref="${escAttr(n)}" title="${escAttr(label)}">`
+                    + `<img src="${escAttr(n)}" width="22" height="22" alt="" style="object-fit:contain">`
                     + `<span class="ipk-name">${escHtml(label)}</span>`
+                    + `<span class="ipk-forget ipk-rename-btn" data-rename="${escAttr(n)}" title="${escAttr(t('iconpack.rename') || 'Rename')}">\u270e</span>`
                     + `<span class="ipk-forget" data-forget="${escAttr(n)}" title="${escAttr(t('iconpack.forget') || 'Remove from your icons')}">\u00d7</span></button>`;
             }
             const ref = withIconColour(`${src}:${n}`, chosenColour());
             const label = src === 'si' ? (_simple?.[n]?.t || n) : n;
             return `<button type="button" class="ipk-cell" data-ref="${escAttr(`${src}:${n}`)}" title="${escAttr(label)}">${renderPackIcon(ref, 20)}<span class="ipk-name">${escHtml(label)}</span></button>`;
         };
+        // Infinite scroll: a sentinel after the last cell; when it comes into view the next chunk
+        // is appended before it. Re-observing after each append re-fires the observer, so a tall
+        // window fills itself without a scroll. Cells use content-visibility, so the browser does
+        // not lay out or paint the ones that are off screen.
+        const sentinel = document.createElement('div');
+        sentinel.className = 'ipk-sentinel';
+        const io = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting))
+            loadMore(); }, { root: grid, rootMargin: '400px' });
+        const loadMore = () => {
+            io.unobserve(sentinel);
+            if (shown >= curAll.length) {
+                sentinel.remove();
+                return;
+            }
+            const page = curAll.slice(shown, shown + PAGE);
+            shown += PAGE;
+            sentinel.insertAdjacentHTML('beforebegin', page.map(cellHtml).join(''));
+            if (shown < curAll.length)
+                io.observe(sentinel);
+            else
+                sentinel.remove();
+        };
         const render = () => {
-            const all = names();
-            grid.innerHTML = all.slice(0, shown).map(cellHtml).join('');
-            countEl.textContent = `${all.length}`;
-            moreBtn.style.display = all.length > shown ? '' : 'none';
+            curAll = names();
+            grid.textContent = '';
+            grid.insertAdjacentHTML('beforeend', curAll.slice(0, shown).map(cellHtml).join(''));
+            grid.appendChild(sentinel);
+            countEl.textContent = `${curAll.length}`;
+            grid.scrollTop = 0;
+            if (shown < curAll.length)
+                io.observe(sentinel);
+            else
+                sentinel.remove();
+            if (src === 'mine' && !curAll.length)
+                grid.innerHTML = `<div class="ipk-loading">${escHtml(t('iconpack.mineEmpty') || 'Nothing here yet. Import SVG or PNG files, or drop them here.')}</div>`;
+            syncMineBar();
+        };
+        const syncMineBar = () => {
+            mineBar.hidden = src !== 'mine';
+            mineBar.querySelector('#ipk-m-select').classList.toggle('active', selecting);
+            const del = mineBar.querySelector('#ipk-m-del');
+            del.hidden = !picks.size;
+            del.textContent = `${t('iconpack.deleteSel') || 'Delete selected'} (${picks.size})`;
+            mineBar.querySelector('#ipk-m-json').textContent = picks.size ? (t('iconpack.exportJsonSel') || 'Export selected (JSON)') : (t('iconpack.exportJson') || 'Export JSON');
+            mineBar.querySelector('#ipk-m-zip').textContent = picks.size ? (t('iconpack.exportZipSel') || 'Export selected (zip)') : (t('iconpack.exportZip') || 'Export zip');
         };
         // The colour is part of the answer, not a separate setting: it rides the ref
         // the caller stores, so it survives every share the icon does.
@@ -441,25 +448,51 @@ export function openIconPicker(opts = {}) {
             const forget = e.target.closest('[data-forget]');
             if (forget) {
                 e.stopPropagation();
-                forgetIcon(forget.dataset.forget);
+                picks.delete(forget.dataset.forget);
+                forgetIcons([forget.dataset.forget]);
                 shown = PAGE;
                 render();
+                return;
+            }
+            const ren = e.target.closest('[data-rename]');
+            if (ren) {
+                e.stopPropagation();
+                const id = ren.dataset.rename;
+                const nameEl = ren.parentElement.querySelector('.ipk-name');
+                const inp = document.createElement('input');
+                inp.className = 'ipk-rename';
+                inp.value = mineMeta.get(id)?.name || '';
+                inp.maxLength = 40;
+                nameEl.replaceWith(inp);
+                inp.focus();
+                inp.select();
+                let fin = false;
+                const commit = (ok) => { if (fin)
+                    return; fin = true; if (ok && inp.value.trim())
+                    renameIcon(id, inp.value); render(); };
+                inp.addEventListener('click', (ev) => ev.stopPropagation());
+                inp.addEventListener('keydown', (ev) => { ev.stopPropagation(); if (ev.key === 'Enter')
+                    commit(true);
+                else if (ev.key === 'Escape')
+                    commit(false); });
+                inp.addEventListener('blur', () => commit(true));
                 return;
             }
             const cell = e.target.closest('.ipk-cell');
             if (!cell?.dataset.ref)
                 return;
+            if (src === 'mine' && selecting) {
+                const id = cell.dataset.ref;
+                if (picks.has(id))
+                    picks.delete(id);
+                else
+                    picks.add(id);
+                cell.classList.toggle('ipk-selected', picks.has(id));
+                syncMineBar();
+                return;
+            }
             // A saved/our icon is already a complete answer; only tintable pack refs take a colour.
             done((src === 'mine' || src === 'ours' || src === 'iso') ? cell.dataset.ref : withIconColour(cell.dataset.ref, chosenColour()));
-        });
-        // Append the new page instead of re-rendering everything: a full rebuild
-        // made each successive click slower (quadratic over 15 pages of brands).
-        moreBtn.addEventListener('click', () => {
-            const all = names();
-            const page = all.slice(shown, shown + PAGE);
-            shown += PAGE;
-            grid.insertAdjacentHTML('beforeend', page.map(cellHtml).join(''));
-            moreBtn.style.display = all.length > shown ? '' : 'none';
         });
         let deb;
         search.addEventListener('input', () => { clearTimeout(deb); deb = setTimeout(() => { shown = PAGE; render(); }, 120); });
@@ -475,28 +508,48 @@ export function openIconPicker(opts = {}) {
             syncColourUi();
             // Colour controls are meaningless over an uploaded image, and an empty
             // "Yours" tab needs to say why rather than look broken.
-            if (src === 'mine' && !savedIcons().length) {
-                grid.innerHTML = `<div class="ipk-loading">${escHtml(t('iconpack.mineEmpty') || 'Nothing here yet — upload an icon and it stays in this tab.')}</div>`;
-            }
         }));
-        overlay.querySelector('#ipk-upload').addEventListener('change', (e) => {
-            const file = e.target.files?.[0];
-            if (!file)
+        // Every way in goes through importIconFiles: several files at once, SVG sanitised, size
+        // capped, bundles and zips accepted. One image from the Import tab is also the answer
+        // (the old upload behaviour); several land in My icons.
+        const importFiles = async (files, pickSingle) => {
+            if (!files.length)
                 return;
-            // Embedded in whatever carries the icon (tag, profile, share) — keep it small.
-            if (file.size > 128 * 1024) {
-                window.toast?.(t('iconpack.tooBig') || 'Image must be under 128 KB', 'warning');
+            const res = await importIconFiles(files);
+            const toast = window.toast;
+            if (res.skipped.length)
+                toast?.((t('iconpack.skipped') || 'Skipped (not a usable image, or over 128 KB): {0}').replace('{0}', res.skipped.slice(0, 3).join(', ') + (res.skipped.length > 3 ? '…' : '')), 'warning');
+            if (pickSingle && files.length === 1 && res.added.length === 1) {
+                done(res.added[0].data);
                 return;
             }
-            const reader = new FileReader();
-            reader.onload = () => {
-                if (typeof reader.result !== 'string')
-                    return;
-                // Remembered before it is returned, so the same icon is one click away next
-                // time instead of another trip through the file dialog.
-                done(saveIcon(file.name, reader.result));
-            };
-            reader.readAsDataURL(file);
+            if (res.added.length)
+                toast?.((t('iconpack.imported') || '{0} icon(s) added to My icons').replace('{0}', String(res.added.length)), 'success');
+            overlay.querySelector('.ipk-tab[data-src="mine"]')?.dispatchEvent(new Event('click'));
+        };
+        const upload = overlay.querySelector('#ipk-upload');
+        upload.addEventListener('change', () => { const f = Array.from(upload.files || []); upload.value = ''; void importFiles(f, true); });
+        mineBar.querySelector('#ipk-m-import').addEventListener('click', () => upload.click());
+        const exp = (kind) => { const n = exportIcons(kind, [...picks]); if (!n)
+            window.toast?.(t('iconpack.nothingToExport') || 'No icons to export yet', 'warning'); };
+        mineBar.querySelector('#ipk-m-json').addEventListener('click', () => exp('json'));
+        mineBar.querySelector('#ipk-m-zip').addEventListener('click', () => exp('zip'));
+        mineBar.querySelector('#ipk-m-select').addEventListener('click', () => { selecting = !selecting; if (!selecting)
+            picks.clear(); render(); });
+        mineBar.querySelector('#ipk-m-del').addEventListener('click', () => { forgetIcons([...picks]); picks.clear(); shown = PAGE; render(); });
+        overlay.addEventListener('dragover', (e) => { if (e.dataTransfer?.types.includes('Files')) {
+            e.preventDefault();
+            overlay.classList.add('ipk-dropping');
+        } });
+        overlay.addEventListener('dragleave', (e) => { if (e.target === overlay)
+            overlay.classList.remove('ipk-dropping'); });
+        overlay.addEventListener('drop', (e) => {
+            const files = Array.from(e.dataTransfer?.files || []);
+            if (!files.length)
+                return;
+            e.preventDefault();
+            overlay.classList.remove('ipk-dropping');
+            void importFiles(files, false);
         });
         const initSrc = opts.current?.startsWith('si:') ? 'si' : opts.current?.startsWith('app:') ? 'ours' : opts.current?.startsWith('iso:') ? 'iso' : null;
         if (initSrc) {

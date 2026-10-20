@@ -1,5 +1,9 @@
 # Modpacks
 
+:::tip[Prefer it step by step?]
+The task version of this page is [Share a modpack](doc-page:guide/share-a-modpack): short steps, what you should see, a picture and a Show me button.
+:::
+
 
 A modpack is a **named bundle of mods you can toggle in one click**. Where a
 [profile](doc-page:features/profiles) is "my setup for this game", a modpack is "this group of mods,

@@ -369,6 +369,32 @@ export function moveStep(root: AnyStep[], layout: FlowLayout | undefined, path: 
     return { path: b, layout: out };
 }
 
+/**
+ * Wire a step after another: move the step at `from` so it runs right after the step at
+ * `after`, in that step's body. What dragging a wire from one node's output onto another node
+ * means on a canvas that draws a TREE: there are no free-floating wires to keep, so connecting
+ * two nodes is placing one after the other.
+ *
+ * Refused (null) when it would put a step inside itself, or move it onto itself. The moved step
+ * drops its own hand-placed offsets (it lands at its automatic place); the others keep theirs.
+ */
+export function relocateStep(root: AnyStep[], layout: FlowLayout | undefined, from: string, after: string): { path: string; layout: FlowLayout | undefined } | null {
+    if (from === after || after.startsWith(from + '.')) return null;
+    const moving = resolve(root, from) as AnyStep | undefined;
+    const anchor = resolve(root, after) as AnyStep | undefined;
+    if (!moving || !anchor || typeof moving !== 'object' || typeof anchor !== 'object') return null;
+    // Already right after it: nothing to do.
+    const a = slotOf(after), f = slotOf(from);
+    if (a.slot === f.slot && f.index === a.index + 1) return null;
+    let lay = removeStep(root, layout, from);
+    const at = findPath(root, anchor);
+    if (at === null) return null;
+    const { slot, index } = slotOf(at);
+    const r = insertStep(root, lay, slot, index + 1, moving);
+    lay = r.layout;
+    return { path: r.path, layout: lay };
+}
+
 // ── Keyboard ────────────────────────────────────────────────────────────────────────────────
 
 /** The node the arrow keys reach from `id`: Left/Right along the reading order, Up/Down across lanes. */
@@ -489,7 +515,7 @@ export function marksForDraft(saved: AnyStep[] | null | undefined, record: Param
 // runAction and evalConditionRaw to prove the two lists are the same list. The executor still
 // decides; this only lets the flow say so before the run does.
 
-export type PermKey = 'command' | 'script' | 'deeplink' | 'stopProcess' | 'delete' | 'resources' | 'tasks' | 'network' | 'ai' | 'navigate';
+export type PermKey = 'command' | 'script' | 'deeplink' | 'stopProcess' | 'delete' | 'resources' | 'tasks' | 'network' | 'ai' | 'navigate' | 'files';
 interface PermRule { perm: PermKey; label: string; when?: (p: Record<string, any>) => boolean }
 
 const DL: PermRule = { perm: 'deeplink', label: 'sched.permDeeplink' };
@@ -499,6 +525,7 @@ const TASKS: PermRule = { perm: 'tasks', label: 'sched.permTasks' };
 const NET: PermRule = { perm: 'network', label: 'sched.permNetwork' };
 const AI: PermRule = { perm: 'ai', label: 'sched.permAi' };
 const NAV: PermRule = { perm: 'navigate', label: 'sched.permNavigate' };
+const FILES: PermRule = { perm: 'files', label: 'sched.permFiles' };
 
 export const ACTION_PERMS: Record<string, PermRule> = {
     'app.stop': { perm: 'stopProcess', label: 'sched.permStopProcess' },
@@ -538,6 +565,10 @@ export const ACTION_PERMS: Record<string, PermRule> = {
     'catalog.install': NET,
     // A local-API route reaches whatever the app exposes: the deeplink grant's meaning.
     'api.call': DL,
+    // Packages and games (sched-pkg.ts): placing a carried file, writing the gate report, and
+    // starting a game. Checking a file or a mod list, and asking a question, need nothing.
+    'pkg.install': FILES, 'gate.report': FILES,
+    'game.launch': { perm: 'command', label: 'sched.permRunCommand' },
 };
 
 /** Second needs of one step: « explain » with a remote writer also reaches the network. */

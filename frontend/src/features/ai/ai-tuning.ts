@@ -6,7 +6,8 @@
 //
 // Rust decides (commands/ai_tuning.rs): it validates every save and applies the settings at
 // each AI call. This card edits a copy and sends it to `ai_laya_save`.
-import { invoke, askConfirm } from '../../core/api.js';
+import { invoke } from '../../core/api.js';
+import { confirmAction } from '../../ui/verify.js';
 import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { ensureAiCss, reasonText } from './ai-shared.js';
@@ -406,7 +407,7 @@ function wire(card: HTMLElement): void {
         } catch (err) { say(errText(String((err as Error)?.message || err)), 'err'); }
     });
     q('#lt-reset')?.addEventListener('click', async () => {
-        if (!(await askConfirm(t('ai.lt.resetConfirm')))) return;
+        if (!(await confirmAction({ title: t('ai.lt.resetTitle'), message: t('ai.lt.resetConfirm'), confirmLabel: t('ai.lt.resetBtn'), tone: 'danger' }))) return;
         try {
             const v = await invoke('ai_laya_save', { config: { ...normConfig({}), allow_program_changes: false } }) as View;
             _draft = normConfig(v?.config); _presets = v?.presets || _presets; _dirty = false; _edit = -1; _area = 'global';
@@ -453,7 +454,7 @@ function wireTasks(card: HTMLElement, changed: () => void, rerender: () => void)
     card.querySelectorAll<HTMLButtonElement>('[data-task-edit]').forEach((b) => b.addEventListener('click', () => { const i = Number(b.dataset.taskEdit); _edit = _edit === i ? -1 : i; rerender(); }));
     card.querySelectorAll<HTMLButtonElement>('[data-task-del]').forEach((b) => b.addEventListener('click', async () => {
         const i = Number(b.dataset.taskDel);
-        if (!(await askConfirm(t('ai.lt.deleteConfirm', { name: cfg().tasks[i]?.name || '' })))) return;
+        if (!(await confirmAction({ title: t('ai.lt.deleteTitle'), message: t('ai.lt.deleteConfirm', { name: cfg().tasks[i]?.name || '' }), confirmLabel: t('ai.lt.deleteBtn'), tone: 'danger' }))) return;
         _draft = { ...cfg(), tasks: cfg().tasks.filter((_, j) => j !== i) };
         _edit = -1; changed(); rerender();
     }));

@@ -9,6 +9,7 @@
  */
 import { invoke } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
+import { confirmAction } from '../../ui/verify.js';
 import { toast } from '../../ui/app.js';
 export { registerDebugSection, getDebugSections } from './debug-sections.js';
 let _ui = null;
@@ -84,7 +85,7 @@ export function initDebugMenu() {
     const resetAppBtn = document.getElementById('btn-debug-reset-app');
     if (resetAppBtn) {
         resetAppBtn.addEventListener('click', async () => {
-            const confirmed = confirm(t('settings.debugResetConfirm') || "DANGER: This will delete everything (Profiles, Mods, Settings). Are you sure?");
+            const confirmed = await confirmAction({ title: t('vfy.t.resetAll'), message: t('settings.debugResetConfirm'), confirmLabel: t('vfy.b.resetAll'), tone: 'danger' });
             if (confirmed) {
                 try {
                     // 1. Reset backend (data.json)
@@ -106,8 +107,7 @@ export function initDebugMenu() {
     const factoryBtn = document.getElementById('btn-factory-reset');
     if (factoryBtn) {
         factoryBtn.addEventListener('click', async () => {
-            const confirmed = confirm((window.t ? window.t('settings.factoryResetConfirm') : '') ||
-                'Reset BMM to a fresh install? Profiles, mods and settings are cleared. A backup of your current data is saved first. Continue?');
+            const confirmed = await confirmAction({ title: t('vfy.t.factory'), message: t('settings.factoryResetConfirm'), confirmLabel: t('vfy.b.factory'), tone: 'danger' });
             if (!confirmed)
                 return;
             try {

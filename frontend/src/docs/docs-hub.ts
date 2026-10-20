@@ -27,6 +27,10 @@ import { uiIcon } from '../ui/icons.js';
 import { docReplaysEnabled, loadDocReplaysSetting } from './doc-replays.js';
 import { readReplayBody } from '../core/replay-body.js';
 import { invoke } from '../core/api.js';
+// « Show me » buttons, tickable steps and click-to-play GIFs in the guide pages (doc-guide-ui.ts;
+// the allow-list of what a button may do is doc-actions.ts).
+import { onShowClick, onTaskClick, hydrateTasks, hydrateGifs } from './doc-guide-ui.js';
+import type { ShowDeps } from './doc-actions.js';
 
 // The published mkdocs documentation site (see BMM Docs/mkdocs.yml site_url).
 const DOCS_SITE = 'https://freeproject089.github.io/BMM-Docs/';
@@ -961,7 +965,7 @@ La référence complète champ par champ, avec chaque clé optionnelle et un tab
       {
         id: 'scheduler', view: 'settings', diagram: 'scheduler', docsPath: 'features/scheduler/',
         title: { en: 'Scheduling & automation', fr: 'Planification & automatisation' },
-        summary: { en: 'A real automation builder — triggers, conditions, loops and 137 actions.', fr: 'Un vrai constructeur d’automatisations — déclencheurs, conditions, boucles et 137 actions.' },
+        summary: { en: 'A real automation builder — triggers, conditions, loops and 143 actions.', fr: 'Un vrai constructeur d’automatisations — déclencheurs, conditions, boucles et 143 actions.' },
         keywords: 'scheduler cron automate task timer trigger loop condition bmmpa planificateur automatiser boucle',
         body: {
           en: `The **Scheduler** turns BMM into an automation tool: a task pairs a **trigger** (when) with a **workflow** (what) — and workflows can branch, loop and wait, not just run a flat list.
@@ -2735,8 +2739,8 @@ Automatise-le depuis le [Planificateur](doc:scheduler) : benchmarke un disque, a
         summary: { en: 'Three tools that answer what the compiler cannot: the module graph, the Rust API surface, and what a change actually touches.', fr: 'Trois outils qui répondent à ce que le compilateur ignore : le graphe de modules, la surface d’API Rust, et ce qu’un changement touche vraiment.' },
         keywords: 'dependency graph cycles orphan invoke api surface test impact coverage carte graphe cycle couverture',
         body: {
-          en: '<p>Two boundaries in BMM have <b>no type checking behind them</b>, and the test suite is far smaller than the codebase. Three developer tools answer what the compiler cannot. None of them ships in the app; they read the source and print a structure.</p><p><b>The module graph</b> (<code>npm run map:deps</code>) reads every import. It names the hub &mdash; <code>core/i18n.ts</code> is imported by 100 modules, so a change there is never small &mdash; the modules nothing reachable ever imports, and the import cycles. A cycle is legal in ES modules and harmless until one member reads a binding at evaluation time; then it is <code>undefined</code> at runtime with a stack pointing at the wrong file. The CI gate is a <b>ratchet against a committed baseline</b>, not a demand for zero: there are 94 cycles today, and a gate insisting on zero on day one is a gate somebody switches off in week two.</p><p><b>The API map</b> (<code>npm run map:api</code>) covers the boundary with the Rust core. <code>invoke</code> is non-generic and returns <code>Promise&lt;any&gt;</code>, so TypeScript checks nothing about those calls &mdash; a typo compiles and fails at runtime as a rejected promise. 671 commands are registered, 534 are called from the frontend. The 62 with no frontend caller are reported as exactly that and <b>never as unused</b>: the MCP server, the CLI and <code>bmm://</code> deeplinks reach commands the interface never touches.</p><p><b>The impact analyser</b> (<code>npm run impact</code>) says which tests reach your change, and &mdash; the useful half &mdash; which changed files no test reaches. It follows the dependency graph, so a test importing one module counts as reaching what that module imports. It therefore <b>over-reports coverage and under-reports gaps</b>, which is what makes the gap list worth trusting: <code>ui/app.ts</code> and <code>features/mods/mods.ts</code>, the two largest modules here, are reached by no test at all.</p>',
-          fr: '<p>Deux frontières de BMM n\'ont <b>aucun typage derrière elles</b>, et la suite de tests est bien plus petite que le code. Trois outils de développement répondent à ce que le compilateur ignore. Aucun n\'est embarqué dans l\'app : ils lisent les sources et impriment une structure.</p><p><b>Le graphe de modules</b> (<code>npm run map:deps</code>) lit chaque import. Il nomme le pivot &mdash; <code>core/i18n.ts</code> est importé par 100 modules, un changement là n\'est jamais petit &mdash; les modules que rien d\'atteignable n\'importe, et les cycles d\'import. Un cycle est légal en modules ES et inoffensif jusqu\'à ce qu\'un membre lise une liaison à l\'évaluation ; c\'est alors <code>undefined</code> à l\'exécution, avec une pile qui pointe le mauvais fichier. La barrière CI est un <b>cliquet contre une référence versionnée</b>, pas une exigence de zéro : il y a 94 cycles aujourd\'hui, et une barrière qui exige zéro dès le premier jour est une barrière que quelqu\'un désactive la deuxième semaine.</p><p><b>La carte d\'API</b> (<code>npm run map:api</code>) couvre la frontière avec le cœur Rust. <code>invoke</code> n\'est pas générique et renvoie <code>Promise&lt;any&gt;</code> : TypeScript ne vérifie rien de ces appels &mdash; une faute de frappe compile et échoue à l\'exécution en promesse rejetée. 671 commandes enregistrées, 534 appelées depuis le frontend. Les 62 sans appelant sont signalées exactement ainsi et <b>jamais comme inutilisées</b> : le serveur MCP, la CLI et les deeplinks <code>bmm://</code> atteignent des commandes que l\'interface ne touche jamais.</p><p><b>L\'analyseur d\'impact</b> (<code>npm run impact</code>) dit quels tests atteignent votre changement et &mdash; la moitié utile &mdash; quels fichiers modifiés aucun test n\'atteint. Il suit le graphe de dépendances : un test qui importe un module atteint donc ce que ce module importe. Il <b>sur-estime la couverture et sous-estime les trous</b>, ce qui rend justement la liste des trous fiable : <code>ui/app.ts</code> et <code>features/mods/mods.ts</code>, les deux plus gros modules d\'ici, ne sont atteints par aucun test.</p>',
+          en: '<p>Two boundaries in BMM have <b>no type checking behind them</b>, and the test suite is far smaller than the codebase. Three developer tools answer what the compiler cannot. None of them ships in the app; they read the source and print a structure.</p><p><b>The module graph</b> (<code>npm run map:deps</code>) reads every import. It names the hub &mdash; <code>core/i18n.ts</code> is imported by 100 modules, so a change there is never small &mdash; the modules nothing reachable ever imports, and the import cycles. A cycle is legal in ES modules and harmless until one member reads a binding at evaluation time; then it is <code>undefined</code> at runtime with a stack pointing at the wrong file. The CI gate is a <b>ratchet against a committed baseline</b>, not a demand for zero: there are 94 cycles today, and a gate insisting on zero on day one is a gate somebody switches off in week two.</p><p><b>The API map</b> (<code>npm run map:api</code>) covers the boundary with the Rust core. <code>invoke</code> is non-generic and returns <code>Promise&lt;any&gt;</code>, so TypeScript checks nothing about those calls &mdash; a typo compiles and fails at runtime as a rejected promise. 689 commands are registered, 534 are called from the frontend. The 62 with no frontend caller are reported as exactly that and <b>never as unused</b>: the MCP server, the CLI and <code>bmm://</code> deeplinks reach commands the interface never touches.</p><p><b>The impact analyser</b> (<code>npm run impact</code>) says which tests reach your change, and &mdash; the useful half &mdash; which changed files no test reaches. It follows the dependency graph, so a test importing one module counts as reaching what that module imports. It therefore <b>over-reports coverage and under-reports gaps</b>, which is what makes the gap list worth trusting: <code>ui/app.ts</code> and <code>features/mods/mods.ts</code>, the two largest modules here, are reached by no test at all.</p>',
+          fr: '<p>Deux frontières de BMM n\'ont <b>aucun typage derrière elles</b>, et la suite de tests est bien plus petite que le code. Trois outils de développement répondent à ce que le compilateur ignore. Aucun n\'est embarqué dans l\'app : ils lisent les sources et impriment une structure.</p><p><b>Le graphe de modules</b> (<code>npm run map:deps</code>) lit chaque import. Il nomme le pivot &mdash; <code>core/i18n.ts</code> est importé par 100 modules, un changement là n\'est jamais petit &mdash; les modules que rien d\'atteignable n\'importe, et les cycles d\'import. Un cycle est légal en modules ES et inoffensif jusqu\'à ce qu\'un membre lise une liaison à l\'évaluation ; c\'est alors <code>undefined</code> à l\'exécution, avec une pile qui pointe le mauvais fichier. La barrière CI est un <b>cliquet contre une référence versionnée</b>, pas une exigence de zéro : il y a 94 cycles aujourd\'hui, et une barrière qui exige zéro dès le premier jour est une barrière que quelqu\'un désactive la deuxième semaine.</p><p><b>La carte d\'API</b> (<code>npm run map:api</code>) couvre la frontière avec le cœur Rust. <code>invoke</code> n\'est pas générique et renvoie <code>Promise&lt;any&gt;</code> : TypeScript ne vérifie rien de ces appels &mdash; une faute de frappe compile et échoue à l\'exécution en promesse rejetée. 689 commandes enregistrées, 534 appelées depuis le frontend. Les 62 sans appelant sont signalées exactement ainsi et <b>jamais comme inutilisées</b> : le serveur MCP, la CLI et les deeplinks <code>bmm://</code> atteignent des commandes que l\'interface ne touche jamais.</p><p><b>L\'analyseur d\'impact</b> (<code>npm run impact</code>) dit quels tests atteignent votre changement et &mdash; la moitié utile &mdash; quels fichiers modifiés aucun test n\'atteint. Il suit le graphe de dépendances : un test qui importe un module atteint donc ce que ce module importe. Il <b>sur-estime la couverture et sous-estime les trous</b>, ce qui rend justement la liste des trous fiable : <code>ui/app.ts</code> et <code>features/mods/mods.ts</code>, les deux plus gros modules d\'ici, ne sont atteints par aucun test.</p>',
         },
       },
       devArticle('code-stack', { en: 'The stack — and why it’s lean', fr: 'La stack — et pourquoi elle est légère' }, { en: 'Tauri shell, a native Rust core and a TypeScript UI — and why that stays small.', fr: 'Coquille Tauri, cœur natif Rust et UI TypeScript — et pourquoi ça reste léger.' }, 'stack rust tauri typescript lightweight memory ram electron', {
@@ -3085,7 +3089,23 @@ function hubView(): string {
           <span class="dh-cat-n">${Math.max(1, Math.round((p.words || 0) / 220))} ${tr({ en: 'min read', fr: 'min de lecture' })} ${svg('arrow', 14)}</span>
         </span>
       </button>`).join('')}</div>` : '';
-  return `<div class="dh-grid">${cards}${diag}</div>${extraHtml}`;
+  // The task pages, first and large: « I want to… » is how most people arrive, and a list of
+  // screens does not answer it. Built from the manifest, so a page added to BMM Docs shows up here.
+  const tasks = route.part === 'user' ? (_manifest || []).filter((p) => p.section === 'guide' && p.path !== 'guide/index') : [];
+  const guideHtml = tasks.length ? `
+    <section class="dh-guide-band" aria-label="${escapeHtml(tr({ en: 'Step by step', fr: 'Pas à pas' }))}">
+      <div class="dh-guide-h">
+        <h3>${tr({ en: 'I want to…', fr: 'Je veux…' })}</h3>
+        <button class="dh-guide-all" data-page="guide/index">${tr({ en: 'All the guides', fr: 'Tous les guides' })} ${svg('arrow', 14)}</button>
+      </div>
+      <div class="dh-guide-grid">${tasks.map((p) => `
+        <button class="dh-guide-i" data-page="${escapeHtml(p.path)}" title="${escapeHtml(p.path)}">
+          <span class="dh-guide-t">${escapeHtml(tr(p.title))}</span>
+          ${p.summary ? `<span class="dh-guide-s">${escapeHtml(tr(p.summary))}</span>` : ''}
+          <span class="dh-guide-m">${svg('clock', 12)} ${Math.max(1, Math.round((p.words || 0) / 220))} min</span>
+        </button>`).join('')}</div>
+    </section>` : '';
+  return `${guideHtml}<div class="dh-grid">${cards}${diag}</div>${extraHtml}`;
 }
 
 function articleCard(a: Article): string {
@@ -3324,6 +3344,11 @@ function onClick(e: Event) {
   const navBtn = hit('[data-nav]');
   if (navBtn) { const v = navBtn.getAttribute('data-nav'); (document.querySelector(`.nav-item[data-view="${v}"]`) as HTMLElement | null)?.click(); return; }
 
+  // A guide page's own controls. Before the generic handlers: the checkbox lives inside a label
+  // inside a list item, none of which is any of the things below.
+  if (onShowClick(el, showDeps())) return;
+  if (onTaskClick(el, tr)) return;
+
   const tutBtn = hit('[data-tut]');
   if (tutBtn) { launchTutorial(tutBtn.getAttribute('data-tut') || '', tutBtn.getAttribute('data-tut-part') || '', tutBtn.getAttribute('data-tut-step') || ''); return; }
   if (hit('[data-act="tutorial"]')) { launchTutorial('', '', ''); return; }
@@ -3463,6 +3488,7 @@ async function loadManifest(): Promise<DocPageMeta[]> {
 }
 
 const SECTION_TITLE: Record<string, L> = {
+  guide: { en: 'Step by step', fr: 'Pas à pas' },
   'getting-started': { en: 'Getting started', fr: 'Prise en main' },
   features: { en: 'Features', fr: 'Fonctionnalités' },
   'how-it-works': { en: 'How it works', fr: 'Comment ça marche' },
@@ -3476,7 +3502,7 @@ function pagesView(): string {
     // Rendered before the manifest resolves; openPages() repaints once it has.
     return `<p class="dh-lead">${tr({ en: 'Loading the documentation index…', fr: 'Chargement de l’index de la documentation…' })}</p>`;
   }
-  const order = ['root', 'getting-started', 'features', 'how-it-works', 'reference'];
+  const order = ['root', 'guide', 'getting-started', 'features', 'how-it-works', 'reference'];
   const groups = order.filter((s) => pages.some((p) => p.section === s));
   const lang = getLang?.() === 'fr' ? 'fr' : 'en';
 
@@ -3526,6 +3552,10 @@ function pagesView(): string {
 
 /** What each section of the site is for — the titles alone ("Reference") do not say. */
 const SECTION_BLURB: Record<string, { en: string; fr: string }> = {
+  guide: {
+    en: 'One task per page: short steps, what you should see, a picture, and a Show me button.',
+    fr: 'Une tâche par page : de courtes étapes, ce que tu dois voir, une image et un bouton Montre-moi.',
+  },
   root: {
     en: 'Start here if you have never opened BMM.',
     fr: 'Commence ici si tu n’as jamais ouvert BMM.',
@@ -3832,6 +3862,10 @@ async function hydrateDocPage(host: HTMLElement) {
   // renderer from another screen, and was getting none of this.
   hydrateMdLite(host);
 
+  // Guide pages: restore the ticked steps, and freeze GIFs until they are played.
+  hydrateTasks(host, tr);
+  hydrateGifs(host, tr);
+
   // Recording / clip cards. md-lite cannot speak the reader's language, so the one-line
   // explanation under the title is filled in here.
   host.querySelectorAll('.dh-clip').forEach((el) => {
@@ -3953,6 +3987,29 @@ async function playClip(card: HTMLElement) {
 async function playReplay(url: string) {
   if (!url || !docReplaysEnabled()) return;
   try { const m = await import('../features/settings/replay-watcher.js'); (m as any).playReplayFromUrl?.(url); } catch { /* ignore */ }
+}
+
+/** What a « Show me » button may reach. The list of names is in doc-actions.ts; this is only the
+ *  wiring to the app's own helpers. */
+function showDeps(): ShowDeps {
+  const nav = (view: string) => {
+    const item = document.querySelector(`.nav-item[data-view="${view}"]`) as HTMLElement | null;
+    if (item) { item.click(); return; }
+    // Customise navigation can hide a screen: say so instead of doing nothing.
+    toast(tr({
+      en: 'That screen is hidden in your navigation bar. Show it again in Settings, Customise navigation.',
+      fr: 'Cet écran est masqué dans ta barre de navigation. Réaffiche-le dans Paramètres, Personnaliser la navigation.',
+    }), 'info');
+  };
+  return {
+    startTutorial: (id, part, step) => launchTutorial(id, part, step),
+    clickNav: nav,
+    goToSettings: (target) => { void import('../core/settings-link.js').then((m) => m.goToSettings(target)).catch(() => nav('settings')); },
+    openAutomations: () => { const f = (window as any).bmmOpenAutomations; if (typeof f === 'function') f(); else nav('plugins'); },
+    openPalette: () => { try { (window as any).bmmOpenCommandPalette?.(); } catch { /* palette not loaded */ } },
+    openNotes: () => { (document.getElementById('btn-show-updates') as HTMLElement | null)?.click(); },
+    openDoc: (path) => { void openPage(path); },
+  };
 }
 
 async function launchTutorial(id: string, part: string, step: string) {

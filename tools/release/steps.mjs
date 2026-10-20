@@ -14,6 +14,7 @@ import { updateReadme, readmeVersion } from './lib/readme.mjs';
 import { renderGithubRelease, ghCommand, orderAssets, assetProblems, GENERATED_MARK } from './lib/notes.mjs';
 import { idleReport, cpuLoad } from './lib/idle.mjs';
 import { launch } from './lib/browser.mjs';
+import { ensureFreshFrontend } from './lib/fresh.mjs';
 
 const rel = (p) => relative(ROOT, p).split('\\').join('/');
 const PUBLIC_ASSETS = ['BMM-Setup.exe', 'bmm.bpkg', 'update.json', 'update-manifest.json'];
@@ -179,6 +180,12 @@ const build = {
     if (!await idleGate(ctx, 'the build')) return { ok: false, notes: ['machine busy: build not started'] };
     const vs = readVersions(ROOT);
     if (vs[0].version !== ctx.version) return { ok: false, notes: [`package.json says ${vs[0].version}: run the version step first`] };
+    // The credits video is bundled into the installer: it must come from the gource step, run before this one.
+    const credits = join(ROOT, 'frontend', 'assets', 'videos', 'credits_bg.mp4');
+    if (!ctx.state.creditsVideoAt && !ctx.opts.noCredits && existsSync(credits)) {
+      const headTime = +git(['log', '-1', '--format=%ct'], ROOT) * 1000;
+      if (statSync(credits).mtimeMs < headTime) { ctx.log.warn('credits_bg.mp4 is older than the latest commit: run the gource step BEFORE the build (steps gource,build), or pass --no-credits to ship it as it is'); notes.push('credits video not regenerated before this build'); }
+    }
     const args = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'examples/bmm/release.ps1', '-Version', ctx.version, '-Notes', `Better Mods Manager ${ctx.version}`];
     if (ctx.opts.skipBmmBuild) args.push('-SkipBmmBuild');
     const r = await run('powershell', args, { cwd: BI_DIR, log: ctx.log });
@@ -302,10 +309,15 @@ const docs = {
 
 // ── 7. Media ─────────────────────────────────────────────────────────────────────────────────
 const media = {
-  id: 'media', title: 'Media', desc: 'release cards, screenshots composed like the app (Tasky top-left), README hero; layered SVG + PSD sources; usage GIFs with --gifs',
+  id: 'media', title: 'Media', desc: 'compiles the frontend first and fails on a stale build; release cards, screenshots of the current app composed like BMM (Tasky top-left), README hero; layered SVG + PSD sources; usage GIFs with --gifs',
   async run(ctx) {
     const notes = [], outputs = [];
     const mdir = ensureDir(join(ctx.rel, 'media'));
+    // The pictures must show the app as it is now: compile, prove the output is current, check the version.
+    try {
+      const fresh = await ensureFreshFrontend({ log: ctx.log, compile: !ctx.opts.noCompile, version: ctx.version });
+      notes.push(...fresh.notes);
+    } catch (e) { ctx.log.fail(e.message); return { ok: false, outputs, notes: [`not shooting an old app: ${e.message}`] }; }
     const { renderCards } = await import('./media/cards.mjs');
     let browser = null;
     try { browser = await launch(); } catch (e) { ctx.log.warn(`no browser: ${e.message} (SVG only)`); }
@@ -404,14 +416,15 @@ const bench = {
 
 // ── 10. Gource ───────────────────────────────────────────────────────────────────────────────
 const gource = {
-  id: 'gource', title: 'Gource', heavy: true, desc: 'history video of BMM + sibling repos (MP4, GIF, poster) and the credits background video',
+  id: 'gource', title: 'Gource + credits video', heavy: true, desc: 'history video of BMM + sibling repos (file names, BMM logo, no captions: MP4, GIF, poster) and the credits background video, BEFORE the build so the installer ships it',
   async run(ctx) {
     if (!await idleGate(ctx, 'the Gource render')) return { ok: false, notes: ['machine busy'] };
     const { renderGource } = await import('./media/gource.mjs');
     const { findFfmpeg } = await import('./bench/run.mjs');
     const r = await renderGource({ version: ctx.version, seconds: ctx.opts.gourceSeconds ?? 75, credits: !ctx.opts.noCredits, ffmpeg: findFfmpeg(), log: ctx.log });
     const notes = [`${r.repos.join(', ')}: ${r.events} file events, ${r.authors} author(s), ${r.avatars.length} local avatar(s)`];
-    if (r.credits?.text) notes.push(r.credits.text);
+    if (r.credits?.text) { notes.push(r.credits.text); ctx.state.creditsVideoAt = Date.now(); }
+    else if (ctx.opts.noCredits) notes.push('credits_bg.mp4 left alone (--no-credits): the build ships the one in the tree');
     ctx.log.ok(`gource-${ctx.version}.mp4 ${r.info?.width}×${r.info?.height}, ${r.info?.duration?.toFixed(1)} s, ${fmtBytes(r.info?.size)}`);
     return { ok: true, outputs: [r.mp4, r.gif, r.poster, r.credits?.path].filter(Boolean).map(rel), notes };
   },
@@ -450,4 +463,6 @@ const notesStep = {
   },
 };
 
-export const STEPS = [preflight, version, changelog, build, verify, docs, media, readme, bench, gource, notesStep];
+// gource sits BEFORE build: it regenerates frontend/assets/videos/credits_bg.mp4, which the
+// build bundles into the installer. After build, the shipped credits video would be the old one.
+export const STEPS = [preflight, version, changelog, gource, build, verify, docs, media, readme, bench, notesStep];

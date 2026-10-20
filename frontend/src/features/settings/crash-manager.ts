@@ -4,6 +4,7 @@
 
 import { invoke, saveFile, pickFile } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
+import { confirmAction } from '../../ui/verify.js';
 import { toast, toastSaved } from '../../ui/app.js';
 import { importReplayFromPath, playReplayJson } from './replay-watcher.js';
 import { uiIcon } from '../../ui/icons.js';
@@ -166,7 +167,7 @@ export async function openCrashManager(): Promise<void> {
             return;
         }
         if (act === 'delete') {
-            if (!confirm(t('crashmgr.confirmDelete') || 'Delete this crash report?')) return;
+            if (!(await confirmAction({ title: t('vfy.t.crashDel'), message: t('vfy.m.cannotUndo'), confirmLabel: t('common.delete'), tone: 'danger' }))) return;
             try { await invoke('delete_crash_report', { path }); toast(t('crashmgr.deleted') || 'Deleted', 'success'); renderReports(); }
             catch (e) { toast(String(e), 'error'); }
             return;
@@ -255,7 +256,7 @@ export async function openCrashManager(): Promise<void> {
             const el = b as HTMLElement; const path = el.dataset.p!; const act = el.dataset.sact!;
             if (act === 'play') { importReplayFromPath(path); return; }
             if (act === 'delete') {
-                if (!confirm(t('crashmgr.confirmDeleteSession') || 'Delete this session?')) return;
+                if (!(await confirmAction({ title: t('vfy.t.sessionDel'), message: t('vfy.m.cannotUndo'), confirmLabel: t('common.delete'), tone: 'danger' }))) return;
                 try { await invoke('delete_local_replay', { path }); toast(t('crashmgr.deleted') || 'Deleted', 'success'); renderSessions(); } catch (e) { toast(String(e), 'error'); }
                 return;
             }

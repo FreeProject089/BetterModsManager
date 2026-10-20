@@ -417,8 +417,8 @@ async function stepModal(p: Record<string, any>, o: NavRunOpts): Promise<NavResu
     return { ok: true, note: t('snav.done.modal', { m: label }) };
 }
 
-/** Read what the guard needs off an element. */
-function factsOf(el: HTMLElement): Parameters<typeof sensitiveReason>[0] {
+/** Read what the guard needs off an element. Also the eyedropper's guard (custom-shortcuts.ts). */
+export function factsOf(el: HTMLElement): Parameters<typeof sensitiveReason>[0] {
     const form = el.closest('form, .modal, .modal-overlay, .modal-generic-overlay');
     return {
         tag: el.tagName,

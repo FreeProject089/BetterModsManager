@@ -1,5 +1,9 @@
 # Dépôt Serveur
 
+:::tip[Tu préfères pas à pas ?]
+La version « tâche » de cette page est [Suivre un dépôt](doc-page:guide/follow-a-repo) : de courtes étapes, ce que tu dois voir, une image et un bouton Montre-moi.
+:::
+
 
 Un **Dépôt Serveur** est une collection de mods partagée et versionnée. Deux flux le
 traversent : tu **synchronises** des mods *depuis* un dépôt vers un profil, et BMM s'en sert

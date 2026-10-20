@@ -53,7 +53,7 @@ avec ce filtre*.
 **Notes de version** (depuis la fenêtre de mise à jour, ou *Afficher les nouveautés* dans la palette
 de commandes) a deux onglets :
 
-- **Versions** : les notes de chaque version dans une seule liste, la plus récente d'abord. Chaque
+- **Versions** : **Les nouveautés de la 1.0** sont épinglées au-dessus de la liste : la version majeure racontée en une seule histoire (profils, ordre, partage, plugins, Laya, mises à jour), qui compte plus que n'importe quel correctif. En dessous, les notes de chaque version dans une seule liste, la plus récente d'abord. L'en-tête de chaque version a aussi un bouton **Les nouveautés de la 1.0**. Chaque
   version porte des compteurs (*n nouveautés, n améliorations, n corrections*) et une étiquette :
   **Installée** pour la tienne, **Plus récente** pour les versions au-dessus. La recherche trouve les
   versions qui mentionnent un mot, et dit *Aucune version ne mentionne ceci* sinon. Quand une version

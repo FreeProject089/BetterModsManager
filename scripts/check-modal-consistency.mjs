@@ -95,7 +95,6 @@ export const OVERLAY_FAMILIES = {
     'legacy-overlay': 'legacy import (house overlay + stacking hook)',
     // -backdrop classes, caught since the family rule learnt the second suffix:
     'update-modal-backdrop': 'update notes / test-build welcome: a notes reader with a folder tree (ui/update-notes.ts)',
-    'lom-backdrop': 'click-catcher behind the library order menu, not a dialog',
 };
 
 /** Modules (and index.html elements, as index.html#id) that still build a full-window overlay

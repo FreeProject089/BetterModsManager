@@ -231,6 +231,30 @@ chose.
 décide de quel côté d'un changement d'heure le moment tombe. Une valeur illisible est
 affichée telle que vous l'avez écrite, jamais en `Invalid Date`.
 
+### Boutons Montre-moi et étapes à cocher (pages du guide)
+
+```
+[Montre-moi](show:view/profiles)
+[Essayer dans le tutoriel](show:tutorial/basics/profiles/s1)
+
+- [ ] **Ouvre Profils.** Tu vois : un écran vide.
+- [ ] **Appuie sur Nouveau profil.**
+```
+
+Dans l'application, un lien `show:` est un bouton, et une liste d'éléments `- [ ]` est une liste que le
+lecteur peut cocher (mémorisée sur ce PC, avec un « Recommencer »). Les deux n'existent **que sur les
+pages embarquées de BMM** : un README ou une entrée de catalogue rendus par B.MD ne les ont jamais. Un
+GIF animé est montré en image fixe avec un bouton de lecture tant qu'on n'a pas appuyé dessus.
+
+Le nom du bouton est cherché dans une liste fixe de `frontend/src/docs/doc-actions.ts`, jamais exécuté
+comme du code : `view/<écran>` (library, profiles, modpacks, modlist, repo, plugins, mapper, apps,
+community, settings), `tutorial/<id>[/<partie>[/<étape>]]`, `settings[/updates|identity|security|feedback]`,
+`automations`, `palette`, `notes` (les notes de version) et `doc/<page>`. Un nom absent de la liste reste
+du texte. `tests/doc-actions.test.mjs` vérifie chaque lien `show:` de ces pages.
+
+Sur le site, il n'y a pas d'application à piloter : le lien devient une pastille étiquetée, et les cases
+se cochent dans le navigateur (`assets/guide.js`).
+
 ## Touches clavier, dans les deux écritures
 
 Deux écritures, toutes deux dessinées des deux côtés :

@@ -38,6 +38,12 @@ import { sanitizeDocHtml, safeDocUrl } from './md-safe.js';
 import { isoIconUrl } from '../core/icon-cdn.js';
 import { uiIcon } from '../ui/icons.js';
 import { docReplaysEnabled } from './doc-replays.js';
+import { parseShow, stepKey, showIconOf } from './doc-actions.js';
+
+// True only while renderDocMarkdown renders a page that is OURS (a bundled guide page). The
+// interactive leaves, « Show me » buttons and tickable steps, exist only then: a README or a
+// catalogue entry is somebody else's text, and must not get buttons that drive the app.
+let _trusted = false;
 
 const CALLOUT_KIND: Record<string, string> = {
   note: 'info', info: 'info', hint: 'tip', tip: 'tip', success: 'success', check: 'success',
@@ -256,8 +262,10 @@ function inline(s: string): string {
   s = s.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
   s = s.replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, '$1<i>$2</i>');
   // Images first, or the link rule below turns "![alt](src)" into "!" plus a link.
+  // An animated GIF gets a class of its own: in the Help hub it is shown as a still with a play
+  // button (doc-guide-ui.ts), so a page with six clips does not move six things at once.
   s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, (_m, alt, src) =>
-    `<img class="dh-md-img" src="${escRaw(src)}" alt="${esc(alt)}" loading="lazy">`);
+    `<img class="dh-md-img${/\.gif(?:[?#].*)?$/i.test(src) ? ' dh-gif' : ''}" src="${escRaw(src)}" alt="${esc(alt)}" loading="lazy">`);
   s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, txt, url) => {
     // `[label](doc:article-id)` → an in-app cross-link that opens another docs article.
     if (/^doc:/i.test(url)) return `<button type="button" class="dh-xref" data-art="${escRaw(url.slice(4))}">${txt}</button>`;
@@ -270,6 +278,15 @@ function inline(s: string): string {
     // Every outward link is therefore a button the app handles — see docs-hub's click handler.
     if (/^https?:\/\//i.test(url)) return `<button type="button" class="dh-link dh-link-ext" data-ext="${escRaw(url)}">${txt}</button>`;
     if (/^bmm:\/\//i.test(url)) return `<button type="button" class="dh-link" data-deeplink="${escRaw(url)}">${txt}</button>`;
+    // `[Show me](show:view/profiles)`: a button that starts a tutorial or opens a screen, for the
+    // allow-listed names in doc-actions.ts and only on our own pages. Anything else is the label
+    // as plain text, never a button that does nothing.
+    if (/^show:/i.test(url)) {
+      const act = _trusted ? parseShow(url) : null;
+      return act
+        ? `<button type="button" class="dh-show" data-show="${escRaw(url.replace(/^show:/i, ''))}">${uiIcon(showIconOf(act), 14)} <span>${txt}</span></button>`
+        : `<span class="dh-link-dead">${txt}</span>`;
+    }
     if (/^#/.test(url)) return `<button type="button" class="dh-link" data-anchor="${escRaw(url.slice(1))}">${txt}</button>`;
     if (/^mailto:/i.test(url)) return `<button type="button" class="dh-link dh-link-ext" data-ext="${escRaw(url)}">${txt}</button>`;
     // A relative path that is not a doc route (a site asset that was not bundled), or a URL
@@ -519,6 +536,16 @@ function renderBlocks(lines: string[]): string {
           raw[raw.length - 1] += ' ' + c.trim();
           i++;
         }
+      }
+      // `- [ ] step` / `- [x] step`: a tickable step, on our own pages only. The key is a hash of
+      // the step's text, so a tick survives a reordered list.
+      if (_trusted && !ordered && raw.every((x) => /^\[[ xX]\]\s+\S/.test(x))) {
+        const lis = raw.map((x) => {
+          const text = x.replace(/^\[[ xX]\]\s+/, '');
+          return `<li class="dh-task"><label><input type="checkbox" data-ck="${stepKey(text)}"${/^\[[xX]\]/.test(x) ? ' data-ck-default="1"' : ''}><span>${inline(text)}</span></label></li>`;
+        });
+        out.push(`<ul class="dh-tasks" data-ck-list>${lis.join('')}</ul>`);
+        continue;
       }
       const items = raw.map((x) => inline(x));
       out.push(`<${ordered ? 'ol' : 'ul'}>${items.map((x) => `<li>${x}</li>`).join('')}</${ordered ? 'ol' : 'ul'}>`);
@@ -896,7 +923,10 @@ export function renderDocMarkdown(src: string, opts: { trusted?: boolean } = {})
   // `withGlobalTauri` is on. That is the whole backend behind an `onerror`.
   const trusted = opts.trusted === true;
   if (trusted && /^\s*</.test(src)) return src;   // our own HTML article bodies
-  const html = renderDocMarkup(src);
+  const before = _trusted;
+  _trusted = trusted;
+  let html: string;
+  try { html = renderDocMarkup(src); } finally { _trusted = before; }
   return trusted ? html : sanitizeDocHtml(html);
 }
 

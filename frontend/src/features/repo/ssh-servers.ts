@@ -30,8 +30,9 @@
 //   3. logs in with the passphrase / password typed in the form, and checks the base folder:
 //      exists, writable, and if not, who owns it.
 // Every step says its result in a line of its own, in words.
-import { invoke, pickFile, askConfirm } from '../../core/api.js';
+import { invoke, pickFile } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
+import { confirmAction } from '../../ui/verify.js';
 import { escHtml, escAttr } from '../../core/utils.js';
 import { openModal } from '../../ui/modal-shell.js';
 import {
@@ -151,7 +152,7 @@ export function openSshServers(focus?: string): void {
 
     async function pick(n: string): Promise<void> {
         if (n === current) return;
-        if (dirty && !(await askConfirm(t('sshsrv.discard'), { title: t('sshsrv.title') }))) return;
+        if (dirty && !(await confirmAction({ title: t('vfy.t.discard'), message: t('sshsrv.discard'), confirmLabel: t('vfy.b.discard'), tone: 'warn' }))) return;
         current = n;
         draft = { ...blank(), ...loadTargets()[n] };
         dirty = false;
@@ -321,7 +322,7 @@ export function openSshServers(focus?: string): void {
             dirty = true;
         } else if (act === 'forget') {
             read();
-            if (!(await askConfirm(t('sshsrv.forgetConfirm', { host: draft.host }), { title: t('repo.ssh.forget'), type: 'warning' }))) return;
+            if (!(await confirmAction({ title: t('repo.ssh.forget'), message: t('sshsrv.forgetConfirm', { host: draft.host }), confirmLabel: t('vfy.b.forget'), tone: 'danger' }))) return;
             await invoke('ssh_forget_host', { host: draft.host, port: draft.port || 22 }).catch(() => undefined);
             knownKeys.delete(hostKey(draft));
             lastTest.delete(current);
@@ -383,7 +384,7 @@ export function openSshServers(focus?: string): void {
                 }]);
                 if ((await answer()) !== 'forget-changed') return;
                 testBtn.disabled = true;
-                if (!(await askConfirm(t('sshsrv.forgetConfirm', { host: draft.host }), { title: t('repo.ssh.forget'), type: 'warning' }))) { steps(done); return; }
+                if (!(await confirmAction({ title: t('repo.ssh.forget'), message: t('sshsrv.forgetConfirm', { host: draft.host }), confirmLabel: t('vfy.b.forget'), tone: 'danger' }))) { steps(done); return; }
                 await invoke('ssh_forget_host', { host: draft.host, port: draft.port || 22 });
                 p = { ...p, known: null, status: 'new' };
             }
@@ -471,7 +472,7 @@ export function openSshServers(focus?: string): void {
 
     delBtn.addEventListener('click', async () => {
         if (!current) return;
-        if (!(await askConfirm(t('sshsrv.confirmDelete', { name: current }), { title: t('sshsrv.title'), type: 'warning' }))) return;
+        if (!(await confirmAction({ title: t('vfy.t.deleteServer'), message: t('sshsrv.confirmDelete', { name: current }), confirmLabel: t('common.delete'), tone: 'danger' }))) return;
         deleteTarget(current);
         lastTest.delete(current);
         current = names()[0] || '';
@@ -482,7 +483,7 @@ export function openSshServers(focus?: string): void {
     });
 
     m.q<HTMLElement>('.ssv-add')!.addEventListener('click', async () => {
-        if (dirty && !(await askConfirm(t('sshsrv.discard'), { title: t('sshsrv.title') }))) return;
+        if (dirty && !(await confirmAction({ title: t('vfy.t.discard'), message: t('sshsrv.discard'), confirmLabel: t('vfy.b.discard'), tone: 'warn' }))) return;
         current = '';
         draft = blank();
         dirty = false;

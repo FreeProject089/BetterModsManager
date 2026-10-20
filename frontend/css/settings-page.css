@@ -774,8 +774,25 @@
 #view-settings .sk-q { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text-primary); font-size: 12.5px; }
 #view-settings .sk-filter { white-space: nowrap; }
 #view-settings .sk-filter[aria-pressed="true"] { background: var(--bmm-accent-dim); color: var(--text-primary); border-color: transparent; }
-/* A long table scrolls inside the card, its group headings pinned, so the card stays one screen. */
-#view-settings .sk-table { display: flex; flex-direction: column; max-height: min(62vh, 560px); overflow-y: auto; padding-right: 4px; scrollbar-width: thin; }
+/* A long table scrolls inside the card, its group headings pinned, so the card stays one screen.
+   Under the pointer the wheel belongs to the table until its end (overscroll-behavior: contain:
+   the page does not take over half way and leave the table stuck); off the table it scrolls the
+   page as before. The scrollbar is the house one: thin, a neutral thumb from the theme's surface
+   ramp, the track invisible, brighter on hover (both themes: --bmm-s* flips with the theme).
+   Standard properties only: in Chromium they win over ::-webkit-scrollbar, and setting
+   `scrollbar-width` alone gave the platform's grey bar with arrows. */
+#view-settings .sk-table {
+    display: flex;
+    flex-direction: column;
+    max-height: min(64vh, 620px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 6px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--bmm-s10) transparent;
+    scrollbar-gutter: stable;
+}
+#view-settings .sk-table:hover { scrollbar-color: var(--bmm-s20) transparent; }
 #view-settings .sk-group { border: 0; }
 #view-settings .sk-group-h {
     display: flex;
@@ -888,3 +905,10 @@
 #view-settings .sk-row[hidden],
 #view-settings .sk-group[hidden],
 #view-settings .sk-empty[hidden] { display: none; }
+/* A disabled shortcut (imported with nothing to run here), and a mouse, wheel or gamepad key:
+   its device's icon, then its name in the UI font (« Back button » is a word, not a key code). */
+#view-settings .sk-tag-off { background: color-mix(in srgb, var(--warning) 16%, transparent); color: var(--text-primary); }
+#view-settings .sk-kbd-dev,
+.sk-dlg .sk-kbd-dev { display: inline-flex; align-items: center; gap: 4px; font-family: inherit; }
+#view-settings .sk-kbd-dev .ic,
+.sk-dlg .sk-kbd-dev .ic { flex: none; color: var(--text-secondary); }

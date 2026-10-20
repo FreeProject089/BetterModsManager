@@ -30,7 +30,6 @@ export const OVERLAY_TOKEN = /(?:^|\s)(?:modal-overlay|[a-z][\w-]*-(?:overlay|ba
  * an entry that no longer matches fails.
  */
 export const BODY_MOUNTED = {
-  'features/mods/lib-order.ts:backdrop': 'click-catcher for the order menu: the menu is fixed-positioned and the frame (contain: paint) would clip it near the bottom edge',
 };
 
 /** Variables in `src` given an overlay class and appended to document.body. Pure. */

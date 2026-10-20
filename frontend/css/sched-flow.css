@@ -476,4 +476,172 @@
     .sflow-flash { animation: none; outline: 2px solid var(--bmm-accent); outline-offset: 2px; }
     .sflow-node.is-dbg-run, .sflow-node.is-test-testing { animation: none; box-shadow: 0 0 0 2px var(--bmm-accent); }
     .sflow-bp { transition: none; }
+    .sflow-wire-temp { stroke-dasharray: none; }
 }
+
+/* ── Blueprint tools (1.0.3): ports, categories, frames, reroutes, menus ──────────────────────
+   Every colour is a theme token. A frame's tone is a ROLE (accent, info, success, warning,
+   danger, neutral), painted as a wash and a ring of that token, never as text colour. */
+
+/* The category of an action, as the node's colour: a stripe and the icon tile. */
+.sflow-node.g-mods { --kind: var(--sk-do); }
+.sflow-node.g-repo, .sflow-node.g-ai { --kind: var(--bmm-purple); }
+.sflow-node.g-apps, .sflow-node.g-nav, .sflow-node.g-notify { --kind: var(--bmm-info); }
+.sflow-node.g-look, .sflow-node.g-logic { --kind: var(--bmm-accent); }
+.sflow-node.g-perf { --kind: var(--bmm-success); }
+.sflow-node.g-privacy { --kind: var(--bmm-danger); }
+.sflow-node.g-system { --kind: var(--bmm-text-secondary); }
+.sflow-node.g-pkg { --kind: var(--bmm-warning); }
+.sflow-node::before {
+    content: '';
+    position: absolute; left: -1px; top: 8px; bottom: 8px;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: var(--kind, var(--sk-do));
+    opacity: .9;
+}
+.sflow-node.sflow-trigger::before { top: 14px; bottom: 14px; }
+
+/* Ports: the input on the left, the output on the right. Drag the output to wire a step after
+   this one, or onto empty canvas to add one there. */
+.sflow-port {
+    position: absolute; top: calc(50% - 6px);
+    width: 12px; height: 12px;
+    box-sizing: border-box;
+    border-radius: 50%;
+    background: var(--bmm-bg-elevated);
+    border: 2px solid var(--bmm-border-hover);
+    pointer-events: none;
+}
+.sflow-port.is-in { left: -6px; }
+.sflow-port.is-out { right: -6px; pointer-events: auto; cursor: crosshair; }
+.sflow-port.is-out:hover, .sflow-node.is-sel .sflow-port.is-out { border-color: var(--kind, var(--bmm-accent)); background: color-mix(in srgb, var(--kind, var(--bmm-accent)) 30%, var(--bmm-bg-elevated)); }
+/* The breakpoint dot sits where the input port is: it moves up a little to share the edge. */
+.sflow-node .sflow-bp { top: 6px; }
+.sflow-canvas.is-wiring { cursor: crosshair; }
+.sflow-wire-temp { fill: none; stroke: var(--bmm-accent); stroke-width: 2; stroke-dasharray: 6 4; }
+
+/* A wire takes the pointer through a wide, invisible twin. */
+.sflow-edge-hit { fill: none; stroke: transparent; stroke-width: 12; pointer-events: stroke; cursor: copy; }
+.sflow-edge-hit:hover + .sflow-edge, .sflow-edge-hit:hover { stroke: color-mix(in srgb, var(--bmm-accent) 22%, transparent); }
+
+.sflow-reroute {
+    position: absolute;
+    width: 12px; height: 12px;
+    box-sizing: border-box;
+    border-radius: 50%;
+    background: var(--bmm-bg-elevated);
+    border: 2px solid var(--bmm-accent);
+    cursor: move;
+    z-index: 1;
+}
+.sflow-reroute:hover { background: var(--bmm-accent); }
+
+/* Frames: a titled, coloured box behind the nodes. Its body lets clicks through to the canvas
+   (pan, box select); only the title bar and the resize corner take the pointer. */
+.sflow-frames { position: absolute; left: 0; top: 0; }
+.sflow-frame {
+    --tone: var(--bmm-accent);
+    position: absolute;
+    box-sizing: border-box;
+    border-radius: 12px;
+    border: 1px solid color-mix(in srgb, var(--tone) 45%, transparent);
+    background: color-mix(in srgb, var(--tone) 7%, transparent);
+    pointer-events: none;
+}
+.sflow-frame.t-info { --tone: var(--bmm-info); }
+.sflow-frame.t-success { --tone: var(--bmm-success); }
+.sflow-frame.t-warning { --tone: var(--bmm-warning); }
+.sflow-frame.t-danger { --tone: var(--bmm-danger); }
+.sflow-frame.t-neutral { --tone: var(--bmm-text-muted); }
+.sflow-frame.is-sel { border-color: var(--tone); box-shadow: 0 0 0 2px color-mix(in srgb, var(--tone) 30%, transparent); }
+.sflow-frame.is-folded { background: color-mix(in srgb, var(--tone) 14%, var(--bmm-bg-elevated)); }
+.sflow-frame-head {
+    display: flex; align-items: center; gap: 6px;
+    height: 30px;
+    padding: 0 8px 0 4px;
+    border-radius: 11px 11px 0 0;
+    background: color-mix(in srgb, var(--tone) 16%, transparent);
+    color: var(--bmm-text-primary);
+    font-size: 12px; font-weight: 700;
+    cursor: move;
+    pointer-events: auto;
+    user-select: none;
+}
+.sflow-frame.is-folded .sflow-frame-head { border-radius: 11px; }
+.sflow-frame-fold {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; padding: 0;
+    border: 0; border-radius: 6px;
+    background: transparent; color: var(--bmm-text-secondary);
+    cursor: pointer;
+}
+.sflow-frame-fold:hover, .sflow-frame-fold:focus-visible { background: var(--bmm-bg-hover); color: var(--bmm-text-primary); outline: none; }
+.sflow-frame-title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: text; }
+.sflow-frame-n { flex-shrink: 0; font-size: 10.5px; font-weight: 600; color: var(--bmm-text-secondary); }
+.sflow-frame-input {
+    flex: 1; min-width: 0;
+    height: 22px; padding: 0 6px;
+    border: 1px solid var(--bmm-accent); border-radius: 6px;
+    background: var(--bmm-bg-base); color: var(--bmm-text-primary);
+    font: 700 12px var(--bmm-font-sans);
+    outline: none;
+}
+.sflow-frame-resize {
+    position: absolute; right: 0; bottom: 0;
+    width: 16px; height: 16px;
+    cursor: nwse-resize;
+    pointer-events: auto;
+    background: linear-gradient(135deg, transparent 50%, color-mix(in srgb, var(--tone) 55%, transparent) 50%);
+    border-radius: 0 0 11px 0;
+}
+
+/* The toolbar's on/off button, and the menus. */
+.sflow-tb-toggle[aria-pressed="true"] { background: color-mix(in srgb, var(--bmm-accent) 16%, transparent); color: var(--bmm-text-primary); }
+.sflow-menu {
+    position: absolute; z-index: 7;
+    min-width: 220px; max-width: 300px;
+    padding: 5px;
+    border-radius: 10px;
+    background: var(--bmm-bg-elevated);
+    border: 1px solid var(--bmm-border);
+    box-shadow: var(--bmm-shadow-modal);
+}
+.sflow-menu-item {
+    display: flex; align-items: center; gap: 8px;
+    width: 100%;
+    padding: 6px 8px;
+    border: 0; border-radius: 7px;
+    background: transparent;
+    color: var(--bmm-text-primary);
+    font: 12.5px var(--bmm-font-sans); text-align: left;
+    cursor: pointer;
+}
+.sflow-menu-item:hover, .sflow-menu-item:focus-visible { background: var(--bmm-bg-hover); outline: none; }
+.sflow-menu-item.is-danger .sflow-menu-ic { color: var(--bmm-danger); }
+.sflow-menu-ic { display: inline-flex; width: 16px; color: var(--bmm-text-secondary); }
+.sflow-menu-l { flex: 1; min-width: 0; }
+.sflow-menu-item kbd {
+    font: 600 10.5px var(--bmm-font-mono);
+    padding: 1px 5px; border-radius: 5px;
+    border: 1px solid var(--bmm-border); background: var(--bmm-bg-base);
+    color: var(--bmm-text-secondary);
+}
+.sflow-menu-sep { height: 1px; margin: 4px 6px; background: var(--bmm-border); }
+.sflow-menu-sw { display: flex; gap: 6px; padding: 6px 8px; }
+.sflow-sw {
+    --tone: var(--bmm-accent);
+    width: 20px; height: 20px; padding: 0;
+    border-radius: 50%;
+    border: 2px solid var(--bmm-bg-elevated);
+    background: var(--tone);
+    box-shadow: 0 0 0 1px var(--bmm-border);
+    cursor: pointer;
+}
+.sflow-sw.t-info { --tone: var(--bmm-info); }
+.sflow-sw.t-success { --tone: var(--bmm-success); }
+.sflow-sw.t-warning { --tone: var(--bmm-warning); }
+.sflow-sw.t-danger { --tone: var(--bmm-danger); }
+.sflow-sw.t-neutral { --tone: var(--bmm-text-muted); }
+.sflow-sw.is-on, .sflow-sw:focus-visible { box-shadow: 0 0 0 2px var(--bmm-text-primary); outline: none; }
+

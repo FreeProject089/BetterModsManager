@@ -275,7 +275,7 @@ export async function renderModList(force = false) {
       card = createModCard(mod);
       applyCardActivity(card, mod.id);
       _anyNewCard = true;
-      // The selected mod's card is marked by createModCard; its details live in the side drawer
+      // The selected mod's card is marked by createModCard; its details live in the mod dialog
       // (mods-details.ts), which a card scrolled back into view does not redraw.
     } else if (!skipInPlaceUpdates && !isProcessing) {
       updateCardState(card, mod);

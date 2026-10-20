@@ -16,8 +16,9 @@
 // generate_repo_manifest / repo_modpacks_apply (creation), repo_format_convert with
 // `setVersion` (the version, backed up and re-signed like a conversion), write_text_file (the
 // hosting files: .md, .yml, .conf are on its allow-list).
-import { invoke, pickFolder, askConfirm } from '../../core/api.js';
+import { invoke, pickFolder } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
+import { confirmAction } from '../../ui/verify.js';
 import { escHtml, escAttr, formatBytes } from '../../core/utils.js';
 import { uiIcon, type IconName } from '../../ui/icons.js';
 import { openConvertDialog, paintRun, listenRun } from './repo-format.js';
@@ -185,7 +186,7 @@ async function quickCreate(): Promise<void> {
         let repoDir = '';
         let summary = '';
         if (kind === 'profile') {
-            if (await hasManifest(out) && !(await askConfirm(t('repo.quick.overwrite', { dir: out }), { title: t('repo.tool.quick.t'), type: 'warning' }))) return;
+            if (await hasManifest(out) && !(await confirmAction({ title: t('repo.tool.quick.t'), message: t('repo.quick.overwrite', { dir: out }), confirmLabel: t('vfy.b.rebuild'), tone: 'warn' }))) return;
             await invoke('export_server_repo', {
                 profileIds: [src], outputDir: out, authorName: author, creds: null, seed: null,
                 modpacksShareConfig: null, zipOutput: false, zipMods: false, compression: null, serverOptions: null,
@@ -439,7 +440,7 @@ async function applyVersion(): Promise<void> {
         const st = plan?.from?.status;
         if (st === 'legacy' || st === 'needs_conversion') notes.push(t('repo.version.alsoConverts', { v: String(plan?.to ?? '') }));
         if (plan?.signerChanges) notes.push(t('repo.version.signerChanges'));
-        if (!(await askConfirm(notes.join('\n\n'), { title: t('repo.tool.version.t'), type: plan?.signerChanges ? 'warning' : 'info' }))) return;
+        if (!(await confirmAction({ title: t('repo.tool.version.t'), details: notes, confirmLabel: t('common.apply'), tone: plan?.signerChanges ? 'warn' : 'accent' }))) return;
         const done = await invoke('repo_format_convert', { args: { path: dir, dryRun: false, rehash: false, sign: true, setVersion: v } }) as any;
         showResult('repo-version-result', `${uiIcon('success', 14)} <span>${escHtml(t('repo.version.done', { v, backup: basename(String(done?.backupPath || '')) }))}</span>`);
         toast(t('repo.version.done', { v, backup: basename(String(done?.backupPath || '')) }), 'success', 6000);

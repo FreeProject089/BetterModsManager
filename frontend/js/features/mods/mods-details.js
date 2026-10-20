@@ -7,7 +7,9 @@ import { invoke } from '../../core/api.js';
 import { toast, openExternal } from '../../ui/app.js';
 import { t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
-import { drawerHtml, drawerHeaderHtml, overviewHtml, filesHtml, linkRowHtml, DRAWER_TABS } from './mod-drawer-view.js';
+import { detailOverlay, detailDialogHtml, detailHeaderHtml, detailActionsHtml, overviewHtml, filesHtml, linkRowHtml, DETAIL_TABS } from './mod-detail-view.js';
+import { bindModal, ensureModalShellCss, topOverlay } from '../../ui/modal-shell.js';
+import { raiseAboveAll } from '../../ui/layer.js';
 import { sourceAccessHtml, wireSourceAccess } from '../../core/source-access.js';
 import { renderModList, updateCardState, revealMod, visibleMods } from './mods-list.js';
 import { setupDependencyInput } from './mods-actions.js';
@@ -151,15 +153,18 @@ function describeOrigin(mod) {
     }
     return t('detail.originLocal');
 }
-// ── The drawer ──────────────────────────────────────────────────────────────────
-// A mod opens in a side drawer beside the library (markup: mod-drawer-view.ts). The list stays
-// where it is and keeps its selection; ‹ › and the arrow keys move to the previous / next mod
-// of the list as it is filtered and sorted; Esc closes. Every field is one form with one
-// Save / Cancel bar, and leaving with unsaved changes asks first.
+// ── The dialog ──────────────────────────────────────────────────────────────────
+// A mod opens in the house dialog, centred over the library (markup: mod-detail-view.ts). The
+// library under it never moves or re-flows: the side drawer it replaces was a third column of
+// the app shell and squeezed the toolbar and every card the moment a mod was opened. The list
+// keeps its selection; ‹ › and ↑ / ↓ move to the previous / next mod of the list as it is
+// filtered and sorted (the dialog stays open and redraws); Esc, × and a click on the dim close
+// it. Every field is one form with one Save / Cancel bar, and leaving with unsaved changes asks
+// first.
 let _tab = (() => {
     try {
         const v = localStorage.getItem('bmm_mdd_tab');
-        return DRAWER_TABS.includes(v) ? v : 'overview';
+        return DETAIL_TABS.includes(v) ? v : 'overview';
     }
     catch {
         return 'overview';
@@ -168,7 +173,11 @@ let _tab = (() => {
 let _dirty = false;
 let _wired = false;
 let _softQueued = false;
-function drawerEl() { return document.getElementById('mod-detail-panel'); }
+let _release = null;
+/** The overlay (#mod-detail-panel: app.ts reads it to know a mod is open). */
+function overlayEl() { return document.getElementById('mod-detail-panel'); }
+/** The dialog card inside it: every query of this module is scoped to it. */
+function drawerEl() { return overlayEl()?.querySelector('.mod-detail') || null; }
 /** The mods around `id` in the list as shown (filters and sort applied). */
 function neighbours(id) {
     const list = visibleMods();
@@ -202,21 +211,19 @@ function markCard(id, on) {
         return;
     document.querySelector(`.mod-card[data-id="${CSS.escape(id)}"]`)?.classList.toggle('selected', on);
 }
-/** Open (or move) the drawer to `modId`. A click on the mod already open closes it. */
+/** Open the dialog on `modId` (or move the open one to it). */
 export async function selectMod(modId) {
-    if (S.selectedModId === modId && drawerEl()) {
-        void requestClose();
-        return;
-    }
     await openModDetail(modId);
 }
-async function openModDetail(modId, focusCard = false) {
+async function openModDetail(modId, revealCard = false) {
     if (S.selectedModId !== modId && !(await canLeave()))
         return;
     markCard(S.selectedModId, false);
     S.selectedModId = modId;
     markCard(modId, true);
-    if (focusCard)
+    // Moving with ‹ ›: the list behind follows (scrolled, never re-flowed), so the card is there
+    // to take the focus back when the dialog closes.
+    if (revealCard)
         revealMod(modId);
     renderModDetail(modId);
     dispatchBmmAction(BMM_ACTIONS.MOD_DETAIL_OPENED, { modId });
@@ -230,11 +237,12 @@ export function closeModDetail() {
     markCard(id, false);
     S.selectedModId = null;
     _dirty = false;
-    const panel = drawerEl();
-    if (panel)
-        panel.remove();
-    document.querySelector('.app-shell')?.classList.remove('has-mod-drawer');
-    // Back to the card it was opened from, so the keyboard carries on in the list.
+    const rel = _release;
+    _release = null;
+    rel?.();
+    overlayEl()?.remove();
+    // Back to the card of the mod last shown (‹ › may have moved it), so the keyboard carries on
+    // in the list.
     if (id)
         document.querySelector(`.mod-card[data-id="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
 }
@@ -261,14 +269,16 @@ function showTab(panel, tab, focus = false) {
             b.focus();
     });
     panel.querySelectorAll('.mdd-pane').forEach((p) => p.classList.toggle('is-active', p.dataset.pane === tab));
+    const body = panel.querySelector('#mod-detail-container');
+    if (body)
+        body.scrollTop = 0;
     syncFoot(panel);
 }
-/** The Save / Cancel bar: where editing happens, and anywhere while something is unsaved. */
+/** The Save / Cancel bar: always there (a dialog keeps its height), live when something is unsaved. */
 function syncFoot(panel) {
     const foot = panel.querySelector('#mdd-foot');
     if (!foot)
         return;
-    foot.hidden = !(_dirty || _tab === 'details' || _tab === 'updates');
     foot.classList.toggle('is-dirty', _dirty);
     panel.querySelector('#btn-save-detail').disabled = !_dirty;
     panel.querySelector('#btn-cancel-detail').disabled = !_dirty;
@@ -290,10 +300,12 @@ function softRefresh() {
         return;
     const ctx = ctxFor(mod);
     const head = panel.querySelector('#mdd-head');
-    if (head) {
-        head.innerHTML = drawerHeaderHtml(mod, ctx);
-        wireHeader(panel, mod);
-    }
+    if (head)
+        head.innerHTML = detailHeaderHtml(mod, ctx);
+    const acts = panel.querySelector('#mdd-actions');
+    if (acts)
+        acts.innerHTML = detailActionsHtml(mod);
+    wireHeader(panel, mod);
     if (!_dirty) {
         const ov = panel.querySelector('#mdd-pane-overview');
         if (ov) {
@@ -317,10 +329,10 @@ function wireOnce() {
     if (_wired)
         return;
     _wired = true;
-    // The list changed (a toggle, a scan, a sync): the drawer follows, without losing edits.
+    // The list changed (a toggle, a scan, a sync): the dialog follows, without losing edits.
     appState.subscribe('allMods', () => { if (drawerEl())
         queueSoftRefresh(); });
-    // Leaving the library closes it; the library's own space is where it lives.
+    // Leaving the library (a shortcut, a deep link) closes it: it is the library's dialog.
     const lib = document.getElementById('view-library');
     if (lib)
         new MutationObserver(() => {
@@ -329,37 +341,58 @@ function wireOnce() {
                 closeModDetail();
             }
         }).observe(lib, { attributes: true, attributeFilter: ['class'] });
-    document.addEventListener('keydown', (e) => {
-        const panel = drawerEl();
-        if (!panel || e.defaultPrevented)
-            return;
-        if (document.querySelector('.modal-overlay.open, .modal-overlay.active'))
+}
+/** The overlay and its card, built once per opening; ‹ › redraw the card in place. Escape, the
+ *  Tab trap and the focus return come from the house shell (bindModal). */
+function ensureDialog() {
+    const existing = drawerEl();
+    if (existing)
+        return existing;
+    const host = document.getElementById('app-window-outer') || document.body;
+    if (!host)
+        return null;
+    ensureModalShellCss();
+    const { overlay, card } = detailOverlay();
+    host.appendChild(overlay);
+    raiseAboveAll(overlay);
+    // A click on the dim closes it — both ends of the click on the dim, so a text selection that
+    // ends outside the card does not throw the form away.
+    let downOnDim = false;
+    overlay.addEventListener('mousedown', (e) => { downOnDim = e.target === overlay; });
+    overlay.addEventListener('click', (e) => { if (downOnDim && e.target === overlay)
+        void requestClose(); downOnDim = false; });
+    // The dialog's own keys, before the shell's Escape (which listens on the document).
+    overlay.addEventListener('keydown', (e) => {
+        if (e.defaultPrevented || topOverlay() !== overlay)
             return;
         const target = e.target;
-        const typing = !!target.closest?.('input, textarea, select, [contenteditable="true"]');
         if (e.key === 'Escape') {
-            if (target.closest?.('#detail-tag-picker, #detail-dep-suggestions'))
-                return;
-            e.preventDefault();
-            if (typing) {
-                target.blur();
+            // The tag menu or the dependency suggestions close first.
+            const menu = card.querySelector('#detail-tag-menu');
+            if (menu && menu.style.display !== 'none') {
+                e.preventDefault();
+                menu.style.display = 'none';
                 return;
             }
-            void requestClose();
-            return;
+            const sug = card.querySelector('#detail-dep-suggestions');
+            if (sug && sug.style.display !== 'none') {
+                e.preventDefault();
+                sug.style.display = 'none';
+                return;
+            }
+            return; // bindModal → requestClose (asks first when something is unsaved)
         }
-        if (typing || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey)
+        if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp')
             return;
-        // A focused card has its own arrows (lib-select.ts); the drawer answers everywhere else.
-        if (target.closest?.('.mod-card'))
+        if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey)
             return;
-        if (target.closest?.('.mdd-tabs'))
+        if (target.closest?.('input, textarea, select, [contenteditable="true"], [role="listbox"], [role="menu"], .mdd-tabs, .bmm-tag-menu'))
             return;
-        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-            e.preventDefault();
-            void stepMod(e.key === 'ArrowDown' ? 1 : -1);
-        }
+        e.preventDefault();
+        void stepMod(e.key === 'ArrowDown' ? 1 : -1);
     });
+    _release = bindModal(overlay, { onClose: () => { void requestClose(); } });
+    return card;
 }
 function wireHeader(panel, mod) {
     panel.querySelector('#btn-close-detail-inner')?.addEventListener('click', () => { void requestClose(); });
@@ -444,7 +477,7 @@ function wireFiles(panel, mod) {
         }
     });
 }
-/** Draw the drawer for `modId` (or redraw it: after a save, a re-hash, a language change). */
+/** Draw the dialog for `modId` (or redraw it: ‹ ›, after a save, a re-hash, a language change). */
 export async function renderModDetail(modId) {
     const mod = S.allMods.find(m => m.id === modId);
     if (!mod)
@@ -457,26 +490,23 @@ export async function renderModDetail(modId) {
         return;
     }
     _dirty = false;
-    const shell = document.querySelector('.app-shell');
-    if (!shell)
+    // Where the focus was in the card (‹ › keep it on the arrow that was pressed).
+    const focusedId = existing && existing.contains(document.activeElement) ? document.activeElement.id : '';
+    const panel = ensureDialog();
+    if (!panel)
         return;
-    let panel = existing;
-    if (!panel) {
-        panel = document.createElement('aside');
-        panel.id = 'mod-detail-panel';
-        panel.className = 'mod-detail-panel mod-drawer';
-        panel.setAttribute('aria-labelledby', 'mdd-title');
-        panel.tabIndex = -1;
-        shell.appendChild(panel);
-        shell.classList.add('has-mod-drawer');
-    }
     panel.dataset.modId = modId;
     const ctx = ctxFor(mod);
-    panel.innerHTML = drawerHtml(mod, ctx, _tab);
+    panel.innerHTML = detailDialogHtml(mod, ctx, _tab);
     // The SHA listener (app.ts) and the hash deletion (settings.ts) refresh the open mod by this.
     const body = panel.querySelector('#mod-detail-container');
     if (body)
         body._currentModId = mod.id;
+    const refocus = focusedId ? panel.querySelector(`#${CSS.escape(focusedId)}`) : null;
+    if (refocus && !refocus.disabled)
+        refocus.focus({ preventScroll: true });
+    else if (!panel.contains(document.activeElement))
+        panel.focus({ preventScroll: true });
     wireHeader(panel, mod);
     paintOverview(panel, mod);
     wireFiles(panel, mod);
@@ -484,7 +514,7 @@ export async function renderModDetail(modId) {
     // Tabs: click, and the tablist keys.
     panel.querySelectorAll('.mdd-tab').forEach((b) => b.addEventListener('click', () => showTab(panel, b.dataset.tab)));
     panel.querySelector('.mdd-tabs')?.addEventListener('keydown', (e) => {
-        const order = DRAWER_TABS;
+        const order = DETAIL_TABS;
         const i = order.indexOf(_tab);
         const go = e.key === 'ArrowRight' ? order[(i + 1) % order.length] : e.key === 'ArrowLeft' ? order[(i - 1 + order.length) % order.length]
             : e.key === 'Home' ? order[0] : e.key === 'End' ? order[order.length - 1] : null;
@@ -493,11 +523,15 @@ export async function renderModDetail(modId) {
         e.preventDefault();
         showTab(panel, go, true);
     });
-    panel.addEventListener('click', (e) => {
-        const go = e.target.closest('[data-goto]');
-        if (go)
-            showTab(panel, go.dataset.goto, true);
-    });
+    // On the card itself, which outlives its redraws: wired once per card.
+    if (!panel.dataset.gotoWired) {
+        panel.dataset.gotoWired = '1';
+        panel.addEventListener('click', (e) => {
+            const go = e.target.closest('[data-goto]');
+            if (go)
+                showTab(panel, go.dataset.goto, true);
+        });
+    }
     // Where this mod sits in the profile's activation order, and the moves (lib-order.ts).
     mountOrderSection(panel, mod);
     // The protected-source block: mounted HERE, beside its listeners, because markup with no

@@ -33,11 +33,11 @@ when a translation and the code disagree. It cannot go out of date.
 | `{label}` | a short title |
 | `{path}` | a file or folder path |
 | `{version}` | a version number |
+| `{host}` | a server name |
 | `{profile}` | a profile name |
+| `{file}` | a file name |
 | `{mod}` | a mod name |
 | `{error}` | an error message |
-| `{file}` | a file name |
-| `{host}` | a server name |
 | `{url}` | a web address |
 | `{x}` | a list or a detail the code inserts |
 | `{time}` | a time |
@@ -73,7 +73,7 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 
 ## Every key with variables
 
-1210 keys, grouped by their first segment. The text is the English one, shortened.
+1275 keys, grouped by their first segment. The text is the English one, shortened.
 
 ### activity
 
@@ -111,6 +111,12 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `ai.ask2.byLocal` | `{model}` | by {model}, on this PC |
 | `ai.ask2.byRemote` | `{model}` | by {model} (remote API) |
 | `ai.ask2.checked` | `{p}` | checked by Laya {p} % |
+| `ai.draft.for` | `{field}` | For: {field} |
+| `ai.draft.goesExternal` | `{host}` `{model}` | Goes to {host}, model {model}. This text leaves this PC. |
+| `ai.draft.goesLocal` | `{host}` `{model}` | Goes to {host} on this PC, model {model}. Nothing leaves this PC. |
+| `ai.draft.masked` | `{n}` | {n} personal item(s) masked before sending. |
+| `ai.draft.sentTo` | `{host}` | Sent to {host} |
+| `ai.draft.tabDiffN` | `{a}` `{r}` | Changes +{a} −{r} |
 | `ai.emb.disk` | `{free}` `{need}` | Needs {need} of disk space; {free} free. |
 | `ai.emb.diskNeed` | `{need}` | Needs {need} of disk space. |
 | `ai.emb.eta` | `{eta}` | {eta} left |
@@ -126,6 +132,18 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `ai.emb.update` | `{size}` | Update the model ({size}) |
 | `ai.emb.where` | `{dir}` `{size}` | {size} in {dir} |
 | `ai.first.install` | `{size}` | Install Laya ({size}) |
+| `ai.gen.code.http` | `{status}` | HTTP {status} |
+| `ai.gen.errHttp` | `{status}` | The server answered with an error (HTTP {status}). |
+| `ai.gen.okChat` | `{ms}` | Connected, and the model answers ({ms} ms). |
+| `ai.gen.okModels` | `{n}` | Connected: {n} model(s) found. |
+| `ai.gen.privGenExt` | `{v}` | Drafts send the text you choose to {v}. |
+| `ai.gen.provSummary` | `{cls}` `{gen}` | Sorting: {cls} · Writer: {gen} |
+| `ai.gen.serverSays` | `{detail}` | The server says: {detail} |
+| `ai.gen.stepOk` | `{ms}` | OK, {ms} ms |
+| `ai.gen.usedBase` | `{base}` | Address used: {base} |
+| `ai.gen.willUse` | `{base}` | Will use {base} |
+| `ai.gen.writerChip` | `{v}` | Writer: {v} |
+| `ai.hub.headState` | `{model}` `{writer}` | Model: {model} · Writer: {writer} |
 | `ai.hub2.model` | `{state}` | Model: {state} |
 | `ai.hub2.nOwn` | `{n}` | {n} with their own settings |
 | `ai.hub2.tasksPill` | `{n}` `{on}` | {n} task(s), {on} on |
@@ -537,6 +555,13 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `i18n.phExtra` | `{name}` | {name} not in the source |
 | `i18n.phMissing` | `{name}` | {name} missing |
 | `i18n.progress` | `{done}` `{lang}` `{pct}` `{total}` | {lang} · {done}/{total} translated ({pct}%) |
+
+### iconpack
+
+| Key | Variables | Text |
+|---|---|---|
+| `iconpack.imported` | `{0}` | {0} icon(s) added to My icons |
+| `iconpack.skipped` | `{0}` | Skipped (not a usable image, or over 128 KB): {0} |
 
 ### kofi
 
@@ -1208,6 +1233,14 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `sched.dbg.trailN` | `{n}` | {n} value(s) |
 | `sched.dcsHookOff` | `{n}` | DCS watcher removed from {n} folder(s). |
 | `sched.dcsHookOk` | `{n}` | DCS watcher installed in {n} folder(s). |
+| `sched.dg.hookMissing` | `{name}` | The join-gate hook is not in place: {name} would not let you in. |
+| `sched.dg.joinHow` | `{server}` | DCS is starting. In Multiplayer, Connect by IP, paste {server} (it is on the clipboard). |
+| `sched.dg.notReadyTitle` | `{name}` | Not ready for {name} |
+| `sched.dg.ownHookSet` | `{f}` | Hook from: {f} |
+| `sched.dg.readyTitle` | `{name}` | Ready for {name} |
+| `sched.dg.stopped` | `{name}` | Not joined: the mod list for {name} is not ready. |
+| `sched.dg.taskDesc` | `{name}` | Checks the mod list for {name}, then starts DCS. Otherwise offers to fix it. |
+| `sched.dg.taskName` | `{name}` | DCS join gate: {name} |
 | `sched.dl.status` | `{s}` | The server answered {s}. |
 | `sched.dl.steps` | `{n}` | {n} step(s) |
 | `sched.dr.measureFailed` | `{e}` | Could not measure: {e} |
@@ -1228,14 +1261,19 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `sched.filter.n` | `{n}` `{total}` | {n} of {total} |
 | `sched.filter.total` | `{total}` | {total} tasks |
 | `sched.flag.denied` | `{k}` `{list}` | “{k}” is not a storage setting a task may change. Allowed: {list}. |
+| `sched.flow.copied` | `{n}` | {n} step(s) copied. |
 | `sched.flow.delMany` | `{n}` | Delete these {n} steps, and everything inside them? |
 | `sched.flow.folded` | `{n}` | {n} inside, folded |
+| `sched.flow.frameN` | `{n}` | {n} step(s) |
 | `sched.flow.lastRun` | `{when}` | Last run {when} |
 | `sched.flow.nBranches` | `{n}` | {n} branch(es) |
 | `sched.flow.nCases` | `{n}` | {n} case(s) |
 | `sched.flow.needs` | `{what}` | needs “{what}” |
+| `sched.flow.needsField` | `{p}` | Required field empty: {p} |
+| `sched.flow.pasted` | `{n}` | {n} step(s) pasted. |
 | `sched.gen.done` | `{n}` | Repo written to {n} |
 | `sched.gen.errGone` | `{n}` | Profile(s) no longer on this machine: {n} |
+| `sched.gl.copied` | `{v}` | Copied: {v} |
 | `sched.gw.found` | `{f}` `{n}` | Found {n}, using {f} |
 | `sched.gw.ready` | `{f}` | watching {f} |
 | `sched.http.badUrl` | `{u}` | Not an http(s) address: {u} |
@@ -1254,10 +1292,18 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `sched.iv.line` | `{a}` `{m}` `{name}` `{x}` | {name}: {m} modified, {x} missing, {a} added |
 | `sched.key.exists` | `{k}` | "{k}" is already on the ring, left alone |
 | `sched.key.made` | `{k}` | made the identity key "{k}" |
+| `sched.list.folderN` | `{n}` `{on}` | {n} · {on} on |
 | `sched.listApply.done` | `{new}` `{on}` | {on} mod(s) turned on, {new} installed. |
 | `sched.listApply.missing` | `{n}` | {n} mod(s) could not be found |
 | `sched.lr.done` | `{d}` `{r}` `{size}` | {r} log(s) rotated, {d} file(s) removed, {size} freed |
 | `sched.lr.would` | `{d}` `{r}` `{size}` | Would rotate {r} log(s) and remove {d} file(s) ({size}) |
+| `sched.lv.altered` | `{n}` | {n} file(s) changed or missing |
+| `sched.lv.extra` | `{n}` | {n} other mod(s) switched on |
+| `sched.lv.inactive` | `{n}` | {n} switched off |
+| `sched.lv.missing` | `{n}` | {n} not installed |
+| `sched.lv.nMods` | `{n}` | {n} mod(s) |
+| `sched.lv.okSum` | `{fp}` `{n}` | List ready: {n} mod(s), fingerprint {fp}. |
+| `sched.lv.undeployed` | `{n}` | {n} file(s) no longer in the game folder |
 | `sched.net.badHeader` | `{s}` | The header “{s}” has an unusable name or value. |
 | `sched.net.error` | `{s}` | Network error: {s} |
 | `sched.net.refused` | `{why}` | Refused before sending: {why}. |
@@ -1285,6 +1331,20 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `sched.pg.permsNeed` | `{p}` | Needs {p}. Left unticked: grant it after reading the steps. |
 | `sched.pg.steps` | `{n}` | {n} step(s) |
 | `sched.pg.sub` | `{n}` | {n} ready-made tasks. Each one is complete and does something useful as is; pick one, read what it does, then… |
+| `sched.pkg.askBody` | `{file}` `{n}` `{pkg}` `{size}` `{task}` `{where}` | « {task} » wants to copy {file} ({size}, {n} file(s)) from the package « {pkg} » into {where}. |
+| `sched.pkg.dcsAll` | `{n}` | All of them ({n} found) |
+| `sched.pkg.exported` | `{n}` `{size}` | Package written: {n} item(s), {size}. Unsigned. |
+| `sched.pkg.exportedSigned` | `{n}` `{size}` | Package written and signed: {n} item(s), {size}. |
+| `sched.pkg.from` | `{p}` | From the package « {p} » |
+| `sched.pkg.imported` | `{n}` `{p}` | {n} automation(s) imported from « {p} ». |
+| `sched.pkg.installed` | `{n}` | {n} file(s) placed. |
+| `sched.pkg.nFiles` | `{n}` | {n} files |
+| `sched.pkg.revFiles` | `{n}` | Files ({n}) |
+| `sched.pkg.revTasks` | `{n}` | Automations ({n}) |
+| `sched.pkg.revTitle` | `{p}` | Import the package « {p} »? |
+| `sched.pkg.sigValid` | `{a}` | Signed by {a}…, unchanged since. |
+| `sched.pkg.verifyBad` | `{n}` | {n} file(s) missing or different. |
+| `sched.pkg.verifyOk` | `{n}` | {n} file(s) in place, identical. |
 | `sched.presetd.sharedvar` | `{sharedNote}` | Writes one shared variable every other task can read as {sharedNote}. A building block rather than a finished… |
 | `sched.presetReplaceBody` | `{n}` | A preset replaces this task: {n} step(s), its name, trigger and permissions. Undo brings it back. |
 | `sched.prev.lede` | `{c}` `{n}` | {c} of {n} step(s) would actually change something. |
@@ -1419,6 +1479,7 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `sk.alsoUsedBy` | `{name}` | Same keys as « {name} »: only one of them runs. |
 | `sk.changeFor` | `{name}` | Change the keys of {name} |
 | `sk.count` | `{c}` `{n}` | {n} shortcuts, {c} changed or yours |
+| `sk.dev.button` | `{n}` | Mouse button {n} |
 | `sk.onlyOn` | `{page}` | only on {page} |
 | `sk.reserved` | `{keys}` | {keys} is kept for Windows or BMM. Try another one. |
 
@@ -1428,8 +1489,15 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 |---|---|---|
 | `skd.clash` | `{name}` | Already used by « {name} ». Saving moves the keys here. |
 | `skd.deleteConfirm` | `{name}` | Delete the shortcut {name}? |
+| `skd.elGone` | `{name}` | « {name} »: the control it clicks is not on screen any more. |
+| `skd.elRefused` | `{name}` `{why}` | « {name} » was not clicked: {why} |
+| `skd.imp.done` | `{k}` `{n}` | {n} entries imported, {k} kept disabled. |
+| `skd.imp.reassignedTo` | `{name}` | Keys now run « {name} ». |
+| `skd.imp.reassignNote` | `{name}` | Imported shortcut « {name} »: choose what its keys should do now. |
+| `skd.imp.sub` | `{n}` | {n} entries of this file point at something this BMM does not have. |
 | `skd.imported` | `{n}` | {n} shortcut entries imported. |
 | `skd.lbl.automation` | `{name}` | Run automation {name} |
+| `skd.lbl.element` | `{name}` | Click « {name} » |
 | `skd.lbl.modpack` | `{name}` | Activate modpack {name} |
 | `skd.lbl.profile` | `{name}` | Switch to profile {name} |
 | `skd.lbl.settings` | `{name}` | Open Settings: {name} |
@@ -1631,6 +1699,8 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 | `tstudio.importInstalled` | `{lang}` | {lang} installed as a new language |
 | `tstudio.liveOtherLang` | `{app}` `{lang}` | Live: {lang} drafts over an app shown in {app} |
 | `tstudio.nlCreated` | `{lang}` | {lang} created |
+| `tstudio.placeNoNav` | `{where}` | {where} is not in your navigation bar. Add it back in Customise navigation. |
+| `tstudio.placeNotNow` | `{where}` | Not on screen right now. Open {where}, then the dialog or panel that holds it. |
 | `tstudio.progressOf` | `{lang}` `{pct}` | {lang}: {pct}% translated |
 | `tstudio.progressTip` | `{done}` `{total}` | {done} of {total} keys. Click to translate this language |
 | `tstudio.revertAllConfirm` | `{n}` | Click again to drop {n} drafts |

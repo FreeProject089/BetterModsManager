@@ -60,3 +60,20 @@
     .un-vside { border-right: 0; border-bottom: 1px solid var(--bmm-border); }
     .un-vnotes { padding: 16px; }
 }
+
+/* The 1.0 story, pinned above the version list. */
+.un-pin {
+    display: flex; align-items: center; gap: 10px; margin: 0 12px 8px; padding: 10px 12px; text-align: left; cursor: pointer;
+    border: 1px solid color-mix(in srgb, var(--bmm-accent) 45%, var(--bmm-border)); border-radius: 10px;
+    background: var(--bmm-accent-dim); color: inherit; font: inherit;
+}
+.un-pin:hover, .un-pin.is-sel { border-color: var(--bmm-accent); }
+.un-pin.is-sel { box-shadow: 0 0 0 1px var(--bmm-accent) inset; }
+.un-pin:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: 1px; }
+.un-pin > svg { flex: none; color: var(--bms-accent-ink); }
+.un-pin-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.un-pin-n { font-size: 13.5px; font-weight: 700; color: var(--bmm-text-primary); }
+.un-pin-s { font-size: 11.5px; line-height: 1.35; color: var(--bmm-text-secondary); }
+.un-tag.is-major { background: var(--bmm-accent-dim); color: var(--bmm-text-primary); }
+.un-nhead .un-to-big { margin-left: auto; }
+.un-nhead .un-to-big + .un-open-doc { margin-left: 0; }

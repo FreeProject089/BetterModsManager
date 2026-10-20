@@ -16,7 +16,7 @@
 // nobody at 04:00 to type anything, and a prompt nobody answers is a task that silently
 // never runs.
 
-import { invoke, pickFile, askConfirm } from '../../core/api.js';
+import { invoke, pickFile } from '../../core/api.js';
 import { t } from '../../core/i18n.js';
 import { toast } from '../../ui/app.js';
 import { escHtml } from '../../core/utils.js';

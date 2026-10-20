@@ -3,6 +3,12 @@
 Three steps. Do them in order — the second one is the one people skip, and it's the one that
 matters.
 
+:::tip[Rather follow one task at a time?]
+The **Step by step** section has a page per job, each with a picture and a Show me button:
+[Create a profile](doc-page:guide/create-profile), [Install your first mod](doc-page:guide/install-first-mod),
+[Fix a conflict](doc-page:guide/fix-a-conflict). Start from the [list of tasks](doc-page:guide/index).
+:::
+
 
 <!-- story:new-game -->
 ![Set up a new game](assets/docs/media/gifs/new-game.gif)

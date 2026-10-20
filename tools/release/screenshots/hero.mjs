@@ -14,7 +14,10 @@ import { writePsd } from '../lib/psd.mjs';
 
 export const HERO = { w: 1600, h: 640 };
 const FONT = "Inter,'Segoe UI',system-ui,sans-serif";
-export const HERO_FONT_NOTE = 'Fonts: Inter (fallback Segoe UI, system-ui); title 56 px weight 800, tagline 22 px, version pill 17 px weight 600.';
+export const HERO_FONT_NOTE = 'Fonts: Inter (fallback Segoe UI, system-ui); title 56 px weight 800, tagline 22 px weight 500, version pill 17 px weight 700.';
+// Text colour on its background, for the contrast test (WCAG AA = 4.5): the hero is dark navy
+// with a blue glow top-left and an amber glow bottom-right.
+export const HERO_PAIRS = [['title', '#e8edf7', '#1d2b4f'], ['title, second line', '#fbbf24', '#1d2b4f'], ['tagline', '#cdd6e6', '#1d2b4f'], ['version', '#b9d0ff', '#121a2c']];
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 const dataUri = (p) => `data:image/png;base64,${readFileSync(p).toString('base64')}`;
@@ -47,10 +50,10 @@ export function heroLayers(version, shots, logoHref, { tagline = ['Profiles, a m
       <rect x="72" y="96" width="112" height="112" rx="28" fill="#000" opacity="0.5" filter="url(#shadow)"/>
       <rect x="72" y="84" width="112" height="112" rx="28" fill="#eef2f9"/>
       <image href="${logoHref}" xlink:href="${logoHref}" x="82" y="94" width="92" height="92"/>`),
-    L('title', 'title', `<text font-family="${FONT}" font-size="56" font-weight="800" letter-spacing="-1" fill="#e8edf7"><tspan x="72" y="270">Better</tspan><tspan x="72" y="332" fill="#f59e0b">Mod Manager</tspan></text>`),
-    L('tagline', 'tagline', tagline.map((t, i) => `<text x="72" y="${384 + i * 32}" font-family="${FONT}" font-size="22" fill="#a9b4c8">${esc(t)}</text>`).join('')),
-    L('version', 'version', `<rect x="72" y="458" width="${Math.round(8.6 * `Version ${version}`.length) + 30}" height="34" rx="17" fill="#121a2c" stroke="#2d3b5c"/>
-      <text x="${72 + 15}" y="481" font-family="${FONT}" font-size="17" font-weight="600" fill="#8fb3ff">Version ${esc(version)}</text>`),
+    L('title', 'title', `<text font-family="${FONT}" font-size="56" font-weight="800" letter-spacing="-1" fill="#e8edf7"><tspan x="72" y="270">Better</tspan><tspan x="72" y="332" fill="#fbbf24">Mod Manager</tspan></text>`),
+    L('tagline', 'tagline', tagline.map((t, i) => `<text x="72" y="${384 + i * 32}" font-family="${FONT}" font-size="22" font-weight="500" fill="#cdd6e6">${esc(t)}</text>`).join('')),
+    L('version', 'version', `<rect x="72" y="458" width="${Math.round(8.6 * `Version ${version}`.length) + 30}" height="34" rx="17" fill="#121a2c" stroke="#5d77b0"/>
+      <text x="${72 + 15}" y="481" font-family="${FONT}" font-size="17" font-weight="700" fill="#b9d0ff">Version ${esc(version)}</text>`),
   ];
 }
 

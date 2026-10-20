@@ -1,5 +1,9 @@
 # Library
 
+:::tip[Prefer it step by step?]
+The task version of this page is [Install your first mod](doc-page:guide/install-first-mod): short steps, what you should see, a picture and a Show me button.
+:::
+
 
 The **Library** is where every mod you own lives — installed or not, from any source. If you
 only ever learn one screen in BMM, make it this one: everything else (profiles, modpacks,

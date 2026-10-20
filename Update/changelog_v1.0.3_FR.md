@@ -2,6 +2,8 @@
 
 La 1.0.3 apporte un centre de notifications, une vue Conflits qui montre quel mod l'emporte sur chaque fichier partagé, des panneaux qui s'ouvrent dans leur propre fenêtre, sept nouveaux Outils BMM, le suivi d'un dépôt par son adresse ou sa simple IP, un dialogue Serveurs SSH refait, une seule liste pour toutes les sources de catalogues, un créateur de plugins guidé et un éditeur de thème reconstruit. C'est aussi le premier build capable de se relier plus tard à BetterCommunity v2 : cette liaison est livrée désactivée, et rien ne change tant qu'elle n'est pas annoncée.
 
+> La 1.0.3 prolonge la version 1.0. L'histoire de la 1.0 dans son ensemble est épinglée en haut de la liste des versions : **Les nouveautés de la 1.0**. Commencez par là si vous découvrez BMM, ou si vous avez sauté les versions 1.0.0 à 1.0.2.
+
 ## [NEW] Centre de notifications
 - Un seul endroit pour tous les messages, avec un seul compteur de non lus (aussi sur l'icône de la barre des tâches). Les messages sont groupés selon leur origine : Mises à jour, Dépôts suivis, Planificateur, Tâches de fond, BetterCommunity et BMM lui-même.
 - Ouvrez un message quand il mène quelque part (une mise à jour disponible, un dépôt suivi), reportez-le (1 heure, 4 heures, demain 9 h) ou retirez-le. Un message reporté revient non lu à l'heure prévue.

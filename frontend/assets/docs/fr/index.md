@@ -54,7 +54,7 @@ tout le reste est bâti. La sauter, c'est la raison pour laquelle on se perd au 
 écran.
 
 !!! tip "Deux façons de lire cette doc"
-    Les sections **Premiers pas** et **Fonctionnalités** t'apprennent à *utiliser* BMM. La
+    Les sections **Premiers pas**, **[Pas à pas](doc-page:guide/index)** (une page par tâche, avec une image et un bouton Montre-moi dans l’application) et **Fonctionnalités** t’apprennent à *utiliser* BMM. La
     nouvelle section **[Comment ça marche](doc-page:how-it-works/index)** s'adresse aux curieux et aux
     contributeurs — elle explique *pourquoi* BMM se comporte ainsi, avec des diagrammes. Lis la
     moitié qui t'intéresse.

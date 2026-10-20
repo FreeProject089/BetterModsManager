@@ -1,32 +1,37 @@
-// mod-drawer-view.ts — the markup of a mod's details, as a side drawer beside the library.
+// mod-detail-view.ts — the markup of a mod's details, as a centred dialog over the library.
 //
-// It was a panel opened INSIDE the mod's card: the card grew to the height of five folded
-// sections, the list under it jumped down, the virtual list (fixed row heights) lost track of
-// where its rows were, and every field — name, hashes, content id, links — was an open input in
-// one long column. Now the library stays where it is and the mod opens beside it:
+// History. It was first a panel opened INSIDE the mod's card (the card grew to the height of five
+// folded sections, the virtual list lost track of its rows), then a side drawer: a third column
+// of the app shell that took its width from the library, so the toolbar, the filters and every
+// card re-flowed the moment a mod was opened. The owner's verdict on the drawer: it breaks the
+// layout. Now the mod opens in the house dialog (css/modal-shell.css, size lg, fixed height) and
+// the library under it never moves:
 //
-//   header   name, version · author · state, and the three things you do to a mod (enable or
-//            disable it, check for an update, open its folder), with ‹ › to the next mod and ×
-//   tabs     Overview (the description, rendered) · Details (the editable fields) · Files
-//            (integrity, content id, the list) · Conflicts & order · Updates & links
-//   footer   Save / Cancel, shown where editing happens and whenever something is unsaved
+//   header    icon, name, version · author · state, ‹ › to the previous / next mod, ×
+//   toolbar   the three things you do to a mod: enable or disable it, check for an update,
+//             open its folder
+//   tabs      Overview (the description, rendered) · Details (the editable fields) · Files
+//             (integrity, content id, the list) · Conflicts & order · Updates & links
+//   footer    the one Save / Cancel bar, with what is unsaved
 //
 // Markup only: mods-details.ts mounts it and wires every control. The ids the tutorial and the
-// rest of the app look for (detail-name, btn-save-detail, btn-browse-archive…) are kept.
+// rest of the app look for (detail-name, btn-save-detail, btn-browse-archive, mdd-tab-*,
+// #mod-detail-container…) are kept.
 
 import { t } from '../../core/i18n.js';
 import { actAttrs, actAttrsStop } from '../../core/inline-actions.js';
 import { escHtml, escAttr, escJs } from '../../core/utils.js';
 import { uiIcon } from '../../ui/icons.js';
+import { modalClassName } from '../../ui/modal-shell.js';
 
-export type DrawerTab = 'overview' | 'details' | 'files' | 'conflicts' | 'updates';
-export const DRAWER_TABS: DrawerTab[] = ['overview', 'details', 'files', 'conflicts', 'updates'];
-const TAB_KEY: Record<DrawerTab, string> = {
+export type DetailTab = 'overview' | 'details' | 'files' | 'conflicts' | 'updates';
+export const DETAIL_TABS: DetailTab[] = ['overview', 'details', 'files', 'conflicts', 'updates'];
+const TAB_KEY: Record<DetailTab, string> = {
     overview: 'mdd.tab.overview', details: 'mdd.tab.details', files: 'mdd.tab.files',
     conflicts: 'mdd.tab.conflicts', updates: 'mdd.tab.updates',
 };
 
-export interface DrawerCtx {
+export interface DetailCtx {
     links: Array<{ url: string; link_type?: string; label?: string }>;
     repoLink: string | null;
     origin: string;
@@ -34,8 +39,8 @@ export interface DrawerCtx {
     hasNext: boolean;
 }
 
-/** The header: identity, state and the primary actions. Re-drawn on its own after a toggle. */
-export function drawerHeaderHtml(mod: any, ctx: DrawerCtx): string {
+/** The header band: identity, state, ‹ › and ×. Re-drawn on its own after a toggle. */
+export function detailHeaderHtml(mod: any, ctx: DetailCtx): string {
     const on = !!mod.enabled;
     const meta = [
         `<span class="mdd-ver">v${escHtml(mod.version || '?')}</span>`,
@@ -43,33 +48,35 @@ export function drawerHeaderHtml(mod: any, ctx: DrawerCtx): string {
         `<span class="mdd-state ${on ? 'is-on' : 'is-off'}" data-tasky="${escAttr(mod.mod_folder_path || '')}" data-tasky-icon="folder" data-tasky-literal="1">${escHtml(t(on ? 'mdd.stateOn' : 'mdd.stateOff'))}</span>`,
     ].filter(Boolean).join('<span class="mdd-dot" aria-hidden="true">·</span>');
     return `
-      <div class="mdd-top">
-        <div class="mdd-icon" aria-hidden="true">${uiIcon('package', 20)}</div>
-        <div class="mdd-id">
-          <h2 class="mdd-name" id="mdd-title" data-tasky="${escAttr(escJs(mod.name))}" data-tasky-icon="package" data-tasky-literal="1">${escHtml(mod.name)}</h2>
-          <div class="mdd-meta">${meta}</div>
+        <div class="bms-icon" aria-hidden="true">${uiIcon('package', 18)}</div>
+        <div class="bms-titles">
+          <h2 class="modal-title mdd-name" id="mdd-title" data-tasky="${escAttr(escJs(mod.name))}" data-tasky-icon="package" data-tasky-literal="1">${escHtml(mod.name)}</h2>
+          <div class="bms-sub mdd-meta">${meta}</div>
         </div>
-        <div class="mdd-nav">
-          <button type="button" class="mdd-icon-btn" id="btn-detail-prev" aria-label="${escAttr(t('mdd.prev'))}" data-tooltip="${escAttr(t('mdd.prev'))}"${ctx.hasPrev ? '' : ' disabled'}>${uiIcon('chevron-up', 16)}</button>
-          <button type="button" class="mdd-icon-btn" id="btn-detail-next" aria-label="${escAttr(t('mdd.next'))}" data-tooltip="${escAttr(t('mdd.next'))}"${ctx.hasNext ? '' : ' disabled'}>${uiIcon('chevron-down', 16)}</button>
-          <button type="button" class="mdd-icon-btn" id="btn-close-detail-inner" aria-label="${escAttr(t('mdd.close'))}" data-tooltip="${escAttr(t('mdd.closeTip'))}">${uiIcon('close', 16)}</button>
+        <div class="bms-head-end mdd-nav">
+          <button type="button" class="mdd-icon-btn" id="btn-detail-prev" aria-label="${escAttr(t('mdd.prev'))}" data-tooltip="${escAttr(t('mdd.prev'))}"${ctx.hasPrev ? '' : ' disabled'}>${uiIcon('chevron-left', 16)}</button>
+          <button type="button" class="mdd-icon-btn" id="btn-detail-next" aria-label="${escAttr(t('mdd.next'))}" data-tooltip="${escAttr(t('mdd.next'))}"${ctx.hasNext ? '' : ' disabled'}>${uiIcon('chevron-right', 16)}</button>
         </div>
-      </div>
-      <div class="mdd-actions">
-        <button type="button" class="btn btn-sm ${on ? 'btn-secondary' : 'btn-primary'}" id="btn-detail-toggle">${uiIcon('power', 14)}<span>${escHtml(t(on ? 'mdd.disable' : 'mdd.enable'))}</span></button>
-        <button type="button" class="btn btn-sm btn-secondary" ${actAttrsStop('bmmMenuCheckModUpdate', mod.id)}>${uiIcon('refresh', 14)}<span>${escHtml(t('mod.checkUpdate'))}</span></button>
-        <button type="button" class="btn btn-sm btn-secondary" id="btn-detail-folder">${uiIcon('open-folder', 14)}<span>${escHtml(t('mdd.openFolder'))}</span></button>
-      </div>`;
+        <button type="button" class="modal-close" id="btn-close-detail-inner" aria-label="${escAttr(t('mdd.close'))}" data-tooltip="${escAttr(t('mdd.closeTip'))}">${uiIcon('close', 16)}</button>`;
 }
 
-function tabsHtml(active: DrawerTab): string {
-    return `<div class="mdd-tabs" role="tablist" aria-label="${escAttr(t('mdd.tabsLabel'))}">${DRAWER_TABS.map((k) => `
-        <button type="button" class="mdd-tab" role="tab" id="mdd-tab-${k}" data-tab="${k}" aria-controls="mdd-pane-${k}" aria-selected="${k === active}" tabindex="${k === active ? 0 : -1}">${escHtml(t(TAB_KEY[k]))}${k === 'conflicts' ? '<span class="mdd-tab-n conflict-badge-container"></span>' : ''}</button>`).join('')}
+/** The primary actions, under the header. Re-drawn with it. */
+export function detailActionsHtml(mod: any): string {
+    const on = !!mod.enabled;
+    return `
+        <button type="button" class="btn btn-sm ${on ? 'btn-secondary' : 'btn-primary'}" id="btn-detail-toggle">${uiIcon('power', 14)}<span>${escHtml(t(on ? 'mdd.disable' : 'mdd.enable'))}</span></button>
+        <button type="button" class="btn btn-sm btn-secondary" ${actAttrsStop('bmmMenuCheckModUpdate', mod.id)}>${uiIcon('refresh', 14)}<span>${escHtml(t('mod.checkUpdate'))}</span></button>
+        <button type="button" class="btn btn-sm btn-secondary" id="btn-detail-folder">${uiIcon('open-folder', 14)}<span>${escHtml(t('mdd.openFolder'))}</span></button>`;
+}
+
+function tabsHtml(active: DetailTab): string {
+    return `<div class="bms-tabs mdd-tabs" role="tablist" aria-label="${escAttr(t('mdd.tabsLabel'))}">${DETAIL_TABS.map((k) => `
+        <button type="button" class="bms-tab mdd-tab" role="tab" id="mdd-tab-${k}" data-tab="${k}" aria-controls="mdd-pane-${k}" aria-selected="${k === active}" tabindex="${k === active ? 0 : -1}">${escHtml(t(TAB_KEY[k]))}${k === 'conflicts' ? '<span class="mdd-tab-n conflict-badge-container"></span>' : ''}</button>`).join('')}
       </div>`;
 }
 
 /** Overview: what the mod is. Read-only; the description is filled by mods-details.ts (B.MD). */
-export function overviewHtml(mod: any, ctx: DrawerCtx): string {
+export function overviewHtml(mod: any, ctx: DetailCtx): string {
     const files = (mod.installed_files || []).length;
     return `
       <div class="mdd-desc md-body" id="mdd-desc-view"></div>
@@ -186,7 +193,7 @@ export function conflictsHtml(): string {
 }
 
 /** Updates & links: what updates it, the two update actions, then its download links (editable). */
-export function updatesHtml(mod: any, ctx: DrawerCtx): string {
+export function updatesHtml(mod: any, ctx: DetailCtx): string {
     const row = (k: string, v: string) => `<div class="detail-upd-row"><span class="detail-upd-k">${escHtml(k)}</span><span class="detail-upd-v" title="${escAttr(v)}">${escHtml(v)}</span></div>`;
     const sources = [
         mod.source_repo ? row(t('detail.upd.repo'), mod.source_repo) : '',
@@ -228,23 +235,45 @@ export function linkRowHtml(url: string, type: string, label: string,
       </div>`;
 }
 
-/** The whole drawer. */
-export function drawerHtml(mod: any, ctx: DrawerCtx, tab: DrawerTab): string {
-    const pane = (k: DrawerTab, body: string) =>
+/** The inside of the dialog card (.modal): the header, the actions, the tabs, the panes, the
+ *  footer. The card itself and its overlay are built by mods-details.ts. */
+export function detailDialogHtml(mod: any, ctx: DetailCtx, tab: DetailTab): string {
+    const pane = (k: DetailTab, body: string) =>
         `<section class="mdd-pane${k === tab ? ' is-active' : ''}" role="tabpanel" id="mdd-pane-${k}" aria-labelledby="mdd-tab-${k}" data-pane="${k}">${body}</section>`;
     return `
-      <header class="mdd-head" id="mdd-head">${drawerHeaderHtml(mod, ctx)}</header>
-      ${tabsHtml(tab)}
-      <div class="mdd-body" id="mod-detail-container">
+      <div class="modal-header" id="mdd-head">${detailHeaderHtml(mod, ctx)}</div>
+      <div class="modal-toolbar mdd-bar">
+        <div class="mdd-actions" id="mdd-actions">${detailActionsHtml(mod)}</div>
+        ${tabsHtml(tab)}
+      </div>
+      <div class="modal-body" id="mod-detail-container">
         ${pane('overview', overviewHtml(mod, ctx))}
         ${pane('details', detailsHtml(mod))}
         ${pane('files', filesHtml(mod))}
         ${pane('conflicts', conflictsHtml())}
         ${pane('updates', updatesHtml(mod, ctx))}
       </div>
-      <footer class="mdd-foot" id="mdd-foot">
-        <span class="mdd-foot-status" id="mdd-foot-status">${escHtml(t('mdd.noChanges'))}</span>
-        <button type="button" class="btn btn-ghost btn-sm" id="btn-cancel-detail" disabled>${escHtml(t('common.cancel'))}</button>
-        <button type="button" class="btn btn-primary btn-sm" id="btn-save-detail" disabled>${uiIcon('save', 14)}<span>${escHtml(t('detail.save'))}</span></button>
-      </footer>`;
+      <div class="modal-footer" id="mdd-foot">
+        <div class="modal-footer-start"><span class="modal-footer-note mdd-foot-status" id="mdd-foot-status">${escHtml(t('mdd.noChanges'))}</span></div>
+        <button type="button" class="btn btn-ghost" id="btn-cancel-detail" disabled>${escHtml(t('common.cancel'))}</button>
+        <button type="button" class="btn btn-primary" id="btn-save-detail" disabled>${uiIcon('save', 14)}<span>${escHtml(t('detail.save'))}</span></button>
+      </div>`;
+}
+
+/** The house overlay and its card (css/modal-shell.css: size lg, fixed height so a tab switch
+ *  never makes it jump). Empty: detailDialogHtml fills the card, mods-details.ts mounts it,
+ *  raises it and binds the shell's keys. #mod-detail-panel is what app.ts reads to know a mod
+ *  is open. */
+export function detailOverlay(): { overlay: HTMLElement; card: HTMLElement } {
+    const overlay = document.createElement('div');
+    overlay.id = 'mod-detail-panel';
+    overlay.className = 'modal-overlay open';
+    const card = document.createElement('div');
+    card.className = modalClassName('lg', 'mod-detail', true);
+    card.setAttribute('role', 'dialog');
+    card.setAttribute('aria-modal', 'true');
+    card.setAttribute('aria-labelledby', 'mdd-title');
+    card.tabIndex = -1;
+    overlay.appendChild(card);
+    return { overlay, card };
 }

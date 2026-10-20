@@ -238,3 +238,19 @@ textarea.sched-secret:not(.is-shown) { -webkit-text-security: disc; }
 /* The export dialog of an automation (scheduler.ts openExportDialog). */
 .sex-pre { margin: 10px 0 0; max-height: 320px; overflow: auto; padding: 10px; border-radius: var(--bmm-radius-input); border: 1px solid var(--bmm-border); background: var(--bmm-bg-base); color: var(--bmm-text-primary); font-family: var(--bmm-font-mono); font-size: 12px; white-space: pre; }
 .sex-format { margin-top: 10px; }
+/* The list's folders and tags (scheduler.ts renderScheduleList, sched-flow-ui.ts). */
+.sched-filter { flex-wrap: wrap; }
+.sched-tagbar { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 6px; }
+.sched-tag { padding: 2px 9px; border-radius: 99px; border: 1px solid var(--bmm-border); background: transparent; color: var(--bmm-text-secondary); font: 600 11px var(--bmm-font-sans); cursor: pointer; }
+.sched-tag:hover, .sched-tag:focus-visible { border-color: var(--bmm-border-hover); color: var(--bmm-text-primary); outline: none; }
+.sched-tag.is-on { background: color-mix(in srgb, var(--bmm-accent) 16%, transparent); border-color: var(--bmm-accent); color: var(--bmm-text-primary); }
+.sched-folder-h { display: flex; align-items: center; gap: 8px; width: 100%; margin: 12px 0 6px; padding: 4px 6px; border: 0; border-radius: 8px; background: transparent; color: var(--bmm-text-primary); font: 700 12px var(--bmm-font-sans); text-align: left; cursor: pointer; }
+.sched-folder-h:hover, .sched-folder-h:focus-visible { background: var(--bmm-bg-hover); outline: none; }
+.sched-folder-h svg { color: var(--bmm-text-secondary); flex-shrink: 0; }
+.sched-folder-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sched-folder-n { font-size: 11px; font-weight: 600; color: var(--bmm-text-muted); }
+.sched-row.in-folder { margin-left: 14px; }
+.sched-chip-tag { color: var(--bmm-text-secondary); }
+.sched-chip-pkg { display: inline-flex; align-items: center; gap: 4px; }
+.sched-chip-pkg svg { color: var(--bmm-warning); }
+.sched-filing { display: grid; gap: 4px; margin-top: 8px; }

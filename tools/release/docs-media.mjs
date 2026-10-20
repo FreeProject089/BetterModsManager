@@ -41,13 +41,17 @@ for (const s of index.stories) {
     mkdirSync(join(docsRoot, 'docs/assets/replays'), { recursive: true });
     copyFileSync(join(storiesDir, s.replay), join(docsRoot, 'docs/assets/replays', s.replay));
   }
+  // The replay embed is raw HTML read in the browser, relative to the page's URL (one folder deeper
+  // than the file: the site serves /features/x/). A markdown image is resolved by mkdocs relative to
+  // the FILE, so it needs one less: `mkdocs build --strict` fails on the other spelling.
   const up = '../'.repeat(page.split('/').length);
+  const upImg = '../'.repeat(page.split('/').length - 1);
   for (const lang of ['en', 'fr']) {
     const file = join(docsRoot, 'docs', lang === 'en' ? `${page}.md` : `${page}.fr.md`);
     if (!existsSync(file)) { out.push(`${s.name}: ${file} missing`); continue; }
     const title = s.title[lang], desc = s.desc[lang];
     const block = [`<!-- story:${s.name} -->`,
-      ...(withGif ? [`![${title}](${up}assets/gifs/${s.gif})`, '', `*${title}. ${desc}*`, ''] : []),
+      ...(withGif ? [`![${title}](${upImg}assets/gifs/${s.gif})`, '', `*${title}. ${desc}*`, ''] : []),
       ...(s.replay ? [`<div class="bmm-replay"`, `     data-src="${up}assets/replays/${s.replay}"`, `     data-title="${title.replace(/"/g, '&quot;')}"></div>`] : []),
       `<!-- /story:${s.name} -->`].join('\n');
     let text = readFileSync(file, 'utf8');

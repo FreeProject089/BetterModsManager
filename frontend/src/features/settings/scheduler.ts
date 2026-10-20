@@ -63,10 +63,10 @@ import {
 } from '../catalogs/catalog-index.js';
 import { writeSources } from '../catalogs/catalog-sources.js';
 import { getLinks } from '../../core/links-config.js';
-import { askConfirm } from '../../core/api.js';
+import { confirmAction } from '../../ui/verify.js';
 import { fetchSourceText } from '../../core/source-fetch.js';
 import { trustedLinkDispatcher } from '../../core/link-dispatch.js';
-import { actionPaths, pruneLayout, paletteStep, walkSteps, resolve as resolvePath, findPath, type FlowLayout } from './sched-flow-model.js';
+import { actionPaths, pruneLayout, paletteStep, walkSteps, resolve as resolvePath, findPath, buildGraph, type FlowLayout } from './sched-flow-model.js';
 import {
     mountFlow, unmountFlow, flowDebugPaint, flowRefresh, flowReveal, flowSelectedPath, type FlowHost, type StepTestResult,
 } from './sched-flow.js';
@@ -78,6 +78,9 @@ import { installFocusTrap } from '../../ui/focus-trap.js';
 import { flowKeyActive, bindScopeKeys } from './sched-flow-keys.js';
 import { newFeedItems, feedEventData, parseHeaderBlock, hostOf, webhookUrlProblem, discordBody, slackBody, webhookBody, jsonTemplate, type FeedItem } from './sched-feed.js';
 import { regexWithBudget } from './regex-budget.js';
+import type { TaskPkg, PkgEnv } from './sched-pkg.js';
+import { buildJoinGate, gateWords } from './sched-dcs-gate.js';
+import { normalizeUi, pruneReroutes, edgeKey, byFolder, allTags, matches as taskMatches, type FlowUi } from './sched-flow-ui.js';
 import { fieldProblem } from './sched-feed.js';
 import { variablesOf, insertVar, type KnownVar } from './sched-debug-map.js';
 import { uiIcon, type IconName } from '../../ui/icons.js';
@@ -237,6 +240,13 @@ interface TaskPerms {
      *  acts as the person would, and a task from a plugin must not press buttons on their
      *  behalf until they said so. Off for every existing task and reset on import. */
     navigate?: boolean;
+    /** Place the files an automation package carries outside BMM: into the DCS Saved Games
+     *  folders, the active profile's game or mods folder (`pkg.install`), and write the
+     *  join-gate report there (`gate.report`). Its own key because it writes into a GAME — a
+     *  hook script runs inside DCS — and that is neither running a program nor touching BMM's
+     *  own data. Path-confined in Rust (commands/sched_pkg.rs), each placement asked once in a
+     *  BMM dialog with a receipt. Off for every existing task and reset on import. */
+    files?: boolean;
 }
 
 /** A task's effective permissions. An old task has no `perms`, only the single
@@ -365,6 +375,12 @@ interface Task {
      *  only: the executor never reads it, the code mode never prints it, and a task nobody
      *  arranged has no such field at all. */
     layout?: FlowLayout;
+    /** The files this task carries (sched-pkg.ts): set by « attach files » or by the package
+     *  importer after it verified the package, never by a file. */
+    pkg?: TaskPkg;
+    /** Presentation only, versioned (sched-flow-ui.ts): the flow editor's frames and reroute
+     *  points, the list's folder and tags. The executor never reads it. */
+    ui?: FlowUi;
     lastRun?: number;       // epoch ms
     lastResult?: string;    // 'ok' | 'error: ...'
     history?: { at: number; ok: boolean; ms: number; err?: string }[];  // last runs (capped)
@@ -685,6 +701,8 @@ export async function openAutomations(): Promise<void> {
 // Kept across re-renders but NOT persisted: a filter is about the next few seconds, and one
 // that survived a restart would hide tasks from somebody who had forgotten they set it.
 let _taskFilter = '';
+/** The tag picked above the list (one at a time), '' for none. Not persisted, like the filter. */
+let _taskTag = '';
 
 function startEngine(): void {
     if (_timer !== null) return;
@@ -1171,7 +1189,7 @@ export async function runTaskOnce(task: Partial<Task>): Promise<void> {
  * why the imported task does nothing.
  */
 export function sanitiseImportedTask(task: any): { task: any; strippedPerms: string[]; wasEnabled: boolean } {
-    const RISKY = ['command', 'script', 'deeplink', 'stopProcess', 'delete', 'resources', 'tasks', 'network', 'ai', 'navigate'] as const;
+    const RISKY = ['command', 'script', 'deeplink', 'stopProcess', 'delete', 'resources', 'tasks', 'network', 'ai', 'navigate', 'files'] as const;
     const asked: string[] = [];
     for (const k of RISKY) if (task?.perms?.[k] === true) asked.push(k);
     // The legacy single flag means command + deeplink; a file written by an older BMM carries
@@ -1185,7 +1203,10 @@ export function sanitiseImportedTask(task: any): { task: any; strippedPerms: str
             enabled: false,
             osSchedule: false,
             allowCustomCommands: false,
-            perms: { command: false, script: false, deeplink: false, stopProcess: false, delete: false, resources: false, tasks: false, network: false, ai: false, navigate: false },
+            // A package link is set by the package importer AFTER it verified the package. A
+            // plain .bmmpa naming one would point at somebody else's files in the store.
+            pkg: undefined,
+            perms: { command: false, script: false, deeplink: false, stopProcess: false, delete: false, resources: false, tasks: false, network: false, ai: false, navigate: false, files: false },
         },
         strippedPerms: asked,
         wasEnabled,
@@ -2117,11 +2138,23 @@ export async function importTasksFromPath(path: string): Promise<number> {
     // becomes an error that reads as if the DATA were wrong rather than the annotation.
     const current: any[] = await (invoke('get_schedules') as Promise<any[]>).catch(() => [] as any[]);
     const have = new Set((current || []).map((x: any) => String(x?.id || '')));
+    // A .bmmpa version 2 with its files beside it (a catalogue bundle, extracted): the files
+    // are checked against the document's hashes and kept in the store. A link to a package is
+    // only ever set HERE, from what was verified — never taken from the file.
+    let pkg: TaskPkg | undefined;
+    if (Array.isArray(doc?.package?.files) && doc.package.files.length) {
+        try {
+            const pi = await invoke('automation_package_adopt', { path }) as { id: string; name: string; signature: string };
+            pkg = { id: pi.id, name: pi.name, signature: pi.signature };
+        } catch (e) {
+            toast(`${t('sched.pkg.adoptFailed')}: ${(await import('./sched-pkg.js')).pkgError(e)}`, 'warning', 10000);
+        }
+    }
     let added = 0;
     for (const raw of incoming) {
         if (!raw || typeof raw !== 'object' || !raw.id) continue;
         if (have.has(String(raw.id))) continue;
-        current.push({ ...raw, enabled: false, perms: {}, osSchedule: false });
+        current.push({ ...raw, enabled: false, perms: {}, osSchedule: false, pkg });
         have.add(String(raw.id));
         added += 1;
     }
@@ -4254,9 +4287,49 @@ async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Pr
             break;
         }
 
+        // ── Packages and games (sched-pkg.ts). The permission is asked HERE, in the runner's own
+        //    words, before the module runs; the module asks the same rule again through `env`.
+        case 'pkg.install': {
+            requirePerm(task, 'files', t('sched.permFiles'));
+            if (p.dryRun === true) break;
+            await (await import('./sched-pkg.js')).runPkgInstall(p, pkgEnv(task, ctx));
+            break;
+        }
+        case 'pkg.verify':
+            await (await import('./sched-pkg.js')).runPkgVerify(p, pkgEnv(task, ctx));
+            break;
+        case 'modlist.verify':
+            await (await import('./sched-pkg.js')).runListVerify(p, pkgEnv(task, ctx));
+            break;
+        case 'gate.report': {
+            requirePerm(task, 'files', t('sched.permFiles'));
+            if (p.dryRun === true) break;
+            await (await import('./sched-pkg.js')).runGateReport(p, pkgEnv(task, ctx));
+            break;
+        }
+        case 'game.launch': {
+            requirePerm(task, 'command', t('sched.permRunCommand'));
+            if (p.dryRun === true) break;
+            await (await import('./sched-pkg.js')).runGameLaunch(p, pkgEnv(task, ctx));
+            break;
+        }
+        case 'ui.ask':
+            if (p.dryRun === true) break;
+            await (await import('./sched-pkg.js')).runAsk(p, pkgEnv(task, ctx));
+            break;
+
         default:
             throw new Error(`Unknown action: ${action.type}`);
     }
+}
+
+/** What a package step (sched-pkg.ts) borrows from the runner: its permission rule and toasts. */
+function pkgEnv(task: Task, ctx: RunCtx): PkgEnv {
+    return {
+        task, ctx,
+        requirePerm: (key, label) => requirePerm(task, key, label),
+        toast: (msg, kind, ms) => toast(msg, kind as any, ms),
+    };
 }
 
 /**
@@ -4283,11 +4356,11 @@ async function navStep(type: string, task: Task, ctx: RunCtx, p: Record<string, 
  * installing or starting anything. The line it leaves in `*.summary` is the answer. Toasts are
  * the real run's business: every measured case is silent under `dryRun`.
  */
-export async function dryRunAction(action: { type: string; params: Record<string, any> }, task: { id?: string; name?: string; outputDir?: string; perms?: Record<string, boolean> }): Promise<string> {
+export async function dryRunAction(action: { type: string; params: Record<string, any> }, task: { id?: string; name?: string; outputDir?: string; perms?: Record<string, boolean>; pkg?: TaskPkg }): Promise<string> {
     const ctx: RunCtx = { nums: {}, text: {} };
     const t0: Task = {
         id: task.id || 'dry-run', name: task.name || '', enabled: false, trigger: { type: 'manual' }, steps: [],
-        allowCustomCommands: false, perms: { ...(task.perms || {}) }, outputDir: task.outputDir,
+        allowCustomCommands: false, perms: { ...(task.perms || {}) }, outputDir: task.outputDir, pkg: task.pkg,
     };
     await runAction({ type: action.type, params: { ...(action.params || {}), dryRun: true, notify: false } }, t0, ctx);
     const key = Object.keys(ctx.text).find((k) => k.endsWith('.summary'));
@@ -4339,7 +4412,8 @@ async function openExportDialog(): Promise<void> {
     body.innerHTML = `
         <p class="sdr-lede">${escHtml(t('sched.ex.lede'))}</p>
         <div class="spg-opts" role="radiogroup">
-            <label class="sched-opt"><input type="radio" name="sex-kind" value="bmmpa" checked><div><b>${escHtml(t('sched.ex.bmmpa'))}</b><span>${escHtml(t('sched.ex.bmmpaD'))}</span></div></label>
+            <label class="sched-opt"><input type="radio" name="sex-kind" value="bmmpa"${task.pkg ? '' : ' checked'}><div><b>${escHtml(t('sched.ex.bmmpa'))}</b><span>${escHtml(t('sched.ex.bmmpaD'))}</span></div></label>
+            <label class="sched-opt"><input type="radio" name="sex-kind" value="package"${task.pkg ? ' checked' : ''}><div><b>${escHtml(t('sched.ex.package'))}</b><span>${escHtml(task.pkg ? t('sched.ex.packageD') : t('sched.ex.packageNone'))}</span></div></label>
             <label class="sched-opt"><input type="radio" name="sex-kind" value="bmmscript"><div><b>${escHtml(t('sched.ex.bmms'))}</b><span>${escHtml(t('sched.ex.bmmsD'))}</span></div></label>
             <label class="sched-opt"><input type="radio" name="sex-kind" value="script"${engine ? '' : ' disabled'}><div><b>${escHtml(t('sched.ex.script'))}</b><span>${escHtml(engine ? t('sched.ex.scriptD') : t('sched.ex.noEngine'))}</span></div></label>
         </div>
@@ -4364,6 +4438,7 @@ async function openExportDialog(): Promise<void> {
         (body.querySelector('.sex-format') as HTMLElement).hidden = kind !== 'script';
         skippedBox.textContent = '';
         if (kind === 'bmmpa') text = JSON.stringify({ magic: BMMPA_MAGIC, version: 1, tasks: [forExport(task)] }, null, 2);
+        else if (kind === 'package') text = JSON.stringify({ magic: BMMPA_MAGIC, version: 2, tasks: [forExport(task)] }, null, 2);
         else if (kind === 'bmmscript') text = String(await invoke('bmms_decompile', { task: { name: task.name, description: task.description, trigger: task.trigger, steps: task.steps, perms: task.perms } }).catch((e) => String(e)));
         else if (engine) {
             const fmt = (body.querySelector('#sex-format') as HTMLSelectElement).value || formats[0];
@@ -4379,6 +4454,15 @@ async function openExportDialog(): Promise<void> {
         const kind = kindOf();
         const stem = safeFileStem(task.name);
         if (kind === 'bmmpa') { await writeBmmpa([task], `${stem}.bmmpa`); m.close(); return; }
+        if (kind === 'package') {
+            // The steps exactly as a .bmmpa carries them, plus the files, in one signed bundle.
+            const includes = await collectIncludes([task]);
+            const doc = { magic: BMMPA_MAGIC, version: 2, exported: new Date().toISOString(), tasks: [forExport(task)], ...(Object.keys(includes).length ? { includes } : {}) };
+            try {
+                if (await (await import('./sched-pkg.js')).exportPackage(task, doc, stem, (m2, k, ms) => toast(m2, k as any, ms))) m.close();
+            } catch (e) { toast(`${t('common.error')}: ${(await import('./sched-pkg.js')).pkgError(e)}`, 'error'); }
+            return;
+        }
         const ext = kind === 'bmmscript' ? 'bmmscript' : ((body.querySelector('#sex-format') as HTMLSelectElement).value || 'txt');
         const { saveFile } = await import('../../core/api.js');
         const path = await saveFile({ defaultPath: `${stem}.${ext}`, filters: [{ name: ext, extensions: [ext] }] }).catch(() => null);
@@ -5094,16 +5178,27 @@ export function renderScheduleList(): void {
     // Below the threshold it would be furniture: three rows are faster to read than to
     // filter, and a search box above them is one more thing between you and the task you
     // came for. Above it, scanning a wall of rows is the actual problem.
-    const NEEDS_FILTER_AT = 8;
+    // Folders and tags (task.ui) make a long list sortable by what it is FOR; the search reads
+    // them too. Shown from a handful of tasks up, or as soon as any task is filed.
+    const NEEDS_FILTER_AT = 5;
     let shown = _tasks;
-    if (_tasks.length >= NEEDS_FILTER_AT) {
+    const tags = allTags(_tasks);
+    if (_taskTag && !tags.includes(_taskTag)) _taskTag = '';
+    if (_tasks.length >= NEEDS_FILTER_AT || tags.length || _tasks.some((x) => x.ui?.folder)) {
         const bar = document.createElement('div');
         bar.className = 'sched-filter';
         bar.innerHTML = `
             <input type="text" class="input sched-filter-input" id="sched-filter-input"
                 placeholder="${escAttr(t('sched.filter') || 'Filter tasks…')}" value="${escAttr(_taskFilter)}">
-            <span class="sched-filter-count" id="sched-filter-count"></span>`;
+            <span class="sched-filter-count" id="sched-filter-count"></span>
+            ${tags.length ? `<div class="sched-tagbar" role="group" aria-label="${escAttr(t('sched.list.tags'))}">
+                ${tags.map((g) => `<button type="button" class="sched-tag${_taskTag === g ? ' is-on' : ''}" data-tag="${escAttr(g)}" aria-pressed="${_taskTag === g}">#${escHtml(g)}</button>`).join('')}
+            </div>` : ''}`;
         container.appendChild(bar);
+        bar.querySelectorAll<HTMLButtonElement>('[data-tag]').forEach((b) => b.addEventListener('click', () => {
+            _taskTag = _taskTag === b.dataset.tag ? '' : (b.dataset.tag || '');
+            renderScheduleList();
+        }));
         const inp = bar.querySelector('#sched-filter-input') as HTMLInputElement;
         inp.addEventListener('input', () => {
             _taskFilter = inp.value;
@@ -5114,14 +5209,14 @@ export function renderScheduleList(): void {
             if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
         });
         const needle = _taskFilter.trim().toLowerCase();
-        if (needle) {
-            // Name and description: the two things somebody remembers about a task they
+        if (needle || _taskTag) {
+            // Name, description, folder and tags: what somebody remembers about a task they
             // wrote weeks ago.
-            shown = _tasks.filter((tk) => `${tk.name} ${tk.description || ''}`.toLowerCase().includes(needle));
+            shown = _tasks.filter((tk) => taskMatches(tk, needle, _taskTag));
         }
         const count = bar.querySelector('#sched-filter-count');
         if (count) {
-            count.textContent = needle
+            count.textContent = needle || _taskTag
                 ? (t('sched.filter.n') || '{n} of {total}').replace('{n}', String(shown.length)).replace('{total}', String(_tasks.length))
                 : (t('sched.filter.total') || '{total} tasks').replace('{total}', String(_tasks.length));
         }
@@ -5134,9 +5229,30 @@ export function renderScheduleList(): void {
         }
     }
 
-    for (const task of shown) {
+    const groups = byFolder(shown);
+    const heads = groups.some((g) => g.folder);
+    for (const grp of groups) {
+    if (heads) {
+        const folded = _foldedFolders.has(grp.folder);
+        const on = grp.tasks.filter((x) => x.enabled).length;
+        const head = document.createElement('button');
+        head.type = 'button';
+        head.className = `sched-folder-h${folded ? ' is-folded' : ''}`;
+        head.setAttribute('aria-expanded', folded ? 'false' : 'true');
+        head.innerHTML = `${uiIcon(folded ? 'chevron-right' : 'chevron-down', 12)}${uiIcon('folder', 14)}
+            <span class="sched-folder-name">${escHtml(grp.folder || t('sched.list.unfiled'))}</span>
+            <span class="sched-folder-n">${escHtml(t('sched.list.folderN', { n: String(grp.tasks.length), on: String(on) }))}</span>`;
+        head.addEventListener('click', () => {
+            if (_foldedFolders.has(grp.folder)) _foldedFolders.delete(grp.folder); else _foldedFolders.add(grp.folder);
+            writeFoldedFolders();
+            renderScheduleList();
+        });
+        container.appendChild(head);
+        if (folded) continue;
+    }
+    for (const task of grp.tasks) {
         const row = document.createElement('div');
-        row.className = `sched-row ${task.enabled ? 'sched-on' : 'sched-off'}`;
+        row.className = `sched-row ${task.enabled ? 'sched-on' : 'sched-off'}${heads ? ' in-folder' : ''}`;
         row.innerHTML = `
             <div class="sched-row-main">
                 <div class="sched-row-icon">${triggerIcon(task.trigger)}</div>
@@ -5150,6 +5266,8 @@ export function renderScheduleList(): void {
                         ${task.lastRun ? `<span class="sched-chip sched-chip-dim" data-tooltip="${escAttr(new Date(task.lastRun).toLocaleString())}">${t('sched.last') || 'last'} ${escHtml(agoTime(task.lastRun))}</span>` : ''}
                         ${task.lastResult ? `<span class="sched-chip ${task.lastResult === 'ok' ? 'sched-chip-ok' : 'sched-chip-err'}" data-tooltip="${escAttr(task.lastResult)}">${task.lastResult === 'ok' ? 'OK' : 'ERR'}</span>` : ''}
                         ${runSparkline(task)}
+                        ${task.pkg ? `<span class="sched-chip sched-chip-pkg" data-tooltip="${escAttr(t('sched.pkg.from', { p: task.pkg.name }))}">${uiIcon('package', 12)}${escHtml(t('sched.pkg.chip'))}</span>` : ''}
+                        ${(task.ui?.tags || []).map((g) => `<span class="sched-chip sched-chip-tag">#${escHtml(g)}</span>`).join('')}
                     </span>
                 </div>
             </div>
@@ -5194,13 +5312,13 @@ export function renderScheduleList(): void {
                 // value that is only there because another module ran first; if it ever is not,
                 // the call throws inside an async listener and the button appears inert.
                 const ask = window.confirmCustom;
-                // askConfirm, not window.confirm: the latter does not ask anything inside the
-                // Tauri webview, it returns immediately — which is precisely how this button
-                // came to do nothing at all.
+                // A BMM dialog either way, never window.confirm: the latter does not ask anything
+                // inside the Tauri webview, it returns immediately — which is precisely how this
+                // button came to do nothing at all.
                 const ok = typeof ask === 'function'
                     ? await ask(t('sched.delTitle') || 'Delete task', `${task.name}?`, 'danger',
                         { yesLabel: t('common.delete') || 'Delete', noLabel: t('common.cancel') || 'Cancel' })
-                    : await askConfirm(`${task.name}?`, { title: t('sched.delTitle') || 'Delete task' });
+                    : await confirmAction({ title: t('sched.delTitle') || 'Delete task', message: `${task.name}?`, tone: 'danger', confirmLabel: t('common.delete'), cancelLabel: t('common.cancel') });
                 if (!ok) return;
                 if (task.osSchedule) {
                     // An OS entry that will not unregister must not stop the task being
@@ -5219,6 +5337,16 @@ export function renderScheduleList(): void {
         });
         container.appendChild(row);
     }
+    }
+}
+
+/** The folders folded in the list, remembered on this machine (a view preference, not data). */
+const _foldedFolders: Set<string> = (() => {
+    try { const v = JSON.parse(localStorage.getItem('bmm.sched.foldedFolders') || '[]'); return new Set(Array.isArray(v) ? v.map(String) : []); }
+    catch { return new Set<string>(); }
+})();
+function writeFoldedFolders(): void {
+    try { localStorage.setItem('bmm.sched.foldedFolders', JSON.stringify([..._foldedFolders])); } catch { /* private mode */ }
 }
 
 /** "in 4 min" / "in 3 h" / "in 2 d" — a duration a human reads at a glance. The exact
@@ -5509,6 +5637,20 @@ const PRESET_CATS: { cat: PresetCat; label: string; key: string }[] = [
 interface PresetOption { opt: string; choices: string[]; dflt: string }
 type PresetDef = { cat: PresetCat; key: string; icon: IconName; title: string; desc: string; options?: PresetOption[]; make: (opt?: Record<string, string>) => Partial<Task> };
 const PRESETS: PresetDef[] = [
+    {
+        // The flagship package template (sched-dcs-gate.ts): built from a guided form that asks
+        // only the server, the list, whether the server checks players, and where DCS is. What
+        // the gallery shows is the shape of it; « Use this template » opens the form.
+        cat: 'mods', key: 'dcsJoinGate',
+        icon: 'game',
+        title: 'DCS: server join gate',
+        desc: 'Checks your mod list is active and intact, installs the server hook if the server asks for it, then starts DCS; otherwise says what is missing and offers to fix it.',
+        make: () => ({
+            ...buildJoinGate({ server: '', whitelist: true, listPath: '', exact: true, dcsExe: '', grantFiles: false, grantCommand: false }, gateWords(t)),
+            name: t('sched.preset.dcsJoinGate'),
+            permissions: { files: true, command: true },
+        }),
+    },
     {
         // Two presets for the same idea: notice which server you are on, put the right mods
         // on before the loading screen decides for you. This one is DCS because DCS can be
@@ -6628,6 +6770,16 @@ async function openPresetGallery(modal: HTMLElement): Promise<void> {
     const useSelected = async () => {
         const p = selected ? PRESETS.find((x) => x.key === selected) : null;
         if (!p) return;
+        if (p.key === 'dcsJoinGate') {
+            // Made from answers, not copied: the guided form, then the editor with the result.
+            closeGallery();
+            const { openJoinGateForm } = await import('./sched-dcs-form.js');
+            await openJoinGateForm({
+                apply: (task) => { _snapshot(); _draft = { ...taskFromPreset(p), ...(task as Partial<Task>) } as Task; renderModal(modal); },
+                dryRun: (task, cover) => openTaskDryRun(task as Partial<Task>, cover),
+            });
+            return;
+        }
         if (await applyPreset(modal, p)) closeGallery();
     };
     render();
@@ -6722,6 +6874,11 @@ async function saveDraft(modal: HTMLElement, close: boolean): Promise<void> {
     {
         const lay = pruneLayout(_draft.steps as any, _draft.layout);
         if (lay) _draft.layout = lay; else delete _draft.layout;
+        // The presentation block, checked, and without the bends of wires that are gone. None
+        // left means no `ui` field, exactly as before it existed.
+        const keys = new Set(buildGraph(_draft.steps as any, _draft.layout).edges.map(edgeKey));
+        const ui = pruneReroutes(normalizeUi(_draft.ui), keys);
+        if (ui) _draft.ui = ui; else delete _draft.ui;
     }
     const idx = _tasks.findIndex(x => x.id === _draft.id);
     // A copy goes into the list, so editing on after a Save-and-stay does not change the saved
@@ -6762,7 +6919,7 @@ function draftSummary(): string {
     return bits.join(' · ');
 }
 /** « 2 of 9 granted » / « none granted »: the folded permission row of the task editor. */
-const PERM_KEYS = ['command', 'script', 'deeplink', 'stopProcess', 'delete', 'resources', 'tasks', 'network', 'ai', 'navigate'] as const;
+const PERM_KEYS = ['command', 'script', 'deeplink', 'stopProcess', 'delete', 'resources', 'tasks', 'network', 'ai', 'navigate', 'files'] as const;
 function permSummaryText(pm: TaskPerms): string {
     const granted = PERM_KEYS.filter((k) => (pm as any)[k] === true).length;
     return granted
@@ -7152,6 +7309,18 @@ function renderModal(modal: HTMLElement): void {
                 <h3 class="sched-side-h"><label for="sched-name">${t('sched.fName') || 'Name'}</label></h3>
                 <input class="input sched-name-input" id="sched-name" value="${escAttr(_draft.name)}" placeholder="${escAttr(t('sched.fNamePh') || 'e.g. Activate DCS profile every morning')}">
                 <textarea class="input sched-desc-input" id="sched-desc" rows="2" placeholder="${escAttr(t('sched.fDescriptionPh') || 'Description (optional)')}">${escHtml(_draft.description || '')}</textarea>
+                <div class="sched-filing">
+                    <label class="sched-cmd-label" for="sched-folder">${escHtml(t('sched.list.folder'))}</label>
+                    <input class="input" id="sched-folder" list="sched-folder-list" maxlength="60" value="${escAttr(_draft.ui?.folder || '')}" placeholder="${escAttr(t('sched.list.folderPh'))}">
+                    <datalist id="sched-folder-list">${[...new Set(_tasks.map((x) => x.ui?.folder || '').filter(Boolean))].map((f) => `<option value="${escAttr(f)}"></option>`).join('')}</datalist>
+                    <label class="sched-cmd-label" for="sched-tags">${escHtml(t('sched.list.tags'))}</label>
+                    <input class="input" id="sched-tags" maxlength="200" value="${escAttr((_draft.ui?.tags || []).join(', '))}" placeholder="${escAttr(t('sched.list.tagsPh'))}">
+                </div>
+                </section>
+
+                <section class="sched-side-sec">
+                <h3 class="sched-side-h">${SVG16('package')}<span>${escHtml(t('sched.pkg.sideTitle'))}</span></h3>
+                <div id="sched-pkg-side"></div>
                 </section>
 
                 <section class="sched-side-sec">
@@ -7197,6 +7366,7 @@ function renderModal(modal: HTMLElement): void {
                         ${row('deeplink', pm.deeplink === true, t('sched.allowDeeplinkTitle') || 'Fire deeplinks', t('sched.allowDeeplink') || 'This task may trigger bmm:// links, which can reach anything the app exposes.')}
                         ${row('stopProcess', pm.stopProcess === true, t('sched.allowStopTitle') || 'Stop programs', t('sched.allowStop') || 'This task may terminate running programs. Unsaved work in them is lost, with no warning and nothing to undo.')}
                         ${row('network', pm.network === true, t('sched.allowNetTitle') || 'Network', t('sched.allowNet') || 'This task may send webhooks and Discord or Slack messages, and read feeds. Never a private address unless a step allows the local network.')}
+                        ${row('files', pm.files === true, t('sched.allowFilesTitle'), t('sched.allowFiles'))}
 
                         <div class="sched-perm-sub">${escHtml(t('sched.permsInside') || 'Destroys your own data')}</div>
                         ${row('delete', pm.delete === true, t('sched.allowDeleteTitle') || 'Delete things', t('sched.allowDelete') || 'This task may delete profiles, modpacks and mod folders. Nothing here goes to the recycle bin.')}
@@ -7333,6 +7503,20 @@ function renderModal(modal: HTMLElement): void {
         const h = modal.querySelector('#sched-head-name');
         if (h) h.textContent = _draft.name.trim() || (_editing ? (t('sched.editTitle') || 'Edit task') : (t('sched.newTitle') || 'New scheduled task'));
     });
+    // The list's folder and tags: presentation only (task.ui), never read by a run.
+    modal.querySelector('#sched-folder')?.addEventListener('input', (e) => {
+        _draft.ui = normalizeUi({ ...(_draft.ui || { v: 1 }), folder: (e.target as HTMLInputElement).value });
+        refreshDirty(modal);
+    });
+    modal.querySelector('#sched-tags')?.addEventListener('input', (e) => {
+        const tags = (e.target as HTMLInputElement).value.split(/[,;]/).map((x) => x.trim()).filter(Boolean);
+        _draft.ui = normalizeUi({ ...(_draft.ui || { v: 1 }), tags });
+        refreshDirty(modal);
+    });
+    {
+        const side = modal.querySelector('#sched-pkg-side') as HTMLElement | null;
+        if (side) void import('./sched-pkg.js').then((m) => m.renderPkgSection(side, _draft, () => refreshDirty(modal), (m2, k, ms) => toast(m2, k as any, ms)));
+    }
     modal.querySelector('#sched-status')?.addEventListener('click', (e) => {
         const b = e.currentTarget as HTMLElement;
         _draft.enabled = !_draft.enabled;
@@ -8114,6 +8298,7 @@ function flowHost(): FlowHost {
         triggerIcon: () => triggerIcon(_draft.trigger),
         actionItems: () => actionPickItems(),
         actionGroups: () => actionPickGroups(),
+        actionGroup: (type: string) => ACTION_TYPES.find((a) => a.v === type)?.group || '',
         focusSidebar: (sel: string) => {
             const el = document.querySelector(`#modal-scheduler ${sel}`) as HTMLElement | null;
             const fold = el?.closest('details') as HTMLDetailsElement | null;
@@ -9194,6 +9379,7 @@ const ACTION_GROUPS: { g: string; label: string }[] = [
     { g: 'system',  label: 'System & flow' },
     { g: 'ai',      label: 'Laya (AI)' },
     { g: 'nav',     label: 'Navigate BMM' },
+    { g: 'pkg',     label: 'Packages & games' },
 ];
 
 // icon per group (inline SVG, no emoji — matches the BMM icon-only rule).
@@ -9213,6 +9399,7 @@ const GROUP_ICON: Record<string, string> = {
     notify:  (uiIcon('send', 14)),
     ai:      (uiIcon('ai', 14)),
     nav:     (uiIcon('map', 14)),
+    pkg:     (uiIcon('package', 14)),
 };
 
 // Clean inline X icon for delete buttons (replaces the raw ✕ glyph).
@@ -9707,6 +9894,14 @@ const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[
     { v: 'nav.message', label: 'Show a message on screen', needs: 'navMessage', group: 'nav' },
     { v: 'nav.modal', label: 'Open a dialog', needs: 'navModal', group: 'nav' },
     { v: 'nav.click', label: 'Click a named control', needs: 'navClick', group: 'nav' },
+    // Packages and games (sched-pkg.ts, commands/sched_pkg.rs). The files an automation carries,
+    // put in place with the person's yes; a mod list checked; a game started with arguments.
+    { v: 'pkg.install', label: 'Install a file the automation carries', needs: 'pkgInstall', group: 'pkg' },
+    { v: 'pkg.verify', label: 'Check a carried file is in place', needs: 'pkgVerify', group: 'pkg' },
+    { v: 'modlist.verify', label: 'Check a mod list is active and intact', needs: 'listVerify', group: 'pkg' },
+    { v: 'gate.report', label: 'Write the result for the server', needs: 'gateReport', group: 'pkg' },
+    { v: 'game.launch', label: 'Start a game with arguments', needs: 'gameLaunch', group: 'pkg' },
+    { v: 'ui.ask', label: 'Ask a question (yes / no)', needs: 'uiAsk', group: 'notify' },
 ];
 
 /**
@@ -10350,6 +10545,14 @@ function renderParams(host: HTMLElement, needs: string | undefined, params: Reco
             <span class="sched-cmd-hint">${escHtml(t('sched.mp.delHint'))}</span>
         </div>`;
         host.querySelector('.sched-p')?.addEventListener('change', (e) => { params.id = (e.target as HTMLSelectElement).value; });
+    }
+    // The package and game steps: their forms live in sched-pkg.ts, next to what runs them.
+    else if (needs === 'pkgInstall' || needs === 'pkgVerify' || needs === 'listVerify' || needs === 'gateReport'
+        || needs === 'gameLaunch' || needs === 'uiAsk') {
+        // Something on screen synchronously: the caller hides an empty params row, and the
+        // previous action's fields must not stay while the module loads.
+        host.innerHTML = '<div class="sched-cmd-builder spkg-form"></div>';
+        void import('./sched-pkg.js').then((m) => { m.renderPkgForm(host, needs, params, _draft?.pkg); host.style.display = ''; });
     }
     // The upkeep and navigation steps: their forms live in sched-forms.ts, shared with the task
     // builder of Plugins & API so a step is written with the same pickers in both places.
@@ -12232,6 +12435,11 @@ const VALUE_SOURCES = [
     // Whether the last navigation step found what it was pointed at (1/0), for a step told to
     // carry on when its target is missing.
     'nav.ok',
+    // Packages and games (sched-pkg.ts): the person's answer, what was placed, whether a carried
+    // file is in place, what a mod list check found, the report, the game, a question's answer.
+    'pkg.consent', 'pkg.installed', 'pkg.ok', 'pkg.missing',
+    'list.ok', 'list.missing', 'list.inactive', 'list.altered', 'list.extra',
+    'gate.written', 'game.pid', 'game.copied', 'ask.yes',
 ];
 function conditionEditor(cond: Condition): HTMLElement {
     const el = document.createElement('div');
@@ -12860,8 +13068,9 @@ async function collectIncludes(tasks: Task[]): Promise<Record<string, any[]>> {
  * "last ran 3 hours ago, OK" is describing a run that happened on somebody else's machine.
  */
 function forExport(task: Task): Task {
-    const { history, lastRun, lastResult, ...rest } = task as any;
-    void history; void lastRun; void lastResult;
+    // `pkg` names this machine's store: the package importer sets it again from what it verified.
+    const { history, lastRun, lastResult, pkg, ...rest } = task as any;
+    void history; void lastRun; void lastResult; void pkg;
     return { ...rest, perms: {}, enabled: false, osSchedule: false } as Task;
 }
 
@@ -13890,8 +14099,9 @@ function remapRefs(steps: Step[], remap: Record<string, string>): void {
 
 export async function importTasksFile(): Promise<void> {
     const { pickFile } = await import('../../core/api.js');
-    const path = await pickFile({ filters: [{ name: 'BMM Automation', extensions: ['bmmpa', 'json'] }] }).catch(() => null);
+    const path = await pickFile({ filters: [{ name: 'BMM Automation', extensions: ['bmmpa', 'bmmbundle', 'json'] }] }).catch(() => null);
     if (!path) return;
+    if (/\.bmmbundle$/i.test(path)) { await importPackageFile(path); return; }
     try {
         const raw: string = await invoke('read_file_text', { path });
         const doc = JSON.parse(raw);
@@ -13929,6 +14139,34 @@ export async function importTasksFile(): Promise<void> {
     } catch (e) { toast(`${t('common.error') || 'Error'}: ${e}`, 'error'); }
 }
 
+
+/**
+ * Import an automation PACKAGE (.bmmbundle with an automation.bmmpa inside): shown first —
+ * signature, files, what its tasks ask for — then its tasks arrive like any import: switched
+ * off, every permission taken away, and linked to the verified copy of the package's files.
+ */
+export async function importPackageFile(path: string): Promise<number> {
+    const P = await import('./sched-pkg.js');
+    const got = await P.reviewPackage(path, (k) => t('sched.perm.' + k) || k, (m2, k, ms) => toast(m2, k as any, ms));
+    if (!got) return 0;
+    const pkg: TaskPkg = { id: got.info.id, name: got.info.name, signature: got.info.signature };
+    const asked = new Set<string>();
+    let added = 0;
+    for (const tk of got.tasks) {
+        if (!tk || !tk.name) continue;
+        const { task: safe, strippedPerms } = sanitiseImportedTask(tk);
+        safe.id = newTaskId();
+        safe.pkg = pkg;
+        strippedPerms.forEach((x) => asked.add(x));
+        _tasks.push(safe as Task);
+        added++;
+    }
+    await saveTasks();
+    renderScheduleList();
+    toast(t('sched.pkg.imported', { n: String(added), p: pkg.name }), 'success', 8000);
+    if (asked.size) toast(t('sched.importStripped').replace('{p}', [...asked].join(', ')), 'warning', 9000);
+    return added;
+}
 
 /**
  * The reference, BESIDE the code instead of instead of it.

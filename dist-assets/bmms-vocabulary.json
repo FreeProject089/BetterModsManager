@@ -1189,6 +1189,44 @@
       "params": [
         "control"
       ]
+    },
+    {
+      "type": "pkg.install",
+      "group": "pkg",
+      "params": [
+        "dryRun"
+      ]
+    },
+    {
+      "type": "pkg.verify",
+      "group": "pkg",
+      "params": []
+    },
+    {
+      "type": "modlist.verify",
+      "group": "pkg",
+      "params": []
+    },
+    {
+      "type": "gate.report",
+      "group": "pkg",
+      "params": [
+        "dryRun"
+      ]
+    },
+    {
+      "type": "game.launch",
+      "group": "pkg",
+      "params": [
+        "dryRun"
+      ]
+    },
+    {
+      "type": "ui.ask",
+      "group": "notify",
+      "params": [
+        "dryRun"
+      ]
     }
   ],
   "conditions": [
@@ -1325,7 +1363,21 @@
     "s single door, and the local API.\n    ",
     ", ",
     ", ",
-    ",\n    // Whether the last navigation step found what it was pointed at (1/0), for a step told to\n    // carry on when its target is missing.\n    "
+    ",\n    // Whether the last navigation step found what it was pointed at (1/0), for a step told to\n    // carry on when its target is missing.\n    ",
+    ",\n    // Packages and games (sched-pkg.ts): the person",
+    "s answer.\n    ",
+    ", ",
+    ", ",
+    ", ",
+    ",\n    ",
+    ", ",
+    ", ",
+    ", ",
+    ", ",
+    ",\n    ",
+    ", ",
+    ", ",
+    ", "
   ],
   "loopSources": [
     "enabledMods",
@@ -1411,7 +1463,8 @@
     "tasks",
     "network",
     "ai",
-    "navigate"
+    "navigate",
+    "files"
   ],
   "scriptEngines": [
     "powershell",

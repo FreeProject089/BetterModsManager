@@ -2,7 +2,7 @@
 
 !!! info ""
 
-    137 actions · 47 conditions · 85 valeurs · 8 sources de boucle
+    143 actions · 47 conditions · 99 valeurs · 8 sources de boucle
 
 > Généré depuis le registre de BMM lui-même, donc cette page ne peut pas décrire une version de l'application qui n'existe pas. Si une action est dans l'éditeur de blocs, elle est dans cette liste.
 
@@ -144,6 +144,7 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `discord.send` | Publie un message dans un salon Discord par son adresse de webhook. | — |
 | `slack.send` | Publie un message dans un salon Slack par un webhook entrant. | `url` · `message` · `username` · `retries` |
 | `feed.publish` | Ajoute une entrée à un fichier de flux Atom que la tâche tient à jour : n’importe quel lecteur RSS peut le suivre. | `path` · `feedTitle` · `title` · `body` · `link` · `max` |
+| `ui.ask` | Une fenêtre BMM à deux boutons. La réponse est ask.yes (1 ou 0). | `dryRun` |
 
 ### Système & flux
 
@@ -201,6 +202,16 @@ S'écrit `do <nom>(param: valeur, …)`. Une action sans paramètre prend des pa
 | `nav.message` | Une carte avec un titre et un texte, près d’un élément ou en bas ; peut attendre OK. | `title` · `message` · `target` · `waitOk` · `okLabel` · `seconds` |
 | `nav.modal` | Une des fenêtres listées (Outils, Stockage, Empreintes…), par son propre bouton. Demande Naviguer et cliquer. | `modal` |
 | `nav.click` | Uniquement les contrôles listés (vérifications, actualisations) ; jamais une suppression, un consentement ou un champ. Demande Naviguer et cliquer. | `control` |
+
+### Paquets et jeux
+
+| Action | Ce qu'elle fait | Paramètres |
+|---|---|---|
+| `pkg.install` | Copie un fichier ou un dossier du paquet dans Saved Games de DCS, le jeu ou les mods, après votre accord. | `dryRun` |
+| `pkg.verify` | Est-il là, identique (SHA-256) ? Remplit pkg.ok. | — |
+| `modlist.verify` | Installée, activée, déployée, fichiers conformes aux empreintes de la liste. Ne change rien. | — |
+| `gate.report` | Un fichier signé dans Saved Games\DCS\Config que le hook de la porte envoie au serveur. | `dryRun` |
+| `game.launch` | Lance un .exe avec vos arguments, sans shell. Demande la permission commande. | `dryRun` |
 
 ## Conditions
 
@@ -272,7 +283,11 @@ S'écrivent là où une condition va — après `if`, `case`, `waitfor`, `repeat
     ` · `, ` · `, ` · `,
     // Whether the last navigation step found what it was pointed at (1/0), for a step told to
     // carry on when its target is missing.
-    `
+    ` · `,
+    // Packages and games (sched-pkg.ts): the person` · `s answer.
+    ` · `, ` · `, ` · `, ` · `,
+    ` · `, ` · `, ` · `, ` · `, ` · `,
+    ` · `, ` · `, ` · `, `
 
 Une valeur que rien n'a encore écrite vaut zéro. `lasttask.ok` vaut 1 ou 0, et ne veut dire quelque chose qu'après un `run`.
 

@@ -34,6 +34,7 @@
 import { invoke } from '../../core/api.js';
 import { getAllTranslations, getLang, getLanguages, t } from '../../core/i18n.js';
 import { escHtml, escAttr } from '../../core/utils.js';
+import { goToSettings } from '../../core/settings-link.js';
 import { uiIcon } from '../../ui/icons.js';
 import { popoutButtonHtml, wirePopout, isPoppedOut, closeWindow, type PopoutSpec } from '../../ui/popout.js';
 
@@ -78,7 +79,8 @@ let _visible: string[] = [];
 let _query = '';
 let _live = false;
 let _revertArmed = 0;
-let _usage: Record<string, Array<{ file: string; line: number; snippet: string }>> = {};
+let _usageMap: Record<string, Array<[string, number, string, string, string]>> | null = null;
+let _places: Place[] = [];
 // Untranslated-text scan (find_hardcoded_strings)
 let _hc: Array<{ file: string; line: number; text: string; kind: string; snippet?: string }> = [];
 let _hcLoaded = false;
@@ -805,27 +807,172 @@ function findInApp(k: string): void {
     toast(t('tstudio.foundOnScreen', { n: String(hits.length) }), 'success', 1800);
 }
 
-// ── Usage (find_i18n_usages) ─────────────────────────────────────────────────────────────
+// ── Usage: every place a key is used ─────────────────────────────────────────────────────
+//
+// Two sources, one list. LIVE: elements in the DOM right now that carry the key (data-i18n and
+// its placeholder/title/tooltip forms) or show its text. STATIC: assets/i18n-usage.gen.json, built
+// from the source by scripts/gen-i18n-usage.mjs (file, line, the view that owns the file, the
+// markup id or the function around the call). « Go there » takes the user to the view, to the
+// Settings card or tab, scrolls to the element and pulses it; the studio is a floating window and
+// stays open. A place that only exists inside a dialog or a hidden panel says so instead of failing.
+
+interface Place {
+    live: boolean;
+    view: string;            // 'library', 'settings'... or '' (dialog / shared chrome) or '?'
+    ctx: string;             // card title, id, or function
+    file?: string;
+    line?: number;
+    kind?: string;           // h | a | t
+    anchor?: string;
+    el?: HTMLElement;
+    note?: string;
+}
+
+const I18N_ATTRS = ['data-i18n', 'data-i18n-placeholder', 'data-i18n-title', 'data-i18n-tooltip', 'data-i18n-aria-label'];
+const normText = (v: string) => v.replace(/\s+/g, ' ').trim().toLowerCase();
+
+function viewLabel(view: string): string {
+    if (!view || view === '?') return t('tstudio.placeShared');
+    const nav = document.querySelector<HTMLElement>(`.nav-item[data-view="${CSS.escape(view)}"]`);
+    const txt = (nav?.querySelector('.nav-label')?.textContent || nav?.textContent || '').trim().replace(/\s+/g, ' ');
+    return txt || view;
+}
+
+function viewOfEl(el: HTMLElement): string {
+    const v = el.closest('section.view');
+    return v ? v.id.replace(/^view-/, '') : '';
+}
+
+function ctxOfEl(el: HTMLElement): string {
+    const box = el.closest<HTMLElement>('.glass-card, .modal, [role="dialog"], section.view');
+    const head = box?.querySelector('h1,h2,h3,h4,.card-title,.modal-title')?.textContent;
+    const own = oneLine(el.textContent || el.getAttribute('placeholder') || el.getAttribute('title') || '').slice(0, 48);
+    const h = head ? oneLine(head).slice(0, 48) : '';
+    return h && own && h !== own ? `${h} \u203a ${own}` : (h || own || el.id || el.tagName.toLowerCase());
+}
+
+/** Elements showing this key right now (visible or not), outside the studio itself. */
+function liveElements(k: string): HTMLElement[] {
+    const out = new Set<HTMLElement>();
+    const sel = I18N_ATTRS.map((a2) => `[${a2}="${CSS.escape(k)}"]`).join(',');
+    for (const el of document.querySelectorAll<HTMLElement>(sel)) if (!_root?.contains(el)) out.add(el);
+    const norm = normText(valueOf(k, getLang()));
+    if (norm.length >= 3 && norm.length <= 140 && out.size < 12) {
+        const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+        let n: Node | null;
+        while ((n = walk.nextNode()) && out.size < 12) {
+            const p = n.parentElement;
+            if (!p || _root?.contains(p) || p.closest('script,style,template,[hidden]')) continue;
+            if (normText(n.textContent || '') === norm) out.add(p);
+        }
+    }
+    return [...out];
+}
+
+async function loadUsageMap(): Promise<void> {
+    if (_usageMap) return;
+    try { _usageMap = await (await fetch('assets/i18n-usage.gen.json')).json(); } catch { _usageMap = {}; }
+}
+
+async function collectPlaces(k: string): Promise<Place[]> {
+    await loadUsageMap();
+    const places: Place[] = liveElements(k).map((el) => ({
+        live: true, view: viewOfEl(el), ctx: ctxOfEl(el), el,
+    }));
+    for (const [file, line, kind, view, anchor] of _usageMap?.[k] || []) {
+        places.push({ live: false, view, ctx: anchor || '', file, line, kind, anchor });
+    }
+    return places;
+}
 
 async function loadUsage(k: string): Promise<void> {
     const box = $('tst-usage');
     const count = $('tst-usage-count');
     if (!box) return;
-    let list = _usage[k];
-    if (!list) {
-        box.innerHTML = `<span class="tst-muted">${escHtml(t('common.loading'))}</span>`;
-        try { list = (await invoke('find_i18n_usages', { key: k })) || []; } catch { list = []; }
-        if (!Array.isArray(list)) list = [];
-        _usage[k] = list;
-    }
+    box.innerHTML = `<span class="tst-muted">${escHtml(t('common.loading'))}</span>`;
+    const list = await collectPlaces(k);
     if (_sel !== k) return;
+    _places = list;
     if (count) count.textContent = String(list.length);
     if (!list.length) { box.innerHTML = `<span class="tst-muted">${escHtml(t('i18n.noUsage'))}</span>`; return; }
-    box.innerHTML = list.slice(0, 30).map((u) => `
-        <button type="button" class="tst-uline" data-ts="copy-loc" data-loc="${escAttr(`${u.file}:${u.line}`)}" data-tooltip="${escAttr(t('i18n.copyLoc'))}">
-            <span class="tst-ufile">${escHtml(u.file.replace(/^.*[/\\]/, ''))}<span class="tst-uln">:${u.line}</span></span>
-            <code class="tst-usnip">${escHtml(u.snippet || '')}</code>
-        </button>`).join('') + (list.length > 30 ? `<span class="tst-muted">+${list.length - 30} ${escHtml(t('i18n.more'))}</span>` : '');
+    const row = (p: Place, i: number): string => {
+        const where = p.live ? (p.el && p.el.getClientRects().length ? t('tstudio.placeVisible') : t('tstudio.placeHidden')) : '';
+        const loc = p.file ? `${p.file.split('/').pop()}:${p.line}` : '';
+        return `<div class="tst-place" data-i="${i}">
+            <div class="tst-place-main">
+                <span class="tst-place-view">${escHtml(viewLabel(p.view))}</span>
+                <span class="tst-place-ctx">${escHtml(p.ctx || (p.live ? '' : t('tstudio.placeNoCtx')))}</span>
+                ${where ? `<span class="tst-place-tag">${escHtml(where)}</span>` : ''}
+                ${loc ? `<button type="button" class="tst-place-loc" data-ts="copy-loc" data-loc="${escAttr(`${p.file}:${p.line}`)}" data-tooltip="${escAttr(t('i18n.copyLoc'))}">${escHtml(loc)}</button>` : ''}
+                <div class="tst-place-note" id="tst-pl-note-${i}" ${p.note ? '' : 'hidden'}>${escHtml(p.note || '')}</div>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" data-ts="place-go" data-i="${i}">${uiIcon('eye', 14)}<span>${escHtml(t('tstudio.goThere'))}</span></button>
+        </div>`;
+    };
+    const live = list.map((p, i) => [p, i] as const).filter(([p]) => p.live);
+    const stat = list.map((p, i) => [p, i] as const).filter(([p]) => !p.live);
+    box.innerHTML = (live.length ? `<div class="tst-uhead">${escHtml(t('tstudio.placesLive'))}<span class="tst-count">${live.length}</span></div>${live.map(([p, i]) => row(p, i)).join('')}` : '')
+        + (stat.length ? `<div class="tst-uhead">${escHtml(t('tstudio.placesStatic'))}<span class="tst-count">${stat.length}</span></div>${stat.map(([p, i]) => row(p, i)).join('')}` : '');
+}
+
+function setPlaceNote(i: number, text: string): void {
+    const p = _places[i];
+    if (p) p.note = text;
+    const n = $(`tst-pl-note-${i}`);
+    if (n) { n.textContent = text; n.hidden = !text; }
+}
+
+function pulse(el: HTMLElement): void {
+    for (let d = el.parentElement?.closest('details'); d; d = d.parentElement?.closest('details')) (d as HTMLDetailsElement).open = true;
+    el.scrollIntoView({ block: 'center' });
+    el.classList.remove('tst-pulse');
+    void el.offsetWidth;
+    el.classList.add('tst-pulse');
+    setTimeout(() => el.classList.remove('tst-pulse'), 3200);
+}
+
+/** Show a view through its navigation button; false when the user's navigation has no such button. */
+function showView(view: string): boolean {
+    if (!view || view === '?') return true;
+    if (document.getElementById(`view-${view}`)?.classList.contains('active')) return true;
+    const nav = (document.getElementById(`nav-${view}`) || document.querySelector(`.nav-item[data-view="${CSS.escape(view)}"]`)) as HTMLElement | null;
+    if (!nav) return false;
+    nav.click();
+    return true;
+}
+
+function reachSettings(el: HTMLElement): void {
+    const id = el.id || el.closest<HTMLElement>('[id]')?.id;
+    if (id && el.closest('#view-settings')) goToSettings(id);
+}
+
+function goToPlace(i: number): void {
+    const p = _places[i];
+    const k = _sel;
+    if (!p || !k) return;
+    setPlaceNote(i, '');
+    const land = (el: HTMLElement) => { pulse(el); setPlaceNote(i, t('tstudio.placeArrived')); };
+    if (p.live && p.el && p.el.isConnected) {
+        const el = p.el;
+        showView(viewOfEl(el));
+        reachSettings(el);
+        // Hidden (a dialog, a tab, a fold): open what can be opened, then say what is left.
+        setTimeout(() => (el.isConnected && el.getClientRects().length ? land(el) : setPlaceNote(i, t('tstudio.placeNotNow', { where: viewLabel(viewOfEl(el)) }))), el.getClientRects().length ? 350 : 700);
+        return;
+    }
+    // A place read from the source: go to its view, then look for it on screen.
+    if (!showView(p.view)) { setPlaceNote(i, t('tstudio.placeNoNav', { where: viewLabel(p.view) })); return; }
+    if (p.kind === 'h' && p.view === 'settings' && p.anchor) goToSettings(p.anchor);
+    const settle = (tries: number) => {
+        const inView = (el: HTMLElement) => el.getClientRects().length > 0 && (!p.view || p.view === '?' || viewOfEl(el) === p.view || !viewOfEl(el));
+        const hit = liveElements(k).find(inView);
+        if (hit) { land(hit); return; }
+        const anchorEl = p.anchor && p.kind === 'h' ? document.getElementById(p.anchor) : null;
+        if (anchorEl && anchorEl.getClientRects().length) { land(anchorEl); return; }
+        if (tries > 0) { setTimeout(() => settle(tries - 1), 250); return; }
+        setPlaceNote(i, t('tstudio.placeNotNow', { where: viewLabel(p.view) }));
+    };
+    setTimeout(() => settle(3), 300);
 }
 
 // ── Untranslated text (hardcoded strings) ────────────────────────────────────────────────
@@ -1176,6 +1323,7 @@ function onClick(e: MouseEvent): void {
         case 'test-toast': if (k) testToast(k); break;
         case 'find-in-app': if (k) findInApp(k); break;
         case 'usage': if (k) setTimeout(() => { if ((_root?.querySelector('#tst-usage-box') as HTMLDetailsElement | null)?.open) void loadUsage(k); }, 0); break;
+        case 'place-go': goToPlace(Number(el.dataset.i)); break;
         case 'copy-loc': void copy(el.dataset.loc || '', `${t('i18n.locCopied')}: ${el.dataset.loc}`); break;
         case 'copy': void copy(el.dataset.copy || '', t('i18n.copied')); break;
         case 'open-key': if (el.dataset.key) selectKey(el.dataset.key, true); break;
