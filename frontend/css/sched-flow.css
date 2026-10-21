@@ -7,17 +7,14 @@
    --sk-pause), so the three modes paint a kind the same way in every theme. The accent is a
    FILL or a ring here, never the colour of text: text is --bmm-text-primary / -secondary. */
 
-/* ── The mode switch grows a third position ──────────────────────────────────────────────── */
-.sched-mode-switch.has-flow .sched-mode-glider { width: calc((100% - 4px) / 3); }
-.sched-mode-switch.at-flow .sched-mode-glider { transform: translateX(200%); }
-
 /* ── The editor body in flow mode: a column whose canvas takes what is left ──────────────── */
 .sched-modal .modal-body.sched-body.sflow-on {
     display: flex;
     flex-direction: column;
     overflow: hidden;
 }
-.sched-body.sflow-on .sched-flow-head { margin-bottom: 10px; flex-shrink: 0; }
+/* The START pill and the blocks legend belong to the Blocks view; the canvas has its own trigger. */
+.sched-body.sflow-on .sched-flow-head { display: none; }
 .sched-body.sflow-on .sched-flow-hint,
 .sched-body.sflow-on .sched-legend-mini { display: none; }
 
@@ -173,7 +170,7 @@
     pointer-events: auto;
 }
 .sflow-lane i { font-style: normal; font-weight: 500; letter-spacing: 0; text-transform: none; overflow: hidden; text-overflow: ellipsis; }
-.sflow-emptyhint { position: absolute; font-size: 12px; color: var(--bmm-text-secondary); white-space: nowrap; }
+.sflow-emptyhint { position: absolute; width: 240px; font-size: 12px; line-height: 1.45; color: var(--bmm-text-secondary); white-space: normal; }
 .sflow-marquee {
     position: absolute;
     border: 1px solid var(--bmm-accent);

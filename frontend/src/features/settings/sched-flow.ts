@@ -496,7 +496,7 @@ function render(): void {
         });
     }
     if (!(draft.steps || []).length) {
-        html.push(`<div class="sflow-emptyhint" style="left:${NODE_W + 110}px;top:${NODE_H / 2 - 10}px">${escHtml(tip('sched.flow.empty', 'sched.flow.addNode'))}</div>`);
+        html.push(`<div class="sflow-emptyhint" style="left:${NODE_W + 110}px;top:${NODE_H / 2 - 10}px">${escHtml(t('sched.flow.empty'))}</div>`);
     }
     _layer.innerHTML = html.join('');
     renderMini();
