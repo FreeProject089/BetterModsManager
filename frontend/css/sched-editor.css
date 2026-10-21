@@ -4,8 +4,21 @@
    never the colour of text. Every animation has a still equivalent under reduced motion. */
 
 /* ── Header: name, status, the main actions ─────────────────────────────────────────────── */
-.sched-modal .sched-head { gap: 12px; flex-wrap: wrap; }
-.sched-modal .sched-head .sched-head-main { flex: 1 1 280px; min-width: 0; }
+/* Name on the left, actions, then the close button — always on the first row. When the window
+   is too narrow for both, the actions take a row of their own UNDER the name, and the close
+   button stays top-right instead of wrapping onto a row by itself. */
+.sched-modal .sched-head {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center;
+    column-gap: var(--space-3); row-gap: var(--space-2);
+}
+.sched-modal .sched-head .sched-head-main { grid-column: 1; grid-row: 1; min-width: 0; }
+.sched-modal .sched-head .sched-head-actions { grid-column: 2; grid-row: 1; }
+.sched-modal .sched-head > .modal-close { grid-column: 3; grid-row: 1; }
+@media (max-width: 1240px) {
+    .sched-modal .sched-head .sched-head-actions { grid-column: 1 / -1; grid-row: 2; justify-content: flex-start; }
+    .sched-modal .sched-head .sched-mode-switch { margin-left: 0; }
+    .sched-foot-keys { display: none; }
+}
 .sched-head-line { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
 .sched-head-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 42ch; }
 .sched-status {
@@ -30,9 +43,9 @@
     background: color-mix(in srgb, var(--bmm-warning) 16%, transparent);
 }
 .sched-dirty[hidden] { display: none; }
-.sched-head-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.sched-head-actions { display: flex; align-items: center; gap: var(--space-1); row-gap: var(--space-2); flex-wrap: wrap; justify-content: flex-end; }
 .sched-head-actions .btn { display: inline-flex; align-items: center; gap: 6px; }
-.sched-head-sep { width: 1px; height: 22px; background: var(--bmm-border); margin: 0 4px; }
+.sched-head-sep { width: 1px; height: 20px; background: var(--bmm-border); margin: 0 var(--space-1); }
 .sched-footer { display: flex; align-items: center; gap: 8px; }
 .sched-foot-left { margin-right: auto; display: inline-flex; align-items: center; gap: 12px; min-width: 0; }
 .sched-foot-keys { font-size: 11px; color: var(--bmm-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -226,14 +239,20 @@ textarea.sched-secret:not(.is-shown) { -webkit-text-security: disc; }
 .spg-opts { display: flex; flex-direction: column; gap: 4px; }
 
 /* Plugins & API → Automations (scheduler.ts mountAutomations): the task list moved here. */
-.auto-root { display: flex; flex-direction: column; gap: 12px; }
-.auto-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.auto-root { display: flex; flex-direction: column; gap: var(--space-4); }
+.auto-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
+#view-plugins .auto-root .auto-head-text .plug-section-title { margin: 0 0 var(--space-1); }
+#view-plugins .auto-root .auto-head-text .plug-section-lead { margin: 0; line-height: 1.5; }
+/* Inside the Automations card the editor preference is a plain row, not a box in a box. */
+.auto-root .sched-mode-pref { margin: 0; padding: 0 0 var(--space-4); border: 0; border-bottom: 1px solid var(--bmm-border); border-radius: 0; background: transparent; }
+.auto-root .sched-filter { margin-bottom: 0; }
+.auto-root .sched-run-panel { margin: 0; }
 .auto-head-text { min-width: 0; flex: 1 1 280px; }
 .auto-head-text .plug-section-lead { margin-bottom: 0; }
-.auto-head-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.auto-head-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 .auto-head-actions .btn { display: inline-flex; align-items: center; gap: 6px; }
-.auto-list { display: flex; flex-direction: column; gap: 8px; }
-.auto-foot { display: flex; justify-content: flex-end; align-items: center; gap: 8px; flex-wrap: wrap; }
+.auto-list { display: flex; flex-direction: column; gap: var(--space-2); }
+.auto-foot { display: flex; justify-content: flex-end; align-items: center; gap: var(--space-2); flex-wrap: wrap; padding-top: var(--space-1); }
 .auto-foot > .btn { display: inline-flex; align-items: center; gap: 6px; }
 /* The export dialog of an automation (scheduler.ts openExportDialog). */
 .sex-pre { margin: 10px 0 0; max-height: 320px; overflow: auto; padding: 10px; border-radius: var(--bmm-radius-input); border: 1px solid var(--bmm-border); background: var(--bmm-bg-base); color: var(--bmm-text-primary); font-family: var(--bmm-font-mono); font-size: 12px; white-space: pre; }
@@ -244,13 +263,13 @@ textarea.sched-secret:not(.is-shown) { -webkit-text-security: disc; }
 .sched-tag { padding: 2px 9px; border-radius: 99px; border: 1px solid var(--bmm-border); background: transparent; color: var(--bmm-text-secondary); font: 600 11px var(--bmm-font-sans); cursor: pointer; }
 .sched-tag:hover, .sched-tag:focus-visible { border-color: var(--bmm-border-hover); color: var(--bmm-text-primary); outline: none; }
 .sched-tag.is-on { background: color-mix(in srgb, var(--bmm-accent) 16%, transparent); border-color: var(--bmm-accent); color: var(--bmm-text-primary); }
-.sched-folder-h { display: flex; align-items: center; gap: 8px; width: 100%; margin: 12px 0 6px; padding: 4px 6px; border: 0; border-radius: 8px; background: transparent; color: var(--bmm-text-primary); font: 700 12px var(--bmm-font-sans); text-align: left; cursor: pointer; }
+.sched-folder-h { display: flex; align-items: center; gap: var(--space-2); width: 100%; margin: var(--space-2) 0 0; padding: var(--space-1) var(--space-2); border: 0; border-radius: 8px; background: transparent; color: var(--bmm-text-primary); font: 700 12px var(--bmm-font-sans); text-align: left; cursor: pointer; }
 .sched-folder-h:hover, .sched-folder-h:focus-visible { background: var(--bmm-bg-hover); outline: none; }
 .sched-folder-h svg { color: var(--bmm-text-secondary); flex-shrink: 0; }
 .sched-folder-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sched-folder-n { font-size: 11px; font-weight: 600; color: var(--bmm-text-muted); }
-.sched-row.in-folder { margin-left: 14px; }
+.sched-row.in-folder { margin-left: var(--space-4); }
 .sched-chip-tag { color: var(--bmm-text-secondary); }
 .sched-chip-pkg { display: inline-flex; align-items: center; gap: 4px; }
 .sched-chip-pkg svg { color: var(--bmm-warning); }
-.sched-filing { display: grid; gap: 4px; margin-top: 8px; }
+.sched-filing { display: grid; gap: var(--space-1); margin-top: var(--space-2); }

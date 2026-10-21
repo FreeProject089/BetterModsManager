@@ -5168,7 +5168,11 @@ export function renderScheduleList(): void {
                 <div class="sched-empty-icon">${uiIcon('clock', 20)}</div>
                 <strong>${t('sched.emptyTitle') || 'No scheduled tasks yet'}</strong>
                 <span>${t('sched.empty') || 'Create one to automate BMM — sync a repo at night, switch profile before a session, launch your tools in one click.'}</span>
+                <div class="sched-empty-actions">
+                    <button type="button" class="btn btn-sm btn-secondary" data-empty="templates">${uiIcon('grid', 14)}<span>${escHtml(t('auto.templates'))}</span></button>
+                </div>
             </div>`;
+        container.querySelector('[data-empty="templates"]')?.addEventListener('click', () => { void openTemplates(); });
         return;
     }
     container.innerHTML = '';
@@ -8711,6 +8715,26 @@ function wireCodeMode(modal: HTMLElement): void {
     const btns = Array.from(modal.querySelectorAll('.sched-mode-btn')) as HTMLElement[];
     if (!pane || !timeline || !ta || !status || !btns.length) return;
 
+    // The switch, drawn. The glider is moved by a class rather than by measuring, so it cannot
+    // drift out of step with the buttons when the labels are translated to different widths.
+    // One tab stop (the selected one); the arrows move between the three, as in any tab list.
+    const sw = modal.querySelector('.sched-mode-switch') as HTMLElement | null;
+    const paintSwitch = (next: EditorMode) => {
+        for (const b of btns) {
+            const on = b.dataset.mode === next;
+            b.classList.toggle('on', on);
+            b.setAttribute('aria-selected', on ? 'true' : 'false');
+            b.tabIndex = on ? 0 : -1;
+        }
+        sw?.classList.toggle('at-code', next === 'code');
+        sw?.classList.toggle('at-flow', next === 'flow');
+    };
+    // Painted in the remembered mode BEFORE the editor is on screen, without the slide: on a
+    // first open the pill used to start on Blocks and travel to Flow while the dialog faded in.
+    sw?.classList.add('is-settling');
+    paintSwitch(readEditorMode());
+    setTimeout(() => sw?.classList.remove('is-settling'), 320);
+
     // Starts in Blocks; the mode used last is applied below, once everything is wired.
     let mode: EditorMode = 'bricks';
 
@@ -8764,16 +8788,7 @@ function wireCodeMode(modal: HTMLElement): void {
         pane.hidden = next !== 'code';
         if (flowPane) flowPane.hidden = next !== 'flow';
         main?.classList.toggle('sflow-on', next === 'flow');
-        for (const b of btns) {
-            const on = b.dataset.mode === next;
-            b.classList.toggle('on', on);
-            b.setAttribute('aria-selected', on ? 'true' : 'false');
-        }
-        // The glider is moved by a class rather than by measuring, so it cannot drift out of
-        // step with the buttons when the labels are translated to different widths.
-        const sw = modal.querySelector('.sched-mode-switch');
-        sw?.classList.toggle('at-code', next === 'code');
-        sw?.classList.toggle('at-flow', next === 'flow');
+        paintSwitch(next);
     };
 
     /**
@@ -8831,6 +8846,19 @@ function wireCodeMode(modal: HTMLElement): void {
             void switchTo(m === 'code' ? 'code' : m === 'flow' ? 'flow' : 'bricks');
         });
     }
+    sw?.addEventListener('keydown', (e) => {
+        const at = btns.findIndex((b) => b.dataset.mode === mode);
+        let to = -1;
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') to = (at + 1) % btns.length;
+        else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') to = (at - 1 + btns.length) % btns.length;
+        else if (e.key === 'Home') to = 0;
+        else if (e.key === 'End') to = btns.length - 1;
+        if (to < 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const m = btns[to].dataset.mode;
+        void switchTo(m === 'code' ? 'code' : m === 'flow' ? 'flow' : 'bricks').then(() => btns.find((b) => b.dataset.mode === mode)?.focus());
+    });
 
     // Checked as you stop typing, so the Blocks button is never the first thing to tell you
     // there is a mistake.

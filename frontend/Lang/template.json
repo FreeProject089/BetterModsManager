@@ -6039,7 +6039,7 @@
   "sched.title": "Scheduling & automation",
   "sched.desc": "Run BMM actions on a schedule or on a condition, while BMM is open.",
   "sched.create": "New scheduled task",
-  "sched.empty": "No scheduled tasks yet. Create one to automate BMM.",
+  "sched.empty": "Create one to automate BMM, or start from a template.",
   "sched.emptyTitle": "No scheduled tasks yet",
   "sched.secBasics": "Basics",
   "sched.secBasicsHint": "Name it so future-you knows what it does.",

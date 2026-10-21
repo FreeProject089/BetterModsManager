@@ -5860,7 +5860,7 @@
   "sched.title": "Planification & automatisation",
   "sched.desc": "Lancez des actions BMM à heure fixe ou sous condition, tant que BMM est ouvert.",
   "sched.create": "Nouvelle tâche planifiée",
-  "sched.empty": "Aucune tâche planifiée. Créez-en une pour automatiser BMM.",
+  "sched.empty": "Créez-en une pour automatiser BMM, ou partez d’un modèle.",
   "sched.emptyTitle": "Aucune tâche planifiée",
   "sched.secBasics": "Base",
   "sched.secBasicsHint": "Nomme-la pour que le futur toi sache ce qu'elle fait.",
