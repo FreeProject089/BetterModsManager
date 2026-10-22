@@ -292,6 +292,9 @@ fn main() {
             let code = fs_utils::run_mod_worker(&argv[2], &argv[3]);
             std::process::exit(code);
         }
+        // An elevated relaunch (« Restart BMM as administrator »): wait for the instance that
+        // started it to close, or the single-instance guard hands this one back to it.
+        commands::elevation::wait_for_parent(&argv);
     }
 
     // ── WebView2 RAM trims ───────────────────────────────────────────────
@@ -783,6 +786,7 @@ fn main() {
             commands::analytics::replay_spool_append,
             commands::analytics::replay_spool_trim,
             commands::analytics::replay_spool_finalize,
+            commands::analytics::read_replay_file,
             commands::analytics::replay_spool_clear,
             commands::analytics::delete_local_replay,
             commands::analytics::save_crash_session,
@@ -1015,6 +1019,9 @@ fn main() {
             boot_flags::set_webview_gpu,
             boot_flags::set_webview_gpu_mode,
             boot_flags::app_restart,
+            commands::elevation::get_elevation_state,
+            commands::elevation::check_folder_protection,
+            commands::elevation::restart_elevated,
             commands::security::bc_api_get,
             commands::security::set_bcweb_api_key,
             commands::security::has_bcweb_api_key,

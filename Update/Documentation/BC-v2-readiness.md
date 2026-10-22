@@ -1,6 +1,6 @@
 # BetterCommunity v2 and telemetry v2: BMM readiness
 
-Status as of 2026-10-14 (BMM 1.0.3, branch `release/1.0.3`). This page lists every
+Status as of 2026-10-14 (BMM 1.0.4, branch `release/1.0.4`). This page lists every
 BetterCommunity (BC) call BMM makes, what each becomes in v2, and what is ready, what waits for
 v2, and what stays on v1. v2 contracts referenced here: `BetterCommunity-v2/packages/contracts/src/*.ts`
 and ADRs 0009 (catalogues), 0011 (consent ledger), 0012 (feedback centre), 0018 (BMM on v2),
@@ -8,7 +8,7 @@ and ADRs 0009 (catalogues), 0011 (consent ledger), 0012 (feedback centre), 0018 
 (app telemetry). Telemetry server: the Rust/Axum telemetry dashboard,
 `BCW/BCWEB/bmm/telemetry-dashboard/server`.
 
-**Nothing changes for users until the switch is on.** BMM 1.0.3 ships every v2 adapter dormant.
+**Nothing changes for users until the switch is on.** BMM 1.0.4 ships every v2 adapter dormant.
 Without a `BCApiVersion` line in `app.cfg` and without `bc_api` in links.json, BMM builds the
 same URLs and sends the same requests as 1.0.2. `tests/bc-endpoints.test.mjs` and
 `tests/bc-v2.test.mjs` check this URL by URL, the bundled links.json included.
@@ -24,7 +24,7 @@ same URLs and sends the same requests as 1.0.2. `tests/bc-endpoints.test.mjs` an
 | Where | Keys | Notes |
 |---|---|---|
 | `app.cfg` | `BCApiVersion=v2` (or `2`), `BCv2Base=https://…` | Wins. An explicit `BCApiVersion=v1` pins the install to v1 whatever links.json says. Documented in `APP_CFG.md`. |
-| links.json (platform asset, fetched at every start) | `bc_api: "v2"`, `bc_v2_base` | The remote switch: the owner flips it the day v2 goes live and installed 1.0.3 copies follow without a release. |
+| links.json (platform asset, fetched at every start) | `bc_api: "v2"`, `bc_v2_base` | The remote switch: the owner flips it the day v2 goes live and installed 1.0.4 copies follow without a release. |
 | default | | v1. |
 
 `BCv2Base` / `bc_v2_base` must be `https://`, or plain `http://` to this machine. Empty means:
@@ -97,22 +97,22 @@ Status legend:
 
 | # | Call | Where (file:line) | Method and route | Auth | Payload / answer | v2 mapping | Status |
 |---|---|---|---|---|---|---|---|
-| 1 | links.json registry | `core/links-config.ts:158` (`bcwebLinksUrl`), fetched via `fetch_remote_json` (`commands/net.rs:83`) | GET `/api/assets/links.json` | anon | the `BmmLinks` JSON | No v2 route. v2 "platform assets" are not in the contracts. | adapter ready (1.0.3). v2 serves `/api/assets/links.json` byte for byte (ADR 0019). Read from the v1 root at start; it carries the remote switch (§1). |
-| 2 | Contributors | `ui/app.ts:1761` (`links.contributors`) | GET `/api/assets/contributors.json` | anon | JSON list | Same as #1 | adapter ready (1.0.3). Moved to the v2 root by `bcRehome` once the session is v2. |
+| 1 | links.json registry | `core/links-config.ts:158` (`bcwebLinksUrl`), fetched via `fetch_remote_json` (`commands/net.rs:83`) | GET `/api/assets/links.json` | anon | the `BmmLinks` JSON | No v2 route. v2 "platform assets" are not in the contracts. | adapter ready (1.0.4). v2 serves `/api/assets/links.json` byte for byte (ADR 0019). Read from the v1 root at start; it carries the remote switch (§1). |
+| 2 | Contributors | `ui/app.ts:1761` (`links.contributors`) | GET `/api/assets/contributors.json` | anon | JSON list | Same as #1 | adapter ready (1.0.4). Moved to the v2 root by `bcRehome` once the session is v2. |
 | 3 | Catalogue feeds per kind | `links-config.ts:90-96` defaults; read by `scheduler.ts:12220` and the catalogue loaders via `catalogSources()`; Rust `net.rs:38` `catalog_get` | GET `/api/catalog.json?project=bmm&kind=…` | CID, keyproof, repo-pw | v1 catalogue document | v2 compat `legacyCatalogFeed` (`compat.ts`), public catalogues only, v1 shape | done (compat). Native v2 is the signed feeds (#5). |
 | 4 | Catalogue index | `links-config.ts:91` (`catalog_index`) | GET `/api/catalogs.json` | CID | list of official catalogues | No compat path. The v2 equivalent is the signed index `GET /v2/feeds/catalog`. | adapter ready (URL discovery only, see #5) |
 | 5 | Signed catalogue feeds (v2 only) | `bc-endpoints.ts` `signedFeedUrls()`, `bc-client.ts` `bcSignedFeeds()` | GET `/v2/feeds/catalog`, `/v2/feeds/catalogs/:catalog`, `/v2/feeds/keys` | anon | DSSE envelope signed with Ed25519 | Verification belongs to the universal catalogue work: format in `catalog_format.rs`, Tauri commands `catalog_validate`, `catalog_normalize`, `catalog_convert`, `catalog_verify_signature` and `catalog_keys` in `catalog_convert.rs`. They are registered in `main.rs`. | adapter ready. The loaders read and verify the signed feeds in v2 mode (`catalog-read.ts`); the root's keys are pinned at the first read (trust on first use). |
 | 6 | Public repo list | `features/repo/repo.ts:1478` (`links.server_browse`) | GET `/api/repos.json` | CID | `{ repos: [...] }` | v2 compat `legacyRepoFeed` (same shape) | done (compat) |
 | 7 | Hosted repo content | Rust `api/mod.rs:3090,3173`, `modlist.rs:824`, `repo.rs:2474,2985,3104`, `net.rs:102` | GET `/api/repos/:slug/*` (`repo.json`, files, Range) | CID, keyproof, repo-pw, `X-Creator-Identity` | bytes | v2 compat `legacyRepoContent` checks `X-Repo-Password` and `X-BMM-Key-Proof` | done (compat). v2 does not read `X-Creator-ID` / `X-Creator-Identity`, so whitelist-by-creator repos need #22. |
-| 8 | Update fallback | `ui/update-notes.ts:761` (`autoupdate_api_fallback`) | GET `/api/updates/bmm` (GitHub releases shape) | anon | releases JSON | v2 has `/v2/projects/:project/releases` and channels (`releases.ts`), but no GitHub-shaped compat. Belongs to the self-updater work. | adapter ready (1.0.3). `autoupdate_api_fallback` moved by `bcRehome` to `<v2>/api/updates/bmm` (ADR 0019, GitHub shape). The signed `update-manifest.json` / `update.json` checks are unchanged. |
-| 9 | Laya offline model | Rust `commands/ai_embedded.rs:73` | GET `/api/assets/bmm-laya-offline` | anon | model archive | Same as #1, or a v2 release file | adapter ready (1.0.3). `pack_mirrors()` adds `<v2>/api/assets/bmm-laya-offline` before the v1 mirror; the SHA-256 pin is unchanged. |
+| 8 | Update fallback | `ui/update-notes.ts:761` (`autoupdate_api_fallback`) | GET `/api/updates/bmm` (GitHub releases shape) | anon | releases JSON | v2 has `/v2/projects/:project/releases` and channels (`releases.ts`), but no GitHub-shaped compat. Belongs to the self-updater work. | adapter ready (1.0.4). `autoupdate_api_fallback` moved by `bcRehome` to `<v2>/api/updates/bmm` (ADR 0019, GitHub shape). The signed `update-manifest.json` / `update.json` checks are unchanged. |
+| 9 | Laya offline model | Rust `commands/ai_embedded.rs:73` | GET `/api/assets/bmm-laya-offline` | anon | model archive | Same as #1, or a v2 release file | adapter ready (1.0.4). `pack_mirrors()` adds `<v2>/api/assets/bmm-laya-offline` before the v1 mirror; the SHA-256 pin is unchanged. |
 
 ### 3.2 Account link and identity
 
 | # | Call | Where | Method and route | Auth | Payload | v2 mapping | Status |
 |---|---|---|---|---|---|---|---|
 | 10 | Link status | `core/bc-link.ts:82` (migrated to `bcUrl`); `features/repo/repo-sync.ts:251` (direct, not migrated) | GET `/api/link/status?creatorId=` | anon (query) | `{linked, displayName, discord}` | v2 has no install-to-account link. Accounts link installs through OIDC (`/v2/oauth/*`, device flow `/v2/oauth/device`) and `POST /v2/me/consents/link`. | v1 only. In v2 mode the device flow (#11) replaces it; the v1 link keeps working against v1. |
-| 11 | Link request (pairing code) | `core/bc-link.ts:163` (migrated) | POST `/api/link/request` | proof | `{creatorId, proof}` → `{code}` or `{linked}` | Replace with the OIDC device flow (`/v2/oauth/device`) | adapter ready (1.0.3). OAuth device flow (`bc_v2_auth.rs`), Settings « Linked BetterCommunity account » card. |
+| 11 | Link request (pairing code) | `core/bc-link.ts:163` (migrated) | POST `/api/link/request` | proof | `{creatorId, proof}` → `{code}` or `{linked}` | Replace with the OIDC device flow (`/v2/oauth/device`) | adapter ready (1.0.4). OAuth device flow (`bc_v2_auth.rs`), Settings « Linked BetterCommunity account » card. |
 | 12 | Key v5 upgrade / pin | `core/bc-link.ts:123` (migrated) | POST `/api/link/upgrade` | proof v5 | `{proof}` | No v2 route. v2 has no creator-key model. | not served by v2 (no creator-key model, ADR 0018 §2). Stays on v1. |
 | 13 | Discord link | `features/settings/settings.ts:968` (Settings UI, belongs to another agent, not migrated) | POST `/api/link/discord` | anon | `{creatorId, code}` | No v2 route | stays on v1 (ADR 0023 §2: belongs to the v2 bot, P6). |
 | 14 | Author lookup | `features/repo/repo-sync.ts:210` (repo-sync belongs to another agent) | GET `/api/users/search?q=` | anon | `{users:[…]}` | No public user search in v2 | stays on v1 (ADR 0023 §2: no creator-key registry). |
@@ -121,11 +121,11 @@ Status legend:
 
 | # | Call | Where | Method and route | Auth | v2 mapping | Status |
 |---|---|---|---|---|---|---|
-| 15 | Blog list, post, history, comments | `features/community/community.ts:181,576,671,683,774,817` (`bcGet` → `bcApi()`) | GET `/api/blog`, `/api/blog/:slug`, `/api/blog/:id/history[/:rev]`, `/api/blog/:id/comments[/:cid/history]` | anon | v2 content entries: `/v2/entries`, `/v2/entries/:kind/:slug` (`content.ts`). Different model. | adapter ready (1.0.3). The v1 paths on the v2 root (ADR 0023) through `bcUrl`; history and comments answer empty lists; a revision's or a comment's history stays on v1. |
+| 15 | Blog list, post, history, comments | `features/community/community.ts:181,576,671,683,774,817` (`bcGet` → `bcApi()`) | GET `/api/blog`, `/api/blog/:slug`, `/api/blog/:id/history[/:rev]`, `/api/blog/:id/comments[/:cid/history]` | anon | v2 content entries: `/v2/entries`, `/v2/entries/:kind/:slug` (`content.ts`). Different model. | adapter ready (1.0.4). The v1 paths on the v2 root (ADR 0023) through `bcUrl`; history and comments answer empty lists; a revision's or a comment's history stays on v1. |
 | 16 | Avatars | `community.ts:98`, fetched with `bc_fetch_data_url` | GET `/api/avatar/:id?size=64` | anon | none in the v2 contracts | stays on v1 (ADR 0023 §2: v2 accounts have no avatar yet). |
 | 17 | Launch announcements | `ui/launch-announcements.ts:80` | GET `/api/bmm/launch?version=&lang=` (ETag) | anon | v2 releases and announcements have no launch-deck route | stays on v1 (ADR 0023 §2: no announcement model yet). |
-| 18 | Notifications | `core/bcweb-notifications.ts:49` → Rust `security.rs:549` | GET `/api/v1/notifications?since=` | BC key | `GET /v2/notifications` (`integrations.ts`) with a v2 token (`bc_pat_` with the notifications scope). Needs a v2 token story and a cursor mapping. | adapter ready (1.0.3). `bc_v2_notifications`: `/api/v1/notifications?since=` on the v2 root with the device-flow token (`notifications:read`), same v1 shape. |
-| 19 | Laya "BetterCommunity" classifier | `features/ai/ai-shared.ts:139` (`bcAuthArgs`) → Rust `ai.rs:32`, `ai_core.rs:2157` | POST `/api/ai/bmm/suggest` | CID and proof | No v2 AI route (the plan describes Laya as a classifier; nothing in the contracts yet) | adapter ready (1.0.3). Same path on the v2 root with the device-flow token (`ai:classify`, ADR 0020); without a sign-in the provider answers `not_signed_in`. |
+| 18 | Notifications | `core/bcweb-notifications.ts:49` → Rust `security.rs:549` | GET `/api/v1/notifications?since=` | BC key | `GET /v2/notifications` (`integrations.ts`) with a v2 token (`bc_pat_` with the notifications scope). Needs a v2 token story and a cursor mapping. | adapter ready (1.0.4). `bc_v2_notifications`: `/api/v1/notifications?since=` on the v2 root with the device-flow token (`notifications:read`), same v1 shape. |
+| 19 | Laya "BetterCommunity" classifier | `features/ai/ai-shared.ts:139` (`bcAuthArgs`) → Rust `ai.rs:32`, `ai_core.rs:2157` | POST `/api/ai/bmm/suggest` | CID and proof | No v2 AI route (the plan describes Laya as a classifier; nothing in the contracts yet) | adapter ready (1.0.4). Same path on the v2 root with the device-flow token (`ai:classify`, ADR 0020); without a sign-in the provider answers `not_signed_in`. |
 | 20 | Account page links | `bc-link.ts:236` (`/profile`), `community.ts:524,626` (`/blog`), `bc-feedback.ts:89` (`/dashboard?s=reports`) | browser navigation | n/a | v2 web paths differ (account pages). Needs a v2 path map. | not started (the v2 web paths are not in the contracts). |
 
 ### 3.4 Feedback, consent and telemetry
@@ -134,7 +134,7 @@ Status legend:
 |---|---|---|---|---|---|---|
 | 21 | Feedback config | `features/feedback/bc-feedback.ts:132,193` | GET `<endpoint>/config` | anon | v1 mode: v1 path (v2 also serves it through compat). v2 mode: `GET /v2/projects/bmm/feedback/config`, mapped by `feedbackConfigFromV2`. | adapter ready. Checked against the final contract (`FeedbackConfigView`, `max_request_mb` included). |
 | 22 | Feedback, bug and crash report | `bc-feedback.ts:221` (`submitFeedback`) | POST `/api/feedback/bmm` (default, unchanged) | CID and proof | v2 mode: `POST /v2/projects/bmm/feedback` with `feedbackToV2` (snake_case, flat meta ≤40 keys, `content_type`). The answer goes through `feedbackAnswerFromV2`, which turns problem codes into the v1 status and `{error}`. Identity in v2 mode: `Authorization: Bearer <bc_v2_app_key>` when links.json has a publishable `bc_pk_` key. The creator headers are not sent, because v2 does not read them. v2 compat on `/api/feedback/bmm` also works and treats every sender as anonymous. | adapter ready. Signed in: sent by Rust with the account token (`bc_v2_feedback_send`, sender `account`). Otherwise the webview sends it with the publishable key (sender `app`). |
-| 23 | Consent receipts → BC v2 ledger | `core/consent.ts` `syncConsents` → Rust `bc_v2.rs` `consent_sync_bc_v2` | POST `/v2/consents` (one per receipt) | anon subject; optional `bc_pk_` app key | Telemetry and crash-report answers become `kind: categories`, `document: app.telemetry` / `app.crash_reports`, a boolean per category, `source: app`. Terms and Privacy answers are deferred (see §5). | adapter ready (1.0.3): category receipts, and Terms / Privacy receipts as `kind: legal` once v2 publishes `bmm-terms` / `bmm-privacy` in the shipped version; re-acceptance answers (§1.3). |
+| 23 | Consent receipts → BC v2 ledger | `core/consent.ts` `syncConsents` → Rust `bc_v2.rs` `consent_sync_bc_v2` | POST `/v2/consents` (one per receipt) | anon subject; optional `bc_pk_` app key | Telemetry and crash-report answers become `kind: categories`, `document: app.telemetry` / `app.crash_reports`, a boolean per category, `source: app`. Terms and Privacy answers are deferred (see §5). | adapter ready (1.0.4): category receipts, and Terms / Privacy receipts as `kind: legal` once v2 publishes `bmm-terms` / `bmm-privacy` in the shipped version; re-acceptance answers (§1.3). |
 | 24 | Telemetry batch | Rust `commands/analytics.rs` `analytics_flush`; webview beacon `core/analytics.ts:825` | POST `<analytics_endpoint>` (`…/batch/`) | pk | Now a versioned envelope, see §4 | done (v1). In v2 mode with `bc_v2_app_id` and `bc_v2_app_key`: `POST /v2/apps/{app}/telemetry/batch` (`bc_v2_telemetry.rs`, §4). |
 | 25 | Consent receipts → telemetry server | Rust `consent_ledger.rs:824` `consent_sync` | POST `…/consents` | pk | Already existed: append-only, receipt hash recomputed by the server, cursor `sent_seq` | done (pre-existing) |
 | 26 | Live issues | Rust `commands/live_issues.rs:304,402` | POST `…/issues` | pk | unchanged | done |
@@ -229,7 +229,7 @@ No new data is collected.
 - The v2 server keeps its own chain and takes no client hash. Idempotence is therefore
   client-side. A crash between the server's 201 and the cursor write can send one receipt twice.
 
-### 4.1 BetterCommunity v2 app telemetry (BMM 1.0.3, ADR 0024)
+### 4.1 BetterCommunity v2 app telemetry (BMM 1.0.4, ADR 0024)
 
 In v2 mode, when links.json gives `bc_v2_app_id` and `bc_v2_app_key`, `analytics_flush` first
 sends the queue to `POST <v2>/v2/apps/{app}/telemetry/batch` (`bc_v2_telemetry.rs`):
@@ -280,7 +280,7 @@ Still open on the v2 side (BMM keeps v1 for these): avatars, launch announcement
 by creator id, the Discord link, post comment and revision history, the account web pages (#20),
 a v2 home for session replay.
 
-## 6. Not done in BMM 1.0.3
+## 6. Not done in BMM 1.0.4
 
 - An install's anonymous consent subject is not linked to the account after sign-in
   (`POST /v2/me/consents/link`): receipts stay on the anonymous subject.
@@ -309,7 +309,7 @@ a v2 home for session replay.
   - app key validation
 - `analytics.rs` `envelope_tests` checks the versioned batch envelope.
 
-BMM 1.0.3 adds:
+BMM 1.0.4 adds:
 
 - `tests/bc-v2.test.mjs`: the v1 default (bundled links.json, every URL), the switch's
   precedence, what moves and what stays on v1, the device-flow state machine

@@ -44,7 +44,7 @@ API locale pour l'automatisation.
 | ![Centre d'activité](.github/screenshots/activity.png) **Centre d'activité** (nouveau en 1.0.2) : chaque tâche en cours, avec Annuler. | ![Outils BMM](.github/screenshots/tools.png) **Outils BMM** (nouveau en 1.0.2) : des vérifications en lecture seule, ici l'espace disque par profil. |
 | ![Catalogue d'applications](.github/screenshots/apps.png) **Catalogue d'applications** : chaque carte indique son état et l'action suivante. | ![Paramètres](.github/screenshots/settings.png) **Paramètres** : un index de toutes les cartes, avec recherche (Ctrl+F). |
 
-<p align="center"><img src=".github/screenshots/library-light.png" alt="Bibliothèque, thème clair" width="70%" /><br/><sub>La même Bibliothèque avec le thème clair intégré. Captures réalisées avec des données de démonstration, interface en anglais.</sub></p>
+<p align="center"><img src=".github/screenshots/automations-flow.png" alt="Éditeur d'Automatisations en mode Flux, des nœuds reliés par des fils" width="70%" /><br/><sub>L'éditeur d'Automatisations en mode Flux, façon Blueprints. Captures réalisées avec des données de démonstration, interface en anglais.</sub></p>
 
 Plus d'images, domaine par domaine : [VISUALS_FR.md](VISUALS_FR.md).
 

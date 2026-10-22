@@ -290,6 +290,38 @@ impl Redactor {
         }
     }
 
+    /// A JSON document whose STRUCTURE must survive (the session replay): every string value
+    /// (and object key) goes through the text pass on its own, then the document is written
+    /// back, so the result is always valid JSON. The text pass over the raw document used to
+    /// cut through it: `"cookie":{` lost its brace to `[REDACTED: 1 chars]`, and a URL inside an
+    /// escaped string (`?k=abc\"`) took the backslash of `\"` with it, which unescaped the quote.
+    /// Either way the crash report's `session_replay.bmmreplay` no longer parsed. None when
+    /// `text` is not JSON.
+    pub fn scrub_json_strings(&self, text: &str) -> Option<String> {
+        fn walk(r: &Redactor, v: &mut Value) {
+            match v {
+                Value::String(s) => {
+                    let out = r.scrub_text(s);
+                    if out != *s { *s = out; }
+                }
+                Value::Array(a) => a.iter_mut().for_each(|x| walk(r, x)),
+                Value::Object(m) => {
+                    let keys: Vec<String> = m.keys().cloned().collect();
+                    for k in keys {
+                        let mut val = m.remove(&k).unwrap_or(Value::Null);
+                        walk(r, &mut val);
+                        let nk = r.scrub_text(&k);
+                        m.insert(nk, val);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut v: Value = serde_json::from_str(text).ok()?;
+        walk(self, &mut v);
+        serde_json::to_string(&v).ok()
+    }
+
     /// Bytes of an entry that may or may not be text (the session replay, a legacy entry).
     pub fn scrub_bytes(&self, bytes: &[u8]) -> Vec<u8> {
         match std::str::from_utf8(bytes) {

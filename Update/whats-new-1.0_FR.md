@@ -1,6 +1,6 @@
 # Les nouveautés de BMM 1.0
 
-La 1.0 est la version qui a fait de Better Mods Manager plus qu'un simple interrupteur de mods : des profils qui survivent à une mise à jour du jeu, des mods reconnus par leur contenu, un ordre que vous maîtrisez, des plugins et des automatisations, des catalogues et des repos que l'on peut suivre, et un assistant facultatif qui ne quitte jamais votre PC. Cette page raconte la 1.0 dans son ensemble (1.0.0, 1.0.1 et 1.0.2). Les notes de correctifs qui suivent, la 1.0.3 et après, sont dans la liste à côté et comptent moins que cette page.
+La 1.0 est la version qui a fait de Better Mods Manager plus qu'un simple interrupteur de mods : des profils qui survivent à une mise à jour du jeu, des mods reconnus par leur contenu, un ordre que vous maîtrisez, des plugins et des automatisations, des catalogues et des repos que l'on peut suivre, et un assistant facultatif qui ne quitte jamais votre PC. Cette page raconte la 1.0 dans son ensemble (1.0.0, 1.0.1 et 1.0.2). Les notes de correctifs qui suivent, la 1.0.4 et après, sont dans la liste à côté et comptent moins que cette page.
 
 > Vous cherchez un correctif ou un chiffre précis ? Choisissez une version dans la liste à gauche. Vous voulez savoir ce que BMM sait faire aujourd'hui ? Lisez d'abord cette page, puis le **Guide d'utilisation** dans Help & other.
 
@@ -8,7 +8,7 @@ La 1.0 est la version qui a fait de Better Mods Manager plus qu'un simple interr
 - Les **profils** gardent séparés les mods, les dossiers et les sauvegardes de chaque jeu. Une mise à jour du jeu ou une réinstallation n'efface plus ce que vous avez construit.
 - **ContentID** : un mod est reconnu par ses fichiers, pas par le nom de son dossier. Les mêmes fichiers donnent la même identité sur n'importe quel PC, donc les listes `.MM`, les modpacks et les repos retrouvent les bons mods.
 - **Intégrité** : empreintes SHA-256 et audit en profondeur. Un mod dont un fichier manque ou a changé affiche un bouclier rouge et ne peut pas être activé par erreur.
-- **Ordre d'activation** : quand deux mods fournissent le même fichier, le dernier de l'ordre gagne. Voyez-le, faites-le glisser, partagez-le en code ou en lien, ré-appliquez-le. La **vue Conflits** (1.0.3) montre qui gagne chaque fichier partagé.
+- **Ordre d'activation** : quand deux mods fournissent le même fichier, le dernier de l'ordre gagne. Voyez-le, faites-le glisser, partagez-le en code ou en lien, ré-appliquez-le. La **vue Conflits** (1.0.4) montre qui gagne chaque fichier partagé.
 - **Mapper** : un arbre visuel de n'importe quel dossier de mod, pour comprendre pourquoi un jeu l'ignore.
 
 ## [MAJOR] Partager et suivre
@@ -46,5 +46,5 @@ La 1.0 est la version qui a fait de Better Mods Manager plus qu'un simple interr
 
 ## Pour la suite
 - Les notes de chaque version sont dans la liste à gauche, de la plus récente à la plus ancienne.
-- La 1.0.3 ajoute le centre de notifications, la vue Conflits, les panneaux dans leur propre fenêtre et des Paramètres plus calmes.
+- La 1.0.4 ajoute le centre de notifications, la vue Conflits, les panneaux dans leur propre fenêtre et des Paramètres plus calmes.
 - Nouveau dans BMM ? Ouvrez **Help & other** et commencez par le **Guide d'utilisation** : chaque tâche a de courtes étapes, une image et un bouton **Montre-moi**.

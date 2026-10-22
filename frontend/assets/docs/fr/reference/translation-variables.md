@@ -33,11 +33,11 @@ la compilation quand une traduction et le code ne sont pas d’accord. Elle ne p
 | `{label}` | un titre court |
 | `{path}` | un chemin de fichier ou de dossier |
 | `{version}` | un numéro de version |
+| `{error}` | un message d’erreur |
 | `{host}` | un nom de serveur |
 | `{profile}` | un nom de profil |
 | `{file}` | un nom de fichier |
 | `{mod}` | un nom de mod |
-| `{error}` | un message d’erreur |
 | `{url}` | une adresse web |
 | `{x}` | une liste ou un détail inséré par le code |
 | `{time}` | une heure |
@@ -73,7 +73,7 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 
 ## Toutes les clés avec variables
 
-1275 clés, regroupées par leur premier segment. Le texte est le texte français, raccourci.
+1284 clés, regroupées par leur premier segment. Le texte est le texte français, raccourci.
 
 ### activity
 
@@ -447,6 +447,10 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 
 | Clé | Variables | Texte |
 |---|---|---|
+| `dev.export.crashDumpFail` | `{error}` | Le rapport de plantage n'a pas pu être écrit : {error} |
+| `dev.export.failed` | `{what}` | Échec de l'enregistrement ({what}) |
+| `dev.export.openFail` | `{error}` | Impossible d'ouvrir le dossier : {error} |
+| `dev.export.saved` | `{what}` | Enregistré ({what}) |
 | `dev.label.rules` | `{n}` | {n} règles |
 | `dev.label.shownOf` | `{n}` `{shown}` | {shown} sur {n} |
 | `dev.msg.rustFailed` | `{why}` | Impossible de lire les journaux Rust : {why} |
@@ -706,6 +710,11 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 | `mod.idCopied` | `{id}` | ID copié : {id} |
 | `mod.importConfirmDesc` | `{name}` | Voulez-vous télécharger et installer &lt;strong&gt;{name}&lt;/strong&gt; ? |
 | `mod.installed` | `{name}` | "{name}" a été installé avec succès ! |
+| `mod.protectedFolder.osError` | `{error}` | Windows a répondu : {error} |
+| `mod.protectedFolder.todo` | `{root}` | Redémarre BMM en administrateur (Windows te demande l'autorisation), déplace le jeu hors de {root}, ou fais p… |
+| `mod.protectedFolder.warning` | `{root}` | Ce dossier de jeu est dans {root} : BMM doit tourner en administrateur pour y activer des mods. |
+| `mod.protectedFolder.what` | `{game}` | BMM n'a pas pu écrire dans {game}. Rien n'a été modifié : l'activation s'est arrêtée avant de copier, ou a re… |
+| `mod.protectedFolder.why` | `{root}` | Windows ne laisse écrire dans {root} qu'un programme exécuté en tant qu'administrateur, et BMM tourne avec te… |
 | `mod.removed` | `{name}` | "{name}" supprimé définitivement. |
 | `mod.removedOnly` | `{name}` | "{name}" retiré de la liste. |
 | `mod.removeTagConfirm` | `{name}` | Voulez-vous vraiment retirer le tag {name} de ce mod ? |

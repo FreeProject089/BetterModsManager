@@ -47,6 +47,38 @@ contrôle pour voir quels fichiers sont `missing`, `modified` ou `added`. Note q
 d'un mod n'échoue jamais — il établit la baseline — donc un échec signifie que quelque chose a changé
 depuis. Voir [Intégrité & hachage](doc-page:how-it-works/integrity-hashing).
 
+<a id="protected-folder"></a>
+### Activer un mod dit que le dossier du jeu est protégé par Windows
+Tu vois « Le dossier du jeu est protégé par Windows » (ou, avant BMM 1.0.4, « Failed to copy … »)
+quand le jeu est installé sous **C:\Program Files**, **C:\Program Files (x86)** ou **C:\Windows**.
+Windows n'y laisse écrire qu'un programme *exécuté en tant qu'administrateur* ; BMM tourne
+normalement avec tes droits, donc chaque copie est refusée (erreur Windows 5, « Accès refusé »).
+
+Rien n'a été modifié : BMM vérifie qu'il peut écrire dans la destination **avant** de copier quoi
+que ce soit, et si une copie échoue quand même en cours de route, il remet chaque fichier qu'il avait
+déjà remplacé ou ajouté.
+
+Trois solutions, de la plus rapide à la plus propre :
+
+- **Redémarrer BMM en administrateur.** La fenêtre le propose. Windows affiche sa propre demande
+  d'autorisation ; réponds Oui et BMM revient sur le même profil, capable d'y écrire. Il faudra le
+  refaire à chaque activation ou désactivation de mods dans ce dossier, et on ne peut pas faire
+  glisser des fichiers d'une fenêtre de l'Explorateur normale vers un BMM administrateur.
+- **Utiliser le dossier où le jeu lit les mods hors de Program Files**, quand il en a un. DCS World
+  lit la plupart des mods (livrées, missions, scripts, beaucoup d'avions) depuis
+  `%USERPROFILE%\Saved Games\DCS` (ou `DCS.openbeta`) : fais pointer le dossier du jeu du profil
+  là. Les mods qui doivent remplacer des fichiers du jeu lui-même (`Mods\aircraft\…\Cockpit\Scripts`
+  et autres) ont toujours besoin du dossier d'installation.
+- **Déplacer le jeu hors de Program Files** (par exemple vers `D:\Games\DCS World`) : l'outil de
+  mise à jour de DCS peut le réparer sur place, Steam sait déplacer sa bibliothèque. Corrige ensuite
+  le dossier du jeu du profil. C'est la solution définitive : BMM n'a plus jamais besoin des droits
+  administrateur.
+
+Les jeux du Microsoft Store / de l'application Xbox vivent dans `C:\Program Files\WindowsApps`, où
+même un administrateur ne peut pas écrire : utilise plutôt le dossier de mods du jeu. L'éditeur de
+profil et l'en-tête de la Bibliothèque affichent un avertissement d'une ligne quand le dossier du
+jeu d'un profil est dans un dossier protégé et que BMM ne tourne pas en administrateur.
+
 ### J'ai annulé une activation — mon dossier de destination est à moitié moddé ?
 
 Non. Annuler tue le worker puis lance une passe d'annulation en opération inverse : les écritures

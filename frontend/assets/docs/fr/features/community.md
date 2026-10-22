@@ -140,7 +140,7 @@ dans quelque chose que tu viens de demander.
 
 ## BetterCommunity v2
 
-BMM 1.0.3 est prêt pour BetterCommunity v2 et le livre **désactivé** : tant que l'interrupteur
+BMM 1.0.4 est prêt pour BetterCommunity v2 et le livre **désactivé** : tant que l'interrupteur
 n'est pas mis, BMM parle à BetterCommunity v1 exactement comme la 1.0.2.
 
 **L'interrupteur** est lu une fois au démarrage, dans cet ordre : ton

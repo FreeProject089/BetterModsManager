@@ -12,6 +12,7 @@ import { isActivationBusy, markCurrentSkipped, cancelAllActivationJobs, announce
 import { uiIcon } from '../../ui/icons.js';
 import { gameReportHtml, showIntegrityModal } from './integrity-report.js';
 import { prepareAddModForm, confirmAddModFlow } from './add-mod.js';
+import { isProtectedFolderError } from './protected-folder-model.js';
 const S = new Proxy(appState.state, {
     get(target, prop) { return target[prop]; },
     set(target, prop, value) { appState.set(prop, value); return true; }
@@ -305,6 +306,11 @@ export async function toggleAllMods(forcedEnable = null) {
     catch (err) {
         if (typeof err === 'string' && (err === 'CANCELLED' || err.includes('CANCELLED'))) {
             // Silent — cancel path already handled
+        }
+        else if (isProtectedFolderError(err)) {
+            // The game folder is under Program Files: the dialog explains it and offers a restart as
+            // administrator (protected-folder.ts).
+            void import('./protected-folder.js').then((m) => m.handleProtectedFolderError(err)).catch(() => { });
         }
         else {
             toast(t('common.error') + ' : ' + err, 'error');

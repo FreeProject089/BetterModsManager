@@ -442,7 +442,7 @@ fn write_report_zip<W: Write + std::io::Seek>(
     if parts.is_crash {
         if let Some(replay) = &parts.replay {
             zip.start_file("session_replay.bmmreplay", opts)?;
-            zip.write_all(&redactor.scrub_bytes(replay))?;
+            zip.write_all(&replay_entry_bytes(redactor, replay))?;
         }
     }
 
@@ -475,7 +475,9 @@ fn rewrite_report_zip_bytes(
         let mut buf = Vec::new();
         use std::io::Read;
         f.read_to_end(&mut buf).ok()?;
-        let clean = if name.to_ascii_lowercase().ends_with(".json") {
+        let clean = if name == "session_replay.bmmreplay" {
+            replay_entry_bytes(redactor, &buf)
+        } else if name.to_ascii_lowercase().ends_with(".json") {
             match std::str::from_utf8(&buf) {
                 Ok(s) => redactor.redact_json_text(s).into_bytes(),
                 Err(_) => redactor.scrub_bytes(&buf),
@@ -994,6 +996,32 @@ fn read_zip_text_entry<R: std::io::Read + std::io::Seek>(
     }))
 }
 
+/// The session replay as it goes into a report: inflated when it was gzipped, then scrubbed
+/// string by string (`Redactor::scrub_json_strings`) so it is still a JSON document the
+/// player can read. The raw-text pass it used to get cut through the JSON (a brace after
+/// `"cookie":`, the backslash of an escaped quote after `?k=`), and the report's replay was
+/// « unreadable ». Not JSON at all: the byte pass, as before.
+pub(crate) fn replay_entry_bytes(redactor: &crate::commands::report_redact::Redactor, replay: &[u8]) -> Vec<u8> {
+    match crate::commands::analytics::replay_text_from_bytes(replay) {
+        Ok(text) => match redactor.scrub_json_strings(&text) {
+            Some(clean) => clean.into_bytes(),
+            None => redactor.scrub_text(&text).into_bytes(),
+        },
+        Err(_) => redactor.scrub_bytes(replay),
+    }
+}
+
+/// The session recording inside a report zip, as JSON text (gzip inflated).
+pub(crate) fn read_session_entry<R: std::io::Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<String, String> {
+    use std::io::Read;
+    let mut f = zip
+        .by_name("session_replay.bmmreplay")
+        .map_err(|_| "No session recording in this report".to_string())?;
+    let mut bytes = Vec::new();
+    f.read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+    crate::commands::analytics::replay_text_from_bytes(&bytes)
+}
+
 /// Extract the attached session recording (session_replay.bmmreplay) from a report
 /// zip and return its JSON so the in-app player can replay it directly.
 #[tauri::command]
@@ -1003,13 +1031,7 @@ pub fn read_crash_session(path: String) -> Result<String, String> {
     }
     let file = fs::File::open(&path).map_err(|e| e.to_string())?;
     let mut zip = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
-    let mut f = zip
-        .by_name("session_replay.bmmreplay")
-        .map_err(|_| "No session recording in this report".to_string())?;
-    use std::io::Read;
-    let mut s = String::new();
-    f.read_to_string(&mut s).map_err(|e| e.to_string())?;
-    Ok(s)
+    read_session_entry(&mut zip)
 }
 
 // ─── TESTS: D1 sandboxed report-file reader ──────────────────────────────────
@@ -1258,5 +1280,74 @@ mod tests {
     fn managed_zip_guard_rejects_non_zip_and_nonexistent() {
         assert!(!is_managed_crash_zip("C:/whatever/report.txt")); // wrong extension → early false
         assert!(!is_managed_crash_zip("Z:/nope/does-not-exist.zip")); // canonicalize fails → false
+    }
+}
+
+#[cfg(test)]
+mod session_replay_entry_tests {
+    //! A crash report's session_replay.bmmreplay must still be a replay after the redactor.
+    use super::*;
+    use crate::commands::analytics::replay_readback_tests::{write_fixture, SAMPLE_EVENTS};
+
+    /// A recording with what tripped the old raw-text pass: an object under a « cookie » key,
+    /// a URL with `?k=` inside an escaped string, and a stored secret typed into a field.
+    fn tricky_replay(secret: &str) -> String {
+        let style = r#"{"type":3,"data":{"source":0,"texts":[{"id":5,"value":"background:url(\"https://h/x.png?k=abc\")"}],"cookie":{"n":1},"adds":[],"removes":[],"attributes":[]},"timestamp":1600}"#;
+        let typed = format!(r#"{{"type":3,"data":{{"source":5,"id":7,"text":"{secret}","isChecked":false}},"timestamp":1700}}"#);
+        format!(
+            r#"{{"bmmReplay":1,"app":"BetterModsManager","events":[{},{},{},{}],"console":[],"rustLog":"Authorization: Bearer abcdefghijkl"}}"#,
+            SAMPLE_EVENTS[0], SAMPLE_EVENTS[1], style, typed
+        )
+    }
+
+    #[test]
+    fn the_old_raw_text_pass_broke_the_json_and_the_new_one_does_not() {
+        let secret = "s3cr3t-0f-the-user-1234";
+        let text = tricky_replay(secret);
+        assert!(serde_json::from_str::<serde_json::Value>(&text).is_ok(), "the sample itself is valid");
+        let mut r = crate::commands::report_redact::Redactor::new();
+        r.absorb_json_text(&format!(r#"{{"api_token":"{secret}"}}"#));
+        // The cause: the text pass over the whole document is not JSON any more.
+        assert!(serde_json::from_str::<serde_json::Value>(&r.scrub_text(&text)).is_err(), "the raw pass cut through the JSON");
+        // The fix: still JSON, the secret gone, the events all there.
+        let clean = String::from_utf8(replay_entry_bytes(&r, text.as_bytes())).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&clean).expect("valid JSON after redaction");
+        assert!(!clean.contains(secret), "{clean}");
+        assert!(!clean.contains("abcdefghijkl"), "the Authorization header in the Rust log is redacted");
+        assert_eq!(v["events"].as_array().unwrap().len(), 4);
+    }
+
+    #[test]
+    fn a_report_zip_carries_a_replay_the_reader_can_open() {
+        let secret = "s3cr3t-0f-the-user-1234";
+        let mut r = crate::commands::report_redact::Redactor::new();
+        r.absorb_json_text(&format!(r#"{{"api_token":"{secret}"}}"#));
+        let parts = ReportParts {
+            is_crash: true,
+            reason: "test".into(),
+            backtrace: None,
+            system_info: String::new(),
+            logs: String::new(),
+            app_state: None,
+            frontend_dump: None,
+            replay: Some(tricky_replay(secret).into_bytes()),
+        };
+        let buf = write_report_zip(std::io::Cursor::new(Vec::new()), &parts, &r).unwrap().into_inner();
+        let mut zip = zip::ZipArchive::new(std::io::Cursor::new(buf)).unwrap();
+        let text = read_session_entry(&mut zip).expect("the entry reads back");
+        let v: serde_json::Value = serde_json::from_str(&text).expect("valid JSON");
+        assert_eq!(v["events"][0]["type"], 4);
+        assert!(!text.contains(secret));
+        write_fixture("crash-zip-entry.bmmreplay", text.as_bytes());
+    }
+
+    #[test]
+    fn a_gzipped_buffer_goes_into_the_report_as_plain_valid_json() {
+        use std::io::Write as _;
+        let text = tricky_replay("x-not-a-secret");
+        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        gz.write_all(text.as_bytes()).unwrap();
+        let out = replay_entry_bytes(&crate::commands::report_redact::Redactor::new(), &gz.finish().unwrap());
+        assert!(serde_json::from_slice::<serde_json::Value>(&out).is_ok());
     }
 }

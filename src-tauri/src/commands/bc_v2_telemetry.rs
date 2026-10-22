@@ -277,7 +277,7 @@ mod tests {
             json!({ "event": "perf", "properties": { "fps_avg": 60 } }),
             json!({ "event": "unknown_event", "properties": {} }),
             json!({ "event": "$replay", "properties": { "chunk": "..." } }),
-            json!({ "event": "$identify", "properties": { "$set": { "os": "windows", "motherboard": "ASUS X", "disks": [1], "app_version": "1.0.3" }, "seq": 1 } }),
+            json!({ "event": "$identify", "properties": { "$set": { "os": "windows", "motherboard": "ASUS X", "disks": [1], "app_version": "1.0.4" }, "seq": 1 } }),
         ];
         let (pairs, keep, dropped) = split_queue(&q, &header, "bmm_x");
         assert_eq!(keep.len(), 1, "replay stays for v1");
@@ -286,7 +286,7 @@ mod tests {
         assert_eq!(v2.len(), 2);
         assert_eq!(v2[0]["distinct_id"], "bmm_x");
         assert_eq!(v2[0]["properties"], json!({ "view": "mods", "depth": 2, "session_id": "s" }));
-        assert_eq!(v2[1]["properties"], json!({ "os": "windows", "app_version": "1.0.3", "seq": 1 }), "hardware identity never leaves");
+        assert_eq!(v2[1]["properties"], json!({ "os": "windows", "app_version": "1.0.4", "seq": 1 }), "hardware identity never leaves");
     }
 
     #[test]

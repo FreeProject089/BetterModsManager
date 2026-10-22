@@ -293,7 +293,7 @@ l'éditeur liste chaque valeur ignorée.
 Parce qu'un thème peut transporter du CSS, des éléments HTML et des assets, **n'installez
 que des thèmes de sources de confiance** — la même règle que pour tout contenu de catalogue.
 
-## Renommés en 1.0.3
+## Renommés en 1.0.4
 
 Six thèmes intégrés portaient le nom d'autres produits. Leurs couleurs n'ont pas changé ; leur
 nom et leur id, si. **Les anciens ids marchent toujours** : un choix enregistré, un lien

@@ -1,4 +1,4 @@
-// BMM 1.0.3 — BetterCommunity v2, shipped dormant and switchable. Against the COMPILED modules.
+// BMM 1.0.4 — BetterCommunity v2, shipped dormant and switchable. Against the COMPILED modules.
 //
 // What is pinned here:
 //   1. v1 stays the default: without the switch no URL changes (links.json as bundled included);
@@ -74,7 +74,7 @@ describe('what moves to the v2 root in v2 mode', () => {
         assert.equal(E.rehomeUrl(V2, 'https://bettercommunity.ch/api/catalog.json?project=bmm&kind=THEME'), 'https://v2.bettercommunity.ch/api/catalog.json?project=bmm&kind=THEME');
     });
     test('the rest stays where it is', () => {
-        for (const u of ['https://bettercommunity.ch/api/catalogs.json', 'https://bettercommunity.ch/api/bmm/launch?version=1.0.3',
+        for (const u of ['https://bettercommunity.ch/api/catalogs.json', 'https://bettercommunity.ch/api/bmm/launch?version=1.0.4',
             'https://api.github.com/repos/FreeProject089/BetterModsManager/releases', 'https://telemetry.bettercommunity.ch/batch/',
             'https://bettercommunity.ch/blog', 'https://evil.example/api/updates/bmm']) {
             assert.equal(E.rehomeUrl(V2, u), u, u);

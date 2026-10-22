@@ -353,6 +353,9 @@ export async function refreshMods(autoScan = false, immediate = false) {
   if (refreshTimeout) { clearTimeout(refreshTimeout); refreshTimeout = null; }
 
   const doRefresh = async () => {
+    // The Library header says it when the active profile's game folder needs BMM elevated
+    // (Program Files): features/mods/protected-folder.ts.
+    void import('./protected-folder.js').then((m) => m.paintLibraryProtectedHint(S.activeProfileId || S.cachedActiveProfileId)).catch(() => {});
     if (autoScan && S.processingMods.size === 0) {
       // Throttle automatic scans by the user-configured interval (settings →
       // "Auto-scan interval", localStorage `bmm_scan_interval_sec`, default 0).

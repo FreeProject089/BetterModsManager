@@ -22,7 +22,8 @@ import { initDeepLinks } from '../core/deep_link_manager.js';
 import { initAnalytics, trackView, showConsentModal } from '../core/analytics.js';
 import { initApiActivity } from '../core/api_activity.js';
 import { initTitlebar } from './titlebar.js';
-import { isActivationBusy, configureActivationJobs } from '../core/activation-jobs.js';
+import { isActivationBusy, configureActivationJobs, onActivationJobEnd } from '../core/activation-jobs.js';
+import { isProtectedFolderError } from '../features/mods/protected-folder-model.js';
 import { attachActivitySources } from '../core/activity-sources.js';
 import { setInvokeActivityHook } from '../core/api.js';
 import { initActivityCenter } from './activity-center.js';
@@ -1081,6 +1082,12 @@ async function main() {
     // The activity pill for mods being turned on / off, in the title bar on every view.
     try {
         configureActivationJobs({ invoke: (cmd, args) => invoke(cmd, args || {}), listen, t });
+        // Any activation job (a card, a modpack, an order list) refused because Windows protects
+        // the game folder: one dialog with a way out (features/mods/protected-folder.ts).
+        onActivationJobEnd((s) => {
+            const f = (s.failed || []).find((x) => isProtectedFolderError(x.error));
+            if (f) void import('../features/mods/protected-folder.js').then((m) => m.handleProtectedFolderError(f.error)).catch(() => {});
+        });
         initActivationIndicator();
     } catch (e) { console.warn('[BMM] activation indicator', e); }
     // The activity centre: every running action (activations, downloads, syncs, exports…) in one

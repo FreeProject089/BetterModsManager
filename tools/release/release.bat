@@ -1,6 +1,6 @@
 @echo off
 rem BMM release tool. Interactive menu without arguments; see tools\release\README.md.
-rem   tools\release\release.bat --all --version 1.0.3 --yes
+rem   tools\release\release.bat --all --version 1.0.4 --yes
 setlocal
 chcp 65001 >nul
 where node >nul 2>nul

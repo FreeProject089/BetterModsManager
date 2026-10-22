@@ -20,6 +20,7 @@ pub mod secret_box;
 pub mod restore_bundle;
 pub mod net;
 pub mod proc;
+pub mod elevation;
 pub mod verify;
 // BMM Tools hub: read-only diagnostics (duplicates, disk usage, profile diff, orphans).
 pub mod tools;

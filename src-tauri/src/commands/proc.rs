@@ -392,6 +392,72 @@ pub fn shell_run_wait(file: &std::path::Path, args: Option<&str>, max_secs: u64)
     Ok(code)
 }
 
+/// Start `file` ELEVATED: ShellExecuteExW with the `runas` verb, so Windows shows its own UAC
+/// prompt and the person answers it (nothing is elevated silently). Returns once the prompt was
+/// answered and the program started; ERROR_CANCELLED (1223) when the answer was No. `args`
+/// follows the rule of [`shell_launch`]: constants, or values BMM validated, never user text.
+/// Used by `commands::elevation::restart_elevated` (« Restart BMM as administrator »).
+#[cfg(windows)]
+pub fn shell_runas(file: &std::path::Path, args: Option<&str>) -> Result<(), LaunchError> {
+    let (process, _what) = shell_start_verb(file, args, "runas")?;
+    if process != 0 {
+        // SAFETY: `process` is the handle ShellExecuteExW returned (NOCLOSEPROCESS); closed once.
+        unsafe { k32::CloseHandle(process); }
+    }
+    Ok(())
+}
+
+/// Is this process elevated (UAC « Run as administrator »)? TokenElevation of its own token;
+/// false when Windows will not say.
+#[cfg(windows)]
+pub fn is_elevated() -> bool {
+    #[link(name = "advapi32")]
+    extern "system" {
+        fn OpenProcessToken(process: *mut core::ffi::c_void, access: u32, token: *mut isize) -> i32;
+        fn GetTokenInformation(token: isize, class: u32, info: *mut core::ffi::c_void, len: u32, ret: *mut u32) -> i32;
+    }
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetCurrentProcess() -> *mut core::ffi::c_void;
+    }
+    const TOKEN_QUERY: u32 = 0x0008;
+    const TOKEN_ELEVATION: u32 = 20;
+    // SAFETY: the token handle is closed once; `elevation` is a u32 (TOKEN_ELEVATION's layout)
+    // whose size is passed.
+    unsafe {
+        let mut token: isize = 0;
+        if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) == 0 { return false; }
+        let mut elevation: u32 = 0;
+        let mut ret: u32 = 0;
+        let ok = GetTokenInformation(token, TOKEN_ELEVATION, &mut elevation as *mut u32 as *mut core::ffi::c_void, 4, &mut ret);
+        k32::CloseHandle(token);
+        ok != 0 && elevation != 0
+    }
+}
+
+#[cfg(not(windows))]
+pub fn is_elevated() -> bool { false }
+
+/// Wait, at most `max_millis`, for process `pid` to end. Used by an elevated relaunch: the new
+/// instance waits for the one that started it, so the single-instance guard does not hand it
+/// back to the old window. False when it could not wait (no such process: already gone).
+#[cfg(windows)]
+pub fn wait_for_pid_exit(pid: u32, max_millis: u32) -> bool {
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn OpenProcess(access: u32, inherit: i32, pid: u32) -> isize;
+    }
+    const SYNCHRONIZE: u32 = 0x0010_0000;
+    // SAFETY: the handle OpenProcess returned is closed once.
+    unsafe {
+        let h = OpenProcess(SYNCHRONIZE, 0, pid);
+        if h == 0 { return false; }
+        let ended = k32::WaitForSingleObject(h, max_millis) == k32::WAIT_OBJECT_0;
+        k32::CloseHandle(h);
+        ended
+    }
+}
+
 #[cfg(windows)]
 mod k32 {
     #[link(name = "kernel32")]
@@ -408,6 +474,12 @@ mod k32 {
 /// (0 when Windows gave none; the caller closes a non-zero one) and the file's display name.
 #[cfg(windows)]
 fn shell_start(file: &std::path::Path, args: Option<&str>) -> Result<(isize, String), LaunchError> {
+    shell_start_verb(file, args, "open")
+}
+
+/// [`shell_start`] with the first verb given: `runas` asks Windows for the UAC prompt at once.
+#[cfg(windows)]
+fn shell_start_verb(file: &std::path::Path, args: Option<&str>, first_verb: &str) -> Result<(isize, String), LaunchError> {
     use std::os::windows::ffi::OsStrExt;
 
     // A #[repr(C)] mirror of SHELLEXECUTEINFOW: windows-sys only exposes it behind a feature
@@ -478,7 +550,7 @@ fn shell_start(file: &std::path::Path, args: Option<&str>) -> Result<(isize, Str
         }
     };
 
-    let mut verb = "open";
+    let mut verb = first_verb;
     let mut retries = 0u64;
     let process = loop {
         match attempt(verb) {

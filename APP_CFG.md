@@ -140,7 +140,7 @@ Read once at startup, after the Tauri bridge is up. Changing it needs a restart.
 
 ### `BCApiVersion` and `BCv2Base`
 
-The switch for **BetterCommunity v2**. Not in the shipped file. Since BMM 1.0.3 the same switch
+The switch for **BetterCommunity v2**. Not in the shipped file. Since BMM 1.0.4 the same switch
 can also come from the links file BetterCommunity publishes (`bc_api`, `bc_v2_base` in
 links.json), so installed copies follow v2 the day it goes live. This file wins: a
 `BCApiVersion` line here decides, whatever links.json says, and `BCApiVersion=v1` keeps this

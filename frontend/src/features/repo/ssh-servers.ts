@@ -20,7 +20,7 @@
 // That is also why a scheduled publish needs a key with no passphrase — there is nobody at
 // 04:00 to type one, and a prompt nobody answers is a task that silently never runs.
 //
-// THE TEST, STEP BY STEP (1.0.3). It used to ask for the secret in a window.prompt (which the
+// THE TEST, STEP BY STEP (1.0.4). It used to ask for the secret in a window.prompt (which the
 // webview does not show), connect, and trust whatever key answered. Now it:
 //   1. checks the form, field by field, and says which field is wrong;
 //   2. reads the server's host key WITHOUT logging in (ssh_probe_host_key). A server seen for

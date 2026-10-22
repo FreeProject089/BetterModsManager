@@ -281,7 +281,7 @@ the `;` is inside the parentheses. The editor's status line lists every ignored 
 Because a theme can carry CSS, HTML elements and assets, **only install themes from sources
 you trust** — the same rule as any catalogue content.
 
-## Renamed in 1.0.3
+## Renamed in 1.0.4
 
 Six built-in themes were named after other products. Their colours did not change; their name
 and id did. **The old ids still work**: a saved choice, a `bmm://theme/apply` link, a

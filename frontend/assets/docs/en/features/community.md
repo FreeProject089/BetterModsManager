@@ -136,7 +136,7 @@ about something you just asked for.
 
 ## BetterCommunity v2
 
-BMM 1.0.3 is ready for BetterCommunity v2 and ships with it **switched off**: until the switch
+BMM 1.0.4 is ready for BetterCommunity v2 and ships with it **switched off**: until the switch
 is on, BMM talks to BetterCommunity v1 exactly as 1.0.2 did.
 
 **The switch** is read once at start, in this order: your [`app.cfg`](doc-page:reference/app-cfg)

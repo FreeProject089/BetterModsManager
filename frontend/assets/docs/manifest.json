@@ -785,7 +785,7 @@
         "fr": "Conflits"
       },
       "summary": {
-        "en": ":::tip[Prefer it step by step?] The task version of this page is Fix a conflict: short steps, what you should see, a picture and a Show me button. :::",
+        "en": ":::tip[Prefer it step by step?] The task version of this page is Fix a conflict: short steps, what you should see, a picture and a Show me button.",
         "fr": ":::tip[Tu préfères pas à pas ?] La version « tâche » de cette page est Régler un conflit : de courtes étapes, ce que tu dois voir, une image et un bouton Montre-moi."
       },
       "words": 1220,
@@ -800,7 +800,7 @@
         "fr": "Ordre d'activation"
       },
       "summary": {
-        "en": ":::tip[Prefer it step by step?] The task version of this page is Activate and order mods: short steps, what you should see, a picture and a Show me button. :::",
+        "en": ":::tip[Prefer it step by step?] The task version of this page is Activate and order mods: short steps, what you should see, a picture and a Show me button.",
         "fr": ":::tip[Tu préfères pas à pas ?] La version « tâche » de cette page est Activer et ordonner les mods : de courtes étapes, ce que tu dois voir, une image et un…"
       },
       "words": 1970,
@@ -1178,7 +1178,7 @@
         "en": "Start here before reinstalling anything. Roughly ordered from \"most likely\" to \"something is actually wrong\".",
         "fr": "Commence ici avant de réinstaller quoi que ce soit. À peu près trié du « plus probable » au « là il y a vraiment un problème »."
       },
-      "words": 2139,
+      "words": 2473,
       "diagrams": 0,
       "fr": true
     },

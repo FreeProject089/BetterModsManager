@@ -3,7 +3,7 @@
 // Tasky — or the theme's replacement for him — over the top-left corner).
 //
 //   node tools/release/screenshots/themes.mjs --frontend <checkout>/frontend --out <checkout>/.github/themes
-//        [--version 1.0.3] [--no-tasky] [--scale 0.78] [id …]
+//        [--version 1.0.4] [--no-tasky] [--scale 0.78] [id …]
 //
 // --frontend picks the checkout whose interface and built-in themes are shown (e.g. a release
 // worktree); the version shown in the app defaults to that checkout's package.json. --scale

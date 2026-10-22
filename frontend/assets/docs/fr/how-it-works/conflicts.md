@@ -3,7 +3,6 @@
 :::tip[Tu préfères pas à pas ?]
 La version « tâche » de cette page est [Régler un conflit](doc-page:guide/fix-a-conflict) : de courtes étapes, ce que tu dois voir, une image et un bouton Montre-moi.
 :::
-
 Deux mods sont en **conflit** quand ils livrent le même fichier. Certains gestionnaires laissent l'un
 écraser l'autre en silence. BMM détecte le recouvrement *avant* d'écrire quoi que ce soit et te
 prévient — mais la résolution elle-même est délibérément simple, et l'ingénierie intéressante est

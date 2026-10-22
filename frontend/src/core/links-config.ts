@@ -70,7 +70,7 @@ export interface BmmLinks {
     kofi_community:   string;
     ed_forum:         string;
     bettercommunity:  string;
-    // BetterCommunity v2 remote switch (BMM 1.0.3). All optional and absent from the bundled
+    // BetterCommunity v2 remote switch (BMM 1.0.4). All optional and absent from the bundled
     // file: absent = v1, today's behaviour. app.cfg (BCApiVersion / BCv2Base) wins over these.
     //   bc_api           "v2" selects v2 for this session (after a health check; v1 on failure)
     //   bc_v2_base       where v2 lives while it runs beside v1 ('' = the same root)

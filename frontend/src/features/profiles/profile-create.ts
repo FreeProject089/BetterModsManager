@@ -33,6 +33,8 @@ const KINDS: FolderKind[] = ['game', 'mods', 'backup'];
 let profiles: ProfileLike[] = [];
 const exists: Record<FolderKind, boolean | null> = { game: null, mods: null, backup: null };
 const freeText: Record<FolderKind, string> = { game: '', mods: '', backup: '' };
+/** The game folder is under Program Files / Windows and BMM is not elevated: its protected root. */
+let protectedRoot = '';
 const asked: Record<FolderKind, number> = { game: 0, mods: 0, backup: 0 };
 let suggestGen = 0;
 let nameTouched = false;
@@ -63,6 +65,9 @@ function renderField(kind: FolderKind): void {
     }
     for (const n of notes) {
         lines.push(`<div class="np-note np-note--${n.level}">${uiIcon(NOTE_ICON[n.level], 14)}<span>${escHtml(t(n.key, n.vars || {}))}</span></div>`);
+    }
+    if (kind === 'game' && path && protectedRoot) {
+        lines.push(`<div class="np-note np-note--warn">${uiIcon('warning', 14)}<span>${escHtml(t('mod.protectedFolder.warning', { root: protectedRoot }))}</span></div>`);
     }
     if (path && exists[kind] && freeText[kind]) {
         lines.push(`<div class="np-note np-note--meta">${uiIcon('hard-drive', 14)}<span>${escHtml(freeText[kind])}</span></div>`);
@@ -100,6 +105,7 @@ async function check(kind: FolderKind): Promise<void> {
     const ticket = ++asked[kind];
     exists[kind] = null;
     freeText[kind] = '';
+    if (kind === 'game') protectedRoot = '';
     clearCreateError();
     renderAll();
     if (!path) { renderAll(); return; }
@@ -114,6 +120,14 @@ async function check(kind: FolderKind): Promise<void> {
                 freeText[kind] = t('prof.chk.free', { free: formatSize(d.available_bytes), drive: String(d.mount_point || '') });
             }
         } catch { /* the free space is a courtesy */ }
+    }
+    if (kind === 'game') {
+        // A game under Program Files needs BMM run as administrator to receive mods: say it now,
+        // not on the first activation (features/mods/protected-folder.ts).
+        try {
+            const p: any = await invoke('check_folder_protection', { path }, { quiet: true });
+            if (ticket === asked[kind]) protectedRoot = p && p.needs_elevation ? String(p.root || '') : '';
+        } catch { /* a courtesy too */ }
     }
     if (ticket !== asked[kind]) return;
     renderAll();

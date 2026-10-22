@@ -15,7 +15,8 @@ export function buildFixtures(base, { lang, version, frontend = null }) {
   f.is_auto_eula_enabled = false;
   f.get_analytics_consent = false;
   f.get_app_version = version;
-  f.ai_get_settings = { enabled: false, classifier: 'off', classifier_chosen: false, generative: 'off', mod_suggest: true, report_triage: true, description_drafts: true, ask: true, ask_generate: false, gen_local_url: 'http://127.0.0.1:11434/v1', gen_local_model: '', local_url: 'http://127.0.0.1:8765', local_allow_remote: false, external_url: '', external_model: '', bc_consent: false, timeout_ms: 20000, installer_choice: null, laya: {} };
+  // The command answers { settings, status } (ai-shared.ts AiView): keep that shape, AI off.
+  f.ai_get_settings = { ...(f.ai_get_settings || {}), settings: { enabled: false, classifier: 'off', classifier_chosen: false, generative: 'off', mod_suggest: true, report_triage: true, description_drafts: true, ask: true, ask_generate: false, gen_local_url: 'http://127.0.0.1:11434/v1', gen_local_model: '', local_url: 'http://127.0.0.1:8765', local_allow_remote: false, external_url: '', external_model: '', bc_consent: false, timeout_ms: 20000, installer_choice: null, laya: {} } };
   const dir = (frontend ? frontend.replace(/\\/g, '/').replace(/\/?$/, '/') : FE) + 'assets/builtin-themes/';
   f.list_builtin_themes = JSON.stringify(readdirSync(dir).filter(n => n.endsWith('.json')).sort().map(n => JSON.parse(readFileSync(dir + n, 'utf8'))));
   f.get_tags = [
@@ -74,6 +75,28 @@ export function buildFixtures(base, { lang, version, frontend = null }) {
     ],
     total_bytes: 0, cancelled: false,
   };
+  // History (the change history window): what a few days of use leave behind.
+  const ev = (mod_id, mod_name, action, minAgo, details = null) => ({ mod_id, mod_name, action, timestamp: iso(minAgo), details });
+  f.get_activity_history = [
+    ev('demo-mod-02', 'Weather Overhaul', 'Enabled', 12),
+    ev('demo-mod-01', 'Enhanced Textures', 'Modified', 38, JSON.stringify([{ field: 'tags', old: ['graphics'], new: ['graphics', 'hd'] }])),
+    ev('demo-mod-05', 'Nightfall Lighting', 'Disabled', 95),
+    ev('demo-mod-04', 'Extended Inventory', 'Enabled with dependencies', 60 * 5),
+    ev('demo-mod-06', 'Companion Rework', 'Modified', 60 * 26, JSON.stringify([{ field: 'version', old: '0.9.6', new: '0.9.7' }, { field: 'notes', old: '', new: 'Test on a new save first.' }])),
+    ev('demo-mod-03', 'Quiet Footsteps', 'Enabled', 60 * 27),
+    ev('demo-mod-07', 'Old Shaders', 'Deleted', 60 * 50),
+  ];
+  // Modpacks (the Modpacks page): load_modpacks answers LocalModpack[] (models/modpack.rs).
+  const ref = (id) => { const m = mods.find((x) => x.id === id) || { id, name: id, version: '1.0.0' };
+    return { mod_id: m.id, mod_name: m.name, mod_version: m.version || '1.0.0', profile_id: 'demo-profile-main', profile_name: 'Playthrough',
+      sha256: '3b7e1f0a9c2d4e6f8a0b1c3d5e7f9a1b3c5d7e9f0a2b4c6d8e0f1a3b5c7d9e1f', file_manifest: [], include_dependencies: true, download_link: null }; };
+  const pack = (id, name, description, ids, daysAgo, extra = {}) => ({ id, name, description, created_at: iso(60 * 24 * (daysAgo + 20)), updated_at: iso(60 * 24 * daysAgo),
+    multi_profile: false, dependency_mode: 'all', skip_integrity_check: false, mods: ids.map(ref), sr_link: null, game_name: 'Demo Game', ...extra });
+  f.load_modpacks = [
+    pack('demo-pack-weekend', 'Weekend', 'The relaxed set: sharper textures, real weather, quiet footsteps.', ['demo-mod-01', 'demo-mod-02', 'demo-mod-03'], 2),
+    pack('demo-pack-lan', 'LAN Party', 'Exactly what the Saturday server expects, nothing more.', ['demo-mod-01', 'demo-mod-04'], 6, { sr_link: 'https://mods.example.org/repo.json' }),
+    pack('demo-pack-photo', 'Photo Mode', 'Lighting and textures for screenshots.', ['demo-mod-01', 'demo-mod-05'], 15),
+  ];
   f.tools_disk_usage.total_bytes = f.tools_disk_usage.profiles.reduce((s, p) => s + p.mods_bytes + p.backup_bytes, 0) + 426 * 1048576;
   return f;
 }

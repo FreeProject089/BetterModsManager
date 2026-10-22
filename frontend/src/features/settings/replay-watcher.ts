@@ -12,7 +12,8 @@ import { toast } from '../../ui/app.js';
 import { MODAL_CLOSE_SVG } from '../../ui/modal-shell.js';
 import { raiseAboveAll } from '../../ui/layer.js';
 import { uiIcon } from '../../ui/icons.js';
-import { readReplayBody } from '../../core/replay-body.js';
+import { showSaved } from '../../ui/export-file.js';
+import { parseReplayText, parseReplayBytes, replayProblemKey, type ReplayRead } from '../../core/replay-body.js';
 
 const ON = 'bmm_watcher_on';
 const FULL = 'bmm_watcher_full';
@@ -315,13 +316,14 @@ export async function exportSession(destPath?: string): Promise<void> {
   if (!_spoolId) { toast(t('watcher.nothing') || 'Rien à exporter pour le moment', 'info'); return; }
   const path = destPath
     || await saveFile({ defaultPath: `bmm-session-${Date.now()}.bmmreplay`, filters: [{ name: 'BMM Replay', extensions: ['bmmreplay', 'json'] }] }).catch(() => null);
-  if (!path) return;
+  if (!path) { toast(t('dev.export.cancelled'), 'info', 5000); return; }
   try {
     const written = await writeBundle('list', path);
     if (!written) { toast(t('watcher.nothing') || 'Rien à exporter pour le moment', 'info'); return; }
     console.info('[replay] exported to', written);
-    toast(t('watcher.exported') || 'Session exportée', 'success');
-  } catch (e) { toast((t('watcher.exportFail') || 'Export échoué') + ': ' + e, 'error'); }
+    // The full path and « Open folder » (ui/export-file.ts), not « exported » to nowhere.
+    showSaved(t('watcher.exported') || 'Session exported', written);
+  } catch (e) { toast((t('watcher.exportFail') || 'Export failed') + ': ' + e, 'error', 10000); }
 }
 
 // Recently imported bundles (path + name), so the list modal can re-open them.
@@ -335,28 +337,44 @@ function addRecent(path: string): void {
   localStorage.setItem(RECENTS, JSON.stringify(list.slice(0, 30)));
 }
 
+/** Say why a replay cannot be played, in words, and keep the detail for a bug report. */
+function refuse(r: Extract<ReplayRead, { ok: false }>, where: string): void {
+  console.warn('[replay] cannot play', where, r.problem, r.detail);
+  toast(`${t(replayProblemKey(r.problem))}: ${r.detail}`, 'error', 8000);
+}
+
+/** Play what a reader returned, or say why not. */
+async function playRead(r: ReplayRead, where: string): Promise<boolean> {
+  if (!r.ok) { refuse(r, where); return false; }
+  if (r.repaired) console.info('[replay] started at the first full snapshot of', where);
+  await playBundle(r.bundle);
+  return true;
+}
+
 async function loadAndPlay(path: string): Promise<void> {
-  let bundle: any;
-  try { 
-    const url = (window as any).__TAURI__.core.convertFileSrc(path);
-    const res = await fetch(url);
-    bundle = await readReplayBody(res);
-  }
-  catch { toast(t('watcher.badFile') || 'Fichier illisible', 'error'); return; }
-  if (!Array.isArray(bundle?.events) || bundle.events.length < 2) { toast(t('watcher.empty') || 'Enregistrement vide', 'error'); return; }
-  addRecent(path);
-  await playBundle(bundle);
+  // Through the core, not fetch(convertFileSrc(path)): the asset protocol only serves the
+  // app's own folders, so a replay exported to the Desktop or picked from Downloads was
+  // refused before a byte was read, and showed as « Unreadable file ».
+  let text: string;
+  try { text = await invoke('read_replay_file', { path }) as string; }
+  catch (e) { toast(`${t('watcher.badFile') || 'Unreadable file'}: ${String((e as any)?.message ?? e)}`, 'error', 8000); return; }
+  if (await playRead(parseReplayText(text), path)) addRecent(path);
+}
+
+/** A replay over HTTP(S) or a bundled asset: its bytes, gzip or not. */
+async function readUrl(url: string): Promise<ReplayRead> {
+  const res = await fetch(url);
+  if (!res.ok) return { ok: false, problem: 'parse', detail: `HTTP ${res.status}` };
+  return parseReplayBytes(new Uint8Array(await res.arrayBuffer()));
 }
 
 /** Play a .bmmreplay fetched from a URL — used by :::replay embeds in rendered markdown
  *  (release/update notes + the in-app Community blog). Reuses the full in-app viewer. */
 export async function playReplayFromUrl(url: string): Promise<void> {
-  let bundle: any;
-  try { const res = await fetch(url); if (!res.ok) throw new Error('http'); bundle = await readReplayBody(res); }
-  catch { toast(t('watcher.badFile') || 'Fichier illisible', 'error'); return; }
-  const events = Array.isArray(bundle) ? bundle : bundle?.events;
-  if (!Array.isArray(events) || events.length < 2) { toast(t('watcher.empty') || 'Empty recording', 'error'); return; }
-  await playBundle(Array.isArray(bundle) ? { events } : bundle);
+  let r: ReplayRead;
+  try { r = await readUrl(url); }
+  catch (e) { toast(`${t('watcher.badFile') || 'Unreadable file'}: ${String((e as any)?.message ?? e)}`, 'error', 8000); return; }
+  await playRead(r, url);
 }
 
 /** Pick a .bmmreplay file and replay it in an in-app viewer. */
@@ -384,19 +402,12 @@ export async function importReplayFromPath(path: string): Promise<void> { await 
 
 /** Replay a session directly from its JSON (e.g. one extracted from a crash zip). */
 export async function playReplayJson(json: string): Promise<void> {
-  let bundle: any;
-  try { bundle = JSON.parse(json); } catch { toast(t('watcher.badFile') || 'Unreadable file', 'error'); return; }
-  if (!Array.isArray(bundle?.events) || bundle.events.length < 2) { toast(t('watcher.empty') || 'Empty recording', 'error'); return; }
-  await playBundle(bundle);
+  await playRead(parseReplayText(json), 'json');
 }
 
 /** Import + replay a .bmmreplay from a download URL (API / deep link). */
 export async function importReplayFromUrl(url: string): Promise<void> {
-  let bundle: any;
-  try { const res = await fetch(url); bundle = await readReplayBody(res); }
-  catch { toast(t('watcher.badFile') || 'Fichier illisible', 'error'); return; }
-  if (!Array.isArray(bundle?.events) || bundle.events.length < 2) { toast(t('watcher.empty') || 'Enregistrement vide', 'error'); return; }
-  await playBundle(bundle);
+  await playReplayFromUrl(url);
 }
 
 /** Modal listing recently imported replays — click one to watch it. */

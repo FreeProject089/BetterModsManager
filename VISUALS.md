@@ -6,7 +6,7 @@ A visual tour of Better Mod Manager, area by area. Every picture is the real app
 browser preview with demo data (no real profile, path or account), composed as it sits on a
 desktop: the window, with Tasky on its top-left corner.
 
-Short usage clips (GIF, with an MP4 copy) are being recorded for 1.0.3. They will appear under
+Short usage clips (GIF, with an MP4 copy) are being recorded for 1.0.4. They will appear under
 `.github/gifs/` once they have been reviewed; until then each one is listed below as *coming*,
 with its link kept in a comment.
 
@@ -24,7 +24,7 @@ with its link kept in a comment.
 | | |
 |---|---|
 | ![Mod Library](.github/screenshots/library.png)<br>**Mod Library**: tagged mods, filters, load order and one switch per mod. | ![Profiles](.github/screenshots/profiles.png)<br>**Profiles**: one setup per game, or several per game. |
-| ![Mod Library, light theme](.github/screenshots/library-light.png)<br>**The same Library** in the built-in light theme (Daylight). | |
+| ![Automations editor in Flow mode](.github/screenshots/automations-flow.png)<br>**Automations** in Flow mode, built like Blueprints. | |
 
 *Clip coming*: **Resolve a conflict**, from a library badge to the conflicts view: « Make Enhanced
 Textures win », the files that change hands, Apply.

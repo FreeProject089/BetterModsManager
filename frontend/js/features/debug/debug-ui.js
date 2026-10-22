@@ -7,6 +7,7 @@ import { t, applyTranslations } from '../../core/i18n.js';
 import { confirmAction } from '../../ui/verify.js';
 import { getDebugSections, watchDebugSections } from './debug-sections.js';
 import { uiIcon } from '../../ui/icons.js';
+import { exportText, showSaved, showExportError, safeStringify } from '../../ui/export-file.js';
 /**
  * debug-ui.js — UI Logic for BMM DevTools
  */
@@ -788,12 +789,11 @@ class DebugUI {
         // pasting their problem into a chat where nobody reads a wall of JSON.
         this._get('rust-gen-report')?.addEventListener('click', async () => {
             try {
-                const path = await window.__TAURI__.core.invoke('generate_diagnostic_report', { frontend: collectWebviewEnv() });
-                window.showToast?.((window.t?.('dev.reportSaved') || 'Diagnostic report saved') + ' — ' + path, 'success', 6000);
-                window.__TAURI__.core.invoke('open_folder', { path: String(path).replace(/[\/][^\/]+$/, '') }).catch(() => { });
+                const path = await invoke('generate_diagnostic_report', { frontend: collectWebviewEnv() });
+                showSaved(t('dev.reportSaved'), String(path));
             }
             catch (e) {
-                window.showToast?.((window.t?.('common.error') || 'Error') + ': ' + e, 'error');
+                showExportError(t('dev.export.report'), e);
             }
         });
         this._get('rust-mem-snap')?.addEventListener('click', async () => {
@@ -814,12 +814,11 @@ class DebugUI {
                     totalJSHeapSize: pm.totalJSHeapSize,
                     jsHeapSizeLimit: pm.jsHeapSizeLimit,
                 } : null;
-                const path = await window.__TAURI__.core.invoke('capture_memory_snapshot', { jsHeap });
-                window.showToast?.((window.t?.('dev.memSaved') || 'Memory snapshot saved') + ' — ' + path, 'success', 6000);
-                window.__TAURI__.core.invoke('open_folder', { path: String(path).replace(/[\/][^\/]+$/, '') }).catch(() => { });
+                const path = await invoke('capture_memory_snapshot', { jsHeap });
+                showSaved(t('dev.memSaved'), String(path));
             }
             catch (e) {
-                window.showToast?.((window.t?.('common.error') || 'Error') + ': ' + e, 'error');
+                showExportError(t('dev.export.memory'), e);
             }
             finally {
                 if (btn) {
@@ -830,12 +829,11 @@ class DebugUI {
         });
         this._get('rust-export-diag')?.addEventListener('click', async () => {
             try {
-                const path = await window.__TAURI__.core.invoke('export_diagnostics', { frontend: collectWebviewEnv() });
-                window.showToast?.((window.t?.('dev.diagExported') || 'Diagnostic exported') + ' — ' + path, 'success');
-                window.__TAURI__.core.invoke('open_folder', { path: String(path).replace(/[\/][^\/]+$/, '') }).catch(() => { });
+                const path = await invoke('export_diagnostics', { frontend: collectWebviewEnv() });
+                showSaved(t('dev.diagExported'), String(path));
             }
             catch (e) {
-                window.showToast?.((window.t?.('common.error') || 'Error') + ': ' + e, 'error');
+                showExportError(t('dev.export.diag'), e);
             }
         });
         this._get('rust-copy-lldb')?.addEventListener('click', () => {
@@ -1036,13 +1034,14 @@ class DebugUI {
             debugHub.patches.filter(p => p.type === 'CSS').forEach(p => debugHub.removePatch(p.id));
         });
         this._get('playground-export').addEventListener('click', () => {
+            // A save dialog and a toast with the path (ui/export-file.ts): an <a download> click
+            // gives no sign of where the file went, when it goes anywhere.
+            if (!debugHub.patches.length) {
+                window.toast?.(t('dev.export.nothing'), 'info', 5000);
+                return;
+            }
             const content = debugHub.patches.map(p => `/* Patch ${p.id} (${p.type}) */\n${p.content}`).join('\n\n');
-            const blob = new Blob([content], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `bmm-patches-${Date.now()}.txt`;
-            a.click();
+            void exportText({ what: t('dev.export.patches'), defaultName: `bmm-patches-${Date.now()}.txt`, content, ext: 'txt', filterName: 'Text' });
         });
         // Patch tree interaction
         this._get('patch-tree').addEventListener('click', e => {
@@ -2112,20 +2111,20 @@ class DebugUI {
         }
         catch (e) { }
     }
-    exportSession() {
+    /** « EXPORT »: logs, IPC calls and the app state as one JSON file the person places. It used
+     *  to click an <a download> (nothing visible in the Tauri webview) after a JSON.stringify
+     *  that threw on the first Set or cycle in the state: the owner clicked it ten times. */
+    async exportSession() {
         const session = {
             timestamp: new Date().toISOString(),
             logs: debugHub.logs,
             ipc: debugHub.ipcCalls,
             state: appState.state
         };
-        const blob = new Blob([JSON.stringify(session, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `bmm-debug-session-${Date.now()}.json`;
-        a.click();
-        console.info('[BMM-Debug] Session exported successfully');
+        const path = await exportText({ what: t('dev.export.session'), defaultName: `bmm-debug-session-${Date.now()}.json`, content: safeStringify(session), ext: 'json', filterName: 'JSON' });
+        if (path)
+            console.info('[BMM-Debug] Session exported to', path);
+        return path;
     }
     // ─────────────────────────────────────────────────────────────
     // The Sources tab + companion methods (loadSources, _fileTypeIcon,
@@ -2206,6 +2205,12 @@ class DebugUI {
         }
     }
     downloadFile(name, content) {
+        // Text goes through the save dialog and says where it went (ui/export-file.ts). A data:
+        // URL (an image) has no text writer behind it and keeps the browser download.
+        if (!String(content).startsWith('data:')) {
+            const ext = (String(name).split('.').pop() || 'txt').toLowerCase();
+            return exportText({ what: name, defaultName: name, content: String(content), ext, filterName: ext.toUpperCase() });
+        }
         let blob;
         if (content.startsWith('data:')) {
             const parts = content.split(';base64,');

@@ -3,7 +3,6 @@
 :::tip[Tu préfères pas à pas ?]
 La version « tâche » de cette page est [Activer et ordonner les mods](doc-page:guide/activate-and-order) : de courtes étapes, ce que tu dois voir, une image et un bouton Montre-moi.
 :::
-
 Deux mods actifs qui fournissent le même fichier ne fusionnent pas : BMM copie des fichiers, donc
 l'un des deux est celui que le jeu lit. Lequel, c'est une seule liste par profil qui le décide,
 l'**ordre d'activation** : les mods sont appliqués du premier au dernier, et **le dernier qui fournit

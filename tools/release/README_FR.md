@@ -15,8 +15,8 @@ Sans argument, un menu s'affiche : choisissez la version, puis les étapes (`a` 
 `1,3,5-7`, `q` pour quitter). Sans aucune question :
 
 ```bat
-tools\release\release.bat --all --version 1.0.3 --yes
-tools\release\release.bat --version 1.0.3 --steps preflight,changelog,verify,media --yes
+tools\release\release.bat --all --version 1.0.4 --yes
+tools\release\release.bat --version 1.0.4 --steps preflight,changelog,verify,media --yes
 ```
 
 Tout arrive dans `Release/<version>/` (ignoré par git), les journaux dans
@@ -34,7 +34,7 @@ Tout arrive dans `Release/<version>/` (ignoré par git), les journaux dans
 | 5 | `build` | attend une machine libre, lance `BetterInstaller/examples/bmm/release.ps1 -Version <v>` (sans `-Publish`) : contrôle des versions, `npm run build`, paquet, signature, `BMM-Setup.exe`, delta, `update.json` et `update-manifest.json` signés. Puis `npx tauri build --bundles nsis,msi` pour les installateurs classiques | `BMM-Setup.exe`, `bmm.bpkg`, `update.json`, `update-manifest.json`, `lang-*.json`, `links.json`, `extras/` (NSIS + MSI, **pas pour GitHub**) |
 | 6 | `verify` | `bpkg info` (version), `bpkg verify --key` (signature), `bpkg verify-manifest --setup` (setup ↔ manifeste), update.json liste `BMM-Setup.exe` avec le bon SHA-256, update-manifest.json liste exactement cet installateur, dates d'expiration affichées (avertit sous 6 jours), règles de la 0.9.11 (un seul installateur nommé `BMM-Setup.exe`, pas de .msi, pas de .zip), `check-release-versions --artifacts` (quand la racine `Release/` contient encore ce build), sommes de contrôle | `SHA256SUMS.txt` |
 | 7 | `docs` | PDF anglais et français de BMM Docs sans WeasyPrint/GTK : un venv privé (`tools/release/.cache/docs-venv`) avec le `requirements.txt` haché des docs (il fixe déjà le plugin print-site et pypdf : installation simple, plus de `--no-deps`), un site d'une seule langue par langue construit par le `language_config` de BMM Docs lui-même (`docs/lang_config.py` l'appelle ; plus de copie locale), puis Chrome sans interface met en page chaque `print_page/` comme un livre (`docs/print-style.mjs`) : couverture (logo, titre, version, date), sommaire avec liens et numéros de page (lus dans les signets d'une première impression), texte noir sur blanc au niveau AA (mesuré), code, tableaux bordés, GIF remplacés par une image fixe, rejeux remplacés par un lien, en-tête (nom BMM, version) et pied (page x / y), signets PDF | `docs/BMM-Docs-EN.pdf`, `docs/BMM-Docs-FR.pdf` |
-| 8 | `media` | compile d'abord le frontend (`npx tsc --project frontend`) et **échoue** si un fichier compilé est plus ancien que sa source ou si les sources ne disent pas la version publiée (les images montrent l'application telle qu'elle est maintenant, servie depuis `frontend/` : les mêmes fichiers que Tauri embarque, donc le build n'est pas nécessaire ; `--no-compile` pour sauter tsc) ; cartes de la version (`tools/release/media/cards.mjs`, texte dans `cards.<version>.json`), captures de la vraie interface avec des données de démonstration, **composées comme BMM sur un bureau** : la fenêtre arrondie entière sur un fond transparent et Tasky qui flotte sur son coin supérieur gauche (`--no-tasky` pour l'enlever), la bannière du README ; chaque visuel existe aussi en SVG à calques et en PSD à calques | `media/*.png`, `media/source/*.svg + .psd`, `media/screenshots/…`, `.github/screenshots/*.png`, `.github/screenshots/layers/`, `.github/screenshots/source/*.svg` |
+| 8 | `media` | compile d'abord le frontend (`npx tsc --project frontend`) et **échoue** si un fichier compilé est plus ancien que sa source ou si les sources ne disent pas la version publiée (les images montrent l'application telle qu'elle est maintenant, servie depuis `frontend/` : les mêmes fichiers que Tauri embarque, donc le build n'est pas nécessaire ; `--no-compile` pour sauter tsc) ; cartes de la version (`tools/release/media/cards.mjs`, texte dans `cards.<version>.json`), captures de la vraie interface avec des données de démonstration, **composées comme BMM sur un bureau** : la fenêtre arrondie entière sur un fond transparent et Tasky qui flotte sur son coin supérieur gauche (`--no-tasky` pour l'enlever), la bannière du README ; chaque visuel existe aussi en SVG à calques et en PSD à calques | `media/*-tasky.png` et `*-plain.png` (`.fr` aussi), `media/source/{svg,psd}/` + `README.md`, `media/screenshots/…` (avec `hero.png`, `hero@2x.png`, `hero.mp4/.webm/.gif`, `hero-flat.png`), `.github/screenshots/*.png`, `.github/screenshots/layers/`, `.github/screenshots/source/*.svg` |
 | 9 | `readme` | README.md / README_EN.md / README_FR.md : badge de version, texte alternatif de la bannière, « Nouveautés de la X » et les liens du journal (les liens ne bougent que si le nouveau journal existe ; « nouveau en 1.0.2 » à côté d'une fonction est de l'historique et reste) | les 3 README |
 | 10 | `bench` | attend une machine libre, lance Criterion, le collecteur mémoire, les micro-benchmarks JS et hyperfine, enregistre `benchmarks/results/<version>/summary.json` (versionné) + `raw/` (ignoré), compare avec la version antérieure la plus récente, écrit le rapport | `bench/BENCHMARK.md`, `BENCHMARK_FR.md`, `BENCHMARK.html`, `comparison.json`, `charts/*.png|svg`, `charts/overview.gif` |
 | 11 | `notes` | `github-release.md` : le commentaire « MAINTAINER NOTES » (titre, tag, ordre, fichiers, signature, vérification), le journal rédigé comme corps, tableau des téléchargements, tableau SHA-256, liens ; `github-release.body.md` sans le commentaire, pour `--notes-file`. Affiche la commande `gh release create`. Un `github-release.md` retouché à la main n'est jamais écrasé (le brouillon va dans `github-release.generated.md`) | les deux fichiers |
@@ -59,7 +59,7 @@ NSIS/MSI classiques restent dans `extras/` et ne vont jamais sur GitHub.
 | `--skip-bmm-build` | build : réutiliser l'exe déjà construit (`release.ps1 -SkipBmmBuild`) |
 | `--no-bundles` | build : pas d'extras NSIS/MSI |
 | `--lenient-artifacts` | verify : un échec de `check-release-versions --artifacts` n'est qu'un avertissement |
-| `--no-compile`, `--no-screenshots`, `--no-tasky`, `--tasky app|br|off`, `--gifs` | options des médias (`--gifs` : enregistre aussi les clips d'usage) |
+| `--no-compile`, `--no-screenshots`, `--no-loop`, `--no-tasky`, `--tasky app|br|off`, `--gifs` | options des médias (`--gifs` : enregistre aussi les clips d'usage) |
 | `--bench-skip-run`, `--bench-only rust,js,hyperfine,mem` | options des benchmarks |
 | `--gource-seconds N`, `--no-credits` | options de Gource |
 | `--no-wait`, `--force` | ne pas attendre une machine libre ; lancer quand même |
@@ -97,14 +97,44 @@ normaliseur universel de catalogues, `catalog_format.rs` monté tel quel), `repo
 cache) et, côté JS, le registre d'activité et le normaliseur de catalogues de l'interface (les
 modules compilés eux-mêmes).
 
-Rapport seul (sans nouvelle exécution) : `node tools/release/bench/run.mjs --version 1.0.3 --skip-run`.
+Rapport seul (sans nouvelle exécution) : `node tools/release/bench/run.mjs --version 1.0.4 --skip-run`.
 
 ## Médias
 
-- Texte des cartes par version : `tools/release/media/cards.<version>.json` (`en` / `fr` : `sub`,
-  `chips`, `whatsNew` avec `{version}`, six `features`). Sans ce fichier, les cartes disent des
-  choses génériques et l'étape avertit. La version affichée vient toujours de l'exécution.
-- Captures : `tools/release/screenshots/` (`shoot.mjs`, `scenes.mjs`, `fixtures.mjs`, `hero.mjs`).
+- Cartes de version (`media/cards.mjs`) : réseaux 1200×630, Discord 960×540, en-tête de blog
+  1600×600, carré 1080, « nouveautés » 1200×675, chacune en anglais et en français et en **deux
+  variantes** : `…-tasky` (Tasky qui dépasse du bord supérieur de la capture, ou assis sur une
+  tuile, dans la zone sûre de la plateforme) et `…-plain` (logo et badge seulement), soit 20 PNG
+  nommés `bmm-<v>-<format>-<variante>[.fr].png`. Chaque format est composé pour son ratio : le logo
+  et un badge `v<version>` en Bricolage Grotesque, le titre, une sous-ligne, jusqu'à trois points
+  forts, et une vraie capture de la version inclinée en perspective par `media/stage.mjs` (ombre,
+  halo) sur le fond marine avec une **grille déformée** (un maillage bombé par une lentille autour
+  de la capture, un champ d'ondes et une perspective, tiré d'une graine fixe : chaque exécution
+  dessine la même) et du grain. Tout texte reste dans `cardSpecs().safe` (recadrage 1.91:1 de X et
+  Mastodon, coins de Discord, grille 3:4 d'Instagram, aperçus de lien de l'en-tête de blog) et est
+  AAA (7:1) sur ce qu'il recouvre (`cardContrast()`, testé). Le texte est coupé et ajusté avec les
+  largeurs mesurées des polices (`media/metrics.mjs`).
+- Texte des cartes par version : `tools/release/media/cards.<version>.json` : `en` / `fr` avec
+  chacun `headline` (6 mots au plus), `subline` (12 au plus), `whatsNew` avec `{version}`, trois
+  `highlights` (`icon` Lucide, `title` de 5 mots au plus, `shot` + `crop` pour la tuile des
+  nouveautés), et `shots` (la capture de chaque format). L'étape avertit quand un texte dépasse une
+  limite ou ne tient pas dans sa boîte. Les anciens fichiers (`sub`, `chips`, `features`) se lisent
+  encore. Sans fichier, les cartes disent des choses génériques et l'étape avertit. La version
+  affichée vient toujours de l'exécution.
+- Bannière du README (`screenshots/hero3d.mjs`), 1600×800 : trois vraies fenêtres (Bibliothèque,
+  Éditeur de thème, Automatisations en mode Flux) qui flottent en perspective avec des ombres de
+  profondeur, un halo aux couleurs de la marque et un reflet au sol, Tasky qui dépasse de la fenêtre
+  de devant, le logo, l'accroche et la version à gauche. `hero.png`, `hero@2x.png`, et une boucle de
+  6 s où chaque fenêtre flotte sur sa propre sinusoïde (parallaxe) : `hero.mp4` (H.264), `hero.webm`
+  (VP9), `hero.gif` (800 px, 15 i/s) ; `--no-loop` la saute. L'ancienne bannière plate est gardée
+  sous `hero-flat.png` (`screenshots/hero.mjs`). Seule :
+  `node tools/release/screenshots/hero3d.mjs --version <v> --shots <dossier des captures> [--no-loop]`.
+- Captures : `tools/release/screenshots/` (`shoot.mjs`, `scenes.mjs`, `fixtures.mjs`). Scènes :
+  library, profiles, repo-sync, repo-host, settings (Analyse), intro, apps, activity, tools, et
+  depuis la 1.0.4 mod-details, notifications, conflicts, automations-flow, laya, translation-studio,
+  theme-editor, modpacks, modpack-wizard, history, catalogue-builder, settings-interface
+  (`library-light` a été retirée). WebGL annonce une carte graphique de démonstration : aucun
+  matériel réel n'apparaît.
   L'outil sert lui-même `frontend/` sur un port local aléatoire ; sans Tauri, l'application utilise
   son simulateur intégré, alimenté **uniquement avec des données de démonstration** (`fixtures.mjs` :
   adresses example.org, un utilisateur « Demo »). Ajoutez une scène dans `scenes.mjs`. Aperçus des thèmes (THEMES.md) : `node tools/release/screenshots/themes.mjs --frontend <checkout>/frontend --out <checkout>/.github/themes`, une image de la Bibliothèque par thème intégré de ce checkout, même composition.
@@ -118,16 +148,22 @@ Rapport seul (sans nouvelle exécution) : `node tools/release/bench/run.mjs --ve
   quand les fixtures ne suffisent pas, et être accélérée (`speed`). Seul : `node tools/release/screenshots/gifs.mjs [--previews] [--width 1000] [--fps 14] [--max-mb 8] [scène …]` ;
   avec l'étape media : `--gifs`. Sortie : `Release/<version>/media/gifs/` (`<nom>.gif`, `.mp4`,
   `gifs.json`, `previews/`), à relire ; copiez à la main ceux qui sont validés dans `.github/gifs/`.
-- Sources modifiables :
-  - **SVG à calques** (calques Inkscape ; Illustrator et Affinity lisent les id des groupes comme
-    noms de calques ; Photoshop importe un SVG aplati) : cartes `background / logo / title /
-    version / subtitle / chips / footer` (ou `features`), bannière `background / screenshot back /
-    screenshot front / logo / title / tagline / version`, captures `screenshot / Tasky`. Les
-    polices sont notées dans chaque fichier : Segoe UI Variable Display / Segoe UI (cartes), Inter
-    avec Segoe UI en secours (bannière).
-  - **PSD à calques** (format Photoshop 1, RVB 8 bits, un calque matriciel par calque SVG, RLE),
-    écrit par un petit module sans dépendance (`lib/psd.mjs`) et relu avec Pillow pendant le
-    développement. Les calques sont des pixels : modifiez le texte dans le SVG.
+- Sources modifiables, toutes dans `Release/<version>/media/source/` avec un `README.md` (EN/FR)
+  qui liste chaque fichier et ses calques :
+  - `svg/` : **SVG à calques** (calques Inkscape en groupes ; Illustrator et Affinity lisent les id
+    comme noms de calques) : cartes `Background (Field and glow, Grid) / Product shot / Tasky / Brand
+    (Wordmark, Badge) / Text (Headline, Subline, Highlights, Footer)`, les nouveautés ajoutent
+    `Screenshots`, bannières `Background / Windows / Tasky / Brand / Text`, captures
+    `screenshot-<nom>.svg` (fenêtre, Tasky, liés depuis `../../screenshots/layers/`). Le texte reste
+    du texte ; les polices sont nommées dans chaque fichier.
+  - `psd/` : **PSD à calques** pour chaque image (cartes × variantes × langues, `hero.psd`,
+    `hero-flat.psd`, `screenshot-<nom>.psd`) : format Photoshop 1, RVB 8 bits, RLE, les mêmes
+    groupes en dossiers, le profil **sRGB** intégré (`lib/icc.mjs`), écrits par `lib/psd.mjs` sans
+    dépendance. Les calques de texte sont des pixels ; le `.txt` à côté du PSD de chaque carte en
+    donne les mots.
+  - Après écriture, l'étape **relit chaque PSD** (`readPsd` : taille, calques, groupes, profil) et
+    compare son image aplatie au PNG ; un PSD illisible ou différent fait échouer l'étape
+    (`media/sources.mjs`).
   - Dans le dépôt, `.github/screenshots/source/` garde des SVG légers qui **lient** les PNG de
     `../` et `../layers/` ; les sources SVG + PSD autonomes sont dans `Release/<version>/media/`.
 

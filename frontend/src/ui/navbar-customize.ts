@@ -773,7 +773,7 @@ export function applyNavCodeFromLink(code: string): boolean {
 
 // ── The editor ────────────────────────────────────────────────────────────────
 //
-// Rebuilt for 1.0.3. The old dialog was one long column: the item list, then an « add a
+// Rebuilt for 1.0.4. The old dialog was one long column: the item list, then an « add a
 // button » form, then a « custom pages » form with three code boxes and six unlabelled
 // permission ticks, all open at once, so the screen asked everything before you had chosen
 // anything. Now:

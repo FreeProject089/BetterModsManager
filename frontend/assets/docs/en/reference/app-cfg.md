@@ -109,7 +109,7 @@ Leaving a stale `BCTestBase` in a shipped file is harmless. Leaving `BCTestMode=
 
 ## BetterCommunity v2: `BCApiVersion` and `BCv2Base`
 
-The switch for **BetterCommunity v2**. Neither key is in the shipped file. Since BMM 1.0.3 the
+The switch for **BetterCommunity v2**. Neither key is in the shipped file. Since BMM 1.0.4 the
 same switch can also come from the links file BetterCommunity publishes (`bc_api`,
 `bc_v2_base` in [links.json](doc-page:reference/links-and-updates)), so installed copies follow v2 the day it goes
 live. **This file wins**: a `BCApiVersion` line here decides whatever links.json says, and

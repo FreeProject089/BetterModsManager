@@ -10,12 +10,12 @@ sombres (*Arctic*, *Charcoal*, *Cobalt*, *Indigo*, *Neon*…) et cinq clairs, do
 (les couleurs du logo, et le logo à la place de Tasky) — et un éditeur capable de refaire toute
 l'allure de l'app — puis de l'exporter en un fichier que quelqu'un importe en un clic.
 
-!!! note "Renommés en 1.0.3"
+!!! note "Renommés en 1.0.4"
 
     Six thèmes intégrés qui portaient le nom d'autres produits ont maintenant des noms
     neutres : Indigo, Neon, Clay, Arctic, Charcoal et Cobalt. Seuls le nom et l'id ont changé ;
     un thème choisi sous l'ancien nom reste appliqué. La table des anciens et nouveaux ids est
-    dans [Créer son propre thème](doc-page:features/making-themes#renommes-en-103).
+    dans [Créer son propre thème](doc-page:features/making-themes#renommes-en-104).
 
 <div class="bmm-replay" data-src="assets/docs/media/replays/themes.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/themes.bmmreplay" data-page="features/themes" data-title="Restyler BMM avec l'éditeur de thèmes"></div>
 

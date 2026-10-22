@@ -197,8 +197,16 @@ export function isRecording(): boolean { return _stop !== null; }
 
 /** Add a listener. The shared rrweb instance starts automatically. If masking requirements change, it restarts. */
 export async function subscribeReplay(cb: ReplaySubscriber): Promise<void> {
+  const running = _stop;
   _listeners.add(cb);
   await syncSharedRecorder();
+  // Joined a recorder that was already running with the right settings (nothing restarted): the
+  // new listener would get incremental events only, with no Meta + FullSnapshot until the next
+  // checkout two minutes later, and a recording that starts without them cannot be replayed. A
+  // fresh checkout opens its stream (the other listeners take it as a normal checkout).
+  if (running && _stop === running) {
+    try { (await loadRrweb())?.record?.takeFullSnapshot?.(true); } catch { /* the next checkout will do */ }
+  }
 }
 
 /** Remove a listener. If none are left, the shared recorder stops. */

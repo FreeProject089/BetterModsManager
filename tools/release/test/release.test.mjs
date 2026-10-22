@@ -11,9 +11,9 @@ import { classifyCommit, groupCommits, renderCommitsMd, cleanSubject } from '../
 import { formatSums, parseSums, sumsFilter, sumsTable } from '../lib/checksums.mjs';
 import { updateReadme, readmeVersion } from '../lib/readme.mjs';
 import { renderGithubRelease, ghCommand, assetProblems, orderAssets, changelogBody, GENERATED_MARK } from '../lib/notes.mjs';
-import { cardText, cardSpecs, fitChips } from '../media/cards-text.mjs';
+import { cardText, cardSpecs, cardFile, textProblems, VARIANTS } from '../media/cards-text.mjs';
 import { verdict, compareSummaries, tally, fmtNs } from '../bench/compare.mjs';
-import { packBits, writePsd, literalPack } from '../lib/psd.mjs';
+import { packBits, writePsd, literalPack, readPsd, layerNames } from '../lib/psd.mjs';
 import { decodePng } from '../lib/png.mjs';
 import { prefixLog, mergeLogs, secondsPerDay } from '../media/gource.mjs';
 
@@ -188,40 +188,107 @@ describe('card text', () => {
     assert.equal(cardText('2.0.0', 'fr').whatsNew, 'Les nouveautés de la 2.0.0');
     assert.equal(cardText('2.0.0', 'fr').generic, true);
   });
-  test('specs carry the version in every file name', () => {
+  test('specs: five formats × EN/FR, each in two variants named …-tasky / …-plain, version in every name', () => {
     const s = cardSpecs('3.1.4');
-    assert.equal(s.length, 8);
-    for (const x of s) assert.match(x.name, /^bmm-3\.1\.4-/);
+    assert.equal(s.length, 10);
+    assert.deepEqual(VARIANTS, ['tasky', 'plain']);
+    const files = s.flatMap((x) => VARIANTS.map((v) => cardFile(x, v)));
+    assert.equal(new Set(files).size, 20);
+    for (const f of files) assert.match(f, /^bmm-3\.1\.4-.+-(tasky|plain)(\.fr)?$/);
+    assert.ok(files.includes('bmm-3.1.4-social-1200x630-tasky.fr'));
+    for (const x of s) {
+      assert.ok(x.safe.x >= 0 && x.safe.y >= 0 && x.safe.x + x.safe.w <= x.w && x.safe.y + x.safe.h <= x.h, x.base);
+    }
   });
-  test('chips that do not fit are dropped from the end', () => {
-    const f = fitChips(['aaaaaaaaaa', 'bbbbbbbbbb', 'cccccccccc'], 20, 300);
-    assert.ok(f.items.length < 3 && f.total <= 300);
-    assert.deepEqual(f.items, ['aaaaaaaaaa', 'bbbbbbbbbb'].slice(0, f.items.length));
+  test('an older cards file (sub, features) still reads', () => {
+    const t = cardText('1.0.3', 'en', { en: { sub: 'S', features: [['A', 'a'], ['B', 'b'], ['C', 'c'], ['D', 'd']] } });
+    assert.equal(t.subline, 'S');
+    assert.deepEqual(t.highlights.map((h) => h.title), ['A', 'B', 'C']);
+  });
+  test('1.0.4 wording keeps the owner limits (headline ≤ 6 words, subline ≤ 12, three highlights ≤ 5) and fits every box', async () => {
+    const custom = JSON.parse(readFileSync(new URL('../media/cards.1.0.4.json', import.meta.url), 'utf8'));
+    assert.deepEqual(textProblems(custom), []);
+    assert.deepEqual(textProblems({ en: { headline: 'one two three four five six seven', subline: 'x', highlights: [] } }), ['en headline: 7 words (6 at most)']);
+    const { overflowReport } = await import('../media/cards.mjs');
+    assert.deepEqual(overflowReport('1.0.4', custom), []);
+    // French typography: no plain space before « : ; ? ! », curly apostrophes.
+    for (const s of JSON.stringify(custom.fr).match(/"[^"]*"/g)) { assert.doesNotMatch(s, / [:;?!]/, s); assert.doesNotMatch(s, /\w'\w/, s); }
   });
 });
 
-describe('benchmark verdicts', () => {
-  const m = (v, half = v * 0.01, extra = {}) => ({ id: 'x', value: v, lo: v - half, hi: v + half, better: 'lower', unit: 'ns', ...extra });
-  test('better / worse / same', () => {
-    assert.equal(verdict(m(100), m(80)).verdict, 'better');
-    assert.equal(verdict(m(100), m(130)).verdict, 'worse');
-    assert.equal(verdict(m(100), m(103)).verdict, 'same');
-    assert.equal(verdict(m(100, 20), m(80, 20)).verdict, 'same', 'overlapping intervals');
-    assert.equal(verdict(null, m(1)).verdict, 'new');
-    assert.equal(verdict(m(1), null).verdict, 'gone');
+describe('card drawing', () => {
+  test('text wrap: no-break spaces hold, \\n breaks, balanced lines, fit shrinks then fails', async () => {
+    const { wrapText, fitText, textWidth } = await import('../media/metrics.mjs');
+    assert.deepEqual(wrapText('liste : groupes', 20, 'seg500', 60), ['liste :', 'groupes']);
+    assert.deepEqual(wrapText('a b\nc', 20, 'seg700', 999), ['a b', 'c']);
+    const bal = wrapText('one two three four five six', 40, 'seg700', 420, 0, true);
+    assert.equal(bal.length, 2);
+    assert.ok(Math.abs(textWidth(bal[0], 40) - textWidth(bal[1], 40)) < textWidth('three', 40) * 1.6);
+    const f = fitText('A short line', { maxW: 200, maxLines: 1, size: 60, min: 10 });
+    assert.ok(f.fits && f.size < 60 && f.width <= 200);
+    assert.equal(fitText('x'.repeat(200), { maxW: 50, maxLines: 1, size: 20, min: 18 }).fits, false);
   });
-  test('one-shot numbers need 15 %', () => {
-    const one = (v) => ({ value: v, lo: null, hi: null, better: 'lower' });
-    assert.equal(verdict(one(100), one(110)).verdict, 'same');
-    assert.equal(verdict(one(100), one(80)).verdict, 'better');
+  test('the distorted grid is the same for the same seed, different for another', async () => {
+    const { warpedGrid } = await import('../media/cards.mjs');
+    const a = warpedGrid(400, 300, { seed: 7 }), b = warpedGrid(400, 300, { seed: 7 }), c = warpedGrid(400, 300, { seed: 8 });
+    assert.deepEqual(a, b);
+    assert.notDeepEqual(a, c);
+    assert.ok(a.length > 10 && a.every((d) => /^M[-\d.]+ [-\d.]+(L[-\d.]+ [-\d.]+)+$/.test(d)));
   });
-  test("Criterion's change interval through zero keeps it « same »", () => {
-    assert.equal(verdict(m(100), m(80, 0.8, { criterionChange: { lo: -0.3, hi: 0.01 } })).verdict, 'same');
+  test('layouts: groups, Tasky only in the tasky variant, text inside the safe zone', async () => {
+    const { cardLayout } = await import('../media/cards.mjs');
+    const custom = JSON.parse(readFileSync(new URL('../media/cards.1.0.4.json', import.meta.url), 'utf8'));
+    const shot = { src: 'data:image/png;base64,', w: 1640, h: 1040 };
+    const shots = new Proxy({}, { get: () => shot });
+    for (const spec of cardSpecs('1.0.4')) {
+      const t = cardText('1.0.4', spec.lang, custom);
+      const plain = cardLayout(spec, t, shots, null), withT = cardLayout(spec, t, shots, { src: 'data:,' });
+      assert.ok(!plain.layers.some((l) => l.group === 'Tasky'), spec.base);
+      assert.equal(withT.layers.filter((l) => l.group === 'Tasky').length, 1, spec.base);
+      assert.deepEqual(plain.layers.slice(0, 2).map((l) => `${l.group}/${l.label}`), ['Background/Field and glow', 'Background/Grid']);
+      for (const l of plain.layers) assert.ok(['Background', 'Product shot', 'Brand', 'Text', 'Screenshots'].includes(l.group), `${spec.base} ${l.label}`);
+      // Every text x / y (tspans and the footer) lies in the safe zone.
+      for (const l of plain.layers.filter((x) => x.group === 'Text' || x.group === 'Brand')) {
+        for (const m of l.body.matchAll(/<tspan x="([\d.]+)" y="([\d.]+)"/g)) {
+          const [x, y] = [+m[1], +m[2]];
+          assert.ok(x >= spec.safe.x - 0.5 && x <= spec.safe.x + spec.safe.w && y >= spec.safe.y && y <= spec.safe.y + spec.safe.h + 1, `${spec.base} ${spec.lang} ${l.label} at ${x},${y}`);
+        }
+      }
+    }
   });
-  test('pairing and tally', () => {
-    const rows = compareSummaries({ metrics: [{ ...m(100), id: 'a' }, { ...m(1), id: 'gone' }] }, { metrics: [{ ...m(50), id: 'a' }, { ...m(1), id: 'new' }] });
-    assert.deepEqual(tally(rows), { better: 1, worse: 0, same: 0, new: 1, gone: 1 });
-    assert.equal(fmtNs(1500), '1.50 µs');
+  test('stage: a floating window comes back to where it started (the loop closes)', async () => {
+    const { itemTransform, stageHtml, stageLayerIds } = await import('../media/stage.mjs');
+    const it = { id: 'w', rotate: { x: 7, y: -19, z: 1 }, float: { amp: 10, rot: 0.4, phase: 0.3 }, z: 0 };
+    assert.equal(itemTransform(it, 0, 6), itemTransform(it, 6, 6));
+    assert.notEqual(itemTransform(it, 0, 6), itemTransform(it, 1.5, 6));
+    const st = { w: 100, h: 50, under: '<svg/>', over: '<svg/>', items: [{ ...it, src: 'data:,', srcW: 10, srcH: 10, crop: { x: 0, y: 0, w: 10, h: 10 }, x: 0, y: 0, w: 50, perch: { id: 'tasky', src: 'data:,', size: 10, along: 0.2, behind: true } }] };
+    assert.deepEqual(stageLayerIds(st).map((x) => x.id), ['under', 'w', 'tasky', 'over']);
+    const html = stageHtml(st);
+    assert.ok(html.indexOf('data-perch="w"') < html.indexOf('data-item="w"'), 'a Tasky peeking from behind is painted first');
+  });
+});
+
+describe('screenshots and hero', () => {
+  test('scenes: library-light is gone, the new pages are there, names unique', async () => {
+    const { scenes } = await import('../screenshots/scenes.mjs');
+    const names = scenes.map((s) => s.name);
+    assert.equal(new Set(names).size, names.length);
+    assert.ok(!names.includes('library-light'));
+    for (const n of ['mod-details', 'conflicts', 'notifications', 'automations-flow', 'laya', 'translation-studio', 'theme-editor', 'modpacks', 'modpack-wizard', 'history', 'catalogue-builder', 'settings-interface']) assert.ok(names.includes(n), n);
+    const { HERO3D_SHOTS } = await import('../screenshots/hero3d.mjs');
+    for (const n of Object.values(HERO3D_SHOTS)) assert.ok(names.includes(n), `hero needs ${n}`);
+    const custom = JSON.parse(readFileSync(new URL('../media/cards.1.0.4.json', import.meta.url), 'utf8'));
+    for (const n of [...Object.values(custom.shots).flat(), ...custom.en.highlights.map((h) => h.shot)]) assert.ok(names.includes(n), `cards need ${n}`);
+  });
+  test('hero layers: background group first, windows and Tasky, then the text', async () => {
+    const { heroItems, heroTextLayers } = await import('../screenshots/hero3d.mjs');
+    const shot = { src: 'data:,', w: 1640, h: 1040 };
+    const items = heroItems({ library: shot, 'theme-editor': shot, 'automations-flow': shot }, { src: 'data:,' });
+    assert.deepEqual(items.map((i) => i.id), ['window-back', 'window-middle', 'window-front']);
+    assert.ok(items[2].perch && !items[0].perch);
+    const t = heroTextLayers('1.0.4', 'en');
+    assert.deepEqual(t.under.map((l) => l.label), ['Field and glow', 'Grid']);
+    assert.ok(t.over.some((l) => l.id === 'version' && /Version 1\.0\.4/.test(l.body)));
   });
 });
 
@@ -247,6 +314,28 @@ describe('psd / png', () => {
     assert.equal(psd.readInt16BE(lmi + 8), 2);
     // first record bounds: full canvas; second: the single dot
     assert.deepEqual([psd.readInt32BE(lmi + 10), psd.readInt32BE(lmi + 14), psd.readInt32BE(lmi + 18), psd.readInt32BE(lmi + 22)], [0, 0, h, w]);
+  });
+  test('grouped PSD with an sRGB profile reads back: size, groups, names, profile, composite', async () => {
+    const { srgbProfile } = await import('../lib/icc.mjs');
+    const { compareComposite } = await import('../media/sources.mjs');
+    const w = 7, h = 4;
+    const bg = new Uint8Array(w * h * 4); for (let i = 0; i < w * h; i++) bg.set([6, 9, 18, 255], i * 4);
+    const dot = new Uint8Array(w * h * 4); dot.set([250, 190, 36, 255], (2 * w + 3) * 4);
+    const comp = bg.slice(); comp.set([250, 190, 36, 255], (2 * w + 3) * 4);
+    const icc = srgbProfile();
+    assert.equal(icc.readUInt32BE(0), icc.length);
+    assert.equal(icc.toString('ascii', 36, 40), 'acsp');
+    const buf = writePsd({ width: w, height: h, layers: [
+      { name: 'Field and glow', group: 'Background', rgba: bg }, { name: 'Grid', group: 'Background', rgba: dot },
+      { name: 'Tasky', group: 'Tasky', rgba: dot }, { name: 'Headline « é »', group: 'Text', rgba: dot }, { name: 'loose', rgba: dot },
+    ], composite: comp, icc });
+    const r = readPsd(buf);
+    assert.deepEqual([r.width, r.height, r.depth, r.mode], [w, h, 8, 3]);
+    assert.ok(r.icc.equals(icc));
+    assert.deepEqual(layerNames(r), ['Background / Field and glow', 'Background / Grid', 'Tasky / Tasky', 'Text / Headline « é »', 'loose']);
+    assert.equal(r.layers.filter((l) => l.divider === 1).length, 3);
+    assert.deepEqual([r.layers[2].top, r.layers[2].left, r.layers[2].bottom, r.layers[2].right], [2, 3, 3, 4]);
+    assert.deepEqual(compareComposite(r, { width: w, height: h, data: comp }), { mean: 0, max: 0, pixels: w * h });
   });
   test('PNG decoder reads RGBA with every filter type', () => {
     const w = 3, h = 5;
@@ -337,10 +426,10 @@ describe('contrast (WCAG AA)', () => {
     assert.equal(+ratio('#777777', '#ffffff').toFixed(2), 4.48);
     assert.equal(blend('#ffffff', '#000000', 0.5), '#808080');
   });
-  test('release cards: every text pair is AA', async () => {
+  test('release cards: every text pair is AAA (7:1)', async () => {
     const { cardContrast } = await import('../media/cards.mjs');
     const c = cardContrast();
-    assert.ok(c.min >= 4.5, JSON.stringify(c.rows.filter((r) => !r.ok)));
+    assert.ok(c.min >= 7, JSON.stringify(c.rows.filter((r) => !r.ok)));
   });
   test('README hero: every text pair is AA', async () => {
     const { HERO_PAIRS } = await import('../screenshots/hero.mjs');

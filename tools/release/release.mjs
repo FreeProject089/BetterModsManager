@@ -2,7 +2,7 @@
 // BMM release tool. Entry point: tools/release/release.bat (or `node tools/release/release.mjs`).
 //
 //   release.bat                                   interactive menu
-//   release.bat --all --version 1.0.3 --yes       every step, no questions
+//   release.bat --all --version 1.0.4 --yes       every step, no questions
 //   release.bat --version 1.0.2 --steps preflight,changelog,verify,media --yes
 //
 // See tools/release/README.md for every option. Nothing here commits, tags, pushes or publishes:
@@ -34,7 +34,8 @@ const HELP = `BMM release tool
   --no-bundles         build: no Tauri NSIS/MSI extras
   --lenient-artifacts  verify: a failed check-release-versions --artifacts is a warning
   --no-compile         media: do not run tsc first (the compiled files must still be newer than the sources)
-  --no-screenshots     media: cards only
+  --no-screenshots     media: no new screenshots (cards and heroes use .github/screenshots)
+  --no-loop            media: no animated hero (MP4/WebM/GIF)
   --tasky app|br|off   media: Tasky in screenshots (default app: top-left over the window's corner, as in BMM)
   --no-tasky           media: screenshots without Tasky
   --gifs               media: also record the usage GIFs/MP4s (gif-scenes.mjs) into media/gifs/ and the
@@ -74,6 +75,7 @@ function parseArgs(argv) {
       case '--no-bundles': o.noBundles = true; break;
       case '--lenient-artifacts': o.lenientArtifacts = true; break;
       case '--no-screenshots': o.noScreenshots = true; break;
+      case '--no-loop': o.noLoop = true; break;
       case '--tasky': o.tasky = next(); break;
       case '--no-tasky': o.tasky = 'off'; break;
       case '--gifs': o.gifs = true; break;

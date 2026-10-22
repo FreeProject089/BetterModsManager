@@ -58,7 +58,7 @@ export function serveStatic(dir) {
       if (dirPath !== base && !dirPath.startsWith(base + sep)) { res.writeHead(403).end(); return; }
       if (p.endsWith('/')) {
         // A folder without index.html gets a listing, as `python -m http.server` gives: the
-        // app's browser mock reads assets/builtin-themes/ that way (1.0.3).
+        // app's browser mock reads assets/builtin-themes/ that way (1.0.4).
         const names = await readdir(dirPath).catch(() => null);
         if (names && !names.includes('index.html')) {
           res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });

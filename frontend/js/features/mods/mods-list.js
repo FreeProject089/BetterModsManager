@@ -17,6 +17,7 @@ import { applyCardActivity } from './mods-job-anim.js';
 import { uiIcon } from '../../ui/icons.js';
 import { askMissingHash } from './integrity-report.js';
 import { cardTabIndex, paintCard, syncSelection } from './lib-select.js';
+import { isProtectedFolderError } from './protected-folder-model.js';
 /**
  * One mod (and, for a disable, the mods it takes with it) through the app's activation queue
  * (core/activation-jobs.ts) instead of a bare invoke: the work belongs to the app, not to this
@@ -463,6 +464,12 @@ export function createModCard(mod) {
                         toast(t('common.error') + ' : ' + e, 'error');
                     }
                 }
+            }
+            else if (isProtectedFolderError(err)) {
+                // Windows protects the game folder (Program Files): nothing was applied. The dialog says
+                // why and offers a restart as administrator (protected-folder.ts), not a raw code.
+                toggle.checked = !toggle.checked;
+                void import('./protected-folder.js').then((m) => m.handleProtectedFolderError(err)).catch(() => { });
             }
             else {
                 toast(t('common.error') + ' : ' + err, 'error');

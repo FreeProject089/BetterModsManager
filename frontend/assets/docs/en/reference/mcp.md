@@ -1,5 +1,4 @@
 # MCP server reference
-
 BMM ships an **MCP server**: the same capabilities the app has, exposed as Model Context
 Protocol tools so an AI assistant can drive BMM directly — list your mods, switch profiles,
 check integrity, run a scheduled task.

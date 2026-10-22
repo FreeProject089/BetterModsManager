@@ -55,7 +55,7 @@ describe('v2 mode', () => {
             assert.equal(v1ApiUrl(r, route), `https://v2.bettercommunity.ch/api${route}`);
         }
         // no v2 route (ADR 0023 §2): stays on v1 rather than calling a server that would 404
-        for (const route of ['/link/status?creatorId=x', '/link/request', '/link/discord', '/avatar/1?size=64', '/users/search?q=x', '/catalogs.json', '/bmm/launch', '/bmm/launch?version=1.0.3&lang=fr',
+        for (const route of ['/link/status?creatorId=x', '/link/request', '/link/discord', '/avatar/1?size=64', '/users/search?q=x', '/catalogs.json', '/bmm/launch', '/bmm/launch?version=1.0.4&lang=fr',
             '/blog/ent_0123456789abcdefghjkmnpqrs/history/rev1', '/blog/7/comments/3/history']) {
             assert.equal(servedByV2Compat(route), false, route);
             assert.equal(v1ApiUrl(r, route), `https://bettercommunity.ch/api${route}`);

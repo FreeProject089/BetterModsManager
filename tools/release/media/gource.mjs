@@ -16,7 +16,7 @@
 // Avatars: only local images, matched by author name (frontend/assets/userpfp/<name>.png, and
 // the pictures contributors.json names). Unmatched authors get gource's default.
 //
-//   node tools/release/media/gource.mjs --version 1.0.3 [--seconds 75] [--no-credits]
+//   node tools/release/media/gource.mjs --version 1.0.4 [--seconds 75] [--no-credits]
 
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, statSync, readdirSync, copyFileSync } from 'node:fs';
