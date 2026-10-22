@@ -434,16 +434,24 @@ pub fn copy_file_governed(
     if legacy_full_speed(smart_io) && gov.policy_for(kind, dst).rate_mb_s.is_none() {
         if let Some(t) = ticket { checkpoint(t)?; }
         if is_mod_op_cancelled() { return Err(cancelled()); }
-        let n = std::fs::copy(src, dst)
-            .with_context(|| format!("Failed to copy {:?} -> {:?}", src, dst))?;
+        let n = std::fs::copy(src, dst).map_err(|e| copy_failed(src, dst, e))?;
         if let Some(t) = ticket { t.add_bytes(n, n); }
         return Ok(());
     }
     match gov.copy(kind, src, dst, ticket) {
         Ok(_) => Ok(()),
         Err(CopyError::Cancelled) => Err(cancelled()),
-        Err(CopyError::Io(e)) => Err(anyhow::Error::new(e).context(format!("Failed to copy {:?} -> {:?}", src, dst))),
+        Err(CopyError::Io(e)) => Err(copy_failed(src, dst, e)),
     }
+}
+
+/// « Failed to copy A -> B » WITH the operating system's reason and its kind. The message used to
+/// stop at the two paths: the worker reports `to_string()`, which is the outermost context only,
+/// so « Access is denied. (os error 5) » never reached the screen or the diagnostic export. The
+/// io::Error stays in the chain, for `io_error_of`.
+fn copy_failed(src: &Path, dst: &Path, e: std::io::Error) -> anyhow::Error {
+    let msg = format!("Failed to copy {:?} -> {:?}: {} [{:?}]", src, dst, e, e.kind());
+    anyhow::Error::new(e).context(msg)
 }
 
 /// The governed copy with `fs::copy`'s other guarantees: the destination keeps the source's
@@ -461,7 +469,7 @@ pub fn copy_file_install(
     let n = match crate::governor::runtime::global().copy(kind, src, dst, ticket) {
         Ok(n) => n,
         Err(CopyError::Cancelled) => return Err(cancelled()),
-        Err(CopyError::Io(e)) => return Err(anyhow::Error::new(e).context(format!("Failed to copy {:?} -> {:?}", src, dst))),
+        Err(CopyError::Io(e)) => return Err(copy_failed(src, dst, e)),
     };
     if let Ok(meta) = std::fs::metadata(src) {
         if let Ok(mtime) = meta.modified() {
@@ -928,20 +936,253 @@ pub fn apply_mod_stacked_ticketed(
     ticket: &crate::governor::queue::Ticket,
 ) -> Result<Vec<PathBuf>> {
     let files = list_mod_files(mod_folder)?;
+    let roots = protected_roots();
 
-    run_deploy_parallel(&files, game_path, profile_backup_root, smart_io, |rel| {
+    // Before anything is copied: can this process write where the files go? A game under
+    // Program Files answers no to a BMM that is not elevated, and finding that out on the first
+    // copy left a backup made and, with parallel copies, files from the same pass in place.
+    probe_write_access_with(game_path, &files, &roots, &write_probe_file)?;
+
+    let journal = std::sync::Mutex::new(Vec::<Touched>::new());
+    let stash_root = profile_backup_root.join(format!("_rollback-{}", uuid::Uuid::new_v4().simple()));
+
+    let result = run_deploy_parallel(&files, game_path, profile_backup_root, smart_io, |rel| {
         if is_mod_op_cancelled() { return Err(cancelled()); }
         checkpoint(ticket)?;
+        let dst = game_path.join(rel);
+        let backup = profile_backup_root.join("_original").join(rel);
+        let existed = dst.symlink_metadata().is_ok();
+        let had_backup = backup.exists();
         // Backup original if it's the first time BMM touches this file in this profile
         let _ = backup_original_file(game_path, rel, profile_backup_root, other_mods_files, smart_io, Some(ticket));
+        let backup_made = existed && !had_backup && backup.exists();
+        // What a rollback puts back for a file that was there: its original backup when that
+        // IS what sits in the game folder, else a copy kept now (another mod's file, or a file
+        // whose backup could not be made). No copy, no overwrite: the deploy stops here.
+        let restore_from_backup = existed && (backup_made || (had_backup && !other_mods_files.contains(rel)));
+        let stash = if existed && !restore_from_backup {
+            let s = stash_root.join(rel);
+            copy_file_governed(crate::governor::config::OpKind::Backup, &dst, &s, Some(ticket), smart_io)
+                .map_err(|e| if e.to_string() == CANCELLED { e } else { e.context(format!("Failed to keep a copy of {:?} for a rollback", dst)) })?;
+            Some(s)
+        } else {
+            None
+        };
+        journal.lock().unwrap_or_else(|p| p.into_inner()).push(Touched { rel: rel.clone(), existed, backup_made, restore_from_backup, stash });
 
         // Copy mod file to game dir (force overwrite)
         let src = mod_folder.join(rel);
-        let dst = game_path.join(rel);
         copy_file_governed(crate::governor::config::OpKind::Deploy, &src, &dst, Some(ticket), smart_io)
-    })?;
+            .map_err(|e| match io_error_of(&e).and_then(|io| classify_write_error(io, &dst, game_path, &roots)) {
+                Some(code) => anyhow!(code),
+                None => e,
+            })
+    });
 
-    Ok(files)
+    let journal = journal.into_inner().unwrap_or_else(|p| p.into_inner());
+    match result {
+        Ok(()) => {
+            if stash_root.exists() { let _ = fs::remove_dir_all(&stash_root); }
+            Ok(files)
+        }
+        // A cancel keeps its own path: the parent kills the worker and runs the inverse undo,
+        // and the literal must stay exactly CANCELLED for every caller that compares it.
+        Err(e) if e.to_string() == CANCELLED => {
+            if stash_root.exists() { let _ = fs::remove_dir_all(&stash_root); }
+            Err(e)
+        }
+        Err(e) => {
+            let left = rollback_deploy(game_path, profile_backup_root, &journal, smart_io);
+            if left == 0 {
+                if stash_root.exists() { let _ = fs::remove_dir_all(&stash_root); }
+                Err(e)
+            } else {
+                // The stash is the only copy of what could not be put back: it stays.
+                Err(anyhow!("{} (rollback incomplete: {} file(s) could not be put back; copies kept in {:?})", e, left, stash_root))
+            }
+        }
+    }
+}
+
+// ── Game folders Windows protects, and a deploy that fails safely ────────────────────────
+//
+// A game installed under C:\Program Files (DCS World's default) cannot be written by a program
+// that is not elevated: every copy into it fails with ERROR_ACCESS_DENIED (os error 5). The
+// worker reported only « Failed to copy A -> B » (the OS error dropped), after the activation had
+// started. Now:
+//   · the deploy probes the destination folders BEFORE it copies anything;
+//   · a denial under a protected folder is the typed `PROTECTED_FOLDER|<game>|<root>|<os error>`
+//     that the frontend turns into its dialog (features/mods/protected-folder.ts). Windows paths
+//     cannot contain `|`, so the fields split cleanly; the OS text is the last one;
+//   · a deploy that fails after it started puts back what it changed (`rollback_deploy`).
+
+/// The typed error's prefix (frontend: features/mods/protected-folder.ts).
+pub const PROTECTED_FOLDER: &str = "PROTECTED_FOLDER";
+
+/// The folders Windows keeps read-only for a program that is not elevated: Program Files (both)
+/// and the Windows folder, from the environment (the drive and language may differ).
+pub fn protected_roots() -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = Vec::new();
+    for var in ["ProgramFiles", "ProgramFiles(x86)", "ProgramW6432", "SystemRoot", "windir"] {
+        if let Some(v) = std::env::var_os(var) {
+            let p = PathBuf::from(v);
+            if !p.as_os_str().is_empty() && !out.iter().any(|o| path_key(o) == path_key(&p)) {
+                out.push(p);
+            }
+        }
+    }
+    out
+}
+
+/// A path as text to compare: no verbatim prefix, backslashes, lower case, no trailing slash.
+fn path_key(p: &Path) -> String {
+    let s = p.to_string_lossy();
+    let mut s = crate::commands::disk::strip_verbatim(&s).replace('/', "\\").to_lowercase();
+    while s.ends_with('\\') { s.pop(); }
+    s
+}
+
+/// The protected folder `path` is in (itself or below), if any. A segment boundary is required:
+/// `C:\Program Files (x86)` is not inside `C:\Program Files`.
+pub fn protected_root_of(path: &Path, roots: &[PathBuf]) -> Option<PathBuf> {
+    let k = path_key(path);
+    roots.iter().find(|r| {
+        let rk = path_key(r);
+        !rk.is_empty() && (k == rk || k.starts_with(&format!("{rk}\\")))
+    }).cloned()
+}
+
+/// `PROTECTED_FOLDER|<game root>|<protected root>|<os error>`.
+pub fn protected_folder_code(game_root: &Path, protected: &Path, os: &std::io::Error) -> String {
+    format!("{PROTECTED_FOLDER}|{}|{}|{}", game_root.display(), protected.display(), os)
+}
+
+/// Access denied, by kind or by the Windows number (ERROR_ACCESS_DENIED = 5).
+pub fn is_permission_denied(e: &std::io::Error) -> bool {
+    e.kind() == std::io::ErrorKind::PermissionDenied || e.raw_os_error() == Some(5)
+}
+
+/// The typed error for a write into `game_root` that failed with `e`, when it is a denial under a
+/// protected folder; None for anything else (a file in use, a full disk: the message says it).
+pub fn classify_write_error(e: &std::io::Error, target: &Path, game_root: &Path, roots: &[PathBuf]) -> Option<String> {
+    if !is_permission_denied(e) { return None; }
+    let root = protected_root_of(target, roots).or_else(|| protected_root_of(game_root, roots))?;
+    Some(protected_folder_code(game_root, &root, e))
+}
+
+/// The io::Error under an anyhow chain (`copy_failed` keeps it there).
+fn io_error_of(e: &anyhow::Error) -> Option<&std::io::Error> {
+    e.chain().find_map(|c| c.downcast_ref::<std::io::Error>())
+}
+
+/// At most this many folders are probed for one deploy (a probe is a create and a delete).
+const MAX_WRITE_PROBES: usize = 64;
+
+/// The folders a deploy of `files` writes into, each reduced to its deepest EXISTING ancestor
+/// (that is where `create_dir_all` and the copy will need the right), without repeats.
+fn probe_dirs(game_root: &Path, files: &[PathBuf]) -> Vec<PathBuf> {
+    let mut leaves = HashSet::new();
+    let mut seen = HashSet::new();
+    let mut out = Vec::new();
+    for rel in files {
+        let Some(parent) = game_root.join(rel).parent().map(|p| p.to_path_buf()) else { continue };
+        if !leaves.insert(parent.clone()) { continue; }
+        let mut d: &Path = &parent;
+        let existing = loop {
+            if d.is_dir() { break Some(d.to_path_buf()); }
+            match d.parent() { Some(p) => d = p, None => break None }
+        };
+        if let Some(e) = existing {
+            if seen.insert(path_key(&e)) {
+                out.push(e);
+                if out.len() >= MAX_WRITE_PROBES { break; }
+            }
+        }
+    }
+    out
+}
+
+/// Write and remove a small file in `dir`. The name is unique, `create_new` never touches an
+/// existing file.
+fn write_probe_file(dir: &Path) -> std::io::Result<()> {
+    let p = dir.join(format!(".bmm-write-probe-{}.tmp", uuid::Uuid::new_v4().simple()));
+    let mut f = fs::OpenOptions::new().write(true).create_new(true).open(&p)?;
+    let w = std::io::Write::write_all(&mut f, b"bmm");
+    drop(f);
+    let _ = fs::remove_file(&p);
+    w
+}
+
+/// Can this process write where `files` go under `game_root`? `probe` writes one test file in a
+/// folder (`write_probe_file`; the tests inject a refusal). The first refusal stops it: the typed
+/// PROTECTED_FOLDER error under a protected folder, else the folder and the OS reason in words.
+fn probe_write_access_with(
+    game_root: &Path,
+    files: &[PathBuf],
+    roots: &[PathBuf],
+    probe: &dyn Fn(&Path) -> std::io::Result<()>,
+) -> Result<()> {
+    for dir in probe_dirs(game_root, files) {
+        if let Err(e) = probe(&dir) {
+            if let Some(code) = classify_write_error(&e, &dir, game_root, roots) {
+                return Err(anyhow!(code));
+            }
+            return Err(anyhow!("BMM cannot write to {:?}: {} [{:?}]. Nothing was copied.", dir, e, e.kind()));
+        }
+    }
+    Ok(())
+}
+
+/// One file a deploy was about to change, and how to put it back.
+#[derive(Debug)]
+struct Touched {
+    rel: PathBuf,
+    /// Something was at the destination before.
+    existed: bool,
+    /// This deploy made its `_original` backup (removed again once restored).
+    backup_made: bool,
+    /// What was there is the `_original` backup's content.
+    restore_from_backup: bool,
+    /// Else a copy kept for the rollback.
+    stash: Option<PathBuf>,
+}
+
+/// Put back every file of `journal`: an added file goes, a replaced one returns from its backup
+/// or from the copy kept for it. Returns how many could NOT be put back.
+fn rollback_deploy(game_path: &Path, backup_root: &Path, journal: &[Touched], smart_io: bool) -> usize {
+    use crate::governor::config::OpKind;
+    let mut left = 0usize;
+    let mut dirs: Vec<PathBuf> = Vec::new();
+    let mut seen: HashSet<PathBuf> = HashSet::new();
+    for t in journal {
+        let dst = game_path.join(&t.rel);
+        if !t.existed {
+            if ensure_removed(&dst).is_err() { left += 1; }
+            let mut cur = t.rel.clone();
+            while let Some(parent) = cur.parent().map(|p| p.to_path_buf()) {
+                if parent.as_os_str().is_empty() { break; }
+                if seen.insert(parent.clone()) { dirs.push(parent.clone()); }
+                cur = parent;
+            }
+            continue;
+        }
+        if t.restore_from_backup {
+            let backup = backup_root.join("_original").join(&t.rel);
+            match copy_file_governed(OpKind::Deploy, &backup, &dst, None, smart_io) {
+                Ok(()) => { if t.backup_made { let _ = ensure_removed(&backup); } }
+                Err(_) => left += 1,
+            }
+        } else if let Some(s) = &t.stash {
+            if copy_file_governed(OpKind::Deploy, s, &dst, None, smart_io).is_err() { left += 1; }
+        }
+    }
+    // Folders the deploy created and that are empty again, deepest first (remove_dir only
+    // removes an empty folder, and the paths are relative to the game folder).
+    dirs.sort_by(|a, b| b.components().count().cmp(&a.components().count()));
+    for d in dirs { let _ = fs::remove_dir(game_path.join(&d)); }
+    let original_dir = backup_root.join("_original");
+    if original_dir.exists() { let _ = remove_empty_dirs(&original_dir); }
+    left
 }
 
 /// Strip a Windows verbatim prefix (\\?\ or \??\) and normalize separators.
@@ -1874,5 +2115,186 @@ mod governed_hash_tests {
         });
         drop(t);
         let _ = fs::remove_dir_all(&dir);
+    }
+}
+
+#[cfg(test)]
+mod protected_folder_tests {
+    //! The owner's export: enabling a mod into C:\Program Files\Eagle Dynamics\DCS World failed
+    //! with « Failed to copy A -> B » and nothing else. These pin the typed error, the probe that
+    //! now runs before any copy, and the rollback of a deploy that fails half-way.
+    use super::*;
+
+    fn scratch(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("bmm_protected_{}_{}", name, std::process::id()));
+        let _ = fs::remove_dir_all(&d);
+        fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    fn put(root: &Path, rel: &str, data: &[u8]) {
+        let p = root.join(rel);
+        fs::create_dir_all(p.parent().unwrap()).unwrap();
+        fs::write(p, data).unwrap();
+    }
+
+    fn denied() -> std::io::Error {
+        std::io::Error::from_raw_os_error(5)
+    }
+
+    fn pf_roots() -> Vec<PathBuf> {
+        vec![PathBuf::from(r"C:\Program Files"), PathBuf::from(r"C:\Program Files (x86)"), PathBuf::from(r"C:\Windows")]
+    }
+
+    #[test]
+    fn a_path_under_program_files_is_protected_and_a_lookalike_is_not() {
+        let roots = pf_roots();
+        let dcs = Path::new(r"C:\Program Files\Eagle Dynamics\DCS World");
+        assert_eq!(protected_root_of(dcs, &roots), Some(PathBuf::from(r"C:\Program Files")));
+        // Case, forward slashes, a trailing slash and a verbatim prefix do not hide it.
+        assert!(protected_root_of(Path::new("c:/program files/Eagle Dynamics/"), &roots).is_some());
+        assert!(protected_root_of(Path::new(r"\\?\C:\PROGRAM FILES\x"), &roots).is_some());
+        assert_eq!(
+            protected_root_of(Path::new(r"C:\Program Files (x86)\Steam\steamapps"), &roots),
+            Some(PathBuf::from(r"C:\Program Files (x86)")),
+            "the (x86) folder is its own root, not a child of Program Files",
+        );
+        assert!(protected_root_of(Path::new(r"C:\Program FilesX\game"), &roots).is_none(), "a segment boundary is required");
+        assert!(protected_root_of(Path::new(r"E:\DCS Root Mods\SavedRoot Mods"), &roots).is_none());
+        assert!(protected_root_of(Path::new(r"C:\Windows\System32"), &roots).is_some());
+    }
+
+    #[test]
+    fn access_denied_under_a_protected_folder_is_the_typed_error() {
+        let roots = pf_roots();
+        let game = Path::new(r"C:\Program Files\Eagle Dynamics\DCS World");
+        let dst = game.join(r"Mods\aircraft\A-10C_2\Cockpit\Scripts\HUD\Indicator\HUD_init.lua");
+        let code = classify_write_error(&denied(), &dst, game, &roots).expect("os error 5 under Program Files");
+        let parts: Vec<&str> = code.split('|').collect();
+        assert_eq!(parts[0], PROTECTED_FOLDER);
+        assert_eq!(parts[1], game.display().to_string());
+        assert_eq!(parts[2], r"C:\Program Files");
+        assert!(parts[3].contains("os error 5"), "the OS reason travels: {code}");
+        // The kind alone (another platform, a mapped error) is enough too.
+        let kind_only = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied");
+        assert!(classify_write_error(&kind_only, &dst, game, &roots).is_some());
+    }
+
+    #[test]
+    fn other_failures_are_not_mistaken_for_a_protected_folder() {
+        let roots = pf_roots();
+        let game = Path::new(r"C:\Program Files\Game");
+        // A file in use (sharing violation) under Program Files is not an elevation problem.
+        let in_use = std::io::Error::from_raw_os_error(32);
+        assert_eq!(classify_write_error(&in_use, &game.join("a"), game, &roots), None);
+        // Access denied OUTSIDE a protected folder: a real refusal, but not this dialog.
+        let other = Path::new(r"E:\Games\DCS");
+        assert_eq!(classify_write_error(&denied(), &other.join("a"), other, &roots), None);
+    }
+
+    #[test]
+    fn the_copy_error_carries_the_os_reason_and_its_kind() {
+        let e = copy_failed(Path::new("a.lua"), Path::new("b.lua"), denied());
+        let msg = e.to_string();
+        assert!(msg.starts_with("Failed to copy"), "{msg}");
+        assert!(msg.contains("os error 5") && msg.contains("PermissionDenied"), "{msg}");
+        assert!(io_error_of(&e).map(is_permission_denied).unwrap_or(false), "the io::Error stays in the chain");
+    }
+
+    #[test]
+    fn the_probe_writes_nothing_that_stays_and_passes_on_a_writable_folder() {
+        let root = scratch("probe_ok");
+        let game = root.join("game");
+        put(&game, "Mods/keep.txt", b"x");
+        let files = vec![PathBuf::from("Mods/aircraft/new/file.lua"), PathBuf::from("root.cfg")];
+        probe_write_access_with(&game, &files, &protected_roots(), &write_probe_file).expect("a temp folder is writable");
+        // Nothing left behind: the game folder holds what it held.
+        let left: Vec<String> = walk_entries(&game, true).into_iter()
+            .filter(|e| e.file_type().is_file())
+            .map(|e| e.path().strip_prefix(&game).unwrap().to_string_lossy().replace('\\', "/"))
+            .collect();
+        assert_eq!(left, vec!["Mods/keep.txt".to_string()]);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn the_probe_asks_the_deepest_existing_folder_once() {
+        let root = scratch("probe_dirs");
+        let game = root.join("game");
+        fs::create_dir_all(game.join("Mods/aircraft")).unwrap();
+        let files = vec![
+            PathBuf::from("Mods/aircraft/A-10C_2/Cockpit/a.lua"),
+            PathBuf::from("Mods/aircraft/A-10C_2/Cockpit/b.lua"),
+            PathBuf::from("Mods/aircraft/F-16/c.lua"),
+        ];
+        let dirs = probe_dirs(&game, &files);
+        assert_eq!(dirs, vec![game.join("Mods/aircraft")], "both missing trees reduce to the folder that exists");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_refused_probe_under_a_protected_folder_is_typed_and_elsewhere_is_in_words() {
+        let root = scratch("probe_denied");
+        let game = root.join("DCS World");
+        fs::create_dir_all(&game).unwrap();
+        let files = vec![PathBuf::from("Mods/x.lua")];
+        // The test's temp folder plays Program Files: a refusal there is the typed error.
+        let roots = vec![root.clone()];
+        let refuse = |_: &Path| -> std::io::Result<()> { Err(std::io::Error::from_raw_os_error(5)) };
+        let e = probe_write_access_with(&game, &files, &roots, &refuse).unwrap_err().to_string();
+        assert!(e.starts_with("PROTECTED_FOLDER|"), "{e}");
+        // Not under a protected folder: the folder and the reason, in words.
+        let e = probe_write_access_with(&game, &files, &[], &refuse).unwrap_err().to_string();
+        assert!(e.starts_with("BMM cannot write to") && e.contains("os error 5") && e.contains("Nothing was copied"), "{e}");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_deploy_that_fails_half_way_puts_the_game_folder_back() {
+        let root = scratch("rollback");
+        let m = root.join("mod");
+        let game = root.join("game");
+        let backup = root.join("backup");
+        // The mod: replaces an original, replaces another mod's file, adds files (one in a new
+        // folder), and has one file that cannot be written (a FOLDER sits at its destination).
+        put(&m, "orig.cfg", b"mod-orig");
+        put(&m, "shared.dds", b"mod-shared");
+        put(&m, "New/added.lua", b"mod-added");
+        put(&m, "added2.txt", b"mod-added2");
+        put(&m, "zz_blocked.bin", b"mod-blocked");
+        put(&game, "orig.cfg", b"vanilla");
+        put(&game, "shared.dds", b"other-mod");
+        fs::create_dir_all(game.join("zz_blocked.bin")).unwrap();
+        put(&game, "zz_blocked.bin/inside.txt", b"keep");
+        let other: HashSet<PathBuf> = [PathBuf::from("shared.dds")].into_iter().collect();
+
+        let err = apply_mod_stacked(&m, &game, &backup, &other, true).expect_err("the folder in the way fails the copy");
+        assert!(!err.to_string().contains("rollback incomplete"), "{err}");
+
+        assert_eq!(fs::read(game.join("orig.cfg")).unwrap(), b"vanilla", "the original is back");
+        assert_eq!(fs::read(game.join("shared.dds")).unwrap(), b"other-mod", "the other mod's file is back");
+        assert!(!game.join("New/added.lua").exists() && !game.join("New").exists(), "added files and their new folder are gone");
+        assert!(!game.join("added2.txt").exists());
+        assert_eq!(fs::read(game.join("zz_blocked.bin/inside.txt")).unwrap(), b"keep");
+        assert!(!backup.join("_original/orig.cfg").exists(), "the backup this deploy made is reclaimed");
+        let leftovers: Vec<_> = fs::read_dir(&backup).map(|r| r.filter_map(|e| e.ok()).map(|e| e.file_name()).collect()).unwrap_or_default();
+        assert!(leftovers.iter().all(|n| !n.to_string_lossy().starts_with("_rollback-")), "the rollback copies are removed: {leftovers:?}");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_deploy_that_succeeds_leaves_no_rollback_copy() {
+        let root = scratch("no_stash");
+        let m = root.join("mod");
+        let game = root.join("game");
+        let backup = root.join("backup");
+        put(&m, "shared.dds", b"mod");
+        put(&game, "shared.dds", b"other-mod");
+        let other: HashSet<PathBuf> = [PathBuf::from("shared.dds")].into_iter().collect();
+        apply_mod_stacked(&m, &game, &backup, &other, false).unwrap();
+        assert_eq!(fs::read(game.join("shared.dds")).unwrap(), b"mod");
+        let names: Vec<_> = fs::read_dir(&backup).map(|r| r.filter_map(|e| e.ok()).map(|e| e.file_name()).collect()).unwrap_or_default();
+        assert!(names.iter().all(|n| !n.to_string_lossy().starts_with("_rollback-")), "{names:?}");
+        let _ = fs::remove_dir_all(&root);
     }
 }

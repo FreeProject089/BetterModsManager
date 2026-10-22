@@ -1,5 +1,4 @@
 # Référence du serveur MCP
-
 BMM embarque un **serveur MCP** : les mêmes capacités que l'application, exposées comme des
 outils Model Context Protocol pour qu'une IA puisse piloter BMM directement — lister tes
 mods, changer de profil, vérifier l'intégrité, déclencher une tâche planifiée.

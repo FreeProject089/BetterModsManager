@@ -7,7 +7,7 @@ application, lancée dans l'aperçu navigateur avec des données de démonstrati
 chemin ni compte réel), composée comme sur un bureau : la fenêtre, avec Tasky sur son coin
 supérieur gauche. Interface en anglais.
 
-De courts clips d'usage (GIF, avec une copie MP4) sont en cours d'enregistrement pour la 1.0.3.
+De courts clips d'usage (GIF, avec une copie MP4) sont en cours d'enregistrement pour la 1.0.4.
 Ils apparaîtront dans `.github/gifs/` une fois relus ; d'ici là, chacun est signalé ci-dessous
 comme *à venir*, son lien gardé en commentaire.
 
@@ -25,7 +25,7 @@ comme *à venir*, son lien gardé en commentaire.
 | | |
 |---|---|
 | ![Bibliothèque de mods](.github/screenshots/library.png)<br>**Bibliothèque** : mods étiquetés, filtres, ordre de chargement et un interrupteur par mod. | ![Profils](.github/screenshots/profiles.png)<br>**Profils** : une configuration par jeu, ou plusieurs par jeu. |
-| ![Bibliothèque, thème clair](.github/screenshots/library-light.png)<br>**La même Bibliothèque** avec le thème clair intégré (Daylight). | |
+| ![Éditeur d’Automatisations en mode Flux](.github/screenshots/automations-flow.png)<br>**Les Automatisations** en mode Flux, façon Blueprints. | |
 
 *Clip à venir* : **Résoudre un conflit**, d'un badge de la bibliothèque à la vue des conflits :
 « Make Enhanced Textures win », les fichiers qui changent de main, Apply.

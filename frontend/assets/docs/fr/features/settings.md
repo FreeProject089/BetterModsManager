@@ -429,7 +429,7 @@ ajoute un que si tu atteins les limites.
 
 Rejoue les tutoriels interactifs de l'app à tout moment. Nouveau sur BMM ? Commence ici. Le guide
 du tutoriel peut **se détacher dans sa propre fenêtre**, pour le garder à côté de BMM pendant que tu
-suis les étapes. Tous les tutoriels ont été réécrits pour la 1.0.3, avec de nouvelles parties :
+suis les étapes. Tous les tutoriels ont été réécrits pour la 1.0.4, avec de nouvelles parties :
 suivre un dépôt, conflits et ordre d'activation, notifications, créer un plugin, et Outils BMM. Le
 tutoriel des Automatisations est maintenant dans Plugins & API.
 

@@ -107,6 +107,7 @@ export const LEARN_MORE: Readonly<Record<string, LearnTarget>> = Object.freeze({
     'feedback':           { article: 'what-is-bmm', page: 'features/feedback' },
     'github-pat':         { article: 'faq-pat', page: 'reference/github-pat' },
     'troubleshooting':    { article: 'faq-crash', page: 'reference/troubleshooting' },
+    'protected-folder':   { article: 'faq-crash', page: 'reference/troubleshooting', hash: 'protected-folder' },
     'tips':               { article: 'what-is-bmm', page: 'reference/tips' },
 });
 

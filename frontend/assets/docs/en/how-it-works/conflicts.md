@@ -3,7 +3,6 @@
 :::tip[Prefer it step by step?]
 The task version of this page is [Fix a conflict](doc-page:guide/fix-a-conflict): short steps, what you should see, a picture and a Show me button.
 :::
-
 Two mods are in **conflict** when they ship the same file. Some managers let one silently overwrite
 the other. BMM detects the overlap *before* it writes anything and warns you — but the resolution
 itself is deliberately simple, and the interesting engineering is in making detection free and

@@ -132,8 +132,10 @@ export async function initProfiles() {
     // Edit profile specific buttons
     document.getElementById('btn-edit-pick-game-path').addEventListener('click', async () => {
         const path = await pickFolder();
-        if (path)
+        if (path) {
             document.getElementById('edit-prof-game-path').value = path;
+            void import('../mods/protected-folder.js').then((m) => m.paintProtectedHint('edit-prof-game-path', path)).catch(() => { });
+        }
     });
     document.getElementById('btn-edit-pick-mods-path').addEventListener('click', async () => {
         const path = await pickFolder();
@@ -1100,6 +1102,7 @@ export async function renderProfiles() {
             document.getElementById('edit-prof-name').value = profile.name;
             document.getElementById('edit-prof-game').value = profile.game_name || '';
             document.getElementById('edit-prof-game-path').value = profile.game_path;
+            void import('../mods/protected-folder.js').then((m) => m.paintProtectedHint('edit-prof-game-path', profile.game_path || '')).catch(() => { });
             document.getElementById('edit-prof-mods-path').value = profile.mods_path;
             document.getElementById('edit-prof-backup-path').value = profile.backup_path;
             document.getElementById('edit-prof-color').value = profile.color || '#3b82f6';

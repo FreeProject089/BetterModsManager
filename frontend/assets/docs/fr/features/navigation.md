@@ -1,7 +1,7 @@
 # Personnaliser la navigation
 
 La barre latérale est à toi. Appuie sur le **crayon en bas de la barre latérale** (ou utilise
-**Paramètres → Navigation et pages personnalisées**) pour ouvrir l'éditeur. Il a été refait en 1.0.3
+**Paramètres → Navigation et pages personnalisées**) pour ouvrir l'éditeur. Il a été refait en 1.0.4
 autour d'un aperçu que tu peux faire glisser, et d'une façon guidée d'ajouter des boutons.
 
 ## Ta barre latérale

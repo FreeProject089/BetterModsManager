@@ -1,7 +1,7 @@
 //! BetterCommunity v2: the Rust half of the switchable BC client.
 //!
 //! WHAT IS HERE
-//!   * The session's mode (`bc_v2_activate`, BMM 1.0.3): app.cfg (`BCApiVersion`, `BCv2Base`)
+//!   * The session's mode (`bc_v2_activate`, BMM 1.0.4): app.cfg (`BCApiVersion`, `BCv2Base`)
 //!     wins over links.json (`bc_api`, `bc_v2_base`), which wins over v1. v2 is used only after
 //!     `GET <root>/v2/health` answered in this session; otherwise the session stays on v1 and the
 //!     reason is logged. `effective_v2_root` is what every Rust caller asks.
@@ -372,12 +372,12 @@ pub async fn consent_sync_bc_v2(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// The switch at run time (BMM 1.0.3)
+// The switch at run time (BMM 1.0.4)
 // ─────────────────────────────────────────────────────────────────────────────
 //
 // Precedence: app.cfg (`BCApiVersion` / `BCv2Base`) > links.json (`bc_api` / `bc_v2_base`) >
 // v1. links.json is fetched at start (platform asset), so the day v2 goes live the owner flips
-// `bc_api: "v2"` there and installed 1.0.3 copies follow without a new release. An explicit
+// `bc_api: "v2"` there and installed 1.0.4 copies follow without a new release. An explicit
 // `BCApiVersion=v1` in app.cfg pins an install to v1 whatever links.json says.
 //
 // Safe by construction: v2 is used only after `GET <root>/v2/health` answered `ok` or
@@ -934,7 +934,7 @@ mod tests {
         assert!(!app_key_ok("bc_pk_short"));
         assert!(!app_key_ok("bc_pk_0123456789abcdefghij\r\nX: y"));
     }
-    // ── 1.0.3: the remote switch, the health gate, the legal texts ──────────────────────────
+    // ── 1.0.4: the remote switch, the health gate, the legal texts ──────────────────────────
 
     #[test]
     fn app_cfg_wins_over_links_json_which_wins_over_v1() {

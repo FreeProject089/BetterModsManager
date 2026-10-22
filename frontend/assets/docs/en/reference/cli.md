@@ -1,5 +1,4 @@
 # CLI reference
-
 The executable that serves BMM's [MCP tools](doc-page:reference/mcp) is also a **command-line tool**. Same
 binary, same install folder — `bmm-mcp-server.exe`, next to `BetterModsManager.exe` — and
 running it with a subcommand instead of `serve` gives you 81 commands from a terminal, a

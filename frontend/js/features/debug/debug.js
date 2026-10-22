@@ -236,21 +236,32 @@ class DebugHub {
                 .then(path => console.log('[BMM-DEBUG] Crash report generated at:', path))
                 .catch(err => {
                 console.error('[BMM-DEBUG] Failed to send crash dump to backend:', err);
-                this._fallbackDownload(dumpStr, reason);
+                this._fallbackDownload(dumpStr, reason, err);
             });
         }
         else {
             this._fallbackDownload(dumpStr, reason);
         }
     }
-    _fallbackDownload(dumpStr, reason) {
-        if (reason !== 'MANUAL') {
-            const _blob = new Blob([dumpStr], { type: 'application/json' });
-            const _url = URL.createObjectURL(_blob);
-            const _a = document.createElement('a');
-            _a.href = _url;
-            _a.download = `bmm-crash-dump-${Date.now()}.json`;
+    /** The core could not write the crash dump (or there is no core: the browser preview). It
+     *  used to build an <a download> and never click it: the dump was lost without a word. Now
+     *  the preview downloads it, and the app says the dump could not be written, and why. */
+    _fallbackDownload(dumpStr, reason, err) {
+        if (err !== undefined) {
+            const why = String(err?.message ?? err);
+            const w = window;
+            w.toast?.(w.t ? w.t('dev.export.crashDumpFail', { error: why }) : `The crash dump could not be written: ${why}`, 'error', 10000);
+            return;
         }
+        if (reason === 'MANUAL')
+            return;
+        const _blob = new Blob([dumpStr], { type: 'application/json' });
+        const _url = URL.createObjectURL(_blob);
+        const _a = document.createElement('a');
+        _a.href = _url;
+        _a.download = `bmm-crash-dump-${Date.now()}.json`;
+        _a.click();
+        setTimeout(() => URL.revokeObjectURL(_url), 1000);
     }
 }
 export const debugHub = new DebugHub();

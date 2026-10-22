@@ -36,7 +36,7 @@ Logo) show the BMM logo, the one in the app icon, wherever Tasky would appear: t
 start-up screen, empty pages and dialogs. On a dark theme it sits on its pale tile, as in the icon.
 Charcoal shows the compact badge: the letters BMM on a tile in the theme's accent.
 
-> **Renamed in 1.0.3.** Six built-in ids used to name other products. They were renamed, the
+> **Renamed in 1.0.4.** Six built-in ids used to name other products. They were renamed, the
 > themes themselves did not change, and the old ids keep working everywhere (your saved choice,
 > hidden presets, scheduler tasks, links, the installer, the MCP bridge):
 >

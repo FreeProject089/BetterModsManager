@@ -17,7 +17,7 @@
 // or a function (args, state) run in the page, which may return a promise to show a spinner),
 // for what the static fixtures cannot show: a repo that answers a test, a list that grows.
 //
-//   node tools/release/screenshots/gifs.mjs [--version 1.0.3] [--out dir] [--width 1000] [--fps 14]
+//   node tools/release/screenshots/gifs.mjs [--version 1.0.4] [--out dir] [--width 1000] [--fps 14]
 //        [--max-mb 8] [--lang en] [--previews] [--keep-frames] [scene …]
 //
 // Output: <out>/<name>.gif, <name>.mp4, gifs.json (name, title, size, duration), and with

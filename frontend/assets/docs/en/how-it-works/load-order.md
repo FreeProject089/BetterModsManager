@@ -3,7 +3,6 @@
 :::tip[Prefer it step by step?]
 The task version of this page is [Activate and order mods](doc-page:guide/activate-and-order): short steps, what you should see, a picture and a Show me button.
 :::
-
 Two active mods that ship the same file do not merge: BMM copies files, so one of them is what the
 game reads. Which one is decided by a single list per profile, the **activation order**: mods are
 applied from the first to the last, and **the last one that ships a file wins it**.

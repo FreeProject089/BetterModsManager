@@ -309,49 +309,83 @@ const docs = {
 
 // ── 7. Media ─────────────────────────────────────────────────────────────────────────────────
 const media = {
-  id: 'media', title: 'Media', desc: 'compiles the frontend first and fails on a stale build; release cards, screenshots of the current app composed like BMM (Tasky top-left), README hero; layered SVG + PSD sources; usage GIFs with --gifs',
+  id: 'media', title: 'Media', desc: 'compiles the frontend first and fails on a stale build; screenshots of the current app composed like BMM (Tasky top-left), release cards in two variants (with Tasky, plain) × EN/FR, the semi-3D README hero (PNG 1x/2x + MP4/WebM/GIF loop) and the flat one; every layered PSD and SVG in media/source/, each PSD read back and checked; usage GIFs with --gifs',
   async run(ctx) {
     const notes = [], outputs = [];
     const mdir = ensureDir(join(ctx.rel, 'media'));
+    const log = { info: (s) => ctx.log.info(s), warn: (s) => ctx.log.warn(s) };
     // The pictures must show the app as it is now: compile, prove the output is current, check the version.
     try {
       const fresh = await ensureFreshFrontend({ log: ctx.log, compile: !ctx.opts.noCompile, version: ctx.version });
       notes.push(...fresh.notes);
     } catch (e) { ctx.log.fail(e.message); return { ok: false, outputs, notes: [`not shooting an old app: ${e.message}`] }; }
-    const { renderCards } = await import('./media/cards.mjs');
+    const gh = join(ROOT, '.github', 'screenshots');
+    const sdir = join(mdir, 'screenshots');
+    // 1. Screenshots first: the cards and the hero are made of them.
+    let shots = [];
+    if (ctx.opts.noScreenshots) notes.push('screenshots skipped (--no-screenshots): cards and hero use .github/screenshots');
+    else {
+      const { shoot } = await import('./screenshots/shoot.mjs');
+      const r = await shoot({ version: ctx.version, outDir: sdir, tasky: ctx.opts.tasky ?? 'app', log });
+      shots = r.shots;
+      outputs.push(`Release/${ctx.version}/media/screenshots/ (${r.shots.length} scenes, layers/, source/)`);
+      if (r.missing.length) notes.push(`${r.missing.length} mock commands had no demo data (listed in screenshots/layers/missing-mock-commands.txt)`);
+    }
+    const shotsDirs = [sdir, gh];
+    const pngs = {};
     let browser = null;
     try { browser = await launch(); } catch (e) { ctx.log.warn(`no browser: ${e.message} (SVG only)`); }
     try {
-      const cr = await renderCards(ctx.version, { outDir: mdir, browser });
-      ctx.log.ok(`cards: ${cr.written.length} files${cr.generic ? ' (GENERIC text)' : ''}`);
+      // 2. Cards: every format × with Tasky / plain × EN / FR.
+      const { renderCards } = await import('./media/cards.mjs');
+      const cr = await renderCards(ctx.version, { outDir: mdir, browser, shotsDirs, log });
+      for (const c of cr.cards) if (c.png) pngs[c.file] = c.png;
+      ctx.log.ok(`cards: ${cr.cards.length} (${cr.written.length} files)${cr.generic ? ' (GENERIC text)' : ''}`);
       if (cr.generic) notes.push(`cards use generic text: add tools/release/media/cards.${ctx.version}.json`);
-      outputs.push(`Release/${ctx.version}/media/*.png + source/*.svg|.psd (${cr.written.length})`);
-    } finally { await browser?.close(); }
-    if (ctx.opts.noScreenshots) { notes.push('screenshots skipped (--no-screenshots)'); await gifsSubStep(ctx, mdir, outputs, notes); return { ok: true, outputs, notes }; }
-    const { shoot } = await import('./screenshots/shoot.mjs');
-    const sdir = join(mdir, 'screenshots');
-    const r = await shoot({ version: ctx.version, outDir: sdir, tasky: ctx.opts.tasky ?? 'app', log: { info: (s) => ctx.log.info(s), warn: (s) => ctx.log.warn(s) } });
-    outputs.push(`Release/${ctx.version}/media/screenshots/ (${r.shots.length} scenes, layers/, source/)`);
-    if (r.missing.length) notes.push(`${r.missing.length} mock commands had no demo data (listed in screenshots/layers/missing-mock-commands.txt)`);
-    const { buildHero } = await import('./screenshots/hero.mjs');
-    const gh = join(ROOT, '.github', 'screenshots');
-    const ghSrc = ensureDir(join(gh, 'source'));
-    browser = await launch();
-    try {
-      const hero = await buildHero({ version: ctx.version, browser, shotsDir: sdir, pngDir: sdir, fullSourceDir: join(sdir, 'source') });
-      outputs.push(rel(hero.png), rel(hero.psd));
-      // README copies: the pictures, their layers, and linked layered SVGs.
+      if (cr.missingShots.length) notes.push(`cards drawn without screenshots: ${cr.missingShots.join(', ')}`);
+      for (const o of cr.overflow) notes.push(`card ${o.card}: ${o.what} too long`);
+      for (const p of cr.wording) notes.push(`card text: ${p}`);
+      outputs.push(`Release/${ctx.version}/media/*-tasky|-plain[.fr].png (${cr.cards.length}), source/svg + source/psd`);
+      if (!browser) return { ok: true, outputs, notes: [...notes, 'no browser: SVG sources only'] };
+      // 3. The semi-3D hero (hero.png, hero@2x.png, the loop) and the flat one (hero-flat.png).
+      const { buildHero3d } = await import('./screenshots/hero3d.mjs');
+      const { buildHero } = await import('./screenshots/hero.mjs');
+      const svgDir = join(mdir, 'source', 'svg'), psdDir = join(mdir, 'source', 'psd');
+      ensureDir(sdir);
+      const h3 = await buildHero3d({ version: ctx.version, browser, shotsDirs, pngDir: sdir, svgDir, psdDir, loopDir: sdir, loop: !ctx.opts.noLoop, log });
+      pngs.hero = h3.png;
+      outputs.push(rel(h3.png), rel(h3.png2x), rel(h3.psd));
+      if (h3.loop) outputs.push(`${rel(h3.loop.mp4)}, hero.webm, hero.gif (${h3.loop.frames} frames)`);
+      else if (!ctx.opts.noLoop) notes.push('hero loop not rendered (no ffmpeg)');
+      const flatDir = existsSync(join(sdir, 'library.png')) ? sdir : gh;
+      const hf = await buildHero({ version: ctx.version, browser, shotsDir: flatDir, pngDir: sdir, fullSourceDir: svgDir, psdDir, name: 'hero-flat' });
+      pngs['hero-flat'] = hf.png;
+      outputs.push(rel(hf.png));
+      // 4. README copies: the pictures, their layers, linked layered SVGs.
+      const ghSrc = ensureDir(join(gh, 'source'));
       ensureDir(join(gh, 'layers'));
       const { screenshotSvg } = await import('./screenshots/shoot.mjs');
-      for (const s of r.shots.filter((x) => x.readme)) {
+      for (const s of shots.filter((x) => x.readme)) {
         copyFileSync(s.png, join(gh, `${s.name}.png`));
         for (const l of ['screen', 'tasky']) if (existsSync(join(sdir, 'layers', `${s.name}.${l}.png`))) copyFileSync(join(sdir, 'layers', `${s.name}.${l}.png`), join(gh, 'layers', `${s.name}.${l}.png`));
         writeText(join(ghSrc, `${s.name}.svg`), screenshotSvg(s.name, s.w, s.h, ctx.version, { tasky: s.tasky }));
       }
-      const h2 = await buildHero({ version: ctx.version, browser, shotsDir: gh, pngDir: gh, linkedSourceDir: ghSrc, linkPrefix: '../' });
-      outputs.push(rel(h2.png), `.github/screenshots/ (${r.shots.filter((x) => x.readme).length} pictures, layers/, source/*.svg)`);
-      writeText(join(ghSrc, 'README.md'), `# Editable sources of the README pictures\n\nGenerated by \`tools/release\` (media step) for BMM ${ctx.version}.\n\n- \`hero.svg\`: the banner, layered (background, screenshot back/front, logo, title, tagline, version). Its screenshots are linked from \`../\`; fonts: Inter, fallback Segoe UI.\n- \`<name>.svg\`: each screenshot as two layers, *screenshot* and *Tasky*, linked from \`../layers/\`.\n\nOpen them in Inkscape, Illustrator or Affinity (Photoshop imports SVG as one layer). Layered **PSD** files of every picture, self-contained, are in \`Release/<version>/media/screenshots/source/\` and \`Release/<version>/media/source/\` (not committed).\n`);
-    } finally { await browser.close(); }
+      for (const f of ['hero.png', 'hero@2x.png', 'hero-flat.png']) copyFileSync(join(sdir, f), join(gh, f));
+      await buildHero3d({ version: ctx.version, browser, shotsDirs: [gh], pngDir: join(mdir, '.gh-hero'), svgDir: join(mdir, '.gh-hero'), psdDir: join(mdir, '.gh-hero'), loop: false, linkedSourceDir: ghSrc, layersDir: join(gh, 'layers'), linkPrefix: '../layers/', log });
+      rmSync(join(mdir, '.gh-hero'), { recursive: true, force: true });
+      await buildHero({ version: ctx.version, browser, shotsDir: gh, pngDir: join(mdir, '.gh-flat'), linkedSourceDir: ghSrc, linkPrefix: '../', name: 'hero-flat' });
+      rmSync(join(mdir, '.gh-flat'), { recursive: true, force: true });
+      outputs.push(`.github/screenshots/ (${shots.filter((x) => x.readme).length} pictures, hero.png, hero@2x.png, hero-flat.png, layers/, source/*.svg)`);
+      writeText(join(ghSrc, 'README.md'), `# Editable sources of the README pictures\n\nGenerated by \`tools/release\` (media step) for BMM ${ctx.version}.\n\n- \`hero.svg\`: the semi-3D banner, layered (background and grid, the three windows and Tasky as raster layers drawn in perspective, linked from \`../layers/hero.*.png\`, then the wordmark, tagline and version).\n- \`hero-flat.svg\`: the flat banner of earlier releases (\`../hero-flat.png\`), its screenshots linked from \`../\`.\n- \`<name>.svg\`: each screenshot as two layers, *screenshot* and *Tasky*, linked from \`../layers/\`.\n\nLayered **PSD** files of every picture (cards, heroes, screenshots), self-contained, with a README listing their layers, are in \`Release/<version>/media/source/psd/\` (not committed).\n`);
+      if (existsSync(join(gh, 'library-light.png'))) notes.push('.github/screenshots/library-light.png is no longer shot (scene removed in 1.0.4): README_EN/README_FR still show it');
+    } finally { await browser?.close(); }
+    // 5. Every PSD in one place, read back and checked, with a README of their layers.
+    const { collectScreenshots, writeSourcesReadme } = await import('./media/sources.mjs');
+    for (const s of collectScreenshots({ mediaDir: mdir, shots, version: ctx.version })) pngs[s.name] = s.png;
+    const v = writeSourcesReadme({ mediaDir: mdir, version: ctx.version, pngs });
+    outputs.push(`Release/${ctx.version}/media/source/ (psd/ ${v.results.length}, svg/, README.md)`);
+    if (v.bad.length) { for (const b of v.bad) ctx.log.fail(`${basename(b.file)}: ${b.problems.join('; ')}`); return { ok: false, outputs, notes: [...notes, `${v.bad.length} PSD(s) failed the read-back check`] }; }
+    ctx.log.ok(`${v.results.length} PSDs read back: sizes, groups, sRGB profile, composite = PNG`);
     await gifsSubStep(ctx, mdir, outputs, notes);
     return { ok: true, outputs, notes };
   },

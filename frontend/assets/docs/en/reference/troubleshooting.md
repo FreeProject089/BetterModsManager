@@ -47,6 +47,36 @@ files are `missing`, `modified` or `added`. Note that the *first* check on a mod
 establishes the baseline — so a failure means something changed since then. See
 [Integrity & hashing](doc-page:how-it-works/integrity-hashing).
 
+<a id="protected-folder"></a>
+### Enabling a mod says the game folder is protected by Windows
+You see « The game folder is protected by Windows » (or, before BMM 1.0.4, « Failed to copy … »)
+when the game is installed under **C:\Program Files**, **C:\Program Files (x86)** or **C:\Windows**.
+Windows lets only a program *run as administrator* write there; BMM normally runs as you, so every
+copy is refused (Windows error 5, « Access is denied »).
+
+Nothing was changed: BMM checks that it can write to the destination **before** it copies anything,
+and if a copy still fails half-way it puts back every file it had already replaced or added.
+
+Three ways out, from quickest to cleanest:
+
+- **Restart BMM as administrator.** The dialog offers it. Windows shows its own permission prompt;
+  answer Yes and BMM comes back on the same profile, able to write there. You will need to do it
+  each time you activate or deactivate mods in that folder, and an elevated BMM cannot be
+  drag-and-dropped onto from a normal Explorer window.
+- **Use the folder the game reads mods from outside Program Files**, when it has one. DCS World
+  reads most mods (liveries, missions, scripts, many aircraft) from
+  `%USERPROFILE%\Saved Games\DCS` (or `DCS.openbeta`): point the profile's game folder there. Mods
+  that must replace files of the game itself (`Mods\aircraft\…\Cockpit\Scripts` and the like) still
+  need the install folder.
+- **Move the game out of Program Files** (for example to `D:\Games\DCS World`): DCS's own updater
+  can repair it in place, Steam can move its library. Then edit the profile's game folder. This
+  is the permanent fix: BMM never needs administrator rights again.
+
+Games from the Microsoft Store / Xbox app live in `C:\Program Files\WindowsApps`, which even an
+administrator cannot write: use the game's own mods folder instead. The profile editor and the
+Library header show a one-line warning when a profile's game folder is in a protected folder and
+BMM is not running as administrator.
+
 ### I cancelled an activation — is my destination folder half-modded?
 
 No. Cancelling kills the worker and then runs an inverse-op undo pass, so partial writes are reverted.

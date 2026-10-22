@@ -1,5 +1,4 @@
 # Référence CLI
-
 L'exécutable qui sert les [outils MCP](doc-page:reference/mcp.fr) de BMM est aussi un **outil en ligne de
 commande**. Même binaire, même dossier d'installation — `bmm-mcp-server.exe`, à côté de
 `BetterModsManager.exe` — et l'appeler avec une sous-commande au lieu de `serve` donne 81

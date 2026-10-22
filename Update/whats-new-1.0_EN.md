@@ -1,6 +1,6 @@
 # What's new in BMM 1.0
 
-1.0 is the release that turned Better Mods Manager from a mod switcher into a platform: profiles that survive a game update, mods recognised by their content, an order you control, plugins and automations, catalogues and repos you can follow, and an optional assistant that never leaves your PC. This page tells the story of 1.0 as a whole (1.0.0, 1.0.1 and 1.0.2). The patch notes that come after it, 1.0.3 and later, are in the list beside it and matter less than this page does.
+1.0 is the release that turned Better Mods Manager from a mod switcher into a platform: profiles that survive a game update, mods recognised by their content, an order you control, plugins and automations, catalogues and repos you can follow, and an optional assistant that never leaves your PC. This page tells the story of 1.0 as a whole (1.0.0, 1.0.1 and 1.0.2). The patch notes that come after it, 1.0.4 and later, are in the list beside it and matter less than this page does.
 
 > Looking for one fix or one number? Pick a version in the list on the left. Looking for what BMM can do today? Read this page first, then the **User guide** in Help & other.
 
@@ -8,7 +8,7 @@
 - **Profiles** keep each game's mods, folders and backups apart. A game update or a reinstall no longer wipes what you built.
 - **ContentID**: a mod is recognised by its files, not by its folder name. The same files give the same identity on any PC, so `.MM` lists, modpacks and repos match the right mods.
 - **Integrity**: SHA-256 fingerprints and a deep audit. A mod with a missing or modified file shows a red shield and cannot be enabled by mistake.
-- **Activation order**: when two mods ship the same file, the last one in the order wins. See it, drag it, share it as a code or a link, re-apply it. The **Conflicts view** (1.0.3) shows who wins each shared file.
+- **Activation order**: when two mods ship the same file, the last one in the order wins. See it, drag it, share it as a code or a link, re-apply it. The **Conflicts view** (1.0.4) shows who wins each shared file.
 - **Mapper**: a visual tree of any mod folder, to see why a game ignores a mod.
 
 ## [MAJOR] Share and follow
@@ -46,5 +46,5 @@
 
 ## Where to go next
 - The patch notes of each version are in the list on the left, newest first.
-- 1.0.3 adds the notification centre, the Conflicts view, panels in their own window and calmer Settings.
+- 1.0.4 adds the notification centre, the Conflicts view, panels in their own window and calmer Settings.
 - New to BMM? Open **Help & other** and start with the **User guide**: each task has short steps, a picture and a **Show me** button.

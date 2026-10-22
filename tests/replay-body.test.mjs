@@ -1,7 +1,7 @@
 // readReplayBody (frontend/src/core/replay-body.ts): the docs replays are stored gzipped under
 // their .bmmreplay name once they pass the size budget, the older ones and every user export are
 // plain JSON. The in-app viewer and the Help hub must read both, or the hub's « Play the recorded
-// session » fails on every story recorded for 1.0.3.
+// session » fails on every story recorded for 1.0.4.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { gzipSync } from 'node:zlib';

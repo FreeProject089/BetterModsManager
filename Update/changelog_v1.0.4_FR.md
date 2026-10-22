@@ -1,8 +1,8 @@
-# Changelog v1.0.3 (depuis 627f956c, le build 1.0.2)
+# Changelog v1.0.4 (depuis 627f956c, le build 1.0.2)
 
-La 1.0.3 apporte un centre de notifications, une vue Conflits qui montre quel mod l'emporte sur chaque fichier partagé, des panneaux qui s'ouvrent dans leur propre fenêtre, sept nouveaux Outils BMM, le suivi d'un dépôt par son adresse ou sa simple IP, un dialogue Serveurs SSH refait, une seule liste pour toutes les sources de catalogues, un créateur de plugins guidé et un éditeur de thème reconstruit. C'est aussi le premier build capable de se relier plus tard à BetterCommunity v2 : cette liaison est livrée désactivée, et rien ne change tant qu'elle n'est pas annoncée.
+La 1.0.4 apporte un centre de notifications, une vue Conflits qui montre quel mod l'emporte sur chaque fichier partagé, des panneaux qui s'ouvrent dans leur propre fenêtre, sept nouveaux Outils BMM, le suivi d'un dépôt par son adresse ou sa simple IP, un dialogue Serveurs SSH refait, une seule liste pour toutes les sources de catalogues, un créateur de plugins guidé et un éditeur de thème reconstruit. C'est aussi le premier build capable de se relier plus tard à BetterCommunity v2 : cette liaison est livrée désactivée, et rien ne change tant qu'elle n'est pas annoncée.
 
-> La 1.0.3 prolonge la version 1.0. L'histoire de la 1.0 dans son ensemble est épinglée en haut de la liste des versions : **Les nouveautés de la 1.0**. Commencez par là si vous découvrez BMM, ou si vous avez sauté les versions 1.0.0 à 1.0.2.
+> La 1.0.4 prolonge la version 1.0. L'histoire de la 1.0 dans son ensemble est épinglée en haut de la liste des versions : **Les nouveautés de la 1.0**. Commencez par là si vous découvrez BMM, ou si vous avez sauté les versions 1.0.0 à 1.0.2.
 
 ## [NEW] Centre de notifications
 - Un seul endroit pour tous les messages, avec un seul compteur de non lus (aussi sur l'icône de la barre des tâches). Les messages sont groupés selon leur origine : Mises à jour, Dépôts suivis, Planificateur, Tâches de fond, BetterCommunity et BMM lui-même.
@@ -69,17 +69,28 @@ La 1.0.3 apporte un centre de notifications, une vue Conflits qui montre quel mo
 ## [IMPROVED] Paramètres, raccourcis et navigation
 - **Paramètres** : toutes les cartes ont la même anatomie (une phrase d'aide, des lignes, un pied de carte, une zone de danger) et un lien « En savoir plus » vers la documentation. Les cartes sont réordonnées selon l'usage, par groupes : Identité & API passe dans Comptes et services, l'enregistreur de session dans Application. **Interface et notifications** est une carte à onglets (Notifications, Tasky, Son, Barre d'outils) avec un repli « Plus d'options ». **Modifier la disposition** permet de faire glisser ou de masquer des cartes, et la recherche trouve un réglage par ses mots.
 - **Raccourcis clavier** : une table avec recherche, un filtre « Modifiés seulement », import et export, et un « Tout réinitialiser » qui garde vos propres raccourcis. **Nouveau raccourci** lie des touches à une commande, une carte des Paramètres, un profil, un modpack ou une automatisation, partout ou sur une seule page ; les touches réservées à Windows ou à BMM sont refusées, et un conflit dit ce qui utilise déjà les touches.
-- **Personnaliser la navigation**, refaite : un aperçu de la barre latérale à faire glisser, des sections, et un « Ajouter un bouton » guidé (une page BMM, un outil BMM, un site web ou votre propre page). Vos pages partent d'un modèle avec toutes les permissions désactivées, chacune avec un niveau de risque, un aperçu en bac à sable et un sélecteur d'icônes. Le réglage rapide « Local + internet » n'active plus le presse-papiers.
+- Les raccourcis acceptent aussi les boutons de la souris, la molette et une manette, et peuvent déclencher n'importe quel contrôle de BMM désigné à l'écran. L'import de raccourcis affiche d'abord une revue, avec ceux dont la cible est absente de ce PC.
+- **Personnaliser la navigation**, refaite : un aperçu de la barre latérale à faire glisser, des sections, et un « Ajouter un bouton » guidé (une page BMM, un outil BMM, un site web ou votre propre page). Vos pages partent d'un modèle avec toutes les permissions désactivées, chacune avec un niveau de risque, un aperçu en bac à sable et un sélecteur d'icônes (il charge d'autres icônes en défilant, et **Mes icônes** s'importent et s'exportent). Le réglage rapide « Local + internet » n'active plus le presse-papiers.
 
 ## [IMPROVED] Détails d'un mod, Modpacks et Dépôt Serveur
-- **Détails d'un mod** : un tiroir latéral à onglets (Aperçu, Détails, Fichiers, Conflits et ordre, Mises à jour et liens). Les flèches haut et bas, ou les boutons ‹ ›, passent au mod suivant ou précédent ; Échap le ferme, et les modifications non enregistrées demandent confirmation avant d'être abandonnées.
+- **Détails d'un mod** : une fenêtre centrée à onglets (Aperçu, Détails, Fichiers, Conflits et ordre, Mises à jour et liens). Les flèches haut et bas, ou les boutons ‹ ›, passent au mod suivant ou précédent ; Échap le ferme, et les modifications non enregistrées demandent confirmation avant d'être abandonnées.
 - **Modpacks** : une barre d'aperçu (recherche, Actifs ou Inactifs, tri, grille ou liste), une action principale par carte avec un menu « … », une création en quatre étapes (Bases, Mods, Options, Récapitulatif), et l'import depuis un fichier, un lien ou un catalogue. « Exporter et partager » affiche les ID du pack.
 - **Dépôt Serveur** : l'onglet Sync tient en trois étapes (adresse, où vont les mods, synchroniser) et l'onglet Host en deux groupes, avec une bande de quatre étapes pour servir. Une source protégée sans clé privée propose « En créer une » ou « Ajouter… » au lieu d'une impasse, et « Gérer les clés » mène au trousseau.
+
+## [NEW] Des automatisations façon Blueprints, et des paquets d'automatisation signés
+- L'éditeur d'Automatisations fonctionne comme Blueprints : ports et fils, recherche pour ajouter un nœud, cadres de commentaire, reroutes, alignement et mise en page automatique, copier-coller, dossiers et étiquettes, et un inspecteur qui valide chaque champ pendant la saisie. Le sélecteur Blocs / Code / Flux s'affiche correctement dès la première ouverture et garde le mode dans lequel tu l'as laissé (les flèches passent de l'un à l'autre).
+- Les **paquets d'automatisation** en `.bmmbundle` sont signés : fichiers, listes de mods, installation confinée au dossier prévu avec reçus, vérification de la liste et des fichiers, rapport de connexion signé et lancement du jeu.
+- Un modèle prêt à l'emploi, la **porte d'entrée d'un serveur DCS**, avec son crochet côté serveur : un joueur ne rejoint la partie que si ses mods correspondent.
 
 ## [NEW] Historique des changements, Studio de traduction et notes de version
 - **L'historique des changements** est une chronologie jour par jour des mods, profils, réglages, mises à jour et dépôts, avec des filtres par type, une recherche et un Avant et Après pour chaque changement. L'annulation est proposée pour la modification d'un mod, son activation ou désactivation, et les réglages. Vous choisissez combien de temps il est gardé, et l'exportez en CSV ou JSON. Les secrets ne sont jamais stockés.
 - **Les notes de version** ont un onglet **Versions** : chaque version dans une liste avec recherche, avec les compteurs de nouveautés, d'améliorations et de corrections.
-- **Le Studio de traduction** remplace le bac à sable de traduction : une fenêtre flottante qui peut se détacher, des filtres (Manquantes, Modifiées, Identiques), des pastilles de variables avec vérifications, vos brouillons visibles en direct dans toute l'app, import et export, et une nouvelle langue en quelques clics.
+- **Le Studio de traduction** remplace le bac à sable de traduction : une fenêtre flottante qui peut se détacher, des filtres (Manquantes, Modifiées, Identiques), des pastilles de variables avec vérifications, vos brouillons visibles en direct dans toute l'app, import et export, et une nouvelle langue en quelques clics. Le panneau **Utilisée dans** d'une clé liste où elle apparaît dans BMM, avec **Y aller** pour ouvrir cet écran.
+
+## [IMPROVED] Laya et le hub d'aide
+- **Laya** : les modèles LM Studio et Ollama sont de nouveau détectés (l'adresse `/v1`, les messages d'erreur, les embeddings). Une nouvelle fenêtre à sept onglets, et une rédaction avec préréglages : tu vois exactement ce qui sera envoyé, la réponse arrive au fil de l'eau, puis tu relis un diff et tu peux annuler.
+- **Aide** : un guide **Pas à pas** avec des étapes à cocher, des boutons **Montre-moi** et des GIF à lancer d'un clic. **Nouveautés de la 1.0** est épinglé dans les notes de version.
+- **Les exports des DevTools** (rapports, rejeux, journaux) indiquent où le fichier a été enregistré. Les rejeux de plantage et de session sont de nouveau lisibles.
 
 ## [IMPROVED] Tutoriels, thèmes et intro de démarrage
 - **Le guide des tutoriels** peut se détacher dans sa propre fenêtre. Tous les tutoriels ont été réécrits, avec de nouvelles parties (suivre un dépôt, conflits et ordre d'activation, notifications, créer un plugin, Outils BMM) ; le tutoriel des Automatisations est désormais dans Plugins & API.
@@ -104,12 +115,15 @@ La 1.0.3 apporte un centre de notifications, une vue Conflits qui montre quel mo
 | `bmm-macos` | `bmm-cobalt` (Cobalt) |
 
 ## [NEW] Prêt pour BetterCommunity v2 (désactivé)
-- La 1.0.3 sait parler à BetterCommunity v2, la prochaine version du service BetterCommunity. **Elle est livrée désactivée** : tant que la v2 n'est pas annoncée, BMM parle à BetterCommunity exactement comme la 1.0.2, adresse pour adresse.
-- À l'ouverture de la v2, l'équipe BetterCommunity l'active depuis le fichier de liens que BMM lit déjà au démarrage : les copies 1.0.3 installées suivent sans nouvelle mise à jour. BMM n'utilise la v2 qu'après qu'elle a répondu à un contrôle de santé ; sinon il reste sur le service actuel pour la session. Une ligne dans `app.cfg` peut garder une installation sur le service actuel quoi que dise le fichier de liens.
+- La 1.0.4 sait parler à BetterCommunity v2, la prochaine version du service BetterCommunity. **Elle est livrée désactivée** : tant que la v2 n'est pas annoncée, BMM parle à BetterCommunity exactement comme la 1.0.2, adresse pour adresse.
+- À l'ouverture de la v2, l'équipe BetterCommunity l'active depuis le fichier de liens que BMM lit déjà au démarrage : les copies 1.0.4 installées suivent sans nouvelle mise à jour. BMM n'utilise la v2 qu'après qu'elle a répondu à un contrôle de santé ; sinon il reste sur le service actuel pour la session. Une ligne dans `app.cfg` peut garder une installation sur le service actuel quoi que dise le fichier de liens.
 - Une fois activée : une carte **Compte BetterCommunity lié** dans les Paramètres, où vous vous connectez en approuvant un code court sur le site (aucun mot de passe saisi dans BMM ; se déconnecter révoque la connexion). Les retours, les notifications, la page Communauté et les suggestions de Laya utilisent alors ce compte. Les mises à jour restent vérifiées avec les manifestes signés de la version, exactement comme avant.
 - Le consentement reste la règle : la télémétrie et les reçus de consentement ne sont envoyés que si vous avez activé la télémétrie, et si BetterCommunity v2 publie une version plus récente des Conditions ou de la Politique de confidentialité, BMM l'affiche et demande Accepter, Refuser ou Plus tard, avec un reçu gardé dans **Mes consentements**.
 
 ## [FIXED]
+- **Confirmations** : chaque confirmation, alerte et saisie du système est maintenant un dialogue de BMM. Huit actions qui demandaient une confirmation qui ne s'affichait jamais (et ne s'exécutaient donc jamais) s'exécutent désormais.
+- **Ordre d'activation** : le menu du clic droit reçoit enfin les clics et se ferme quand tu cliques en dehors.
+- **Jeux sous Program Files** (le dossier par défaut de DCS World) : activer un mod échouait avec « Failed to copy … » et rien d'autre. BMM vérifie désormais qu'il peut écrire dans le dossier du jeu avant de copier quoi que ce soit, remet ce qu'il avait copié si une copie échoue quand même en cours de route, donne la raison de Windows, et propose « Redémarrer BMM en administrateur » ou « En savoir plus » (Dépannage). L'éditeur de profil et l'en-tête de la Bibliothèque préviennent quand le dossier du jeu d'un profil est dans un dossier protégé par Windows.
 - **Catalogue d'applications** : « une source n'a pas répondu » s'affichait chez des personnes qui n'avaient ajouté aucune source. Les adresses de réserve vides sont ignorées, les fichiers `.bmmbundle` suivis ne sont plus comptés comme des échecs (et en ajouter un depuis Sources survit maintenant à un redémarrage), et les adresses de flux avec des paramètres `?…` restent intactes. Sans aucune source active, la page le dit et propose d'en ajouter une.
 - **Dépôts suivis avec mot de passe de téléchargement** : ils échouaient à chaque vérification planifiée. Le mot de passe est désormais enregistré scellé sur ce PC, jamais dans le fichier de réglages de BMM, et oublié quand vous cessez de suivre le dépôt.
 - `192.168.1.20:8000` et `http://192.168.1.20:8000/repo.json` sont désormais le même dépôt suivi, pas deux.
@@ -119,6 +133,7 @@ La 1.0.3 apporte un centre de notifications, une vue Conflits qui montre quel mo
 - **Référence de l'API** : une partie n'était qu'en français et ignorait le thème ; un endpoint sans champ n'affiche plus de tableau vide.
 - **Thèmes** : `bmm://theme/apply` applique aussi les thèmes intégrés (il répondait « Thème introuvable »). Importer un thème dont l'identifiant est déjà pris par un autre thème ne l'écrase plus. « Désigner à l'écran » reconnaît maintenant n'importe quelle couleur, plus seulement neuf couleurs fixes.
 - Les boutons de l'éditeur de navigation suivent l'ordre de tous les autres dialogues.
+- **Automatisations** : le sélecteur Blocs / Code / Flux pouvait être mal dimensionné à la première ouverture ; l'en-tête et le pied de l'éditeur restent sur leurs lignes dans une fenêtre étroite. Les espacements de l'onglet, de l'éditeur, de la barre latérale, de la liste et de l'état vide sont réguliers.
 
 ## [SECURITY]
 - **SSH** : un serveur vu pour la première fois affiche l'empreinte de sa clé et demande « Approuver ce serveur » avant que quoi que ce soit lui soit envoyé. Une clé changée est refusée, avec les deux empreintes côte à côte.
@@ -128,4 +143,5 @@ La 1.0.3 apporte un centre de notifications, une vue Conflits qui montre quel mo
 - Le contournement du proxy du système ne concerne que les adresses de dépôts sur votre PC ou votre réseau local. Les blocages d'adresses du réseau local pour les tâches planifiées, les points d'accès IA et les pages personnalisées ne changent pas.
 
 ## Version
-- Une seule version partout : 1.0.3.
+- Les jeux de démonstration et le pack de mods inutilisés qui accompagnaient les tutoriels sont retirés, l'installation est plus légère.
+- Une seule version partout : 1.0.4.

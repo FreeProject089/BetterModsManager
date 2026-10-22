@@ -890,8 +890,28 @@ pub fn replay_spool_finalize(
         let _ = std::fs::create_dir_all(&app_dir);
         app_dir.join("last_crash_session.bmmreplay")
     };
-    // Write to a temp file and rename, so a crash mid-write can never leave a truncated
-    // .bmmreplay where a complete one used to be.
+    assemble_replay(&files, &meta_json, &console_json, &rust_log, &out_path, &id, &|doc| {
+        crate::commands::doc_sign::sign_doc(&app_handle, doc, "bmmreplay");
+    })?;
+    Ok(out_path.to_string_lossy().to_string())
+}
+
+/// The streaming assembly of `replay_spool_finalize`, without the app handle: the spool
+/// segments `files` (one rrweb event per line) into `out_path` as ONE envelope,
+///   { <meta fields>, "events": [...], "console": [...], "rustLog": "...", "bmm_signature_of": {...} }
+/// which is the shape every reader accepts (core/replay-body.ts `parseReplayText`). `sign`
+/// signs the small digest document (the command passes `doc_sign::sign_doc`, the tests a no-op).
+/// Written to a temp file and renamed, so a crash mid-write never leaves a truncated file where a
+/// complete one was.
+pub(crate) fn assemble_replay(
+    files: &[PathBuf],
+    meta_json: &str,
+    console_json: &str,
+    rust_log: &str,
+    out_path: &Path,
+    id: &str,
+    sign: &dyn Fn(&mut Value),
+) -> Result<(), String> {
     let tmp_path = out_path.with_extension("bmmreplay.part");
     {
         let mut out = std::io::BufWriter::new(std::fs::File::create(&tmp_path).map_err(|e| e.to_string())?);
@@ -910,7 +930,7 @@ pub fn replay_spool_finalize(
         let mut event_count = 0usize;
         let mut first = true;
         let mut skipped = 0usize;
-        for seg in &files {
+        for seg in files {
             let f = match std::fs::File::open(seg) { Ok(f) => f, Err(_) => continue };
             for line in std::io::BufRead::lines(std::io::BufReader::new(f)) {
                 let line = match line { Ok(l) => l, Err(_) => continue };
@@ -955,7 +975,7 @@ pub fn replay_spool_finalize(
             "events_sha256": digest,
             "events": event_count,
         });
-        crate::commands::doc_sign::sign_doc(&app_handle, &mut sig_doc, "bmmreplay");
+        sign(&mut sig_doc);
         out.write_all(b",\"bmm_signature_of\":").map_err(|e| e.to_string())?;
         out.write_all(serde_json::to_string(&sig_doc).unwrap_or_else(|_| "null".into()).as_bytes())
             .map_err(|e| e.to_string())?;
@@ -963,8 +983,8 @@ pub fn replay_spool_finalize(
         out.write_all(b"}").map_err(|e| e.to_string())?;
         out.flush().map_err(|e| e.to_string())?;
     }
-    std::fs::rename(&tmp_path, &out_path).map_err(|e| e.to_string())?;
-    Ok(out_path.to_string_lossy().to_string())
+    std::fs::rename(&tmp_path, out_path).map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 /// Drop a spool's contents (end of session, or the user turned the recorder off).
@@ -989,6 +1009,60 @@ pub fn save_local_replay(app_handle: AppHandle, content: String) -> Result<Strin
     // called by the caller after saving — so no hard 20-cap here anymore.
 
     Ok(path.to_string_lossy().to_string())
+}
+
+// ─── Reading a .bmmreplay back ───────────────────────────────────────────────────────
+//
+// « The .bmmreplay from crash reports and sessions don't work: unreadable. » The in-app player
+// read saved and imported files with `fetch(convertFileSrc(path))`: the asset protocol only
+// serves $APP / $APPDATA / $RESOURCE (tauri.conf.json), so a replay exported to the Desktop or
+// picked from Downloads answered 403 and the viewer said « Unreadable file » whatever was in it.
+// It now asks the core for the bytes, which also inflates the gzipped form
+// (tools/release/shrink-replays.mjs) here instead of in each reader.
+
+/// The most a replay may weigh once inflated: the spool's rolling window is 512 MiB.
+pub const REPLAY_READ_MAX_BYTES: u64 = 768 * 1024 * 1024;
+
+/// A replay file's bytes as JSON text: gzip (1f 8b) inflated, a UTF-8 BOM dropped. Errors
+/// say what is wrong in words, for the viewer's message.
+pub fn replay_text_from_bytes(bytes: &[u8]) -> Result<String, String> {
+    let raw: std::borrow::Cow<[u8]> = if bytes.len() >= 2 && bytes[0] == 0x1f && bytes[1] == 0x8b {
+        use std::io::Read;
+        let mut out = Vec::new();
+        flate2::read::MultiGzDecoder::new(bytes)
+            .take(REPLAY_READ_MAX_BYTES + 1)
+            .read_to_end(&mut out)
+            .map_err(|e| format!("the file looks gzipped but does not inflate: {e}"))?;
+        if out.len() as u64 > REPLAY_READ_MAX_BYTES {
+            return Err(format!("the recording is larger than {} MB once inflated", REPLAY_READ_MAX_BYTES >> 20));
+        }
+        std::borrow::Cow::Owned(out)
+    } else {
+        std::borrow::Cow::Borrowed(bytes)
+    };
+    let raw = raw.strip_prefix(&[0xef, 0xbb, 0xbf][..]).unwrap_or(&raw);
+    String::from_utf8(raw.to_vec()).map_err(|_| "the file is not text (not a .bmmreplay, or damaged)".to_string())
+}
+
+/// Read a replay file the person picked, saved or exported: `.bmmreplay`, `.json` or their
+/// `.gz`, nothing else (the webview names the path). Returns the JSON text.
+#[tauri::command]
+pub async fn read_replay_file(path: String) -> Result<String, String> {
+    let p = PathBuf::from(&path);
+    let name = p.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
+    if !(name.ends_with(".bmmreplay") || name.ends_with(".json") || name.ends_with(".bmmreplay.gz") || name.ends_with(".json.gz")) {
+        return Err("refused: not a .bmmreplay or .json file".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let len = std::fs::metadata(&p).map_err(|e| format!("cannot open {}: {e}", p.display()))?.len();
+        if len > REPLAY_READ_MAX_BYTES {
+            return Err(format!("the recording is larger than {} MB", REPLAY_READ_MAX_BYTES >> 20));
+        }
+        let bytes = std::fs::read(&p).map_err(|e| format!("cannot read {}: {e}", p.display()))?;
+        replay_text_from_bytes(&bytes)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Save a Replay Studio video clip next to the `.bmmreplay` files.
@@ -1224,5 +1298,118 @@ mod consent_tests {
         assert_eq!(consent_choice(None, true, &c), "accepted", "the extras are not part of « all »");
         c.insert("perf".to_string(), false);
         assert_eq!(consent_choice(Some(false), true, &c), "custom");
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod replay_readback_tests {
+    //! « The .bmmreplay from crash reports and sessions don't work: unreadable. » Each real
+    //! writer produces a sample here, and the sample is kept in tests/fixtures/replays/ for
+    //! tests/replay-readers.test.mjs, which reads it with the app's own reader
+    //! (core/replay-body.ts). A writer and a reader that drift apart fail on one side or the other.
+    use super::*;
+
+    /// The events a recording opens with: Meta (4), FullSnapshot (2), then incremental (3).
+    pub(crate) const SAMPLE_EVENTS: [&str; 4] = [
+        r#"{"type":4,"data":{"href":"tauri://localhost/","width":1280,"height":800},"timestamp":1000}"#,
+        r#"{"type":2,"data":{"node":{"type":0,"childNodes":[],"id":1},"initialOffset":{"left":0,"top":0}},"timestamp":1001}"#,
+        r#"{"type":3,"data":{"source":2,"type":2,"id":1,"x":10,"y":10},"timestamp":1500}"#,
+        r#"{"type":3,"data":{"source":0,"texts":[],"attributes":[],"removes":[],"adds":[]},"timestamp":2000}"#,
+    ];
+
+    pub(crate) fn scratch(tag: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("bmm-replay-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    /// Write `name` in tests/fixtures/replays when its bytes changed (no churn otherwise).
+    pub(crate) fn write_fixture(name: &str, bytes: &[u8]) {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("tests").join("fixtures").join("replays");
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join(name);
+        if std::fs::read(&p).ok().as_deref() != Some(bytes) {
+            std::fs::write(&p, bytes).unwrap();
+        }
+    }
+
+    /// The spool as `replay_spool_append` leaves it: two segments, the second opening with
+    /// its own checkout, and a final line a hard kill cut in half.
+    fn sample_spool(dir: &Path) -> Vec<PathBuf> {
+        let a = dir.join("seg-000000.ndjson");
+        let b = dir.join("seg-000001.ndjson");
+        std::fs::write(&a, format!("{}\n{}\n{}\n", SAMPLE_EVENTS[0], SAMPLE_EVENTS[1], SAMPLE_EVENTS[2])).unwrap();
+        std::fs::write(&b, format!("{}\n{}\n{}\n{{\"type\":3,\"data\":{{\"sou", SAMPLE_EVENTS[0], SAMPLE_EVENTS[1], SAMPLE_EVENTS[3])).unwrap();
+        vec![a, b]
+    }
+
+    const META: &str = r#"{"bmmReplay":1,"app":"BetterModsManager","createdAt":"2026-10-21T00:00:00.000Z","masked":true,"durationMs":1000}"#;
+
+    pub(crate) fn finalized_sample() -> Vec<u8> {
+        // One folder per call: the tests run in parallel and three of them build a sample.
+        static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let dir = scratch(&format!("finalize{}", N.fetch_add(1, std::sync::atomic::Ordering::Relaxed)));
+        let files = sample_spool(&dir);
+        let out = dir.join("out.bmmreplay");
+        assemble_replay(&files, META, r#"[{"t":1,"level":"log","msg":"hello"}]"#, "rust log line\n", &out, "test", &|_| {}).unwrap();
+        let bytes = std::fs::read(&out).unwrap();
+        assert!(!dir.join("out.bmmreplay.part").exists(), "the temp file is renamed away");
+        let _ = std::fs::remove_dir_all(&dir);
+        bytes
+    }
+
+    #[test]
+    fn the_spool_finalize_writes_one_valid_envelope_with_every_whole_event() {
+        let bytes = finalized_sample();
+        let v: Value = serde_json::from_slice(&bytes).expect("valid JSON");
+        assert_eq!(v["bmmReplay"], 1);
+        let events = v["events"].as_array().unwrap();
+        assert_eq!(events.len(), 6, "the half-written last line is dropped, the rest kept");
+        assert_eq!(events[0]["type"], 4);
+        assert_eq!(events[1]["type"], 2);
+        assert_eq!(v["console"][0]["msg"], "hello");
+        assert_eq!(v["rustLog"], "rust log line\n");
+        assert_eq!(v["bmm_signature_of"]["events"], 6);
+        write_fixture("spool-finalize.bmmreplay", &bytes);
+    }
+
+    #[test]
+    fn a_gzipped_replay_reads_back_as_the_same_text() {
+        use std::io::Write as _;
+        let plain = finalized_sample();
+        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        gz.write_all(&plain).unwrap();
+        let gz = gz.finish().unwrap();
+        assert_eq!(&gz[..2], &[0x1f, 0x8b]);
+        assert_eq!(replay_text_from_bytes(&gz).unwrap().as_bytes(), &plain[..]);
+        // The shrink tool keeps the .bmmreplay name for the gzipped form.
+        write_fixture("gzipped.bmmreplay", &gz);
+        // A BOM (a file saved by an editor) is not part of the JSON.
+        let mut bom = vec![0xef, 0xbb, 0xbf];
+        bom.extend_from_slice(&plain);
+        assert_eq!(replay_text_from_bytes(&bom).unwrap().as_bytes(), &plain[..]);
+    }
+
+    #[test]
+    fn damaged_files_are_refused_in_words() {
+        let e = replay_text_from_bytes(&[0x1f, 0x8b, 0, 1, 2, 3]).unwrap_err();
+        assert!(e.contains("gzipped"), "{e}");
+        let e = replay_text_from_bytes(&[0xff, 0xfe, 0xfd]).unwrap_err();
+        assert!(e.contains("not text"), "{e}");
+    }
+
+    #[test]
+    fn reading_is_limited_to_replay_files() {
+        let e = tauri::async_runtime::block_on(read_replay_file("C:/Windows/win.ini".into())).unwrap_err();
+        assert!(e.starts_with("refused"), "{e}");
+        let dir = scratch("read");
+        let p = dir.join("x.bmmreplay");
+        std::fs::write(&p, finalized_sample()).unwrap();
+        let text = tauri::async_runtime::block_on(read_replay_file(p.to_string_lossy().to_string())).unwrap();
+        assert!(serde_json::from_str::<Value>(&text).is_ok());
+        let e = tauri::async_runtime::block_on(read_replay_file(dir.join("missing.bmmreplay").to_string_lossy().to_string())).unwrap_err();
+        assert!(e.starts_with("cannot open"), "{e}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -1,5 +1,4 @@
 # Dependencies & conflicts, as a tree
-
 Every mod already carries a list of the mods it needs, and BMM already knows which mods fight over
 which files. What was missing was the **shape**. A flat list of pairs answers *"does A conflict with
 B?"* and never answers the question you actually have before installing or removing something:

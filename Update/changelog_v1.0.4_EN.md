@@ -1,8 +1,8 @@
-# Changelog v1.0.3 (since 627f956c, the 1.0.2 build)
+# Changelog v1.0.4 (since 627f956c, the 1.0.2 build)
 
-1.0.3 brings a notification centre, a Conflicts view that shows which mod wins each shared file, panels that pop out into their own window, seven more BMM Tools, following a repo by its address or plain IP, a rebuilt SSH servers dialog, one list for every catalogue source, a guided plugin creator and a rebuilt theme editor. It is also the first build able to link to BetterCommunity v2 later on: that link ships switched off, and nothing changes until it is announced.
+1.0.4 brings a notification centre, a Conflicts view that shows which mod wins each shared file, panels that pop out into their own window, seven more BMM Tools, following a repo by its address or plain IP, a rebuilt SSH servers dialog, one list for every catalogue source, a guided plugin creator and a rebuilt theme editor. It is also the first build able to link to BetterCommunity v2 later on: that link ships switched off, and nothing changes until it is announced.
 
-> 1.0.3 builds on the 1.0 release. The story of 1.0 as a whole is pinned at the top of the version list: **What's new in 1.0**. Start there if you are new to BMM, or if you skipped 1.0.0 to 1.0.2.
+> 1.0.4 builds on the 1.0 release. The story of 1.0 as a whole is pinned at the top of the version list: **What's new in 1.0**. Start there if you are new to BMM, or if you skipped 1.0.0 to 1.0.2.
 
 ## [NEW] Notification centre
 - One place for every message, with one unread count (also on the taskbar icon). Messages are grouped by where they come from: Updates, Followed repos, Scheduler, Background jobs, BetterCommunity and BMM itself.
@@ -69,17 +69,28 @@
 ## [IMPROVED] Settings, shortcuts and navigation
 - **Settings**: every card has the same anatomy (a one-sentence help line, rows, a footer, a danger zone) and a « Learn more » link to the documentation. The cards are reordered by use, in groups: Identity & API moved to Accounts and services, the session recorder to Application. **Interface and notifications** is one card with tabs (Notifications, Tasky, Sound, Toolbar) and a « More options » fold. **Edit layout** lets you drag or hide cards, and the search box finds a setting by its words.
 - **Keyboard shortcuts** are a searchable table with a « Changed only » filter, import and export, and a « Reset all » that keeps your own shortcuts. **New shortcut** binds keys to a command, a Settings card, a profile, a modpack or an automation, for everywhere or one page; keys kept for Windows or BMM are refused, and a clash says what already uses the keys.
-- **Customise navigation**, rebuilt: a sidebar preview you can drag, sections, and a guided « Add a button » (a BMM page, a BMM tool, a website or your own page). Your own pages start from a template with every permission off, each with a risk level, a sandboxed preview and an icon picker. The « Local + internet » quick set no longer turns the clipboard on.
+- Shortcuts also take mouse buttons, the wheel and a gamepad, and can fire any BMM control you pick on screen. Importing shortcuts shows a review first, with the ones whose target is missing on this PC.
+- **Customise navigation**, rebuilt: a sidebar preview you can drag, sections, and a guided « Add a button » (a BMM page, a BMM tool, a website or your own page). Your own pages start from a template with every permission off, each with a risk level, a sandboxed preview and an icon picker (it loads more icons as you scroll, and **My icons** can be imported and exported). The « Local + internet » quick set no longer turns the clipboard on.
 
 ## [IMPROVED] Mod details, Modpacks and Server Repo
-- **Mod details** open in a side drawer with tabs (Overview, Details, Files, Conflicts & order, Updates & links). Up and down arrows, or the ‹ › buttons, move to the next or previous mod; Escape closes it, and unsaved changes ask before they are discarded.
+- **Mod details** open in a centred window with tabs (Overview, Details, Files, Conflicts & order, Updates & links). Up and down arrows, or the ‹ › buttons, move to the next or previous mod; Escape closes it, and unsaved changes ask before they are discarded.
 - **Modpacks**: an overview bar (search, Active or Inactive, sort, grid or list), one main action per card with a « … » menu, a four-step create flow (Basics, Mods, Options, Review), and Import from a file, a link or a catalogue. « Export & share » shows the pack IDs.
 - **Server Repo**: the Sync tab is three steps (address, where mods go, synchronise) and the Host tab is two groups, with a four-step strip for serving. A protected source with no private key offers « Create one » or « Add… » instead of a dead end, and « Manage keys » lands on the keyring.
+
+## [NEW] Automations like Blueprints, and signed automation packages
+- The Automations editor works like Blueprints: ports and wires, search to add a node, comment frames, reroutes, align and auto-layout, copy and paste, folders and tags, and an inspector that validates each field as you type. The Blocks / Code / Flow switch is drawn right on a first open and keeps the mode you left it in (arrow keys move between the three).
+- **Automation packages** in `.bmmbundle` are signed: files, mod lists, a path-confined install with receipts, list and file verification, a signed join report and a game launch.
+- A ready-made template, the **DCS server join gate**, with its server-side hook: a player joins only if their mods match.
 
 ## [NEW] Change history, Translation studio and release notes
 - **Change history** is a day-by-day timeline of mods, profiles, settings, updates and repos, with type filters, search and a Before and After for each change. Undo is offered for edits to a mod, enabling or disabling it, and settings. You choose how long it is kept, and export it as CSV or JSON. Secrets are never stored.
 - **Release notes** have a **Versions** tab: every version in one searchable list, with counts of what is new, improved and fixed.
-- **Translation studio** replaces the translation sandbox: a floating window that can pop out, filters (Missing, Changed, Same), variable chips with checks, your drafts shown live in the whole app, import and export, and a new language in a few clicks.
+- **Translation studio** replaces the translation sandbox: a floating window that can pop out, filters (Missing, Changed, Same), variable chips with checks, your drafts shown live in the whole app, import and export, and a new language in a few clicks. A key's **Used in** panel lists where it appears in BMM, with **Go there** to open that screen.
+
+## [IMPROVED] Laya and the Help hub
+- **Laya**: LM Studio and Ollama models are found again (the `/v1` address, error messages, embeddings). A new seven-tab dialog, and drafting with presets: see exactly what will be sent, watch the answer stream in, then review a diff and undo.
+- **Help** has a **Step by step** guide: tickable steps with **Show me** buttons and click-to-play GIFs. **What's new in 1.0** is pinned in the release notes.
+- **DevTools exports** (reports, replays, logs) say where the file went. Crash and session replays are readable again.
 
 ## [IMPROVED] Tutorials, themes and the start-up intro
 - The **tutorial guide** can pop out into its own window. Every tutorial was rewritten, with new parts (follow a repo, conflicts and activation order, notifications, create a plugin, BMM Tools); the Automations tutorial now lives in Plugins & API.
@@ -104,12 +115,15 @@
 | `bmm-macos` | `bmm-cobalt` (Cobalt) |
 
 ## [NEW] Ready for BetterCommunity v2 (switched off)
-- 1.0.3 can talk to BetterCommunity v2, the next version of the BetterCommunity service. **It ships switched off**: until v2 is announced, BMM talks to BetterCommunity exactly as 1.0.2 does, address for address.
-- When v2 opens, the BetterCommunity team turns it on from the links file BMM already reads at start, so installed 1.0.3 copies follow without another update. BMM only uses v2 after it has answered a health check; otherwise it stays on the current service for that session. A line in `app.cfg` can keep an install on the current service whatever the links file says.
+- 1.0.4 can talk to BetterCommunity v2, the next version of the BetterCommunity service. **It ships switched off**: until v2 is announced, BMM talks to BetterCommunity exactly as 1.0.2 does, address for address.
+- When v2 opens, the BetterCommunity team turns it on from the links file BMM already reads at start, so installed 1.0.4 copies follow without another update. BMM only uses v2 after it has answered a health check; otherwise it stays on the current service for that session. A line in `app.cfg` can keep an install on the current service whatever the links file says.
 - Once on: a **Linked BetterCommunity account** card in Settings, where you sign in by approving a short code on the website (no password typed into BMM; signing out revokes the sign-in). Feedback, notifications, the Community page and Laya's suggestions then use that account. Updates are still checked against the release's signed manifests, exactly as before.
 - Consent stays the rule: telemetry and consent receipts are only sent if you turned telemetry on, and if BetterCommunity v2 publishes a newer version of the Terms or Privacy Policy, BMM shows it and asks Accept, Refuse or Later, with a receipt kept in **My consents**.
 
 ## [FIXED]
+- **Confirmations**: every system confirm, alert and prompt is now a BMM dialog. Eight actions that asked for a confirmation which never showed (so they never ran) now run.
+- **Activation order**: the right-click menu now receives its clicks and closes when you press outside it.
+- **Games under Program Files** (DCS World's default folder): enabling a mod failed with « Failed to copy … » and nothing else. BMM now checks that it can write to the game folder before it copies anything, puts back what it had copied if a copy still fails half-way, gives Windows' own reason, and offers « Restart BMM as administrator » or « Learn more » (Troubleshooting). The profile editor and the Library header warn when a profile's game folder is in a folder Windows protects.
 - **App catalogue**: « a source did not answer » showed for people who had added no source. Empty placeholder addresses are skipped, followed `.bmmbundle` files are no longer counted as failures (and adding one from Sources now survives a restart), and feed addresses with a `?query` are kept intact. With no source switched on, the page says so and offers to add one.
 - **Followed repos with a download password** failed every scheduled check. The password is now saved sealed on this PC, never in BMM's settings file, and is forgotten when you stop following the repo.
 - `192.168.1.20:8000` and `http://192.168.1.20:8000/repo.json` are now the same followed repo, not two.
@@ -119,6 +133,7 @@
 - **API reference**: parts of it were in French only and ignored the theme; an endpoint without fields no longer shows an empty table.
 - **Themes**: `bmm://theme/apply` now applies built-in themes too (it answered « Theme not found »). Importing a theme whose id is already used by a different theme no longer overwrites it. « Pick on screen » now matches any colour, not only nine fixed ones.
 - The navigation editor's buttons follow the order of every other dialog.
+- **Automations**: the Blocks / Code / Flow switch could be mis-sized on the first open; editor header and footer stay on their rows in a narrow window. Spacing of the tab, editor, sidebar, list and empty state is even.
 
 ## [SECURITY]
 - **SSH**: a server seen for the first time shows its key fingerprint and asks « Trust this server » before anything is sent to it. A changed key is refused, with both fingerprints side by side.
@@ -128,4 +143,5 @@
 - Bypassing the system proxy applies only to repo addresses on your PC or local network. BMM's blocks on local-network addresses for scheduled tasks, AI endpoints and custom pages are unchanged.
 
 ## Release
-- One version everywhere: 1.0.3.
+- The unused demo games and mod pack that shipped with the tutorials are removed, making the install smaller.
+- One version everywhere: 1.0.4.

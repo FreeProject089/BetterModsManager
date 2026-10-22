@@ -124,7 +124,7 @@ describe('wiring', () => {
     });
 });
 
-describe('1.0.3 tools: search, logs, cache, exports', () => {
+describe('1.0.4 tools: search, logs, cache, exports', () => {
     test('filterTools matches every word, accent- and case-insensitively', () => {
         const tools = [{ id: 'logs', txt: 'Lecteur de journaux' }, { id: 'cache', txt: 'Nettoyage des caches' }];
         assert.deepEqual(M.filterTools(tools, '', (x) => x.txt).map((x) => x.id), ['logs', 'cache']);

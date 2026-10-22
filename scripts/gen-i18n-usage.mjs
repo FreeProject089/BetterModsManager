@@ -30,7 +30,7 @@ const FRONT = path.join(ROOT, 'frontend');
 const OUT = path.join(FRONT, 'assets/i18n-usage.gen.json');
 const CAP = 12;
 
-// File -> view. First match wins. Automations live in Plugins & API since 1.0.3.
+// File -> view. First match wins. Automations live in Plugins & API since 1.0.4.
 const VIEW_BY_PATH = [
   [/features\/settings\/(sched|scheduler)/, 'plugins'],
   [/features\/settings\/|ui\/settings|ui\/(security|style)-modal|features\/themes|features\/bench|features\/debug|features\/dev\//, 'settings'],

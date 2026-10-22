@@ -628,7 +628,7 @@ const ADVANCED = {
                 },
             ],
         },
-        // ── Part 2b : Following a repo (1.0.3) ─────────────────────
+        // ── Part 2b : Following a repo (1.0.4) ─────────────────────
         //
         // « Follow a repo » sits in the Followed repos card on the Sync tab (the default tab),
         // and opens features/repo/follow-dialog.ts: a modal-shell dialog with className
@@ -959,7 +959,7 @@ const OTHER = {
                 },
             ],
         },
-        // ── Part : Create a plugin (1.0.3) ─────────────────────────
+        // ── Part : Create a plugin (1.0.4) ─────────────────────────
         //
         // The Create tab (plugins.ts renderCreate): a six-step form, a step bar and a live
         // preview. Its sections only exist once the tab is open, which the first step asks for.
@@ -1043,7 +1043,7 @@ const OTHER = {
                     title_key: 'tut.other.appcatalog.s4.title',
                     text_key: 'tut.other.appcatalog.s4.text',
                     nav: 'apps',
-                    // The Sources tab itself (1.0.3: the one source list, shared with Settings).
+                    // The Sources tab itself (1.0.4: the one source list, shared with Settings).
                     selector: '#apps-tabs [data-tab="sources"]',
                 },
             ],
@@ -1110,7 +1110,7 @@ const OTHER = {
                     nav: 'settings',
                     selector: 'btn-open-theme-editor',
                     modal_selector: 'bte-save',
-                    // The rebuilt editor (1.0.3): section rail, live preview, contrast checks.
+                    // The rebuilt editor (1.0.4): section rail, live preview, contrast checks.
                     // Import / Export moved into the File menu (hidden until opened), so the
                     // guide points at the menu button instead of its items.
                     modal_fields: [
@@ -1150,7 +1150,7 @@ const OTHER = {
                 },
             ],
         },
-        // ── Part : Notification centre (1.0.3) ─────────────────────
+        // ── Part : Notification centre (1.0.4) ─────────────────────
         //
         // The bell in the sidebar footer opens ui/notification-center.ts's panel (.nc-panel);
         // the preferences are rendered into #notif-source-list in Settings by ui/app.ts.
@@ -1406,7 +1406,7 @@ const ORDER = {
                 },
             ],
         },
-        // ── The Conflicts view (1.0.3) ─────────────────────────────
+        // ── The Conflicts view (1.0.4) ─────────────────────────────
         //
         // features/mods/conflicts-view.ts: a modal-shell dialog (className 'cv-modal'). A
         // library badge opens the conflict list, whose « Resolve conflicts » opens this view;

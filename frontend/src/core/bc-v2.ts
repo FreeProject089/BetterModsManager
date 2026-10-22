@@ -1,4 +1,4 @@
-// bc-v2.ts — this session's BetterCommunity mode, and the v2 account (BMM 1.0.3).
+// bc-v2.ts — this session's BetterCommunity mode, and the v2 account (BMM 1.0.4).
 //
 // THE SWITCH. app.cfg (`BCApiVersion`, `BCv2Base`) > links.json (`bc_api`, `bc_v2_base`) > v1.
 // links.json is the platform asset fetched at every start, so the day v2 goes live the owner sets

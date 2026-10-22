@@ -11,7 +11,7 @@
 //!   · **Orphans**: profiles naming mods that no longer exist, mods whose folder is gone,
 //!     folders in a mods directory BMM does not know about, profile folders that vanished.
 //!
-//! Added in 1.0.3: deployed-files check (active mods' files gone from the game folder, broken
+//! Added in 1.0.4: deployed-files check (active mods' files gone from the game folder, broken
 //! or stale links, files missing from the library), large files, mod name / version report,
 //! duplicate profiles, cache cleaner (preview, then a confirmed clean of fixed cache folders),
 //! BMM log reader, and a catalogue / repo.json diff.
@@ -609,7 +609,7 @@ pub fn tools_find_orphans(state: tauri::State<AppState>) -> Result<OrphanReport,
 }
 
 // ═════════════════════════════════════════════════════════════════════════════════════════
-// 1.0.3 additions. Same rules as above: every finder READS; the one command that deletes
+// 1.0.4 additions. Same rules as above: every finder READS; the one command that deletes
 // (`tools_cache_clean`) only ever touches the fixed cache folders listed in `cache_targets`,
 // never a path from an argument, and the hub asks before calling it.
 // ═════════════════════════════════════════════════════════════════════════════════════════

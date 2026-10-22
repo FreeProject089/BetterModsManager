@@ -43,7 +43,7 @@ CLI, an MCP server and a local API for scripting.
 | ![Activity centre](.github/screenshots/activity.png) **Activity centre** (new in 1.0.2): every running task, with Cancel. | ![BMM Tools](.github/screenshots/tools.png) **BMM Tools** (new in 1.0.2): read-only checks, here disk usage per profile. |
 | ![App Catalog](.github/screenshots/apps.png) **App Catalog**: each card shows its state and next action. | ![Settings](.github/screenshots/settings.png) **Settings**: an index of every card, with search (Ctrl+F). |
 
-<p align="center"><img src=".github/screenshots/library-light.png" alt="Mod Library, light theme" width="70%" /><br/><sub>The same Library in the built-in light theme. Screenshots use demo data.</sub></p>
+<p align="center"><img src=".github/screenshots/automations-flow.png" alt="Automations editor in Flow mode, nodes joined by wires" width="70%" /><br/><sub>The Automations editor in Flow mode, built like Blueprints. Screenshots use demo data.</sub></p>
 
 More pictures, area by area: [VISUALS.md](VISUALS.md).
 

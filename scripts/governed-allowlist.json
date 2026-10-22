@@ -23,6 +23,12 @@
       "why": "governed (G3c): one zip entry into its file (parallel and >8000-entry serial paths), between two checkpoints of the Extract ticket, bytes counted"
     }
   },
+  "src/commands/analytics.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "one-shot: read_replay_file reads one replay the person opens (capped at 768 MB, gzip inflated) off the async runtime; user-requested, no copy loop"
+    }
+  },
   "src/commands/apps.rs": {
     "thread::spawn": {
       "count": 1,
@@ -89,6 +95,16 @@
     "spawn_blocking": {
       "count": 3,
       "why": "governed (G3b): benchmark_disk holds a Maintenance ticket (background: waits for deploys and game mode; checkpoints only BETWEEN the timed phases); get_folder_size, a sync command on the main thread before, walks under a Scan ticket with a checkpoint per directory; exempt: get_system_disks enumerates volumes (size and free space per volume, no bulk I/O) off the main thread, where a spinning-up disk or a dead network drive froze the window"
+    }
+  },
+  "src/commands/elevation.rs": {
+    "thread::spawn": {
+      "count": 1,
+      "why": "one-shot: closes this instance 300 ms after the elevated BMM started (restart_elevated); no I/O"
+    },
+    "spawn_blocking": {
+      "count": 1,
+      "why": "one-shot: ShellExecuteExW runas waits while the Windows UAC prompt is open; off the async runtime, no file work"
     }
   },
   "src/commands/format_check.rs": {

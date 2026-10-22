@@ -109,7 +109,7 @@ export function v2ApiUrl(roots: BcRoots, route: string): string {
     return `${roots.v2Root}/v2${r}`;
 }
 
-// ── The remote switch (BMM 1.0.3): app.cfg > links.json > v1. Mirrors bc_v2.rs pick_switch ──
+// ── The remote switch (BMM 1.0.4): app.cfg > links.json > v1. Mirrors bc_v2.rs pick_switch ──
 
 export interface SwitchInputs {
     /** app.cfg has a `BCApiVersion` line (an explicit v1 there pins the install to v1). */

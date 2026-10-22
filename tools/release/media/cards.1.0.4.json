@@ -1,0 +1,28 @@
+{
+  "shots": {
+    "social": "conflicts",
+    "discord": "conflicts",
+    "blog": ["library", "conflicts"],
+    "square": "notifications"
+  },
+  "en": {
+    "headline": "See which mod wins each file.",
+    "subline": "A clear conflicts view, one inbox for every message, and undo.",
+    "whatsNew": "What's new in {version}",
+    "highlights": [
+      { "icon": "git-merge", "title": "Fix conflicts in one click", "shot": "conflicts", "crop": [610, 200, 520, 473] },
+      { "icon": "bell", "title": "One inbox for every message", "shot": "notifications", "crop": [228, 503, 384, 349] },
+      { "icon": "history", "title": "Undo from your history", "shot": "history", "crop": [466, 280, 500, 455] }
+    ]
+  },
+  "fr": {
+    "headline": "Sache enfin quel mod gagne.",
+    "subline": "Des conflits clairs, tous tes messages réunis, et tes changements annulables.",
+    "whatsNew": "Les nouveautés de la {version}",
+    "highlights": [
+      { "icon": "git-merge", "title": "Règle tes conflits d’un clic", "shot": "conflicts", "crop": [610, 200, 520, 473] },
+      { "icon": "bell", "title": "Tes messages au même endroit", "shot": "notifications", "crop": [228, 503, 384, 349] },
+      { "icon": "history", "title": "Annule depuis l’historique", "shot": "history", "crop": [466, 280, 500, 455] }
+    ]
+  }
+}

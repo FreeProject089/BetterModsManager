@@ -115,7 +115,7 @@ machine qui n'est pas la sienne.
 ## BetterCommunity v2 : `BCApiVersion` et `BCv2Base`
 
 L'interrupteur de **BetterCommunity v2**. Aucune des deux clés n'est dans le fichier livré.
-Depuis BMM 1.0.3, le même interrupteur peut aussi venir du fichier de liens publié par
+Depuis BMM 1.0.4, le même interrupteur peut aussi venir du fichier de liens publié par
 BetterCommunity (`bc_api`, `bc_v2_base` dans [links.json](doc-page:reference/links-and-updates)), pour que les
 copies installées suivent la v2 le jour où elle ouvre. **Ce fichier l'emporte** : une ligne
 `BCApiVersion` ici décide quoi que dise links.json, et `BCApiVersion=v1` garde cette installation

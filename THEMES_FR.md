@@ -39,7 +39,7 @@ apparaîtrait : le coin, l'écran de démarrage, les pages vides et les fenêtre
 il est posé sur sa tuile pâle, comme dans l'icône. Charcoal montre le badge compact : les lettres
 BMM sur une tuile de la couleur d'accent du thème.
 
-> **Renommés en 1.0.3.** Six identifiants intégrés reprenaient le nom d'autres produits. Ils ont
+> **Renommés en 1.0.4.** Six identifiants intégrés reprenaient le nom d'autres produits. Ils ont
 > été renommés, les thèmes eux-mêmes n'ont pas changé, et les anciens identifiants fonctionnent
 > toujours partout (votre choix enregistré, les thèmes masqués, les tâches planifiées, les liens,
 > l'installateur, le pont MCP) :

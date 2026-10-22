@@ -31,6 +31,7 @@ import { t } from '../../core/i18n.js';
 import { loadRrweb, subscribeReplay, unsubscribeReplay, isFullReplay, setExtraBlockSelectors, type ReplaySubscriber } from '../../core/replay-recorder.js';
 import { captureSupport, startCapture, stopCapture, isCapturing } from './video-capture.js';
 import { uiIcon } from '../../ui/icons.js';
+import { showSaved, showExportError } from '../../ui/export-file.js';
 import {
   emptyEdit, isEditEmpty, normalizeCuts, keepUntil, mapTime, unmapTime, editedDuration, editEvents, planEdit,
   editRegions, editMarkers, anchorsOf, playabilityProblem, fmtBytes, fmtClock, embedSnippets, MIN_CUT_MS,
@@ -859,9 +860,12 @@ async function studioExport(): Promise<string | null> {
     const path = await invoke('save_local_replay', { content }) as string;
     if (R) { R.savedPath = path || null; R.dirty = false; }
     setStatus((t('rstudio.saved') || 'Saved to Replays') + (path ? ` · ${path.split(/[\\/]/).pop()}` : '') + ` · ${fmtBytes(content.length)}`);
+    // The full path and « Open folder » (ui/export-file.ts): the bar only has room for the name.
+    if (path) showSaved(t('rstudio.saved') || 'Saved to Replays', path);
     return path || null;
-  } catch {
+  } catch (e) {
     setStatus(t('rstudio.savefail') || 'Save failed.');
+    showExportError(t('dev.export.replay'), e);
     return null;
   } finally {
     if (R) R.busy = false;
@@ -932,9 +936,13 @@ async function videoStop() {
     const r = await stopCapture();
     if (!r) setStatus(t('rstudio.vnone') || 'No video was being recorded.');
     else if (!r.path) setStatus(t('rstudio.vempty') || 'The capture produced no frames. Nothing saved.');
-    else setStatus(`${t('rstudio.vsaved') || 'Clip saved'} · ${r.path.split(/[\\/]/).pop()} · ${fmtMB(r.bytes)} · ${(r.ms / 1000).toFixed(1)}s`);
-  } catch {
+    else {
+      setStatus(`${t('rstudio.vsaved') || 'Clip saved'} · ${r.path.split(/[\\/]/).pop()} · ${fmtMB(r.bytes)} · ${(r.ms / 1000).toFixed(1)}s`);
+      showSaved(t('rstudio.vsaved') || 'Clip saved', r.path);
+    }
+  } catch (e) {
     setStatus(t('rstudio.vsavefail') || 'Saving the clip failed.');
+    showExportError(t('dev.export.clip'), e);
   }
   renderBar();
 }

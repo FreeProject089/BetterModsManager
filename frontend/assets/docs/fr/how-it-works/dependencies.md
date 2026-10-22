@@ -1,5 +1,4 @@
 # Dépendances et conflits, en arbre
-
 Chaque mod porte déjà la liste des mods dont il a besoin, et BMM sait déjà quels mods se disputent
 quels fichiers. Ce qui manquait, c'est la **forme**. Une liste plate de paires répond à *« est-ce que
 A est en conflit avec B ? »* et ne répond jamais à la question qu'on se pose vraiment avant

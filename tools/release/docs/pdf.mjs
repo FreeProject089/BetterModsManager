@@ -12,7 +12,7 @@
 //   4. the page numbers of the table of contents come from the PDF's own bookmarks of a first
 //      print, then the page is printed again with the numbers in (same layout, so they hold).
 //
-//   node tools/release/docs/pdf.mjs --version 1.0.3 [--lang en|fr] [--no-build] [--out dir]
+//   node tools/release/docs/pdf.mjs --version 1.0.4 [--lang en|fr] [--no-build] [--out dir]
 //   (--no-build reuses the sites already in the cache: for iterating on the look)
 
 import { existsSync, mkdirSync, statSync, readdirSync, readFileSync } from 'node:fs';

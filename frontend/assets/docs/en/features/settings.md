@@ -398,7 +398,7 @@ limits.
 
 Replay the interactive in-app tutorials at any time. New to BMM? Start here. The tutorial guide can
 **pop out into its own window**, so you can keep it beside BMM while you follow the steps. Every
-tutorial was rewritten for 1.0.3, and there are new parts: following a repo, conflicts and
+tutorial was rewritten for 1.0.4, and there are new parts: following a repo, conflicts and
 activation order, notifications, creating a plugin, and BMM Tools. The Automations tutorial now
 lives in Plugins & API.
 

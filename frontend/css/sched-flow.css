@@ -476,7 +476,7 @@
     .sflow-wire-temp { stroke-dasharray: none; }
 }
 
-/* ── Blueprint tools (1.0.3): ports, categories, frames, reroutes, menus ──────────────────────
+/* ── Blueprint tools (1.0.4): ports, categories, frames, reroutes, menus ──────────────────────
    Every colour is a theme token. A frame's tone is a ROLE (accent, info, success, warning,
    danger, neutral), painted as a wash and a ring of that token, never as text colour. */
 

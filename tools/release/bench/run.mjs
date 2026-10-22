@@ -1,7 +1,7 @@
 // Release step « bench »: run the suite, store this version's results, compare with the
 // previous version, write the report into Release/<version>/bench/.
 //
-//   node tools/release/bench/run.mjs --version 1.0.3 [--skip-run] [--only rust,js,hyperfine,mem]
+//   node tools/release/bench/run.mjs --version 1.0.4 [--skip-run] [--only rust,js,hyperfine,mem]
 //
 // --skip-run reuses whatever raw results are on disk (re-generates the report only).
 

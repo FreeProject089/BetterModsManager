@@ -1,7 +1,7 @@
 # Customise navigation
 
 The sidebar is yours to arrange. Press the **pencil at the bottom of the sidebar** (or use
-**Settings → Navigation & custom pages**) to open the editor. It was rebuilt in 1.0.3 around a
+**Settings → Navigation & custom pages**) to open the editor. It was rebuilt in 1.0.4 around a
 preview you can drag, and a guided way to add buttons.
 
 ## Your sidebar

@@ -37,6 +37,7 @@ import { dialog, copy } from './order-share.js';
 import { runActivationBatch, type ActivationJobHandle } from '../../core/activation-jobs.js';
 import { loadNotesRenderer, paintNotes, openNotesEditor } from './order-notes.js';
 import { notesLength } from './order-notes-model.js';
+import { failureLine } from '../mods/protected-folder-model.js';
 import {
     type OrderList, type OrderEntry, type ListPlan, type LibraryMod, type PlanRow,
     addMods, moveEntry, removeEntry, searchLibrary, sameList, activationCounts, qualityCounts, isWeakMatch,
@@ -915,7 +916,7 @@ function run(
         const r = report as ActivateReport | null;
         if (r) {
             const msg = fill(r.cancelled ? 'orderList.activatedCancelled' : 'orderList.activated', { n: r.enabled, d: r.disabled, f: r.moved, m: r.missing });
-            const failed = r.failed.map((f) => `<li>${escHtml(f.name)}: ${escHtml(f.error.startsWith('MISSING_SHA|') ? t('orderList.failedSha') : t(f.error))}</li>`).join('');
+            const failed = r.failed.map((f) => `<li>${escHtml(f.name)}: ${escHtml(f.error.startsWith('MISSING_SHA|') ? t('orderList.failedSha') : failureLine(f.error, (k, v) => t(k, v || {})))}</li>`).join('');
             const res = main.querySelector('.olm-result');
             if (res) res.innerHTML = `<p class="osh-note">${escHtml(msg)}</p>${failed ? `<details class="osh-more olm-card" open><summary>${escHtml(fill('orderList.failed', { n: r.failed.length }))}</summary><ul>${failed}</ul></details>` : ''}`;
             say(msg);

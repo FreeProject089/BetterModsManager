@@ -98,6 +98,10 @@ function builtInActions(): void {
         void import('../features/mods/conflicts-view.js').then((m) => m.openConflictsView(id || null)).catch(() => {});
     });
     registerNotifAction('settings', () => openNotifSettings());
+    // A file an export wrote (ui/export-file.ts): open its folder.
+    registerNotifAction('open-folder', (p) => {
+        if (p) void import('../core/api.js').then((m) => m.invoke('open_folder', { path: p })).catch(() => {});
+    });
 }
 
 /** Settings → the notification preferences, scrolled into view. */
