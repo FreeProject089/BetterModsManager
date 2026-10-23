@@ -1,0 +1,288 @@
+# Dépannage
+
+Commence ici avant de réinstaller quoi que ce soit. À peu près trié du « plus probable » au « là il y a
+vraiment un problème ».
+
+!!! tip "La seule habitude qui vaille"
+    **Réglages → Données → Exporter** avant tout changement radical. Ça écrit un fichier, ça prend une
+    seconde, et c'est la différence entre un mauvais après-midi et une installation perdue.
+
+---
+
+## Mods et profils
+
+### Le jeu se comporte comme si le mod n'était pas là
+
+Presque toujours l'empaquetage, pas BMM. L'archive a un dossier de trop, donc le jeu cherche `Data/` et
+trouve `MonMod-v3/Data/`. Ouvre le [Mapper](doc-page:features/mapper), lance le **Diagnostic de
+structure**, et vérifie le chemin final *avant* d'appliquer.
+
+### Un mod que j'ai désactivé est toujours actif
+
+Deux profils pointent sur le même dossier de destination. BMM prévient à la configuration — c'est *une source
+majeure d'erreur humaine*. Note que les profils partageant **à la fois** le dossier de destination et le dossier
+mods gardent leurs listes actives synchronisées, mais pas ceux qui ne partagent que le dossier de *jeu* :
+chacun a sa propre liste, et les mods des deux listes sont déployés au même endroit. BMM en tient compte
+(il ne prend jamais les fichiers de l'autre profil pour des originaux du jeu), mais un fichier déployé
+par le mod de l'autre profil est toujours là. Désactive-le depuis ce profil, ou donne à chaque profil
+son propre dossier de jeu. Voir [Profils & activation](doc-page:how-it-works/profiles-activation).
+
+### J'ai changé de profil et rien n'a changé
+
+C'est le comportement correct. **Changer de profil ne déplace aucun fichier** — ça change la liste que tu
+édites. Ce qui est déployé reste déployé jusqu'à ce que tu le désactives. C'est la surprise la plus
+fréquente dans BMM.
+
+### Deux mods se battent — l'un écrase l'autre
+
+C'est un [conflit](doc-page:features/library#conflicts), et c'est attendu : ils livrent le même fichier. BMM
+te montre exactement quels fichiers se recouvrent. Il n'y a pas de sélecteur par fichier ni de liste de
+priorités — **le dernier mod activé gagne**, donc active en dernier celui qui doit gagner. Voir
+[Conflits](doc-page:how-it-works/conflicts).
+
+### Un mod affiche une icône d'avertissement dans la Bibliothèque
+
+Son dernier contrôle d'intégrité a échoué, et BMM s'en souvient d'un redémarrage à l'autre. Relance le
+contrôle pour voir quels fichiers sont `missing`, `modified` ou `added`. Note que le *premier* contrôle
+d'un mod n'échoue jamais — il établit la baseline — donc un échec signifie que quelque chose a changé
+depuis. Voir [Intégrité & hachage](doc-page:how-it-works/integrity-hashing).
+
+<a id="protected-folder"></a>
+### Activer un mod dit que le dossier du jeu est protégé par Windows
+Tu vois « Le dossier du jeu est protégé par Windows » (ou, avant BMM 1.0.4, « Failed to copy … »)
+quand le jeu est installé sous **C:\Program Files**, **C:\Program Files (x86)** ou **C:\Windows**.
+Windows n'y laisse écrire qu'un programme *exécuté en tant qu'administrateur* ; BMM tourne
+normalement avec tes droits, donc chaque copie est refusée (erreur Windows 5, « Accès refusé »).
+
+Rien n'a été modifié : BMM vérifie qu'il peut écrire dans la destination **avant** de copier quoi
+que ce soit, et si une copie échoue quand même en cours de route, il remet chaque fichier qu'il avait
+déjà remplacé ou ajouté.
+
+Trois solutions, de la plus rapide à la plus propre :
+
+- **Redémarrer BMM en administrateur.** La fenêtre le propose. Windows affiche sa propre demande
+  d'autorisation ; réponds Oui et BMM revient sur le même profil, capable d'y écrire. Il faudra le
+  refaire à chaque activation ou désactivation de mods dans ce dossier, et on ne peut pas faire
+  glisser des fichiers d'une fenêtre de l'Explorateur normale vers un BMM administrateur.
+- **Utiliser le dossier où le jeu lit les mods hors de Program Files**, quand il en a un. DCS World
+  lit la plupart des mods (livrées, missions, scripts, beaucoup d'avions) depuis
+  `%USERPROFILE%\Saved Games\DCS` (ou `DCS.openbeta`) : fais pointer le dossier du jeu du profil
+  là. Les mods qui doivent remplacer des fichiers du jeu lui-même (`Mods\aircraft\…\Cockpit\Scripts`
+  et autres) ont toujours besoin du dossier d'installation.
+- **Déplacer le jeu hors de Program Files** (par exemple vers `D:\Games\DCS World`) : l'outil de
+  mise à jour de DCS peut le réparer sur place, Steam sait déplacer sa bibliothèque. Corrige ensuite
+  le dossier du jeu du profil. C'est la solution définitive : BMM n'a plus jamais besoin des droits
+  administrateur.
+
+Les jeux du Microsoft Store / de l'application Xbox vivent dans `C:\Program Files\WindowsApps`, où
+même un administrateur ne peut pas écrire : utilise plutôt le dossier de mods du jeu. L'éditeur de
+profil et l'en-tête de la Bibliothèque affichent un avertissement d'une ligne quand le dossier du
+jeu d'un profil est dans un dossier protégé et que BMM ne tourne pas en administrateur.
+
+### J'ai annulé une activation — mon dossier de destination est à moitié moddé ?
+
+Non. Annuler tue le worker puis lance une passe d'annulation en opération inverse : les écritures
+partielles sont reverties. Un **kill de force ou une coupure de courant**, c'est différent : il n'y a pas
+de journal, donc un déploiement partiel peut survivre. C'est quand même sûr — les sauvegardes
+`_original/` sont écrites *avant* qu'on écrase quoi que ce soit, les fichiers propres du jeu n'ont donc
+jamais été en danger. Réactive le mod pour terminer la copie, ou désactive-le pour nettoyer entièrement.
+
+---
+
+## Disques et chemins
+
+### Mes mods ont disparu après avoir débranché un disque
+
+Non. BMM détecte une racine inaccessible et **garde** les entrées existantes au lieu de les purger — *« ne
+pas brasser l'état hors ligne »*. Rebranche le disque et le scan suivant réconcilie. Le hachage est sauté
+pendant l'absence, aucune donnée d'intégrité n'est donc corrompue non plus.
+
+### La lettre du lecteur a changé et tout est cassé
+
+Celui-là, BMM ne peut pas le corriger pour toi. Les profils stockent des **chemins absolus**, donc `E:\Mods`
+devenu `F:\Mods` demande de corriger chaque chemin concerné dans le profil. Rien n'est perdu — les chemins
+pointent juste vers une lettre qui n'existe plus.
+
+### Un mod avec des accents, du chinois, ou des `#`/`@`/`-` dans le nom
+
+Supporté. Les chemins sont manipulés comme des chaînes OS de bout en bout, pas comme des chaînes d'octets,
+et les noms qui deviennent des noms de fichiers sont assainis à chaque frontière. Si un *jeu* gère mal un
+tel nom, renomme le dossier du mod — BMM le ré-identifiera par son contenu, il garde donc son identité.
+
+---
+
+## Performances
+
+### Mon PC rame pendant l'activation des mods
+
+**Réglages → Stockage.** Active **Smart I/O** et lance l'**Auto-calibration** une fois — elle benchmarke
+tes disques et cadence les copies. Si ça saccade encore, pose un **plafond Mo/s** explicite pour ce
+disque.
+
+Si c'est le jeu qui saccade pendant que BMM travaille, choisis **Silencieux** en haut du Gestionnaire
+de Stockage, ou laisse le **Mode jeu** sur **Le détecter** : BMM fait alors une chose à la fois,
+doucement, et retient le calcul des empreintes de fond tant que le jeu tourne. La détection voit un
+jeu lancé depuis le dossier de jeu d'un de tes profils, un jeu listé sous **Jeux surveillés par
+BMM**, ou un jeu en plein écran exclusif ; pour un autre, ajoute son exécutable à cette liste ou
+utilise **Forcer**. Voir
+[Le gouverneur de ressources](doc-page:how-it-works/resources#comment-marche-la-detection).
+
+À savoir : si le dossier de destination ou de sauvegarde est sur ton **disque système**, BMM réduit déjà les
+copies à un seul thread sous les presets Silencieux et Équilibré, parce que Windows lui-même a besoin
+de la marge (**Tout pour BMM** ne le fait pas). Déplacer le dossier mods hors de `C:` est le plus gros
+gain disponible.
+
+### Une opération reste « en attente » ou « suspendu » dans le Gestionnaire de Stockage
+
+La file en haut du Gestionnaire de Stockage dit pourquoi BMM ne fait pas encore quelque chose. Du plus
+probable au moins probable :
+
+- **Sa sorte est pleine.** Chaque sorte de travail (déploiement, installation, empreintes…) en fait
+  tourner un nombre fixe à la fois : un en Silencieux, deux en Équilibré. La suivante démarre quand
+  une se termine.
+- **C'est du travail de fond.** Les empreintes et la maintenance, benchmarks de disque compris,
+  s'effacent pendant qu'on active ou installe des mods, et reprennent seuls ensuite.
+- **Le mode jeu est actif.** Il suspend les empreintes et la maintenance jusqu'à ce qu'il se termine.
+  **Forcer** reste actif jusqu'à ce que tu le remettes sur **Le détecter** ou **Arrêter**, y compris
+  après la fermeture du jeu.
+- **Quelqu'un a appuyé sur Tout suspendre**, ou une tâche planifiée avec la permission
+  **Ressources** (ou un plugin via l'API) a suspendu la file. Un encadré au-dessus de la file le
+  dit, avec qui l'a fait ; **Tout reprendre** libère tout. Une suspension qui ne vient pas de toi
+  prend fin seule au bout de 30 minutes.
+
+Un preset choisi par une tâche planifiée « pour cette tâche seulement » se termine avec la tâche, et
+au bout de 2 heures au plus même si la tâche a planté.
+
+### J'ai mis une limite en Mo/s pour les empreintes et rien n'a changé
+
+C'est normal : les lignes **Empreintes** et **Analyse** du tableau avancé sont grisées. Une analyse
+ne déplace aucun octet, et les empreintes lisent des fichiers depuis des endroits qui ne passent pas
+encore par une seule boucle ; les deux sont gouvernées par leurs créneaux, leur pool de threads et
+sa priorité. Les Mo/s agissent bien sur les copies de BMM, l'extraction, les zip que BMM écrit et
+les téléchargements de dépôt et de modpack, mais pas encore sur un mod téléchargé depuis un lien.
+Voir [Sur quoi agit chaque colonne](doc-page:how-it-works/resources#sur-quoi-agit-chaque-colonne).
+
+### L'activation est plus lente qu'une simple copie de fichiers
+
+Par conception. Le débit maximal est échangé contre une fenêtre réactive : pools de threads plafonnés,
+budget de yield sur la boucle de copie, et un worker en priorité I/O de fond. Voir
+[Performances](doc-page:how-it-works/performance), et lance le benchmark intégré pour voir les vrais chiffres
+sur ton matériel. Si tu préfères la vitesse, **Tout pour BMM** en haut du Gestionnaire de Stockage lève
+la plupart de ces plafonds ; regarde aussi la limite en Mo/s sur la carte du disque, que
+l'auto-calibration règle à environ 70 % de la vitesse d'écriture mesurée.
+
+### BMM consomme beaucoup de mémoire au bout d'un moment
+
+Ouvre la fenêtre DevTools et referme-la — tant qu'elle est ouverte, c'est un processus séparé de *~480
+Mo*.
+
+L'**enregistreur de session** n'est plus un suspect : il écrit ses événements sur le disque au fur et
+à mesure, donc une session de n'importe quelle durée coûte environ un demi-mégaoctet de mémoire à
+l'app. Ce qu'il consomme, c'est du **disque** — une fenêtre glissante de 512 Mo sous `Spool/`, plus ce
+que ta rétention de replays sauvegardés autorise (Réglages → Confidentialité). Le **Replay Studio** des
+DevTools est celui qui bufferise encore en mémoire, délibérément, et il s'arrête à 64 Mo au lieu de
+grossir.
+
+---
+
+## Mises à jour, dépôts et API
+
+### BMM dit qu'un mod n'a pas de mise à jour, mais je sais que si
+
+Si la source du mod est un **téléchargement direct**, BMM est honnête :
+
+> Aucune mise à jour détectée. Un téléchargement direct n'a pas de version, donc BMM ne peut
+> pas savoir s'il est plus récent que ce que vous avez — mais vous pouvez le re-télécharger à
+> tout moment.
+
+Il n'y a rien à comparer. Relie le mod à un [dépôt](doc-page:features/repo) qui publie des versions, ou
+utilise le re-téléchargement direct.
+
+### BMM ne propose plus de mise à jour après une release
+
+Les deux manifestes de mise à jour que lit BMM — le `update.json` de BetterInstaller et le
+`update-manifest.json` propre à BMM (la **mise à jour rapide**) — sont signés et expirent au bout de
+7 jours. Un manifeste expiré est refusé, et un manifeste refusé ressemble exactement à « tu es à
+jour » ; le journal dit pourquoi (`Update manifest refused: … expired`).
+
+- **Si tu utilises BMM :** vérifie que l'horloge de ton PC est juste. Sinon rien ne cloche de ton
+  côté ; l'installeur complet de la page de release marche toujours.
+- **Si tu publies BMM :** le workflow *Re-sign update manifests* (`.github/workflows/resign-manifests.yml`)
+  renouvelle les deux fichiers deux fois par semaine. Lance-le à la main depuis *Actions → Re-sign
+  update manifests → Run workflow* (en nommant un tag si besoin). Il lui faut le secret
+  `BMM_PRIVATE_KEY` — la clé qui signe les releases — et, seulement pour les miroirs BetterCommunity,
+  `BCWEB_ASSETS_TOKEN`, une clé de publication CI qu'un administrateur crée dans BCWEB (*Admin →
+  Téléchargements et assets → Clé de publication CI* ; elle expire en 90 jours au plus, donc une étape
+  miroir qui se met à échouer en HTTP 401 demande en général une nouvelle clé). GitHub met en pause les
+  workflows planifiés d'un dépôt sans activité depuis
+  60 jours : réactive-le depuis l'onglet Actions le cas échéant. Voir [Sécurité](doc-page:how-it-works/security)
+  pour les règles que BMM applique.
+
+### La fenêtre de mise à jour dit que l'installateur n'a pas pu être vérifié
+
+La version ne propose ni `update-manifest.json` signé ni `update.json` signé que BMM puisse
+utiliser pour cet installateur, et la fenêtre dit lequel manque. **Annuler** (le choix par défaut)
+ne change rien. Ne choisis **Installer quand même** que si tu fais confiance à la provenance du
+fichier ; sinon attends que l'éditeur corrige la version, ou télécharge `BMM-Setup.exe` depuis la
+page de la version. Un fichier affiché **en rouge** ne correspond pas à ce que la version annonce :
+ne l'installe pas, réessaie plus tard. Voir [Mettre BMM à jour](doc-page:getting-started/install#mettre-bmm-a-jour).
+
+### L'installateur ne démarre pas
+
+La fenêtre dit pourquoi, en clair, avec l'erreur Windows : demande d'autorisation refusée (appuie
+sur **Réessayer** et accepte-la), fichier encore bloqué par un antivirus (BMM a déjà réessayé
+plusieurs fois ; attends la fin de l'analyse et **Réessayer**), accès refusé par une stratégie de
+sécurité (demande à qui gère le PC), ou installateur fermé aussitôt avec un code d'erreur.
+**Télécharger depuis la page de la version** marche toujours en dernier recours.
+
+### Une synchro de dépôt dit qu'un fichier a échoué
+
+Le hash du fichier téléchargé ne correspondait pas à ce que le dépôt a publié, et BMM traite ça comme une
+erreur, pas un avertissement. Réessaie — un transfert reprisé ne re-télécharge que les chunks qui
+diffèrent, un réessai est donc bon marché. Si ça échoue de façon répétée, le hash publié et le fichier
+hébergé sont réellement en désaccord ; c'est à l'hébergeur de corriger.
+
+### Une synchro ne démarre pas — il dit qu'une autre tourne déjà
+
+Une seule synchro à la fois (`409`). Annule celle en cours ; elle s'arrête à la prochaine frontière de
+mod, pas au milieu d'un fichier.
+
+### Un script ou un plugin n'arrive pas à joindre l'API locale
+
+Vérifie `GET http://127.0.0.1:51274/api/health` d'abord. Si rien ne répond, la cause la plus probable est
+que **le port était déjà pris au démarrage de BMM** — typiquement une instance zombie après un
+redémarrage in-app. BMM ne **bascule pas** sur un autre port : l'API est désactivée pour toute la session
+et une ligne part dans le journal de crash. Redémarre BMM. Voir la [référence API](doc-page:reference/api).
+
+### Un plugin reçoit 403 sur quelque chose qu'il devrait pouvoir faire
+
+L'erreur nomme la permission manquante et la route qui l'accorde. Note le piège inverse aussi : certaines
+routes sont **token seul**, un plugin sans aucune permission peut donc les appeler — la référence liste
+lesquelles.
+
+---
+
+## Un modpack ne s'applique pas entièrement
+
+La carte dira que des mods sont manquants ou corrompus, et proposera **Réparer**. Lance-le. Un pack qui ne
+peut pas s'appliquer entièrement explique bien plus de bugs que le jeu. Si un pack est *censé* sauter la
+vérification, c'est l'option *ignorer le contrôle d'intégrité* par pack — pas une option globale.
+
+---
+
+## Quelque chose va vraiment mal
+
+Dans l'ordre :
+
+1. **Réglages → Données → Exporter.** Toujours en premier.
+2. **Regarde le journal de crash.** Réglages → Débogage a le dossier. Un marqueur de sortie propre fait
+   que BMM distingue un crash d'une fermeture normale : le journal te dit donc lequel c'était.
+3. **Cherche un `.bak`.** `data.json` garde une sauvegarde tournante et BMM la récupère automatiquement si
+   le fichier principal est illisible. Un fichier principal corrompu est conservé sous
+   `data.corrupt-<horodatage>.json` plutôt que supprimé : rien n'est jeté en silence.
+4. **Réinitialisation d'usine** — Réglages → Débogage. **Aucune annulation.** Exporte avant de t'en
+   approcher.
+
+!!! info "Toujours bloqué ?"
+    Le hub **Aide & autres** dans l'app a les mêmes articles plus 45 diagrammes, et
+    [BetterCommunity](doc-page:features/community) est l'endroit pour demander.

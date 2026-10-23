@@ -24,12 +24,16 @@ if %errorlevel% equ 0 ( set NODE_EXE=node ) else (
         if "%PROCESSOR_ARCHITECTURE%"=="x86" (
             if not defined PROCESSOR_ARCHITEW6432 set "NODE_ARCH=win-x86"
         )
-        set "NODE_URL=https://nodejs.org/dist/v20.11.1/!NODE_ARCH!/node.exe"
+        rem Node.js 22 LTS, pinned, and checked against nodejs.org SHASUMS256.txt before it ever runs.
+        set "NODE_URL=https://nodejs.org/dist/v22.23.3/!NODE_ARCH!/node.exe"
+        set "NODE_SHA256=9c9245166b4a8e182e0b797da9c20136117ff24368eaff1fec8343a123c8db0e"
+        if "!NODE_ARCH!"=="win-x86" set "NODE_SHA256=a8aa72dda43af5357d0a502548a54e402d4f7643be221662624a2cc876cd37bb"
         powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; (New-Object Net.WebClient).DownloadFile('!NODE_URL!', 'node.exe')"
+        if exist "node.exe" powershell -NoProfile -Command "if ((Get-FileHash node.exe -Algorithm SHA256).Hash -ne '!NODE_SHA256!') { Write-Host '[BMM] node.exe checksum mismatch - deleted'; Remove-Item -Force node.exe }"
         if exist "node.exe" (
             set NODE_EXE=".\node.exe"
         ) else (
-            echo [ERREUR] Impossible de telecharger Node.js. ; pause ; exit /b
+            echo [ERREUR] Impossible de telecharger Node.js. & pause & exit /b 1
         )
     )
 )
@@ -44,17 +48,45 @@ exit /b
 //  BMM LUXURY SERVER (Node.js Logic)
 // ────────────────────────────────────────────────────────────
 const http = require('http');
+// The download password and the authorised public keys, read from access.json beside this
+// file at request time. Same module the Express edition uses, so a proof accepted by one
+// generated server is accepted by all of them. Loaded defensively: an older generated folder
+// with no access-gate.js keeps working exactly as it did.
+let checkAccess = null;
+try { ({ checkAccess } = require('./access-gate.js')); } catch (_) {}
+// The origin your subscribers dial — scheme, host and port, exactly as they type it. BMM
+// signs the address it dialled, so a proof addressed elsewhere is refused. Override with
+// "audience" in access.json, or the BMM_PUBLIC_ORIGIN environment variable.
+const PUBLIC_ORIGIN = process.env.BMM_PUBLIC_ORIGIN || 'PUBLIC_ORIGIN_PLACEHOLDER';
+
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+
+// Path confinement (CWE-22). The resolved path must be the folder itself or BELOW it: a bare
+// `abs.startsWith(dir)` also accepts a SIBLING whose name only begins with the same letters
+// (/srv/repo -> /srv/repo-private/...), reachable with an encoded `..` such as
+// `/..%2Frepo-private%2Fsecret.txt`, which no client normalises away.
+function insideDir(dir, p) {
+    const d = path.resolve(dir), a = path.resolve(p);
+    return a === d || a.startsWith(d.endsWith(path.sep) ? d : d + path.sep);
+}
 const { spawn, execSync } = require('child_process');
 
 // placeholders
-const PORT = PORT_PLACEHOLDER;
+const PORT = Number(process.env.PORT) || PORT_PLACEHOLDER;
 const USE_CLOUDFLARE = USE_CLOUDFLARE_PLACEHOLDER;
 const USE_UPNP = USE_UPNP_PLACE_HOLDER;
 const CLOUDFLARE_PATH = 'CLOUDFLARE_BINARY_PLACEHOLDER';
 const UPLOAD_LIMIT = UPLOAD_LIMIT_PLACEHOLDER; // KB/s
+
+// Status page, health, Atom feed, ETag/304, resumable downloads, rate limiting and scheduled
+// jobs: bmm-extras.js beside this file, configured by server.config.json. Loaded defensively, so
+// a folder generated before it existed keeps running exactly as it did.
+let extras = null;
+try {
+    extras = require('./bmm-extras.js').create({ dir: __dirname, kind: 'v1-windows', adminPassword: '', port: PORT });
+} catch (e) { if (!e || e.code !== 'MODULE_NOT_FOUND') console.error('[EXTRAS] not loaded:', e && e.message); }
 
 const logFile = path.join(__dirname, 'server.log');
 const bansFile = path.join(__dirname, 'bans.json');
@@ -122,10 +154,12 @@ function getBans() {
     return { banned_ips: [], banned_keys: [] };
 }
 
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
     const xff = req.headers['x-forwarded-for'];
     const cfIp = req.headers['cf-connecting-ip'];
     const ip = (cfIp || (xff ? xff.split(',')[0].trim() : req.socket.remoteAddress || '127.0.0.1')).replace('::ffff:', '');
+    // /health, /status, /status.json, /admin/jobs and the rate limit (bmm-extras.js).
+    if (extras && extras.early(req, res, ip)) return;
     
     const b = getBans();
     const key = req.headers['x-creator-id'] || req.headers['x-creator-key'];
@@ -171,7 +205,25 @@ const server = http.createServer((req, res) => {
                 }
             }
         } catch(e) { log(`Security check error: ${e.message}`, 'ERROR'); }
+
+        // Password / authorised keys. Last of the non-local checks: bans and the whitelist
+        // above are local file reads, this one may verify a signature.
+        if (checkAccess) {
+            const _q = {};
+            try {
+                new URL(req.url, 'http://x').searchParams.forEach((v, k) => { _q[k] = v; });
+            } catch (_) {}
+            const _gate = await checkAccess(__dirname, { headers: req.headers, query: _q }, PUBLIC_ORIGIN);
+            if (!_gate.ok) {
+                res.statusCode = _gate.status;
+                res.end(_gate.reason);
+                return;
+            }
+        }
     }
+
+    // The Atom feed (/feed.xml, /feed.atom), behind the same gates as repo.json.
+    if (extras && extras.serve(req, res)) return;
 
     let urlPath = decodeURIComponent(req.url.split('?')[0]);
     if (urlPath === '/' || urlPath === '') urlPath = '/repo.json';
@@ -186,11 +238,27 @@ const server = http.createServer((req, res) => {
     const safePath = path.normalize(path.join(__dirname, urlPath.replace(/\//g, path.sep))).replace(/^(\.\.(\/|\\|$))+/, '');
     const absolutePath = path.resolve(__dirname, safePath.startsWith(path.sep) ? safePath.substring(1) : safePath);
 
-    if (!absolutePath.startsWith(__dirname) || !fs.existsSync(absolutePath) || !fs.statSync(absolutePath).isFile()) {
+    if (!insideDir(__dirname, absolutePath) || !fs.existsSync(absolutePath) || !fs.statSync(absolutePath).isFile()) {
+        res.statusCode = 404; res.end('Not Found'); return;
+    }
+    // At the root, only the manifest and its stats (the rule of BMM's built-in server,
+    // builtin_may_serve). Everything else there is this server's own: monitoring.json lists
+    // every downloader's IP and Creator ID (BMM security summary, item 9), server.log the
+    // same, bans/whitelist/access files the owner's lists. Decided on the RESOLVED path, so
+    // `/mods/../monitoring.json` or `/monitoring.json.` cannot spell their way past it.
+    const _segs = path.relative(__dirname, absolutePath).split(path.sep).filter(Boolean);
+    if ((_segs.length === 1 && !['repo.json', 'info.json'].includes(_segs[0].toLowerCase()))
+        || (_segs.length > 1 && _segs[0].toLowerCase() === 'node_modules')
+        // bmm-server/ holds the job state and the repo.json backups: never served.
+        || (_segs.length > 1 && _segs[0].toLowerCase() === 'bmm-server')) {
         res.statusCode = 404; res.end('Not Found'); return;
     }
 
-    const total = fs.statSync(absolutePath).size;
+    const _stat = fs.statSync(absolutePath);
+    // ETag / Last-Modified / 304, Range / 206 / 416 and HEAD. A 304 or a HEAD is not a download.
+    const _part = extras ? extras.prepareFile(req, res, absolutePath, _stat) : null;
+    if (_part && _part.done) return;
+    const total = _part ? _part.length : _stat.size;
     const protocol = ip.startsWith('127.0.0.1') ? 'Local' : (ip.startsWith('192.168.') || ip.startsWith('10.') ? 'LAN' : 'WAN');
     const dlId = `${ip}-${Date.now()}`;
     const dlObj = { ip, creatorId: key || '-', file: urlPath, total, downloaded: 0, startTime: Date.now(), protocol };
@@ -200,9 +268,9 @@ const server = http.createServer((req, res) => {
     const mime = { '.json': 'application/json', '.zip': 'application/zip', '.txt': 'text/plain', '.html': 'text/html', '.lua': 'text/plain' };
     res.setHeader('Content-Type', mime[path.extname(absolutePath).toLowerCase()] || 'application/octet-stream');
     res.setHeader('Content-Length', total);
-    res.statusCode = 200;
+    res.statusCode = _part ? _part.status : 200;
 
-    const stream = fs.createReadStream(absolutePath);
+    const stream = fs.createReadStream(absolutePath, _part ? { start: _part.start, end: _part.end } : undefined);
     let bytesSentInInterval = 0;
     let intervalStart = Date.now();
 
@@ -283,16 +351,15 @@ function setupUPnP() {
     }
 }
 
-async function getPublicIP() {
-    return new Promise(r => https.get('https://api.ipify.org', res => { let d = ''; res.on('data', c => d+=c); res.on('end', () => r(d.trim())); }).on('error', () => r(null)));
-}
-
 async function testLocalReachability() {
     return new Promise(r => {
         const req = http.get(`http://127.0.0.1:${PORT}/repo.json`, res => r(res.statusCode === 200)).on('error', () => r(false));
         req.setTimeout(1000, () => { req.destroy(); r(false); });
     });
 }
+
+// Scheduled jobs and a graceful SIGTERM (docker stop, systemd).
+if (extras) extras.attach(server);
 
 server.listen(PORT, '0.0.0.0', async () => {
     console.clear();
@@ -301,11 +368,9 @@ server.listen(PORT, '0.0.0.0', async () => {
     console.log('\x1b[1m\x1b[36m    > ^ <  \x1b[35m╚══════════════════════════════════════════════════════╝\x1b[0m');
     console.log('\x1b[34m    Tasky \x1b[0m  \x1b[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m\n');
 
-    console.log(`  \x1b[1m\x1b[32m[STATUS]\x1b[0m  🟢 SERVEUR EN LIGNE (Port ${PORT})`);
+    console.log(`  \x1b[1m\x1b[32m[STATUS]\x1b[0m  🟢 SERVER ONLINE (Port ${PORT})`);
     console.log(`  \x1b[1m\x1b[36m[LOCAL]\x1b[0m   http://${LOCAL_IP}:${PORT}/`);
     
-    const publicIp = await getPublicIP();
-    if (publicIp) console.log(`  \x1b[1m\x1b[33m[PUBLIC]\x1b[0m  http://${publicIp}:${PORT}/`);
 
     setupUPnP();
 
@@ -401,7 +466,7 @@ server.listen(PORT, '0.0.0.0', async () => {
             setTimeout(() => { 
                 if (!found && !exited) { 
                     clearInterval(checkLog); clearInterval(spinner); 
-                    process.stdout.write(`\r  \x1b[1m\x1b[31m[TUNNEL]\x1b[0m  ❌ Échec (Timeout 90s)\n`); 
+                    process.stdout.write(`\r  \x1b[1m\x1b[31m[TUNNEL]\x1b[0m  ❌ Failed (Timeout 90s)\n`); 
                     log(`Tunnel generation timed out after 90s`, 'ERROR');
                 } 
             }, 90000);

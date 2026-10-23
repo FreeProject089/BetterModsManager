@@ -1,0 +1,1833 @@
+# Planification & automatisation
+
+
+> Planifiez des actions BMM (ponctuelles ou récurrentes) — activer un mod, un modpack, un
+> profil… avec conditions (si/sinon), tes propres scripts et des programmes externes. Les tâches s’exécutent tant
+> que BMM est ouvert.
+
+Dans [Plugins & API](doc-page:features/plugins), onglet **Automatisations**. C'est la partie de BMM qui agit
+sans que vous la pilotiez.
+
+!!! warning "Par défaut, BMM doit tourner"
+
+    Le planificateur est une minuterie **dans l'application** : elle vérifie les tâches dues
+    toutes les 20 secondes tant que la fenêtre est ouverte. Rien ne se déclenche quand BMM est
+    fermé — une tâche ponctuelle dont l'heure passe entre-temps s'exécute au prochain
+    lancement, pas au moment demandé.
+
+    Sous Windows, vous pouvez lever cette limite. BMM enregistre une **tâche planifiée
+    Windows** qui lance `BMM.exe "bmm://schedule/run?id=…&k=…"` à l'heure voulue ; BMM
+    gère le schéma `bmm://`, donc Windows le démarre et le routeur de deeplinks exécute cette
+    tâche. L'application s'ouvre — c'est un réveil de BMM, pas une exécution dans son dos.
+
+    `k=` est une clé créée sur ta machine. Le même lien, sans elle, demande avant
+    d'exécuter quoi que ce soit : un lien `bmm://` peut être écrit par n'importe quelle page
+    sur laquelle tu cliques, et les ids de tâches sont des horodatages, donc devinables. La
+    tâche enregistrée est le seul appelant qui puisse prouver qu'il n'est pas une page.
+
+
+
+
+<!-- story:automate -->
+![Automatiser les corvées](assets/docs/media/gifs/automate.gif)
+
+*Automatiser les corvées. Une tâche planifiée qui vérifie les repos suivis et sauvegarde les profils chaque soir, prévisualisée avant d’être enregistrée.*
+
+<!-- /story:automate -->
+
+## Une tâche a trois parties
+
+**Déclencheur → règles → action.** Le déclencheur demande *quand*, les règles demandent *si*,
+l'action est *quoi*.
+
+Dans l'éditeur, chaque étape est une carte dont la couleur dit le genre — bleu pour une action,
+ambre pour une condition, violet pour une boucle, vert pour une attente — sur son étiquette et
+sur son bord gauche, et les étapes imbriquées sous une condition ou une boucle pendent à un
+guide en pointillés. Une étape désactivée garde sa place avec un bord en pointillés ; une étape
+repliée garde son étiquette, pour qu'une longue automatisation se lise toujours comme un
+organigramme.
+
+### 1. Déclencheur — quand
+
+| Type | Se déclenche |
+|---|---|
+| `once` | Une fois, à une date et une heure. |
+| `interval` | Toutes les N minutes. |
+| `hourly` | Toutes les N heures. |
+| `dailyAt` | Chaque jour à `HH:MM`. |
+| `weeklyAt` | À une heure, les jours de semaine choisis. |
+| `monthlyAt` | Un jour du mois (1–31) à une heure. |
+| `appStart` | Une fois par lancement de BMM (quelques secondes après le démarrage). |
+| `watchFile` | Un fichier a changé. |
+| `onEvent` | BMM lui-même a signalé quelque chose — un mod manquant, une synchro ratée. Se déclenche aussi sur tout ce qui fait un `POST` vers `/api/hook` avec ce nom : un webhook et un événement BMM sont la même chose. |
+| `afterTask` | Une autre tâche s'est terminée. Éventuellement seulement si elle a réussi, ou seulement si elle a échoué. |
+| `condition` | L'une des 34 conditions est devenue vraie. |
+| `script` | Un script que tu as écrit est sorti avec le code 0. |
+| `rss` | Un flux (RSS ou Atom) a un élément qu'il n'avait pas — [plus bas](#prevenir-le-monde-exterieur-webhooks-discord-slack-flux). |
+| `manual` | Jamais tout seul — seulement le bouton ▶ **Lancer maintenant** ou `bmm://schedule/run`. |
+
+!!! warning "Les déclencheurs horaires ne partent que si BMM est éveillé"
+
+    `dailyAt` / `weeklyAt` / `monthlyAt` sont vérifiés par la boucle interne de BMM, qui se réveille
+    environ toutes les 20 secondes. Si BMM est **fermé** à cette minute précise, l'exécution est
+    manquée et **non** rattrapée. C'est à ça que sert *Exécuter même quand BMM est fermé* (plus bas).
+
+
+#### Les trois qui attendent quelque chose que BMM ignore
+
+`afterTask`, `condition` et `script` existent parce que les autres déclencheurs ne savent
+répondre qu'à des questions dont BMM a déjà la réponse.
+
+**Après une autre tâche.** Choisis une tâche et, si tu veux, une issue : *quelle qu'elle
+soit*, *seulement si elle a réussi*, *seulement si elle a échoué*. Ce qu'a fait l'autre tâche
+arrive dans `{event.name}`, `{event.ok}` et `{event.ms}`, pour qu'une tâche de réparation
+puisse dire quelle exécution elle répare.
+
+Ce n'est pas un cas particulier greffé sur la boucle. Chaque exécution terminée fait sonner
+`bmm.task.done` sur l'anneau de hooks que lisent déjà `onEvent` et `wait.hook`, et ce
+déclencheur n'en est qu'un lecteur — c'est pourquoi tu peux aussi attraper toutes les fins de
+tâches avec un simple `onEvent`.
+
+!!! warning "Une chaîne s'arrête après 8 tâches"
+
+    Deux tâches qui s'attendent l'une l'autre forment une boucle que rien d'autre n'arrêterait :
+    chaque étape prise séparément se comporte correctement. Chaque exécution transporte donc un
+    compteur de maillons, et la neuvième refuse avec un message qui nomme la tâche. Une tâche
+    qui s'attend **elle-même** est refusée d'emblée.
+
+**Quand une condition devient vraie.** Les mêmes 34 conditions qu'utilise une règle `SI`, en
+*quand* au lieu de *si* : `quand l'espace libre passe sous 10 Go`, `quand cette app ne tourne
+pas`.
+
+Elle se déclenche sur le **changement**, pas sur l'état. Une version qui partirait tant que la
+condition tient lancerait cent nettoyages avant que le premier ait fini de faire de la place —
+elle part donc une fois au passage faux→vrai, et pas de nouveau tant qu'elle n'est pas
+redevenue fausse entre-temps.
+
+**Quand un script le dit.** Le libre : PowerShell, CMD, Bash, Python, Node ou Rust, exécuté à
+l'intervalle de ton choix.
+
+**C'est toi qui décides ce qui compte comme « oui ».** Quatre règles : il réussit (code 0),
+le code de sortie vaut exactement N, il affiche quelque chose, ou ce qu'il affiche contient un
+texte donné. Avant, c'était le code 0 et rien d'autre, décidé dans le coureur et écrit nulle
+part — donc une sonde qui affiche sa réponse et sort 0 dans tous les cas se déclenchait à
+chaque intervalle, et une sonde qui signale en sortant 1 ne se déclenchait jamais. Les deux
+ressemblaient à un déclencheur cassé plutôt qu'à une règle que personne n'avait dite.
+
+Le code peut être **écrit ici ou lu depuis un fichier**. Un fichier est relu à chaque
+vérification : le modifier dans ton éditeur change donc ce que BMM surveille. Le bouton
+« Charger » à côté de l'éditeur en prend une copie — c'est une autre promesse, d'où leur
+séparation. Un fichier disparu ne déclenche pas.
+
+Ce qu'il a affiché arrive dans `{event.stdout}`, et son code de sortie dans
+`{event.exitCode}` — une sonde peut donc dire CE QU'elle a remarqué, pas seulement qu'elle a
+remarqué quelque chose.
+
+Ce déclencheur exécute du code : il demande donc la permission **Exécuter des scripts** —
+vérifiée avant que la sonde tourne, pas au moment où la tâche s'exécute. Sans cette règle,
+une tâche dont les étapes ne demandent rien exécuterait quand même le code de son auteur
+toutes les quelques minutes. Une sonde encore en cours quand la suivante est due est sautée
+plutôt qu'empilée.
+
+En BMMScript, les trois s'écrivent :
+
+```bmms
+task "Réparer après la synchro de nuit" {
+    after task "t-42" failed
+}
+
+task "Nettoyer quand le disque se remplit" {
+    when file exists "C:/games/.full"
+}
+
+task "Surveiller le serveur" {
+    probe python every 5m {
+        import sys, urllib.request
+        n = len(urllib.request.urlopen("http://server/players").read().split())
+        sys.exit(0 if n > 20 else 1)
+    }
+}
+```
+
+### 2. Règles — si
+
+Une règle, c'est `SI <condition> ALORS <action>`. C'est là que le planificateur cesse d'être
+une minuterie et devient utile. Les conditions :
+
+| Condition | Vraie quand |
+|---|---|
+| `Toujours` | Sans condition (par défaut). |
+| `Profil actif` | Un [profil](doc-page:features/profiles) donné est le courant. |
+| `Mod activé` / `Mod désactivé` | L'état d'un mod donné. |
+| `Modpack actif` / `Modpack inactif` | Tous les mods d'un [modpack](doc-page:features/modpacks) sont on / off. |
+| `Tous les mods du profil actif sont on` | Rien n'est éteint dans le profil. |
+| `App en cours` / `App non lancée` | Un processus (par nom) tourne ou non — le jeu, par exemple. |
+| `En ligne` | La machine a une connexion internet. |
+| `Jour de la semaine` | Aujourd'hui est un des jours choisis. |
+| `Plage horaire` / `Heure atteinte` | L'horloge est dans une plage / a dépassé une heure. |
+| `Fichier existe` / `hash` / `taille` / `type` | Vérifs de fichier — un chemin existe, ou son hash (blake3/sha256), sa taille ou son type correspond. |
+| `La commande réussit` | Une commande externe s'exécute et sort en `0`. |
+| `Comparaison de valeur` | Un nombre capté se compare à un seuil (plus bas). |
+
+!!! warning "La première qui correspond gagne"
+
+    D'après l'état vide du planificateur lui-même : *Aucune règle — ajoutes-en une. **La
+    première ligne qui correspond gagne** (de haut en bas).*
+
+    Ordonne tes règles **de la plus spécifique à la plus générale**, exactement comme des
+    règles de pare-feu. Une règle `Toujours` en haut rend toutes celles du dessous du code
+    mort — et rien ne te le dira, puisque du point de vue du planificateur, il a fait son
+    travail.
+
+### 3. Action — quoi
+
+Il y a ~143 actions réparties en onze groupes :
+
+| Groupe | Quelques actions |
+|---|---|
+| **Mods & profils** | Activer un profil · **créer / renommer / supprimer un profil** · activer/désactiver un mod · **retirer un mod** · activer/désactiver un modpack · créer un modpack · **supprimer un modpack** · ajouter un mod depuis une URL · exporter/importer une liste · tout activer/désactiver · scanner le dossier · vérifier les MàJ de mods |
+| **Dépôt & partage** | Connecter · synchroniser · générer · mettre à jour · héberger un dépôt |
+| **Apps & lancement** | Lancer une app · installer une app · ouvrir un fichier/dossier · **lancer un [Launch Pack](doc-page:features/launch-packs)** |
+| **Apparence** | Appliquer un thème |
+| **Benchmarks & stockage** | Benchmark d'app · **benchmarker un disque** · **appliquer une limite de vitesse** · basculer **Smart I/O** / **Auto-calibration** · **vérifier l'espace libre** (voir [Stockage](doc-page:features/storage)) · **choisir le preset de ressources**, **le mode jeu**, **suspendre ou reprendre la file** (voir [plus bas](#lintensite-de-travail-de-bmm)) |
+| **Confidentialité & enregistreur** | Consentement télémétrie · enregistreur de session · exporter/importer un replay |
+| **Système & flux** | Afficher une notification · Discord RPC · exporter une sauvegarde · définir une variable · **lancer une autre tâche planifiée** · redémarrer BMM · ouvrir une URL · **lancer une commande personnalisée** |
+| **Logique & maths** | Calcul mathématique dans une variable · ternaire · table de décision · garde d'arrêt de tâche |
+| **Notifications & web** | Envoyer un webhook · un message Discord ou Slack · lire un flux (voir [plus bas](#prevenir-le-monde-exterieur-webhooks-discord-slack-flux)) |
+| **Laya (IA)** | Trier un texte dans tes libellés · lancer une de tes tâches Laya · taguer un mod · vérifier la bibliothèque · trouver les causes des nouveaux crashs · expliquer un crash · trier un rapport · lire l'état de Laya (voir [plus bas](#laya-dans-une-tache)) |
+
+Beaucoup d'actions s'exécutent en émettant un deeplink `bmm://` canonique via le gestionnaire de
+l'app — la même plomberie qu'expose la page [Plugins & API](doc-page:features/plugins), d'où le fait que les deux
+systèmes peuvent se piloter mutuellement. Chacune de ces étapes construit son propre lien à partir
+de ses champs ; aucune étape ne déclenche un lien que tu tapes.
+
+L'ancienne étape générique *Lancer un deeplink bmm://* est **supprimée** : elle ne faisait rien
+quand elle s'exécutait, et les actions typées ci-dessus couvrent ce à quoi elle servait. Une tâche
+enregistrée avec elle se charge toujours. L'éditeur affiche l'étape comme supprimée, avec son
+ancien lien, et l'exécution l'ignore avec un avertissement : le reste de la tâche s'exécute comme
+avant. Choisis une action typée à sa place.
+
+## Tourner quand BMM est fermé
+
+> Exécuter même quand BMM est fermé.
+
+Ça enregistre la tâche auprès du **planificateur de ton système**, pas de la boucle interne
+de BMM. Le système la réveille à l'heure, que l'app tourne ou non — tout l'intérêt d'un
+« prépare mon modpack à 6h ».
+
+Ça veut aussi dire que la tâche vit en dehors de BMM. La supprimer dans BMM supprime aussi la
+tâche système ; si tu fouilles la liste des tâches de ton OS, ce sont ces entrées-là.
+
+## Exécuter ton propre code
+
+Deux étapes sortent de BMM. **Lancer un programme externe** démarre quelque chose avec des
+arguments. **Exécuter un script** prend du code que tu écris — PowerShell, CMD, Bash ou
+Python — directement dans la tâche.
+
+Le script est enregistré dans un fichier temporaire et c'est *le fichier* qui est remis à
+l'interpréteur. Rien de ce que tu tapes n'est jamais placé sur une ligne de commande : aucun
+échappement à réussir, et un guillemet égaré ne peut pas changer ce qui s'exécute. Dans un
+**Pour chaque**, `{item.name}` et `{item.id}` sont remplacés avant le démarrage, donc un seul
+script peut agir sur chaque mod à son tour.
+
+Dans *Avancé*, nomme une variable. La première ligne de sortie du script en devient la valeur,
+et les étapes suivantes peuvent la tester :
+
+```powershell
+# compte les .dll ; un SI plus loin peut se brancher sur {dlls}
+(Get-ChildItem -Recurse -Filter *.dll | Measure-Object).Count
+```
+
+Sans ça, un script ne pouvait que signaler une réussite ou un échec — « si le script dit oui,
+alors… » n'avait aucun moyen d'être exprimé.
+
+## Les permissions
+
+Chaque tâche accorde onze choses séparément, et chacune dit ce qu'elle débloque :
+
+| Autorisation | Ce qu'elle permet |
+|---|---|
+| **Lancer des programmes externes** | Démarrer un programme avec des arguments |
+| **Exécuter des scripts** | Exécuter du PowerShell / CMD / Bash / Python que tu as écrit |
+| **Déclencher des deeplinks** | Exécuter les étapes qui agissent par un lien `bmm://` qu'elles construisent elles-mêmes : suivre un catalogue, ouvrir un écran, exporter les données… |
+| **Arrêter un programme** | Terminer un processus en cours |
+| **Supprimer des choses** | Supprimer un profil, un modpack, ou le dossier d'un mod |
+| **Ressources** | Changer le preset de ressources, le mode jeu et la file ([plus bas](#lintensite-de-travail-de-bmm)) |
+| **Autres tâches** | Lancer, démarrer ou activer une autre de tes tâches (*Lancer une autre tâche*, *Lancer une autre tâche sans attendre*, *Armer ou désarmer une autre tâche*) |
+| **Réseau** | Envoyer des webhooks et des messages Discord ou Slack, et lire un flux pour le déclencheur `rss` — http(s) uniquement, jamais une adresse privée sauf si l'étape autorise le réseau local ([plus bas](#prevenir-le-monde-exterieur-webhooks-discord-slack-flux)) |
+| **Laya (IA)** | Interroger Laya sur ce PC : chaque étape `ai.*` (classer un texte, classer un mod, vérifier la bibliothèque, trouver les causes des crashs…) et la condition `aiAvailable` ([plus bas](#laya-dans-une-tache)) |
+| **Naviguer et cliquer** | Ouvrir une fenêtre listée ou appuyer sur un contrôle listé des écrans de BMM (`nav.modal`, `nav.click`, [plus bas](#naviguer-dans-bmm-depuis-une-tache)). Afficher une page, une carte ou un message ne demande rien |
+| **Placer les fichiers du paquet** | Copier un fichier que le paquet de l'automatisation transporte dans les dossiers Saved Games de DCS, le dossier du jeu ou celui des mods (`pkg.install`), et y écrire le rapport de la porte d'accès (`gate.report`). Chaque placement reste demandé une fois, dans une fenêtre BMM, avec un reçu ([plus bas](#paquets-dautomatisation)) |
+
+Les onze sont désactivées tant que tu ne les actives pas, et une étape dont la permission
+manque échoue avec un message indiquant laquelle accorder — elle ne s'exécute jamais en
+silence.
+
+**Supprimer des choses** est l'intruse. Quatre des autres concernent ce qui sort de BMM ;
+celle-ci détruit tes propres données de l'intérieur, là où aucune barrière externe ne la
+verrait passer. Elle couvre la suppression d'un profil, celle d'un fichier de modpack, et —
+seulement si tu coches la deuxième case — celle du dossier d'un mod sur le disque. Rien ici ne
+passe par la corbeille.
+
+**Ressources** reste aussi à l'intérieur de BMM et ne détruit rien, mais une tâche qui l'a peut
+faire tourner BMM à fond pendant que tu joues, ou retenir toutes les opérations dans la file
+jusqu'à ce que quelque chose les reprenne. C'est une décision sur ta machine, donc c'est une
+permission comme les autres.
+
+Arrêter un programme est séparé de le lancer parce que le risque est d'une autre nature :
+démarrer quelque chose s'annule, tuer quelque chose peut perdre un travail non enregistré sans
+rien pour revenir en arrière.
+
+**Autres tâches** existe parce que lancer une autre tâche, c'est agir avec les permissions de
+*cette* tâche-là. Sans elle, une tâche à qui rien n'est accordé pouvait lancer, ou activer pour
+son déclencheur, une de tes propres tâches capable de lancer des programmes ou de supprimer des
+choses. C'est une permission à part plutôt qu'une partie de **Déclencher des deeplinks** : laisser
+une tâche appeler sa sous-tâche ne lui permet pas aussi de suivre des catalogues, d'ouvrir des écrans
+ou d'exporter les données par un lien.
+
+!!! warning "Ces liens s'exécutent en tant que planificateur"
+
+    Les étapes sous **Déclencher des deeplinks** passent par le même gestionnaire qu'un lien
+    `bmm://` venu d'une page web, mais en tant que planificateur, qui est de confiance : rien ne
+    te demande quoi que ce soit à 3 h du matin. Les limites strictes (pas de chemin réseau, pas de
+    chemin de programme brut, pas de script porté par un lien) s'appliquent toujours. Une tâche
+    ne peut pas écrire son propre lien : chaque étape en construit un fixe à partir de ses champs,
+    et *Ouvrir un écran ou une fenêtre* n'ouvre que les fenêtres de sa liste.
+
+!!! note "Migration depuis l'ancienne case unique"
+
+    Une tâche construite avant la séparation garde tout ce qu'elle avait, y compris lancer
+    d'autres tâches — mais aucune ne gagne
+    **Exécuter des scripts**, **Arrêter un programme**, **Supprimer des choses** ni **Ressources**. Aucune de
+    ces capacités n'existait quand tu as coché *Autoriser les commandes personnalisées* : te
+    les accorder maintenant reviendrait à inventer ton consentement plutôt qu'à l'honorer.
+
+!!! danger "Une tâche qui arrive dans un FICHIER n'en reçoit aucune"
+
+    Importer un `.bmmpa`, ou ajouter un `.bmmscript` partagé à tes tâches, retire les quatre
+    autorisations et laisse la tâche **désactivée** — puis te dit ce que le fichier demandait.
+
+    L'automatisation est intacte et à un interrupteur de fonctionner. Ce qu'elle ne peut pas
+    faire, c'est arriver en tenant déjà le droit de lancer des programmes à intervalle
+    régulier — ce qui était le cas avant : seul *Exécuter même quand BMM est fermé* était
+    effacé, et tout le reste passait tel que l'auteur l'avait réglé.
+
+## Un exemple
+
+Le planificateur en fournit un, et c'est une bonne forme à copier :
+
+> Toutes les heures, boucle 3× et affiche une notification à chaque fois.
+
+Pars de là, remplace la notification par une vraie action, et ajoute une condition pour
+qu'elle ne se déclenche que quand il le faut.
+
+### La condition `Comparaison de valeur`
+
+Elle compare un nombre que BMM a capté plus tôt dans l'exécution — par exemple la vitesse
+d'écriture mesurée d'un disque (`disk.write_mbps`) ou un résultat de benchmark
+(`benchmark.mbps`) — à un seuil que tu fixes, via l'un de six opérateurs :
+
+`>` · `<` · `>=` · `<=` · `==` · `!=`
+
+Ainsi « *si `disk.write_mbps` `<` 50, affiche un avertissement* » devient une vraie règle. Si
+la valeur source n'a jamais été captée, la condition est simplement fausse — elle ne se
+déclenche pas sur une donnée manquante. Chaque condition peut aussi être **niée**.
+
+### Les groupes — `all` et `any`
+
+`all` et `any` contiennent une **liste d'autres conditions**, pour qu'une garde pose plusieurs
+questions sans un escalier de `si` imbriqués. « Quand le jeu est fermé **et** qu'il est plus de
+18 h **et** qu'une sauvegarde existe » tient dans un seul `all` ; un `any` à la place donne un
+*ou*. Ce sont eux-mêmes des conditions, donc ils s'imbriquent, et la négation que chaque
+condition avait déjà donne le *non*.
+
+Deux comportements à connaître, parce que ce sont ceux qu'on devine mal :
+
+- Un groupe **s'arrête à la première réponse qui tranche**. `all` s'arrête au premier faux,
+  `any` au premier vrai — les conditions suivantes ne sont donc jamais évaluées. Ça compte :
+  une condition peut lancer une commande ou aller sur le réseau, alors mets la moins chère
+  en premier.
+- Un `all` **vide est vrai** ; un `any` vide est faux. Ajouter un groupe sans le remplir tout
+  de suite ne bloque pas la tâche que tu es en train d'écrire.
+
+## Choisir une action ou une condition
+
+Les deux sélecteurs ouvrent le même panneau : une recherche, puis chaque type regroupé (mods & profils, dépôt & partage, apps, apparence, benchmarks & stockage, confidentialité, logique, système — et pour les conditions : logique & valeurs, mods, fichiers, apps/réseau/tâches, temps), chacun avec son nom et une ligne qui dit ce qu'il fait. Tape un mot — *dépôt*, *fichier*, *stop* — et seuls les types correspondants restent ; Entrée prend le premier, Échap ferme. Le type actuel est surligné, et survoler le bouton dans l'étape réaffiche sa description.
+
+## Les conditions — *si*
+
+Une tâche peut porter des conditions pour n'agir que quand l'état est le bon. Chaque condition
+peut être **niée** (« *pas* connecté »), et elles servent de deux façons : pour conditionner une
+action (`if`), ou pour patienter jusqu'à ce que quelque chose devienne vrai (`waitFor`,
+plus bas).
+
+| Condition | Vraie quand |
+|---|---|
+| `always` | Toujours — le défaut, aucune barrière. |
+| `profileActive` | Un profil précis est le profil actif. |
+| `modEnabled` · `modDisabled` | Un mod précis est activé / désactivé. |
+| `modpackActive` · `modpackInactive` | Tous les mods d'un modpack sont activés / désactivés. |
+| `allModsActive` | Tous les mods du profil actif sont activés. |
+| `appRunning` · `appNotRunning` | Un processus (par nom) tourne / ne tourne pas. |
+| `online` | La machine a une connexion Internet. |
+| `textIs` | Une variable texte vaut / ne vaut pas / contient / correspond / est vide. |
+| `fileContains` | Les derniers N Ko d'un fichier contiennent un texte ou correspondent à un motif. |
+| `dayOfWeek` | Aujourd'hui fait partie des jours choisis. |
+| `timeRange` · `timeReached` | L'heure est dans une plage / a dépassé une heure. |
+| `fileExists` · `fileHash` · `fileSize` · `fileType` | Vérifications de fichier — un chemin existe, ou son hash (blake3/sha256), sa taille ou son type correspond. |
+| `commandSucceeds` | Une commande externe s'exécute et sort avec `0`. |
+| `gameRunning` · `resourcesPresetIs` · `queueIdle` | Le mode jeu est actif · le preset en vigueur est celui que tu as choisi · BMM n'a aucune opération en cours ni en attente ([plus bas](#lintensite-de-travail-de-bmm)). |
+| `value` | Un nombre capturé se compare à un seuil (plus bas). |
+| `all` · `any` | Toutes / au moins une des conditions qu'elle contient sont vraies (plus bas). |
+
+### Les groupes — `all` et `any`
+
+`all` et `any` contiennent une **liste d'autres conditions**, pour qu'une barrière puisse poser
+plus d'une question sans un escalier de `if` imbriqués. « Quand le jeu est fermé **et** qu'il
+est après 18:00 **et** qu'une sauvegarde existe », c'est un seul `all` ; mets un `any` à la
+place pour un *ou*. Ce sont elles-mêmes des conditions, donc elles s'imbriquent, et `negate` —
+que chaque condition avait déjà — te donne le *non*.
+
+Deux comportements à connaître, parce que ce sont ceux qu'on se trompe :
+
+- Un groupe **s'arrête à la première réponse qui tranche**. `all` s'arrête au premier faux,
+  `any` au premier vrai — les conditions suivantes ne s'exécutent donc pas. Ça compte parce
+  qu'une condition peut lancer une commande ou atteindre le réseau : mets la vérification la
+  moins coûteuse en premier.
+- Un **`all` vide est vrai** ; un `any` vide est faux. Ajouter un groupe sans l'avoir encore
+  rempli ne bloque pas la tâche que tu es en train d'écrire.
+
+### La condition `value`
+
+`value` compare un nombre que BMM a capturé plus tôt dans l'exécution — par exemple la vitesse
+d'écriture mesurée d'un disque (`disk.write_mbps`) ou un résultat de benchmark
+(`benchmark.mbps`) — à un seuil que tu définis, avec l'un de six opérateurs :
+
+`>` · `<` · `>=` · `<=` · `==` · `!=`
+
+« *si `disk.write_mbps` `<` 50, afficher un avertissement* » devient donc une vraie règle. Si la
+valeur source n'a jamais été capturée, la condition est simplement fausse — elle ne se
+déclenchera pas sur une donnée absente.
+
+## L'intensité de travail de BMM
+
+Trois actions et trois conditions pilotent le [gouverneur de ressources](doc-page:how-it-works/resources),
+la partie de BMM qui décide à quel point il sollicite ton CPU et tes disques. Chacune de ces actions
+demande la permission de tâche **Ressources** ; une étape qui ne l'a pas échoue et le dit.
+
+| Action | Ce qu'elle fait | Réglages |
+|---|---|---|
+| `resources.preset` | Choisit un preset : **Silencieux**, **Équilibré** ou **Tout pour BMM** | **pour cette tâche seulement** (par défaut) ou **pour de bon** · **même pendant un jeu** |
+| `resources.gameMode` | Mode jeu : **Le détecter**, **Forcer**, **Arrêter** | — |
+| `resources.queue` | **Suspendre tout ce qui attend**, ou **Tout reprendre** | — |
+
+**Pour cette tâche seulement**, c'est celui qu'il te faut. Le preset dure le temps de la tâche et
+revient au tien quand elle se termine, qu'elle ait réussi ou échoué, et au bout de **2 heures** au
+plus même si la tâche n'arrive jamais jusque-là. Il n'est jamais enregistré dans tes réglages.
+**Pour de bon**, c'est comme appuyer sur le bouton du preset dans le Gestionnaire de Stockage. Une
+deuxième étape de preset dans la même tâche remplace la première.
+
+D'habitude, le mode jeu l'emporte sur le preset d'une tâche : pendant qu'un jeu tourne, BMM reste
+Silencieux. Coche **même pendant un jeu** pour une tâche qui doit finir à pleine vitesse quand même.
+
+| Condition | Vraie quand |
+|---|---|
+| `gameRunning` | Le mode jeu est actif |
+| `resourcesPresetIs` | Le preset **en vigueur** est celui que tu as choisi (celui d'une tâche ou du mode jeu compte, pas seulement le tien) |
+| `queueIdle` | BMM n'a aucune opération en cours ni en attente |
+
+La condition `value` peut aussi lire `queue.length`, le nombre d'opérations en cours ou en
+attente, lu au moment où la condition est vérifiée.
+
+Une tâche de nuit qui travaille à fond puis remet tout en place :
+
+```text
+03:00  resources.preset   Tout pour BMM, pour cette tâche seulement
+       mods.checkUpdates
+       ATTENDRE queueIdle
+       (la tâche se termine : le preset revient au tien)
+```
+
+!!! note "La détection ou une tâche"
+    **Le détecter** active le mode jeu tout seul pour un jeu lancé depuis le dossier de jeu d'un
+    profil, un jeu listé dans le Gestionnaire de Stockage, ou un jeu en plein écran exclusif. Pour
+    un jeu qu'il ne voit pas, une tâche peut le forcer : `resources.gameMode` **Forcer** avant qu'un
+    launch pack lance le jeu, **Le détecter** de nouveau ensuite. Voir
+    [Comment marche la détection](doc-page:how-it-works/resources#comment-marche-la-detection).
+
+## Boucles & attente
+
+Au-delà d'une liste plate d'actions, une tâche peut se ramifier et se répéter :
+
+| Bloc | Rôle |
+|---|---|
+| **`si`** | Exécute un jeu d'étapes quand une condition tient, un autre (`sinon`) quand elle ne tient pas. |
+| **`répéter`** | Exécute ses étapes en boucle — `tant que` une condition tient, `jusqu'à` ce qu'une tienne, ou un nombre fixe de `fois`. `everySec` fixe l'écart entre itérations, et **`maxIters` est un plafond de sécurité strict** pour qu'une boucle `tant que`/`jusqu'à` ne tourne jamais indéfiniment. |
+| **`attendre`** | Met en pause jusqu'à ce qu'une condition devienne vraie, en sondant toutes les `pollSec`, jusqu'à `timeoutSec`. Au timeout, elle **abandonne** la tâche ou **continue** quand même — au choix. |
+| **`pour chaque`** | Exécute ses étapes une fois **par élément d'une collection vivante** — mods activés, désactivés, tous, profils, modpacks ou thèmes, récupérée au moment de l'exécution. Dans le corps, `{item.id}` / `{item.name}` (n'importe quel champ de l'élément) sont substitués dans chaque paramètre d'action. Même plafond `maxIters` et pause par tour que `répéter`. |
+| **`switch`** | Des cas ordonnés, chacun avec sa condition — le **premier** qui correspond s'exécute, sinon la branche `défaut`. Plus propre qu'un escalier de `si` imbriqués. |
+
+`répéter` gagne aussi un mode **`do… while`** : le corps s'exécute D'ABORD, puis la condition
+décide d'un autre tour — la boucle post-condition, pour « essaie une fois, continue tant que ça marche ».
+
+L'exemple fourni est un `répéter` en mode `fois` (boucle 3×). Change le mode en
+`tant que`/`jusqu'à` avec une condition `Comparaison de valeur` ou `App en cours`, et tu
+obtiens des automatisations comme « *continue de vérifier jusqu'à ce que le processus du jeu
+sorte, puis exporte mes données* ».
+
+## Trois façons de modifier une tâche
+
+**La première fois que vous créez une tâche**, BMM demande laquelle des trois vous préférez —
+**Flux** (recommandé : toute la tâche d'un coup d'œil, un test par nœud, le débogueur qui la
+parcourt), **BMMScript** ou **Blocs**, une ligne chacune. La réponse est un réglage :
+**Paramètres → Planification → Les tâches s'ouvrent en**, et le sélecteur en haut de l'éditeur le
+change aussi.
+
+**L'en-tête de l'éditeur** porte ce sur quoi on agit : le nom de la tâche, si elle est **Activée**
+ou **Désactivée** (cliquez pour basculer), *Modifications non enregistrées* quand il y en a, le
+sélecteur de mode, **Aperçu** (une exécution à blanc qui ne change rien), **Déboguer**, **Test** et
+**Enregistrer** — qui garde l'éditeur ouvert (:kbd[Ctrl+S]). Le pied garde **Annuler** et
+**Enregistrer et fermer**.
+
+
+Le constructeur a un sélecteur au-dessus des étapes : **Blocs**, **Code** et **Flux**. Ce sont trois
+vues de la même tâche. Il n'y a qu'un arbre d'étapes ; chaque mode le lit et l'écrit, donc une tâche
+construite dans l'un s'ouvre à l'identique dans les deux autres, et le constructeur rouvre dans le
+dernier mode utilisé.
+
+| Mode | Ce que c'est | Utile pour |
+|---|---|---|
+| **Blocs** | Les étapes en cartes, de haut en bas, avec leurs champs. | Remplir des champs ; glisser une étape dans une branche. |
+| **Code** | Les étapes en texte [BMMScript](doc-page:features/bmmscript). En sortir compile le texte ; une erreur t'y garde, avec la ligne fautive. | Écrire vite ; coller ; relire une tâche entière d'un coup. |
+| **Flux** | La tâche en graphe, de gauche à droite : le déclencheur, un nœud par étape, une voie par branche, une jonction où les voies se rejoignent. | Voir la forme d'une tâche avec des branches, des boucles et du travail en parallèle. |
+
+### Le flux
+
+- **Les nœuds.** Chacun montre son icône, ce qu'il fait, et une ligne sur *lequel* (le fichier, le
+  mod, la condition). Un **SI**, un **SWITCH** ou un **S'ASSURER** ouvre ses voies à droite (ALORS /
+  SINON, chaque CAS et DÉFAUT) ; une boucle dessine son corps avec un trait pointillé qui revient ;
+  **EN MÊME TEMPS** dessine une voie par branche ; **ESSAYER** a une voie ESSAYER et une voie EN CAS
+  D'ERREUR.
+- **Ajouter.** Chaque lien a un **+** en son milieu, chaque voie vide a un **+**, et la fin de la
+  tâche aussi. Chacun ouvre une recherche sur toutes les étapes et toutes les actions — quelques
+  lettres, les flèches, Entrée. Une action qui demande une permission que la tâche n'a pas le dit
+  dans la liste.
+- **Modifier.** Sélectionne un nœud : le panneau de droite montre ses champs. Ce sont *les mêmes*
+  champs qu'en Blocs, pas une copie : les mêmes sélecteurs, les mêmes vérifications.
+- **Déplacer.** Fais glisser un nœud ; il s'aligne sur la grille. L'endroit où tu le poses est gardé
+  avec la tâche, comme un décalage par rapport à sa place automatique : insérer une étape pousse
+  toujours ce qui suit. La **disposition automatique** oublie les positions placées à la main. Où un
+  nœud se trouve ne change rien à ce que fait la tâche, ni à son identifiant de contenu.
+- **Dernière exécution.** Pour une tâche enregistrée, chaque action montre comment s'est passée la
+  dernière exécution : un point vert si elle a réussi, rouge si elle a échoué (survole-le pour
+  l'erreur), un point vide pour une étape jamais atteinte. Un bloc prend le pire de ce qui a tourné
+  dedans.
+- **Les fils.** Chaque nœud a une entrée à gauche et une sortie à droite. Fais glisser une sortie
+  sur une autre étape : cette étape passe juste après celle-ci (une tâche est une suite, relier deux
+  nœuds *c'est* les ordonner ; une étape ne peut pas aller dans elle-même). Lâche dans le vide et la
+  recherche s'ouvre là : ce que tu choisis est ajouté après le nœud, à l'endroit où le fil s'arrête.
+- **Chercher et ajouter, là où tu es.** Clic droit sur le canevas, ou :kbd[Tab] avec le pointeur
+  dessus, ouvre la même recherche sous le pointeur ; le nouveau nœud se pose où tu as cliqué.
+- **Les couleurs.** La bande et l'icône d'une action prennent la couleur de sa catégorie (mods,
+  dépôt, applis, paquets et jeux, notifications, logique…) : une longue tâche se lit d'un coup d'œil.
+- **Les cadres.** :kbd[C], ou **Encadrer la sélection** dans la barre, dessine une boîte titrée
+  autour des nœuds sélectionnés, comme un commentaire de Blueprint. Double-clic sur le titre pour le
+  renommer ; clic droit sur sa barre de titre pour changer sa couleur (six couleurs du thème) ou le
+  retirer (ses étapes restent). Fais glisser la barre de titre et les nœuds dedans suivent ; le coin
+  le redimensionne ; la flèche le replie sur sa barre, les fils s'y arrêtent.
+- **Les points de passage.** Double-clic sur un fil (ou clic droit) pour ajouter un point ; fais
+  glisser le point pour courber le fil ; double-clic dessus pour l'enlever.
+- **Ranger.** Sélectionne plusieurs nœuds (:kbd[Maj] + glisser, ou :kbd[Ctrl] + clic), puis
+  **Ranger** : aligner à gauche, les centres, à droite, en haut, les milieux ou en bas, répartir de
+  gauche à droite ou de haut en bas, ou redisposer toute la tâche. **Aimanter à la grille** (:kbd[G])
+  se coupe pour placer librement.
+- **Copier, coller.** :kbd[Ctrl+C], :kbd[Ctrl+X] et :kbd[Ctrl+V] copient, coupent et collent des
+  étapes (avec tout ce qu'elles contiennent) après la sélection, dans cette tâche ou une autre. Une
+  étape collée n'a aucun droit : les permissions de la tâche décident, comme pour une étape tapée.
+- **Vérifications en direct.** Une étape qui ne peut pas tourner parce qu'un champ obligatoire est
+  vide dit lequel, sur le nœud et en haut de son panneau, avant toute exécution.
+
+Les cadres, les points de passage, le dossier et les étiquettes de la liste sont gardés dans le
+bloc `ui` de la tâche (versionné, présentation seulement, jamais lu par une exécution). Une
+automatisation enregistrée avant n'en a pas et s'ouvre disposée automatiquement, comme avant.
+
+!!! warning "Les permissions décident toujours"
+
+    Un nœud dont l'étape demande une permission que la tâche n'a pas porte un **!** et dit, avec les
+    mots de l'exécution, ce qui lui sera refusé. Le flux n'accorde jamais rien : *Le montrer dans
+    Permissions* t'emmène à la case du panneau latéral, la même que dans les autres modes, et
+    l'exécution vérifie l'autorisation exactement comme avant.
+
+### Raccourcis du flux
+
+Chaque raccourci ici est une commande : il est dans la palette :kbd[Ctrl+K] quand l'éditeur est
+ouvert, et il se change dans **Réglages → Raccourcis clavier**, sous *Planificateur*. Les touches du
+flux n'agissent que quand le canevas a le focus : taper dans un champ n'est jamais intercepté.
+
+| Commande | Par défaut |
+|---|---|
+| Ajouter un nœud… | :kbd[/] |
+| Modifier le nœud sélectionné | :kbd[Entrée] |
+| Supprimer la sélection | :kbd[Suppr] |
+| Dupliquer la sélection | :kbd[Ctrl+D] |
+| Annuler · Rétablir | :kbd[Ctrl+Z] · :kbd[Ctrl+Maj+Z] |
+| Sélectionner toutes les étapes | :kbd[Ctrl+A] |
+| Sélectionner le nœud suivant · Sélectionner le nœud précédent | :kbd[→] · :kbd[←] |
+| Sélectionner le nœud au-dessus · Sélectionner le nœud en dessous | :kbd[↑] · :kbd[↓] |
+| Avancer l’étape · Reculer l’étape | :kbd[Alt+←] · :kbd[Alt+→] |
+| Zoomer · Dézoomer | :kbd[Ctrl+=] · :kbd[Ctrl+-] |
+| Ajuster toute la tâche à la vue | :kbd[F] |
+| Disposition automatique (oublier les positions manuelles) | :kbd[Maj+L] |
+| Chercher et ajouter un nœud sous le pointeur | :kbd[Tab] |
+| Copier la sélection · Couper la sélection · Coller après la sélection | :kbd[Ctrl+C] · :kbd[Ctrl+X] · :kbd[Ctrl+V] |
+| Encadrer la sélection (commentaire) | :kbd[C] |
+| Aimanter à la grille, oui ou non | :kbd[G] |
+| Aligner la sélection à gauche · Aligner la sélection en haut | :kbd[Alt+Maj+←] · :kbd[Alt+Maj+↑] |
+| Répartir la sélection, de gauche à droite · Répartir la sélection, de haut en bas | :kbd[Alt+Maj+H] · :kbd[Alt+Maj+V] |
+| Mode Blocs · Mode Code · Mode Flux | :kbd[Alt+1] · :kbd[Alt+2] · :kbd[Alt+3] |
+| Enregistrer la tâche (et continuer) | :kbd[Ctrl+S] |
+| Tester une fois l’étape sélectionnée | :kbd[T] |
+| Point d’arrêt sur l’étape sélectionnée | :kbd[F9] |
+| Pas à pas (exécuter l’étape suivante, puis s’arrêter) · Continuer jusqu’au prochain point d’arrêt · Arrêter l’exécution | :kbd[F10] · :kbd[F5] · :kbd[Maj+F5] |
+
+Dans le panneau d'un nœud, les réglages sont groupés et disent ce qui ne va pas **pendant la
+frappe** (une adresse qui serait refusée, un corps JSON illisible, une expression régulière qui
+reviendrait en arrière pendant des minutes) ; chaque champ qui accepte des `{variables}` a un
+bouton **{x}** qui liste les variables que la tâche peut nommer. Le panneau montre aussi une
+section **Tester** et une section **Débogage** (point d'arrêt, et les valeurs que l'étape nomme
+pendant une pause).
+
+À la souris : glisse le fond, maintiens :kbd[Espace] en glissant, ou fais défiler, pour te déplacer ;
+:kbd[Ctrl] + molette (ou un pincement) pour zoomer ; :kbd[Maj] + glisser pour sélectionner plusieurs
+nœuds, :kbd[Ctrl] + clic pour en ajouter un à la sélection. Clic droit sur un nœud, la barre de
+titre d'un cadre ou un fil pour ce qu'on peut en faire.
+
+## Laya dans une tâche
+
+Le groupe d'actions **Laya (IA)** interroge **Laya**, le classifieur qui tourne sur ton PC.
+Chacune demande la permission **Laya (IA)** et l'IA activée dans les Paramètres.
+
+| Action | Ce qu'elle laisse |
+|---|---|
+| `ai.classify` | Classe un texte (ou le début d'un fichier texte) dans **tes** étiquettes. `{kind}` est l'étiquette, `{kind.p}` sa probabilité ; aussi `{ai.label}`, `{ai.p}`, `{ai.abstained}` et le score de chaque étiquette dans la map `ai.scores` |
+| `ai.run_task` | Le même classement avec une de tes **tâches Laya** enregistrées (Paramètres → Réponses de Laya → Tâches perso), choisie dans une liste. Mêmes variables |
+| `ai.classify_mod` | Des tags pour un mod, choisis parmi **tes** tags d'après ses propres fichiers, et l'indice de contenu adulte : `{ai.mod.tags}`, `{ai.mod.category}` (le tag le plus sûr), `{ai.mod.adult}`. Avec **Appliquer les tags sûrs**, voir plus bas |
+| `ai.library_check` | Doublons probables, mods qui s'écrasent maintenant, mods sans tag, et les tags de Laya pour 10 d'entre eux au plus. Nombres dans `{ai.lib.findings}`, `{ai.lib.duplicates}`, `{ai.lib.conflicts}`, `{ai.lib.untagged}` ; une liste lisible `ai.library`, les ids sans tag dans la liste `ai.library.untagged`. **Ne change rien** |
+| `ai.crash_label` | « Trouver les causes » sur les rapports de crash arrivés depuis sa dernière exécution (7 jours en arrière la première fois), ou sur les plus récents : famille, cause et probabilité de chacun. Le plus récent dans `{ai.crash.family}`, `{ai.crash.cause}`, `{ai.crash.p}` ; une ligne par crash dans la liste `ai.crashes` |
+| `ai.triage_report` | Un texte (ou un fichier) est-il une idée, un bug ou un crash, et sur quelle partie de BMM : `{ai.report.kind}`, `{ai.report.area}`. Les données personnelles sont masquées avant |
+| `ai.status` | L'état de Laya : `{ai.available}`, `{ai.enabled}`, `{ai.installed}`, `{ai.loaded}`, `{ai.writer}`, `{ai.provider}`. Ne lance aucun modèle |
+| `ai.explain_crash` | Une courte explication écrite d'un crash, dans `{ai.explanation}`. Seulement avec un **modèle de rédaction** configuré |
+| `ai.ask` | Cherche dans la doc et tes mods pour une question. La réponse est du texte dans `{answer}` et `{ai.answer}` |
+| `ai.suggest_mod_metadata` | Liste des suggestions pour un mod (nom, tags, liens…). **Rien n'est appliqué** |
+
+Branche-toi sur le résultat avec les conditions de Laya :
+
+| Condition | Vraie quand |
+|---|---|
+| `aiLabel` | L'étiquette est X avec une probabilité d'au moins *t* : `if aiLabel(var: "kind", label: "crash", min: 0.8) { … }` |
+| `aiScore` | Le score donné par Laya à **n'importe quelle** étiquette, comparé à un nombre : `aiScore(label: "ui", op: ">=", value: 0.3)` |
+| `aiAbstained` | Le dernier classement (`ai`), les tags du dernier mod (`ai.mod`) ou le dernier tri (`ai.report`) a donné « je ne sais pas » |
+| `aiAvailable` | Laya peut tourner maintenant, est activée, installée, chargée, ou un modèle de rédaction est configuré. Interroge l'application : demande la permission |
+| `crashCause` | La famille (ou la cause) du crash le plus récent, ou d'un crash de l'exécution, est X avec une probabilité minimum. Sans étape de crash dans l'exécution, elle lit ce que le déclencheur a apporté |
+| `aiLibraryCount` | Un nombre de la dernière vérification de la bibliothèque, comparé à une valeur (`>= 1` par défaut) |
+| `modAiTag` | Laya a donné à un mod (par défaut le dernier classé) le tag X. Une supposition signalée ne compte pas |
+
+Chaque nom de variable est stable et listé avec son contenu dans le code (`sched-vars.ts`,
+`LAYA_VARS`). Une étape avec **into: x** écrit aussi les mêmes valeurs sous `x.` (`{x.tags}`,
+`{x.abstained}`…).
+
+**Tes réglages de réponses s'appliquent.** Chaque étape passe par Paramètres → **Réponses de
+Laya** de son domaine : « Tâches et scripts » pour un classement, « Analyse de la bibliothèque »
+pour les tags d'un mod et la vérification, « Rapports de crash » pour les causes, « Rapports de
+bug » pour le tri. Un seuil relevé fait s'abstenir Laya plus souvent (`none`, `unknown`,
+`{…abstained}` = 1) ; « garder la meilleure supposition, signalée » la garde, marquée comme
+supposition (un `?` dans la liste des crashs, jamais appliquée, jamais comptée par `modAiTag`).
+
+**Appliquer des tags.** Avec **Appliquer les tags sûrs** coché, `ai.classify_mod` n'écrit que
+les tags que la fenêtre cocherait d'elle-même : ceux de Laya, au-dessus de ton seuil, pas une
+supposition signalée, et seulement si **appliquer sans demander** est activé dans les réponses
+« Analyse de la bibliothèque ». Les tags sont ajoutés, jamais retirés, et l'historique du mod
+montre le changement. Décoché, les tags restent des propositions dans des variables.
+
+**Rien ne quitte le PC pour ces étapes.** Les fichiers d'un mod, un journal de crash ou un
+rapport sont lus par la Laya intégrée ou ton propre laya-serve, jamais par un serveur : avec
+BetterCommunity comme classifieur, ces étapes sont refusées. `ai.explain_crash` est la seule
+exception, et c'est toi qui la choisis : un modèle de rédaction **distant** est refusé sauf si tu
+coches **Autoriser un modèle de rédaction distant** dans l'étape, ce qui demande aussi la
+permission **réseau**.
+
+**Une réponse est une donnée, jamais une commande.** Le texte de `ai.ask`,
+`ai.suggest_mod_metadata` et `ai.explain_crash` vient de choses que BMM ne contrôle pas (le
+readme d'un mod, un fichier, un journal de crash). Il peut aller dans un message, une ligne de journal ou un fichier. Il ne peut pas aller
+dans un programme, un script, un lien, une adresse ou un en-tête : l'étape échoue et le dit. Une
+copie (`set`, une liste, une map) est refusée de la même façon. Une étiquette d'`ai.classify` est
+toujours un de tes propres mots (ou `none`) : s'en servir pour choisir la suite est sûr. Pareil
+pour les autres étapes : un tag est un des tiens, une cause ou un type de rapport vient d'une
+liste fixe, vérifié à nouveau avant d'arriver dans une variable.
+
+Limites : par exécution, 20 appels à Laya et 2 minutes d'attente (`ai.status` ne compte pour
+aucun des deux) ; pour toutes les tâches, 30 appels par minute, un à la fois. Rien ne tourne
+pendant un jeu, avec l'IA désactivée, ou avec `--no-ai`.
+
+Quatre modèles partent d'ici : **Classer les nouveaux mods avec Laya**, **Classer les nouveaux
+crashs et me prévenir**, **Vérification hebdomadaire de la bibliothèque** et **Me prévenir d'un
+nouveau type de crash**.
+
+## Prévenir le monde extérieur — webhooks, Discord, Slack, flux
+
+Quatre étapes dans le groupe **Notifications et web**, et un déclencheur.
+
+| Étape | Envoie | Permission |
+|---|---|---|
+| **Envoyer un webhook** (`webhook.send`) | POST, PUT ou PATCH vers n'importe quelle adresse, avec un corps JSON (ou texte), des en-têtes, des **en-têtes secrets** et de nouvelles tentatives | **Réseau** |
+| **Envoyer un message Discord** (`discord.send`) | Un message dans un salon, par son adresse de webhook | **Réseau** |
+| **Envoyer un message Slack** (`slack.send`) | Un message dans un salon, par un webhook entrant | **Réseau** |
+| **Ajouter une entrée à un flux** (`feed.publish`) | Rien sur le réseau : une entrée en tête d'un fichier Atom que la tâche tient à jour | aucune |
+
+Le corps d'un webhook est un modèle : les `{variables}` sont remplies avant l'envoi et, dans un
+corps JSON, elles sont **échappées comme du texte JSON** — un titre de flux avec un guillemet ou
+une ligne de journal avec un retour à la ligne ne cassent pas le document. Un corps JSON qui ne
+se lit pas est refusé avant tout envoi.
+
+**Ce qui reste secret.** Mettez les jetons dans les **En-têtes secrets** : ils partent comme les
+autres et n'apparaissent jamais dans un journal, une erreur, le débogueur ou le résumé d'une
+étape. Une adresse de webhook Discord ou Slack *est* le mot de passe : elle se tape dans un champ
+masqué et un nœud n'en montre que l'hôte. Les erreurs ne citent jamais l'adresse.
+
+**Ce qui est refusé, quoi que dise la tâche** (vérifié par le backend de BMM) :
+
+- tout ce qui n'est pas `http://` ou `https://`, et une adresse contenant `user:motdepasse@` ;
+- une **adresse privée** — ce PC (`localhost`, `127.0.0.1`, `::1`), votre réseau (`10.x`,
+  `192.168.x`, `172.16–31.x`), le lien local (`169.254.x`, l'adresse de métadonnées du cloud), le
+  CGNAT (`100.64.x`), les plages locales IPv6 et l'IPv4 cachée dans l'IPv6 — sauf si l'**étape**
+  coche *Autoriser le réseau local*. La vérification porte sur les adresses **résolues**, et la
+  connexion est épinglée à exactement celles-là : un nom qui répond une chose à la vérification et
+  une autre à la connexion n'atteint rien de nouveau. Aucun proxy système n'est utilisé ici ;
+- une étape Discord dont l'adresse n'est pas `https://discord.com/api/webhooks/…`, une étape Slack
+  dont l'adresse n'est pas `https://hooks.slack.com/…` ;
+- les redirections d'un webhook (le 3xx est signalé ; le corps n'est pas renvoyé ailleurs). La
+  lecture d'un flux suit jusqu'à cinq redirections et revérifie chaque saut.
+
+Chaque requête a un **délai** (15 s par défaut, 60 s au plus) et une **taille maximale** de réponse
+(256 Ko pour un webhook, 4 Mo pour un flux). Un webhook est retenté sur erreur réseau, `429` ou
+`5xx` — jusqu'à quatre fois de plus — et jamais sur un autre `4xx`. `{http.status}` et
+`{http.body}` (les premières lignes de la réponse) sont lisibles ensuite ; un non-2xx arrête
+l'étape sauf si *Considérer 4xx et 5xx comme un succès* est coché.
+
+**« RSS » veut dire deux choses, et BMM fait les deux.**
+
+- **Un flux comme déclencheur** — *Quand un flux a un nouvel élément* (`rss`). Donnez l'adresse
+  d'un flux RSS ou Atom et la fréquence de vérification (toutes les 5 minutes au plus souvent). La
+  première vérification **apprend** seulement ce qui s'y trouve. Ensuite, les nouveaux éléments
+  lancent la tâche **une fois**, avec le plus récent dans `{event.title}`, `{event.link}`,
+  `{event.id}`, `{event.published}`, et leur nombre dans `{event.count}`. Ce qui a été vu est
+  mémorisé d'un lancement à l'autre. Il faut **Réseau** ; sans elle le flux n'est jamais lu, et la
+  ligne « pourquoi elle ne tourne pas » le dit. *Lire le flux maintenant* montre ce que verrait le
+  déclencheur sans rien mémoriser.
+- **Un flux propre à la tâche** — *Ajouter une entrée à un flux* écrit un fichier Atom (le plus
+  récent en premier, 50 entrées gardées par défaut) dans le dossier de sortie de la tâche, ou là où
+  vous l'indiquez. N'importe quel lecteur de flux peut le suivre. Avec un déclencheur *après une
+  tâche*, c'est un flux des résultats d'une autre tâche. BMM ne réécrit jamais un fichier qui n'est
+  pas un flux qu'il tient.
+
+L'e-mail n'est pas proposé : BMM n'a pas de chemin d'envoi de courrier, et en ajouter un voudrait
+dire stocker un mot de passe SMTP.
+
+## Tester une étape
+
+Chaque étape a un bouton **Tester** — ▶ sur un bloc, une section *Tester cette étape* dans le
+panneau du flux, :kbd[T] sur un nœud sélectionné. Il exécute cette étape une fois, seule, avec les
+permissions de la tâche et des variables neuves, et montre ce qui est revenu **sur l'étape même** :
+une pulsation pendant l'exécution, puis un contour vert ou rouge et une ligne avec le verdict, le
+statut HTTP et les premiers mots de la réponse. En *mouvement réduit*, la pulsation devient un
+contour fixe.
+
+Une étape qui ne fait que calculer, lire ou envoyer un message est testée tout de suite. Une étape
+qui modifie quelque chose — active un mod, supprime un profil, lance un programme — demande
+d'abord.
+
+## Contrôles au quotidien
+
+Chaque ligne de tâche porte : un interrupteur **activer/désactiver**, ▶ **Lancer maintenant** (part
+tout de suite, en ignorant le déclencheur), **Dupliquer** (la copie est créée **désactivée** pour ne
+pas double-partir), **Éditer** et **Supprimer**. Dans le constructeur, **Test** exécute une fois le
+brouillon *non enregistré*, et le panneau latéral montre les dernières exécutions (heure · OK/ERR ·
+durée). Pendant l'édition, :kbd[Ctrl+Z] / :kbd[Ctrl+Y] annulent et rétablissent, et chaque étape a
+son propre bouton *lancer juste cette étape*.
+
+**Dossiers et étiquettes.** Dans le panneau latéral de l'éditeur, sous le nom, donne à une tâche un
+**dossier** (un seul niveau, par exemple *DCS*) et des **étiquettes**. La liste regroupe alors les
+tâches par dossier (clic sur un dossier pour le replier ; le compte dit combien sont actives),
+montre les étiquettes sur chaque ligne et les propose comme filtres au-dessus ; la recherche lit les
+noms, descriptions, dossiers et étiquettes. Une tâche qui transporte des fichiers montre une puce
+**Paquet**.
+
+## Partir d'un modèle
+
+Une nouvelle tâche s'ouvre avec un bouton **Parcourir les modèles…** (le nombre à côté est
+leur total) et un bouton **Depuis un catalogue…** pour les automatisations publiées par
+d'autres.
+
+**Parcourir les modèles…** ouvre la galerie : une colonne de catégories à gauche (*Mods et
+profils*, *Sauvegardes et entretien*, *Surveiller quelque chose*, *Dépôts et synchronisation*,
+*Enchaînements et variables*), une recherche, et une carte par modèle qui dit ce qu'il fait,
+quand il tourne, combien d'étapes il a et s'il demande une permission. Sélectionner une carte
+remplit le panneau de détail à droite — le déclencheur, chaque étape en mots, et les
+permissions nécessaires — pour choisir sur ce qu'un modèle **fait**, pas sur son nom.
+**Utiliser ce modèle** (ou un double-clic) l'envoie dans l'éditeur.
+
+Utiliser un modèle **remplace le brouillon**. Sur une tâche vierge c'est immédiat ; dès qu'il
+y a du travail dans la tâche, BMM demande d'abord et dit combien d'étapes partiraient. Les
+blancs d'un modèle (un profil à choisir, un programme à nommer, un chemin) sont à vous de
+remplir — un modèle ne les devine jamais, parce qu'un chemin deviné est une tâche qui a l'air
+configurée et ne fait rien.
+
+| Preset | Ce qu'il construit |
+|---|---|
+| Sauvegarde hebdomadaire | Exporte vos données BMM chaque lundi matin et le signale |
+| Me parler des mises à jour | Vérifie chaque jour, et ne prévient **que** s'il y a quelque chose |
+| M'avertir avant que le disque soit plein | Deux fois par jour ; silencieux au-dessus du seuil |
+| Rescanner les mods à l'ouverture de BMM | Récupère les changements faits hors de BMM |
+| Ranger après la fermeture du jeu | Ménage une fois que vous arrêtez de jouer |
+| S'arrêter si le disque est presque plein | Une **garde** à mettre en tête d'une autre tâche — s'arrête *proprement* sous 10 Go |
+| Rescanner la bibliothèque chaque matin | Le même rescan, à l'heure plutôt qu'au démarrage |
+| Me prévenir quand un serveur ne répond plus | Appelle une adresse toutes les 30 minutes ; ne se manifeste que sur un statut ≠ 200 |
+| Partager une valeur avec vos autres tâches | Écrit une variable partagée comme point de départ |
+| Soirée jeu du vendredi | Chaque vendredi à 19h00, le profil et le modpack avec lesquels vous jouez |
+| Repartir de zéro | Tous les mods désactivés, puis un seul modpack activé |
+| Sauvegarde complète le 1er | Un export complet plus vos modpacks, chaque mois |
+| Vérifier les mises à jour seulement en ligne | La vérification quotidienne, sautée proprement sans connexion |
+| Checklist de démarrage | Rescan à l'ouverture, puis alerte sous 15 Go |
+| Réagir quand un fichier change | Surveille un fichier et rescanne quand il change |
+| Changer de profil quand le jeu démarre | Toutes les 2 minutes, active le profil du jeu tant qu'il tourne |
+| Synchroniser après le succès d'une autre tâche | Un enchaînement : synchronise le dépôt après la tâche choisie, si elle réussit |
+| Vérifier trois fois, puis s'arrêter | Un bloc de répétition — trois vérifications à dix minutes d'écart |
+| Thème de nuit le soir | Passe sur un thème sombre à 20h00 |
+
+Aucun n'arrive avec une permission déjà accordée. Un preset qui demanderait à exécuter des
+scripts avant que vous l'ayez lu vous entraînerait à accorder sans regarder — l'inverse de ce
+pour quoi les permissions ont été séparées. Les deux qui touchent à d'autres programmes le
+disent dans leur description et laissent la case décochée.
+
+## Les automatisations publiées par d'autres
+
+**Depuis un catalogue…** reste disponible pendant l'édition, parce qu'il n'ouvre jamais qu'un
+**rapport en lecture seule** : il n'importe rien.
+
+La fenêtre liste vos sources à gauche, chacune indiquant son propre résultat. Un catalogue
+injoignable le dit sur sa ligne : un résultat vide dont la raison est repliée se lit « vous ne
+suivez rien », ce qui est autre chose — et plus décourageant — que « le serveur est en panne ».
+
+Le flux officiel vient du registre de liens de BMM : il peut donc être pointé vers un autre
+hôte — un serveur de test, un tunnel — sans livrer une nouvelle version de BMM. Les catalogues
+communautaires se suivent en collant une adresse dans le même panneau. Tout ce qu'un catalogue
+propose passe d'abord par **Inspecter** : vous voyez le déclencheur, les permissions demandées,
+tout ce que la tâche atteint hors de BMM, et le texte complet de chaque script et commande
+qu'elle transporte, avant de décider.
+
+## Partager un jeu de tâches — `.BMMPA`
+
+**Exporter .BMMPA** écrit tout ton jeu de tâches dans un fichier JSON ; **Importer .BMMPA** charge
+celui de quelqu'un d'autre. Chaque ligne de tâche a aussi **son propre** export, qui n'écrit
+que celle-là.
+
+Exporter une seule tâche compte plus qu'il n'y paraît : partager une automatisation voulait
+dire exporter toutes les autres et supprimer le reste à la main dans un éditeur — c'est ainsi
+qu'un chemin privé ou un jeton d'API rangé dans une tâche sans rapport finit dans un fichier
+que tu croyais propre. Les deux boutons écrivent la même forme — une tâche est une liste d'une
+seule — donc tout ce qui lit un .bmmpa lit l'un comme l'autre.
+
+!!! warning "Une variable partagée voyage avec le fichier"
+
+    Les valeurs écrites avec la portée **Partagée** sont stockées en clair et transportées dans
+    un .bmmpa exporté. Si l'une contient un jeton d'API, ce jeton part chez la personne à qui tu
+    envoies le fichier. Vérifie avant de partager.
+
+!!! note "Les imports ne partent jamais tout seuls"
+
+    Une tâche importée reçoit un nouvel id, arrive **désactivée**, perd ses quatre autorisations,
+    et n'enregistre jamais de tâche au niveau du système. BMM te dit ensuite ce que le fichier
+    demandait, pour que tu accordes ce que tu veux vraiment plutôt que de chercher pourquoi une
+    tâche importée ne fait rien. **Charger l'exemple** dépose une tâche prête (et désactivée)
+    que tu peux décortiquer.
+
+## Paquets d'automatisation
+
+Un `.bmmpa` transporte des étapes. Un **paquet** transporte les étapes **et les fichiers sur
+lesquels elles agissent** : un script à mettre dans un jeu, la liste de mods à vérifier, un petit
+mod, n'importe quel fichier à placer.
+
+**Joindre des fichiers.** Dans le panneau latéral de l'éditeur, **Fichiers** liste ce que la tâche
+transporte : **Ajouter un fichier** ou **Ajouter un dossier**. Ils sont copiés dans le magasin de
+paquets de BMM (à côté de ses données, un dossier par version de l'ensemble, nommé par son
+empreinte), si bien qu'une tâche enregistrée avant pointe toujours exactement vers ses fichiers. Les
+étapes choisissent ensuite un fichier *du paquet* dans une liste.
+
+**Exporter.** **Exporter** dans l'éditeur propose **Paquet (.bmmbundle)** : l'automatisation et ses
+fichiers en un seul fichier signé. **En importer un** (Automatisations, Importer) le montre d'abord :
+qui l'a signé (ou que rien ne prouve qui l'a fait), ses fichiers, ses automatisations et les
+permissions qu'elles demandent. Elles arrivent désactivées, sans aucune permission, comme tout
+import, et reliées à la copie vérifiée du paquet.
+
+### Le format
+
+Ce n'est pas un nouveau conteneur. Un paquet est un `.bmmbundle`, le zip que BMM utilise déjà pour
+un catalogue qui transporte ses fichiers :
+
+| Entrée | Ce que c'est |
+|---|---|
+| `bmm_signature.json` | La liste signée de chaque entrée et de son SHA-256 (le même bloc qu'un `.mm`, un `.bmmplug` ou un `.bmmtheme`). |
+| `automation.bmmpa` | L'automatisation, `version: 2`, elle-même signée, avec un bloc `package` qui liste chaque fichier, son SHA-256 et sa taille. |
+| `catalog.json` | Un preset qui pointe vers `automation.bmmpa`, pour qu'un lecteur de catalogue voie une automatisation à installer. |
+| `files/…` | Les fichiers. |
+
+L'ouverture est refusée quand la signature ne correspond plus aux entrées, quand un fichier n'est
+pas celui que le document liste (ou n'est pas listé), ou quand un nom tente de sortir de
+`files/`. Il est extrait par le même code qu'une archive de mod (zip-slip refusé, budget de
+taille), et pèse au plus 512 Mo : les gros mods viennent du catalogue ou d'un dépôt, avec leurs
+propres vérifications. Un `.bmmpa` version 1 s'ouvre toujours partout ; une version 2 ouverte comme
+simple fichier importe ses étapes, et ses étapes de fichiers disent que le paquet manque.
+
+### Les étapes
+
+| Étape | Ce qu'elle fait | Demande |
+|---|---|---|
+| **Installer un fichier du paquet** (`pkg.install`) | Copie un fichier ou un dossier du paquet dans les dossiers Saved Games de DCS (tous, ou un), le dossier du jeu du profil actif ou son dossier de mods, dans un sous-dossier que tu nommes (relatif, sans `..`, sans lecteur). Avant toute copie, une fenêtre BMM montre le fichier, sa taille, le paquet, s'il est signé, et sa destination ; *Afficher le fichier* montre un script. La réponse est gardée comme reçu et redemandée seulement pour une autre version du paquet (ou à chaque fois, si tu le coches). Remplit `pkg.consent`, `pkg.installed`. | **Placer les fichiers du paquet** |
+| **Vérifier qu'un fichier du paquet est en place** (`pkg.verify`) | Est-il là, identique (SHA-256), dans chaque dossier visé ? Remplit `pkg.ok`, `pkg.missing`, `{pkg.report}`. | rien |
+| **Vérifier qu'une liste de mods est active et intacte** (`modlist.verify`) | Pour un `.mm` (un chemin, ou celui du paquet) : chaque mod installé et activé, aucun autre activé avec *Seulement ces mods*, chaque fichier déployé par un mod toujours dans le dossier du jeu, chaque fichier que la liste empreinte identique dans le mod. Ne change rien. Remplit `list.ok`, `list.missing`, `list.inactive`, `list.altered`, `list.extra`, `{list.report}`, `{list.path}` et `{list.fingerprint}` (16 caractères, les mêmes pour la même liste sur chaque machine). | rien |
+| **Écrire le résultat pour le serveur** (`gate.report`) | Écrit `Config\bmm-joingate.json` dans chaque dossier DCS d'après la dernière vérification de liste, signé avec ta clé BMM. L'endroit est fixe : une tâche choisit ce qui est rapporté, jamais où. | **Placer les fichiers du paquet** |
+| **Lancer un jeu avec des arguments** (`game.launch`) | Lance un `.exe` avec une liste d'arguments (sans shell, rien n'est réinterprété) et ne l'attend pas ; peut d'abord copier un texte dans le presse-papiers. Remplit `game.pid`. | **Lancer des programmes externes** |
+| **Poser une question** (`ui.ask`) | Une fenêtre BMM à deux boutons ; `ask.yes` vaut 1 pour le premier. Branche avec un **Si**. | rien |
+
+Les deux vérifications et **Poser une question** ne demandent rien ; placer un fichier et lancer
+un programme demandent leur autorisation, et une tâche importée n'arrive jamais avec.
+
+## La porte d'accès à un serveur DCS
+
+Un modèle fait de réponses : **Modèles → DCS : porte d'accès au serveur**, puis un court formulaire.
+
+1. **Le formulaire demande** l'adresse du serveur, son nom (pour les messages), la liste de mods du
+   serveur (`.mm`, son empreinte s'affiche dès que tu la choisis), *Seulement ces mods*, si **le
+   serveur vérifie les joueurs** (liste blanche active), où est `DCS.exe` (deviné depuis ton profil
+   DCS) et les arguments de lancement. Deux cases non cochées accordent **Placer les fichiers du
+   paquet** et **Lancer des programmes externes** : coche-les, sinon les étapes s'arrêtent en disant
+   laquelle manque.
+2. **Simulation** montre chaque étape, ce qu'elle ferait et ce qui lui serait refusé, et *mesure*
+   les deux vérifications : si ta liste passerait maintenant, et si le hook est en place.
+3. **Créer** construit le paquet (le hook, le script serveur et la liste) et met l'automatisation
+   dans l'éditeur, en trois cadres : *Hook*, *Vérifier les mods*, *Rejoindre, ou corriger*.
+   Enregistre-la.
+
+À l'exécution :
+
+- **Hook** (seulement si le serveur vérifie les joueurs) : `pkg.install` te demande, puis copie
+  `BMM-JoinGate.lua` dans `Saved Games\DCS*\Scripts\Hooks` ; `pkg.verify` vérifie qu'il est là,
+  identique. Absent : elle le dit et s'arrête.
+- **Vérifier les mods** : `modlist.verify`, puis (serveur qui vérifie) `gate.report` écrit le
+  résultat.
+- **Ça passe** : DCS démarre avec tes arguments et l'adresse du serveur est dans le presse-papiers.
+  DCS n'a pas d'option de ligne de commande prise en charge pour rejoindre un serveur, donc BMM n'en
+  invente pas : dans DCS, ouvre **Multijoueur**, **Connexion par IP**, colle.
+- **Ça ne passe pas** : DCS ne démarre pas. Une fenêtre liste ce qui ne va pas (non installé,
+  désactivé, fichiers modifiés, autres mods actifs) et propose **Corriger** : BMM active la liste et
+  installe ce qui manque depuis les sources qu'elle nomme (`modlist.apply`), vérifie à nouveau,
+  écrit le nouveau résultat et demande s'il faut lancer DCS. **Pas maintenant** termine sans
+  rejoindre.
+
+### Pour les admins de serveur : l'appliquer
+
+L'exclusion appartient au serveur, jamais à BMM. Le paquet transporte `BMM-JoinGate-Server.lua` ;
+**Afficher le script serveur** dans le formulaire le montre.
+
+1. Copie-le dans `Saved Games\DCS.server\Scripts\Hooks\` de ton serveur dédié et redémarre.
+2. Mets l'empreinte de ta liste dans `fingerprints` (garde aussi l'ancienne le temps que les
+   joueurs se mettent à jour).
+3. Laisse `enforce = false` le temps d'une session : `dcs.log` montre `[BMMGATE] passed`,
+   `not passing` ou `would kick` pour chaque joueur. Puis mets `enforce = true`.
+
+Le principe : quand la mission d'un joueur démarre, le hook client envoie une ligne de discussion
+commençant par `[BMMGATE]` (résultat, empreinte, heure). Le script serveur cache cette ligne à
+tout le monde, accepte un résultat qui passe avec une empreinte que tu as listée et assez récent
+(`max_age`), et exclut, avec ton `message`, un joueur qui n'en a envoyé aucun dans les `grace`
+secondes. `exempt` liste les UCID qu'il ne touche jamais.
+
+!!! warning "Une vérification de confort, pas un anti-triche"
+
+    La ligne est écrite par le PC du joueur, et un joueur déterminé peut la falsifier. La porte
+    s'assure que les joueurs honnêtes arrivent avec les bons mods et reçoivent un message clair
+    sinon ; le contrôle d'intégrité de DCS reste ton outil pour le reste. Rien ici ne touche le
+    serveur depuis BMM ni ne contourne DCS ou les règles d'un serveur.
+
+Pour donner la porte à tes joueurs, ouvre l'automatisation et **Exporter → Paquet (.bmmbundle)** :
+ils importent un fichier, lisent ce que c'est, indiquent où est DCS et accordent eux-mêmes les deux
+permissions.
+
+## Publier ton propre catalogue
+
+**Fichiers… → Mes catalogues…** est le même écran que tous les autres types de catalogue :
+parcourir ce que tu suis, en suivre un autre par adresse ou par fichier, ou faire le tien.
+
+**En créer un** choisit tes automatisations et écrit **un seul fichier**, et c'est toi qui
+choisis lequel des deux. Un `.bmmbundle` contient le `catalog.json` et chaque automatisation
+emballée dedans — une seule chose à envoyer, rien à héberger, aucune adresse à maintenir en
+vie. Un `catalog.json` ne contient que des adresses, pour des automatisations déjà hébergées.
+
+Dans l'un comme dans l'autre, chaque automatisation est **emballée** dans le catalogue ou
+**liée** à une adresse que tu donnes, au choix par entrée — un même catalogue peut donc porter
+les petites et pointer vers la grosse que quelqu'un héberge déjà. Seul ce que le catalogue
+nomme est emballé, et c'est toi qui choisis où le fichier est enregistré.
+
+Les adresses écrites sont **relatives** (`nightly.bmmpa`, pas une URL complète). Un catalogue
+qui nomme son propre hébergeur cesse de fonctionner dès qu'il est déplacé, copié ou forké — la
+vie normale d'un dossier sur GitHub — donc BMM les résout par rapport à l'endroit d'où il a
+récupéré le catalogue. Une base absolue est proposée pour les fichiers qui vivent vraiment
+ailleurs.
+
+Tout ce qu'une automatisation appelle voyage avec elle : sous-tâches, blocs partagés, launch
+packs et plugins. Deux automatisations du même nom reçoivent des noms de fichier différents,
+pour qu'une entrée ne serve jamais en silence le contenu d'une autre.
+
+
+## Transporter des valeurs
+
+Une tâche peut retenir des valeurs pendant qu'elle tourne, et les relire par leur nom avec des
+`{accolades}`.
+
+**Les variables** contiennent une seule chose. Une étape qui capture une sortie vous donne le
+texte et, quand ça y ressemble, le nombre. `Définir une variable` en écrit une vous-même, et sa
+**portée** décide de sa durée de vie : *cette exécution seulement*, ou **partagée** — conservée
+entre les exécutions et visible par toutes les tâches. La colonne de gauche liste chaque variable
+partagée avec sa valeur, pour voir ce qui est déjà pris avant de choisir un nom.
+
+!!! note "Les variables partagées fonctionnent aussi dans les calculs"
+    Elles y étaient invisibles : `count + 1` sur un compteur partagé lisait 0 et valait 1 à chaque
+    exécution, alors que le même nom se substituait correctement dans un message deux lignes plus
+    haut.
+
+**Les listes** en contiennent plusieurs — les profils touchés, les URLs renvoyées par un flux.
+`Liste — la définir` accepte un tableau JSON ou une simple ligne `a, b, c` ; `ajouter un élément`
+complète. La taille se lit avec `{list.<nom>.length}`, et **Pour chaque** en parcourt une — son
+sélecteur de source propose vos propres listes autant que les collections de l'app.
+
+**Les tables** répondent à *quoi va avec quoi* plutôt qu'à *lesquels* — l'id derrière un nom,
+l'URL derrière une étiquette. `Table — définir une clé`, `lire une clé dans une variable`,
+`la vider`. **Pour chaque** peut parcourir les clés d'une table.
+
+!!! warning "Une clé absente n'est pas une valeur vide"
+    `map.get` sur une clé inexistante enregistre une valeur vide et met `map.hit` à 0. Testez
+    `map.hit` quand la différence compte — sinon « absente » et « présente et vide » se
+    ressemblent exactement.
+
+## Enums, et un Switch qui dit ce que vous avez oublié
+
+Déclarez un **enum** dans la colonne de gauche — un nom et ses valeurs, par exemple
+`ok, echec, ignore`. Une condition peut alors tester *la variable vaut le membre X de l'enum E*,
+ce qui donne un sujet à la branche au lieu d'une comparaison de texte libre.
+
+Dès que tous les cas d'un **Switch** testent le même enum, le bloc liste les membres non traités.
+L'avertissement est consultatif : en traiter trois sur cinq volontairement et laisser DEFAULT
+absorber le reste est légitime, donc il ne bloque jamais l'enregistrement.
+
+## Blocs réutilisables
+
+Des étapes écrites une fois et exécutables partout. Construisez-les dans une tâche, nommez-les
+dans la colonne de gauche avec **Enregistrer ces étapes**, puis placez **Exécuter un bloc** où
+vous en avez besoin.
+
+Un bloc s'exécute **avec les permissions de la tâche appelante**, jamais les siennes. C'est
+délibéré : un bloc est écrit une fois et appelé depuis plusieurs endroits, donc des permissions
+qui lui seraient attachées seraient accordées à un endroit et dépensées à un autre — et importer
+un bloc deviendrait un moyen d'exécuter des actions que la tâche appelante s'est vu refuser.
+
+!!! warning "Deux refus que vous rencontrerez"
+    Supprimer un bloc qu'une tâche appelle encore est refusé, et un `Exécuter un bloc` pointant
+    vers un nom disparu **arrête la tâche** au lieu de passer en silence. Un appel qui ne fait
+    rien discrètement, c'est une tâche qui annonce un succès alors que la moitié n'a jamais
+    tourné. Les blocs qui s'appellent entre eux sont plafonnés à 20 niveaux.
+
+
+## Réagir à un jeu
+
+BMM ne peut pas te voir rejoindre un serveur. D'un jeu qui tourne, un autre processus ne voit
+rien d'autre que ce que ce jeu **écrit** — c'est donc là-dessus que tout ça repose : trois
+pièces, plus un fichier pour DCS.
+
+### `watchFile` — quelque chose a changé
+
+Indique un fichier. La tâche se déclenche quand sa date de modification ou sa taille change.
+
+!!! note "La première vérification après le démarrage ne déclenche jamais"
+
+    Elle enregistre le fichier et s'arrête là. Sans ça, chaque tâche de surveillance se
+    déclencherait une fois à chaque lancement, et un changement survenu pendant que BMM était
+    fermé agirait sur une session terminée depuis des heures.
+
+    Un fichier absent n'est pas un changement non plus. Un jeu qui n'a jamais tourné n'a pas
+    de log, et se déclencher quand il apparaît est correct — se déclencher sur son absence
+    maintenant ne l'est pas.
+
+### `text.extract` — en extraire une valeur
+
+Applique un motif aux **derniers Ko** d'un fichier (un log de jeu est alimenté pendant toute
+la session ; ce qui vient d'arriver est à la fin) ou à une variable, et garde ce que le
+groupe 1 a capturé.
+
+**C'est la dernière correspondance qui gagne.** Dans un log, la ligne la plus récente décrit
+maintenant ; la première décrit ce qui s'est passé au démarrage.
+
+Le nom que tu lui donnes est le tien — `server`, `mission`, ce que tu veux — et les étapes
+suivantes le relisent avec `{text.server}`. Si la valeur se trouve être un nombre, elle est
+aussi disponible pour les conditions numériques : pas besoin d'une action de conversion.
+
+### `modlist.apply` — mettre les bons mods
+
+Installe ce que la liste nomme et qui manque, puis active exactement ceux-là.
+
+!!! warning "`exact` est celui qui mord"
+
+    Désactivé, la liste **s'ajoute** à ce qui est déjà actif — ce que tu veux quand tu
+    appliques deux listes pour deux avions.
+
+    Activé, l'ensemble actif **devient** la liste, et rien d'autre. C'est ce qu'un serveur
+    strict entend par liste de mods, et un mod en trop, c'est le même refus qu'un mod manquant.
+
+Une liste verrouillée sans phrase secrète dans l'action **échoue** au lieu de demander. Une
+tâche planifiée ne peut pas répondre à une fenêtre à quatre heures du matin, et une fenêtre
+que personne ne voit, c'est une tâche bloquée qui a l'air de travailler.
+
+Les mods introuvables sont signalés **par leur nom**. « Appliqué » avec trois mods absents en
+silence, c'est le rapport qui fait éjecter quelqu'un à l'écran de chargement sans savoir
+pourquoi.
+
+### DCS a un vrai hook
+
+DCS dispose d'une API de callbacks supportée : on le lui **demande** plutôt que de le deviner
+dans un log. L'action **Surveiller un jeu** (`game.watch`) écrit
+un petit fichier Lua dans `Saved Games/DCS/Scripts/Hooks/bmm-serverwatch.lua`. Il signale sur
+quel serveur multijoueur tu es, dans un fichier que BMM surveille. Il ne lit rien d'autre et
+n'envoie rien nulle part.
+
+C'était aussi un bouton sur le déclencheur `watchFile`. Ça ne l'est plus, et la raison mérite
+d'être dite : configurer un jeu est une **étape**, et mettre le nom d'un jeu sur un
+déclencheur générique faisait que la première chose rencontrée en choisissant « quand un
+fichier change » était DCS — et, si on appuyait, un chemin finissant par `bmm-server.json`
+sans rien à l'écran pour dire ce que c'était. Ajoute l'action, puis pointe le déclencheur sur
+le fichier qu'elle écrit.
+
+Il est installé dans **tous** les dossiers DCS trouvés — il y en a généralement deux, release
+et open beta — parce que voler dans celui que tu n'as pas configuré ressemble exactement à
+une fonctionnalité qui ne marche pas.
+
+!!! note "Pourquoi chaque appel y est protégé"
+
+    Un hook GUI qui lève une erreur est abandonné par DCS pour toute la session. Une seule
+    fonction manquante dans une version arrêterait le signalement en silence, sans rien
+    afficher à personne — donc chaque appel est dans un `pcall`.
+
+### Deux modèles
+
+**Partir d'un modèle** propose les deux :
+
+- **DCS : les bons mods pour le serveur rejoint** — met en place le hook, lit le serveur dans
+  ce qu'il écrit, applique la liste.
+- **N'importe quel jeu : les mods du serveur lu dans le log** — la même forme, en lisant un
+  log. La seule chose qui change d'un jeu à l'autre, c'est le motif.
+
+Les deux arrivent avec le chemin du fichier et la liste de mods **vides**. Un modèle qui
+devinerait serait une tâche qui a l'air configurée, s'exécute, ne trouve rien, et annonce
+qu'elle a réussi.
+
+
+## Sauvegardes, clés, catalogues et imports
+
+Quatre choses qu'une tâche ne pouvait pas faire du tout, et une qu'elle faisait dans le
+mauvais format.
+
+### Sauvegarder les données — `data.backup`
+
+La **même** archive que l'écran Export de données : un `.DATABMM`, les sections que tu coches,
+et une phrase secrète si tu en donnes une.
+
+!!! warning "L'ancienne action écrivait autre chose"
+
+    « Export de données (sauvegarde) » écrivait un `.json` via une autre commande : une
+    automatisation nocturne produisait donc un artefact plus petit et différent, sans choix
+    de contenu et sans verrou. Elle est toujours là, renommée pour dire `.json`, parce que
+    des tâches existantes s'y réfèrent et qu'un BMM plus ancien sait en lire une.
+
+Les enregistrements, rapports de crash et diagnostics sont **décochés** par défaut : c'est
+volumineux et c'est du diagnostic, pas de la configuration — et une sauvegarde nocturne qui
+grossit discrètement jusqu'au gigaoctet est une sauvegarde qu'on finit par désactiver.
+
+!!! danger "Les clés d'identité refusent de partir sans phrase secrète"
+
+    L'indication du champ passe à OBLIGATOIRE dès que tu coches cette case : c'est la seule
+    section qui change le sens du champ. Une tâche nocturne écrivant des clés privées non
+    verrouillées dans un dossier synchronisé le ferait *toutes les nuits*, et on ne
+    l'apprendrait qu'une fois fait.
+
+`{backup.bytes}` et `{text.backup.path}` sont écrits : une étape suivante peut alerter quand
+le bundle triple d'un coup — ce à quoi ressemble une section d'enregistrements cochée par
+inadvertance.
+
+### Créer une clé d'identité — `key.create`
+
+Un nom déjà sur le trousseau est **laissé tel quel, jamais remplacé**. C'est ce qui rend
+l'action sûre sur une planification : une tâche hebdomadaire crée une clé puis ne fait plus
+rien, au lieu de remplacer discrètement celle avec laquelle tu prouves et de te fermer toutes
+les sources qui ont ta ligne publique.
+
+La ligne publique arrive dans `{text.key.public}`, le chemin du fichier dans
+`{text.key.path}`, et un hôte facultatif l'associe immédiatement — c'est toute la raison d'en
+créer une sans surveillance : la synchro qui en a besoin est l'étape suivante.
+
+### Suivre un catalogue — `catalog.follow`
+
+N'importe lequel des huit types, dépôts compris. Ça passe par les écrans de l'app : la source
+arrive dans la liste des suivis **avec son origine** et se retire avec le même bouton que les
+autres.
+
+### Importer un fichier — `import.file`
+
+Un chemin ou une adresse, lu dans le format BMM qui est le sien. Ce qui diffère selon le type
+est ce qui mérite de différer :
+
+| Type | Par défaut |
+|---|---|
+| Liste de mods | **Lue**, pas appliquée. Appliquer est une case séparée — une tâche qui veut la liste dans BMM ne doit pas se mettre à télécharger des mods parce que l'action s'appelle « importer ». |
+| Automatisation | Arrive **désactivée, permissions retirées**. Importer n'est pas accepter d'exécuter la tâche de quelqu'un. Un id que tu as déjà est laissé tel quel. |
+| Bundle de catalogue | **Suivi**, pas décompressé — le contenu d'un catalogue change quand son auteur le republie. |
+| Sauvegarde | **Inspectée**. La restaurer est sa propre case : sans surveillance, c'est la chose la plus destructrice du planificateur. |
+
+Inspecter une sauvegarde est de toute façon la moitié utile sur une planification : ça répond
+à *celle de cette nuit est-elle correcte ?*
+
+## Sources protégées
+
+Un dépôt peut vouloir un mot de passe, une preuve signée par une clé d'identité, ou les
+deux ; un fichier verrouillé veut une phrase secrète. Toute action qui atteint une source
+demande maintenant de la même façon, dans un seul bloc.
+
+Choisir une clé l'**associe** à cet hôte. C'est le comportement honnête plutôt que de basculer
+une « clé active » globale le temps de l'opération : les preuves sont par hôte, l'association
+persiste, et la prochaine synchro manuelle du même dépôt utilise la même clé. Elle est
+appliquée *avant* la récupération du manifeste, parce que sur un dépôt protégé le manifeste
+est lui-même derrière la porte.
+
+!!! note "Le mot de passe était sous « Options destructrices »"
+
+    Ce n'est pas une option destructrice. Il est maintenant avec la clé et la phrase secrète.
+
+## Attendre quelque chose d'extérieur à BMM
+
+### Qu'une adresse réponde — `wait.http`
+
+Interroge, **avec un plafond**. C'est le plafond qui compte : une attente sans fin, c'est une
+tâche bloquée pour toujours et un planificateur qui n'exécute plus la suivante — et « toujours
+en attente » ressemble exactement à « en train de travailler » vu de l'extérieur.
+
+N'importe quel statut compte comme une réponse par défaut : c'est ce qui rend exprimable
+*attendre qu'elle cesse de renvoyer 503*. Indique un code précis quand un service répond 503
+pendant son démarrage.
+
+Elle peut aussi attendre ce que **dit** la réponse. Remplis *attendre que la réponse
+contienne* avec un bout de texte — cherché n'importe où dans le corps, sans tenir compte de la
+casse — et les deux doivent être vrais. C'est le cas courant, pas l'exotique : une adresse de
+tâche répond `200` dès qu'elle accepte le travail, donc au statut seul l'attente se termine
+dès la première interrogation et toutes les étapes suivantes travaillent contre une tâche
+encore en cours.
+
+```
+{"id":"a91","state":"running"}   ← 200, et pas ce que tu attends
+{"id":"a91","state":"done"}      ← 200, et celle-là si
+```
+
+Avec `"state":"done"` dans ce champ, l'attente se termine à la deuxième. La réponse
+elle-même arrive dans `{text.http.body}`, pour que les étapes suivantes puissent lire
+*quelle* tâche s'est terminée.
+
+L'abandon est annoncé avec le dernier statut, et arrête la tâche sauf si tu décoches — sinon
+les étapes suivantes travaillent contre quelque chose qui n'est jamais arrivé. Teste
+`{wait.ok}` d'abord si tu décoches.
+
+### Un signal — `wait.hook`
+
+Quelque chose poste sur `POST /api/hook` avec un nom, et l'attente se termine.
+
+```bash
+curl -X POST http://127.0.0.1:51274/api/hook \
+  -H "Authorization: Bearer <ton token d'API>" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"build-done","data":{"version":"1.4"}}'
+```
+
+Ce que tu envoies arrive dans `{text.hook.data}`. Une sonnette qui ne saurait dire que
+« quelqu'un a sonné » aurait besoin d'un second canal pour dire de quoi.
+
+**Les événements de BMM sonnent les mêmes clochettes.** La case du nom propose la liste — les
+mêmes noms que propose le déclencheur *sur événement* — donc une tâche peut attendre en cours
+de route `bmm.repo.synced` ou `bmm.profile.activated`, au lieu de seulement être démarrée par
+lui. `{text.hook.data}` porte alors ce que portait l'événement.
+
+C'est là toute la différence entre les deux : le déclencheur dit *lance cette tâche quand X
+arrive*, l'attente dit *arrête-toi ici jusqu'à ce que X arrive*. Une tâche qui doit faire
+quelque chose avant X et quelque chose après a besoin de la seconde.
+
+Pour déboguer une attente qui ne finit jamais : `GET /api/hook` liste chaque nom qui a sonné
+avec son compte, et `GET /api/hook/:name` donne les sonneries elles-mêmes avec leur contenu —
+ce qui sépare « rien n'est jamais arrivé » de « quelque chose est arrivé sous un autre nom »,
+ou de « c'est arrivé et le contenu n'était pas celui que je croyais ».
+
+!!! note "C'est une sonnette LOCALE"
+
+    L'API n'écoute que sur 127.0.0.1 et la route exige le token : un service sur Internet ne
+    peut pas sonner sans un tunnel que tu mets en place exprès. Ce à quoi ça sert vraiment,
+    c'est aux autres choses de cette machine : un script, un jeu, un autre outil, la CLI.
+
+    Seuls les signaux envoyés **après** le début de l'attente comptent : une tâche horaire ne
+    se déclenche pas aussitôt sur celui de l'heure d'avant. Lire ne consomme pas — deux
+    tâches peuvent attendre la même sonnette.
+
+    `GET /api/hook` liste ce qui est arrivé. « Mon webhook passe-t-il vraiment ? » est la
+    première question quand une attente ne finit jamais.
+
+## Le code de sortie d'un script est un résultat
+
+Un code non nul faisait échouer toute l'étape : *sorti 2 parce qu'il n'y avait rien à faire*
+et *l'interpréteur n'est pas installé* étaient le même verdict — et un script qui voulait
+SIGNALER un état n'avait aucun moyen de le faire, puisque le dire faisait échouer l'étape qui
+demandait.
+
+Coche **Un code de sortie non nul est un résultat, pas un échec** et il arrive dans
+`{script.code}`, avec `{text.script.stdout}` et `{text.script.stderr}` gardés séparément. Ne
+pas *démarrer* reste une erreur : il n'y a alors aucun code de sortie et rien n'a tourné.
+
+!!! danger "Un script a maintenant un délai"
+
+    Cinq minutes par défaut, réglable par étape, deux heures au maximum. Au-delà, le script est
+    arrêté — sous Windows avec tout ce qu'il a lancé — et l'étape échoue en disant qu'il a
+    expiré, plutôt que de faire croire qu'il s'est terminé.
+
+    Avant ça, il n'y avait aucune limite. Un `.ps1` qui lit sur l'entrée standard, un `python`
+    bloqué sur une socket, un installeur qui ouvre une boîte de dialogue sur une session que
+    personne ne regarde : la tâche gardait sa place jusqu'à la fermeture de BMM, et le seul
+    symptôme était une exécution « en cours » depuis 3h du matin.
+
+    Une étape qui a vraiment besoin de plus de deux heures est un programme à LANCER puis à
+    attendre avec `wait until`, pas quelque chose à retenir dans une étape où rien ne le voit.
+
+!!! note "Ce qu'un export laisse derrière"
+
+    Un `.bmmpa` partagé arrive désactivé, sans permissions et sans tâche Windows — trois
+    décisions qui appartiennent à la personne qui l'importe.
+
+    Il ne porte pas non plus **l'historique d'exécution**. Ces entrées contiennent des messages
+    d'erreur, et un message d'erreur contient régulièrement un chemin local : partager une
+    automatisation, c'était partager la liste des moments où son auteur était à son ordinateur
+    et l'endroit où vivent ses fichiers. Rien ne prévenait, parce que rien n'allait mal dans
+    l'automatisation.
+
+## Deux façons de demander avant de lancer
+
+**Demander**, à côté de n'importe quelle condition, l'évalue contre l'état actuel de l'app.
+« Est-ce que `fileExists` voit bien ce que je crois » demandait avant de construire toute une
+tâche autour : ajouter une étape, ajouter une notification, enregistrer, lancer, lire le toast,
+tout supprimer.
+
+La réponse est donnée avec les variables PARTAGÉES de la tâche et rien d'autre — une condition
+qui lit ce qu'une étape précédente aurait capturé ne peut pas être évaluée seule, et le bouton
+le dit plutôt que de répondre faux. Une condition qui LÈVE une erreur l'affiche — c'est la plus
+utile des trois réponses : une permission qu'elle n'a pas, un chemin qu'elle ne peut pas lire.
+
+**Aperçu**, à côté de Test et Déboguer, lit les étapes et dit ce qu'elles changeraient.
+
+| | |
+|---|---|
+| changerait | ça fait vraiment quelque chose |
+| déjà ainsi | le mod est activé et l'étape l'active |
+| impossible à dire d'ici | pas installé sur cette machine, ou dans un bloc |
+
+!!! warning "Ça lit, ça n'exécute pas"
+
+    Aucune condition n'est évaluée : tout ce qui est dans un `if`, une boucle, un `ensure` ou le
+    gestionnaire d'erreur d'un `try` est marqué **peut-être**. Le corps principal d'un `try` et
+    celui d'un `retry` n'en sont pas — le premier démarre toujours, le second tourne au moins
+    une fois.
+
+    Un `call` est listé et son contenu n'est pas lu. Dire « il y a un bloc ici et je n'ai pas
+    regardé dedans » vaut mieux que de laisser la moitié d'une tâche hors de la réponse.
+
+## Parcourir une tâche pas à pas
+
+### Dans chaque éditeur
+
+L'exécution est montrée là où vous regardez, et les trois éditeurs sont d'accord parce que le
+débogueur indique **sur quelle étape** il se trouve (son chemin dans la tâche — le même que celui
+du journal d'exécution) :
+
+| Mode | Pendant l'exécution | Points d'arrêt |
+|---|---|---|
+| **Flux** | Le nœud en cours s'illumine ; un nœud qui s'exécute pulse ; un nœud en échec devient rouge. Survolez un nœud pendant une pause pour voir les valeurs que **cette étape** lit ou écrit. | Le point au bord gauche d'un nœud, ou *S'arrêter ici* dans son panneau |
+| **Blocs** | Le bloc en cours est entouré et amené à l'écran. | Le bouton ● d'un bloc |
+| **Code** | La ligne en cours est surlignée. | Cliquez dans la marge à côté d'une ligne |
+
+Un point d'arrêt posé dans un mode est présent dans les deux autres. **Continuer** va jusqu'au
+prochain point d'arrêt. Le journal donne pour chaque étape le temps depuis le début (`+1.2s`) ;
+cliquez une ligne pour montrer l'étape dans l'éditeur. Quand une étape échoue, le message dit
+**laquelle** et *Montrer l'étape* vous y mène. Les touches ++f10++, ++f5++, ++shift+f5++ et ++f9++
+sont des commandes comme les autres (Ctrl+K, Paramètres → Raccourcis clavier).
+
+
+**Déboguer**, à côté de Test. Ça exécute les mêmes étapes dans le même ordre avec les mêmes
+permissions, et s'arrête avant chacune pour te montrer ce que la tâche tient.
+
+| | |
+|---|---|
+| **Pas à pas** — ++f10++ | Exécuter l'étape affichée, puis s'arrêter à nouveau. Pressez-le *pendant* une exécution pour reprendre pas à pas. |
+| **Continuer** — ++f5++ | Arrêter de s'arrêter — ou aller jusqu'à la première étape correspondant au champ ci-dessous. Le panneau continue d'afficher les variables qui changent. |
+| **Copier** | Les étapes et les variables en texte, pour un rapport de bug. Un échec est annoncé dès la deuxième ligne, au-dessus du journal. |
+| **Arrêter** | Terminer l'exécution ici. |
+
+Les deux touches sont ignorées quand un champ texte a le focus, pour que taper un F dans le
+filtre ne fasse pas avancer l'exécution. Rien n'est associé à ++esc++ : elle ferme des
+fenêtres partout ailleurs dans BMM, et une touche qui arrête parfois un débogage et ferme
+parfois la fenêtre derrière est pire que pas de touche.
+
+**Continuer jusqu'à une étape mentionnant…** est le réglage entre les deux autres. Pas à pas
+avance d'une étape, Continuer va jusqu'au bout ; une tâche de cent étapes avec une seule
+branche suspecte, c'était le choix entre cent clics et aucun. Tapez n'importe quelle partie de
+la description d'une étape — un nom d'action, un id de mod — et Continuer s'arrête à la
+première étape qui la contient, puis vous rend la main. Laissez vide et Continuer veut dire ce
+qu'il a toujours voulu dire.
+
+Le champ accepte une **liste** séparée par des virgules : `download, upload, cleanup`. Un seul
+motif obligeait à relancer toute la tâche une fois par endroit intéressant. Les entrées vides
+entre virgules sont jetées — toute description contient la chaîne vide, donc
+`download,,upload` s'arrêterait sinon à *chaque* étape et passerait pour un Continuer cassé.
+
+**Ce qui a déjà tourné** liste chaque étape jusqu'ici, dans l'ordre. Le panneau n'affichait que
+l'étape courante, ce qui répond à « où suis-je » et pas à « comment suis-je arrivé là » — et
+c'est la seconde question qu'on se pose quand une tâche a pris une branche inattendue.
+
+Les noms qui viennent de **changer** sont surlignés, et ceux qui viennent d'**apparaître** le
+sont différemment : vingt lignes repeintes à l'identique cachent celle qui a bougé, et c'est
+la raison même de regarder.
+
+Le panneau se déplace par son en-tête — il est épinglé dans un coin, et ce coin est parfois
+exactement là où s'affiche l'étape qu'on lit. Son en-tête compte aussi les **étapes exécutées
+et les secondes écoulées** : une étape qui a pris neuf secondes n'était visible nulle part, et
+c'est en général celle qu'on cherche.
+
+### Quand ça casse, la fenêtre reste
+
+C'est tout l'intérêt, et c'était la seule chose qui manquait. Une tâche qui échouait fermait le
+débogueur — le panneau partait, les variables avec, et il restait un message d'erreur en
+notification : exactement ce qu'on avait avant qu'un débogueur existe.
+
+Maintenant l'exécution s'arrête **sur** l'échec : le message en haut, l'étape fautive en rouge
+dans le journal (c'est déjà la seule sans coche), et chaque variable encore lisible, filtrable,
+copiable. Pas à pas et Continuer passent en grisé, puisqu'il n'y a plus rien à continuer ;
+Arrêter devient Fermer.
+
+### D'où vient une valeur
+
+Cliquez le **nom** d'une variable — pas sa valeur, qui est l'éditeur — et vous obtenez toute sa
+trace : chaque valeur qu'elle a prise, et le numéro d'étape qui l'y a laissée.
+
+« Elle est vide maintenant » est la moitié d'une réponse. La moitié qui compte, c'est *quelle*
+étape sur deux cents l'a vidée, et y répondre obligeait à refaire tourner la tâche en surveillant
+une seule ligne.
+
+Seuls les changements sont enregistrés, pour que la trace soit la réponse et pas la
+transcription, et le plafond jette les plus anciennes entrées : une variable qui a changé mille
+fois est modifiée dans une boucle, et c'est le dernier tour de cette boucle qui a cassé.
+
+**Quelle étape s'est terminée.** Une coche veut dire qu'elle est revenue. L'entrée **sans**
+coche est là où l'exécution se trouve — ou, après un échec, là où elle s'est arrêtée, et elle
+y est marquée en rouge. La
+barrière s'exécute avant chaque étape : y revenir prouve que la précédente a fonctionné, et
+rien n'a eu besoin d'être ajouté à l'exécuteur pour le savoir.
+
+**Un filtre** sur les noms de variables, pour quand il y en a vingt.
+
+**Changer une valeur.** Cliquez dessus, tapez, Entrée. C'est l'essentiel de ce pour quoi on
+s'arrête avant un `if` : demander ce que fait l'autre branche, sans modifier la tâche, la
+relancer et espérer que le monde coopère. Ça réécrit dans le sac d'où la valeur vient, donc un
+nombre reste un nombre et continue de correspondre à une condition `value` — et votre propre
+modification n'est pas surlignée comme un changement, sinon elle masquerait le prochain vrai.
+
+La liste de variables est l'essentiel. Un nom qui est à la fois du texte et un nombre apparaît
+une seule fois, marqué comme les deux — une capture écrit chacun, et deux lignes se liraient
+comme deux variables. Une valeur **partagée** ne s'affiche que si rien dans ce run ne revendique
+le nom, parce que c'est celle que la substitution utilisera.
+
+!!! note "C'est la vraie exécution"
+
+    Pas une simulation, pas un second moteur. Un débogueur qui exécute la tâche autrement
+    qu'elle ne s'exécute vraiment est un débogueur qui ment sur le bug.
+
+    Ça veut dire aussi que les étapes arrivent pour de bon : les mods sont vraiment activés, les
+    fichiers vraiment écrits. Débogue sur un profil que tu peux te permettre de casser, comme
+    pour un test.
+
+!!! warning "Ça n'entre pas DANS un script"
+
+    Une étape « exécuter un script » confie son code à PowerShell, cmd, bash, Python, Node ou
+    Rust dans un autre processus. Y entrer voudrait dire écrire un débogueur pour cinq langages,
+    et faire semblant serait pire que de ne pas le proposer.
+
+    L'étape est montrée, exécutée entièrement, et ce qu'elle a renvoyé apparaît dans les
+    variables comme le reste.
+
+!!! tip "Une source protégée, depuis une tâche"
+
+    **Connecter un dépôt**, **Synchroniser un dépôt** et **Suivre un catalogue** portent
+    désormais chacun un bloc *Cette source est protégée* — ils n'offraient qu'une URL, donc
+    une tâche pointée vers un dépôt protégé ouvrait l'écran avec un champ de mot de passe
+    vide et attendait quelqu'un qui n'est pas là.
+
+    Un **mot de passe** seulement, pour ces trois-là. Tous agissent via un lien `bmm://`, et
+    un lien capable de nommer quelle clé d'identité signe est un lien qui choisit qui vous
+    êtes pour un serveur ; la clé reste l'active. **Synchroniser un dépôt (sans surveillance)**
+    et **Importer depuis une URL** font le travail eux-mêmes, et proposent donc aussi la clé
+    et la phrase secrète.
+
+### Emmener quelqu'un quelque part, et demander ce qui est déjà vrai
+
+**Ouvrir un écran ou une fenêtre** couvre les deux sortes d'endroits. Les écrans viennent de la
+barre de navigation elle-même, la liste ne peut donc pas en nommer un absent ; les cinq choses
+qui ne *sont pas* des écrans — l'éditeur de thème, ceux de disposition et de barre de
+navigation, le banc d'essai, et un article de documentation — avaient chacune leur lien
+`bmm://` et aucune action, donc en ouvrir une depuis une tâche demandait d'écrire une URL à la
+main.
+
+Deux conditions referment des boucles que des actions avaient laissées ouvertes :
+
+| Condition | Pourquoi elle devait exister |
+|---|---|
+| **Le plugin est installé** | Une tâche pouvait installer un plugin sans pouvoir demander s'il était là. « Ne l'installer que s'il manque » s'écrivait donc « l'installer à chaque fois », ce qui re-télécharge et ré-applique à chaque exécution. |
+| **Une autre tâche est armée** | L'autre moitié d'*Armer ou désarmer une autre tâche*. Sans elle, une tâche pouvait fixer l'état d'une autre sans jamais pouvoir s'y brancher. |
+
+Les deux choisissent dans une liste plutôt que de prendre un id tapé — un id de plugin est
+`com.quelquun.chose` et un id de tâche un horodatage à la milliseconde ; tapés à la main,
+chacun est un `false` silencieux qui se lit « ce n'est pas vrai » au lieu de « vous avez nommé
+quelque chose qui n'est pas là ».
+
+!!! note "Trois actions attendaient une fenêtre que personne ne verrait"
+
+    **Exporter une liste de mods**, **Importer une liste de mods** et **Exporter le rejeu**
+    acceptent toutes un chemin côté endpoint et n'offraient aucun moyen d'en donner un : chacune
+    ouvrait donc une boîte de dialogue. Parfait devant une personne ; sur une minuterie, la
+    tâche attend, simplement. Elles prennent un chemin maintenant, et l'indice dit ce que vide
+    veut dire : *demande-moi*.
+
+## Vérifier ce qu'est un fichier avant d'agir dessus
+
+Une automatisation qui récupère quelque chose puis agit dessus a une question d'abord : **est-ce
+que ce qui est revenu est bien ce que j'ai demandé.** Sans réponse, elle agit quand même —
+importe un thème comme liste de mods, suit une page de connexion comme un catalogue — et la
+panne apparaît trois étapes plus loin, sur autre chose.
+
+```bmms
+do http.request(url: "https://…/catalog.json", into: "body")
+do data.validate(text: "{body}", expect: "bmmcat")
+print "{valid.count} entrées"
+```
+
+| Laissé derrière | C'est |
+|---|---|
+| `{valid.format}` | Ce que c'est avéré, ou vide |
+| `{valid.ok}` | 1 quand rien ne cloche |
+| `{valid.count}` | Mods, tâches ou entrées — ce que ce format compte |
+| `{valid.problems}` | Ce qui ne va pas, en mots |
+
+Nommer un format attendu fait **échouer** l'étape quand autre chose arrive. Il existe aussi une
+condition `fileIsValid`, pour `if` et `ensure`.
+
+Ce qu'elle sait reconnaître, par la FORME et jamais par ce que le document prétend être :
+`bmmpa` · `bmmnav` · `bmmlaunch` · `bmmreplay` · `bmmplug` · `mm-locked` · `theme` · `databmm` ·
+`repo` · `mm` · `bmp` · `cbmp` · `bmmcat`. Un fichier qui annonce `format: "mm"` ne prouve
+rien ; un fichier signé qui ment sur son propre type est précisément le cas pour lequel ça
+existe.
+
+!!! tip "Un launch pack mérite d'être validé avant d'être lancé"
+
+    `bmmlaunch` dit combien de programmes un pack lance, et signale ceux qui passent par un
+    shell — un `.ps1` s'exécute avec la stratégie d'exécution PowerShell contournée — et ceux
+    désignés par un chemin relatif, résolus selon le dossier courant au moment du
+    déclenchement. Ni l'un ni l'autre ne se voit dans le nom du fichier.
+
+**Ça décide par la FORME, jamais par ce que le document prétend être.** Un fichier qui dit
+`format: "mm"` ne prouve rien, et un fichier signé qui ment sur son propre type est justement le
+cas pour lequel ça existe.
+
+!!! note "« Pas du JSON » et « du JSON que je ne reconnais pas » sont deux réponses"
+
+    Elles envoient chercher à des endroits différents. La première est presque toujours une page
+    web qu'un téléchargement a renvoyée à la place du fichier — une redirection de connexion, un
+    lien expiré, un 404 servi en 200.
+
+!!! warning "C'est volontairement superficiel"
+
+    Ça dit ce qu'est un document et si sa propre forme tient debout. Savoir si chaque entrée
+    d'un catalogue se résout vraiment se décide dans ce qui l'installe, sur la machine qui
+    l'exécutera — un deuxième avis ici serait faux le jour où quelqu'un ajoute un champ.
+
+    La seule exception est un `.bmmpa` dont une tâche appelle un bloc partagé que le fichier ne
+    porte pas : cette réponse-là EST dans le même document, et sans le contrôle le fichier
+    s'importe parfaitement et meurt à cette étape.
+
+!!! tip "Chaque tâche dit quand elle tourne — ou pourquoi elle ne tourne pas"
+
+    La pastille d'une tâche était vide dans quatre des cas où une tâche reste sans rien faire :
+    éteinte, manuelle, en surveillance d'un fichier, en attente d'un événement. Elle dit
+    maintenant lequel.
+
+    Aucun de ces cas n'est une erreur, donc aucun n'est coloré. Une tâche manuelle qui affiche
+    « seulement quand tu lances » fonctionne exactement comme prévu.
+
+## Quand BMM lui-même fait quelque chose
+
+Tous les autres déclencheurs regardent l'extérieur : une horloge, un fichier écrit par un autre
+programme. Celui-ci regarde BMM.
+
+| Événement | Part quand |
+|---|---|
+| `bmm.mod.missing` | Un mod dont un pack a besoin n'est pas installé. Un événement par mod. |
+| `bmm.mod.corrupt` | Les fichiers d'un mod ne correspondent pas à ce qu'ils devraient être. |
+| `bmm.modpack.incomplete` | Un pack s'est appliqué avec du manquant ou du corrompu. |
+| `bmm.repo.synced` · `bmm.repo.syncFailed` | Une synchro a fini, ou pas. |
+| `bmm.profile.activated` | Un profil est devenu l'actif. |
+| `bmm.error` | Tout ce que BMM a signalé comme une erreur. |
+| `bmm.ai.crashLabelled` | Laya a classé un rapport de crash pour la première fois (sur la page des crashs ou dans une tâche). Porte `report`, `family`, `cause`, `p`, `abstained`, `uncertain`. |
+| `bmm.ai.crashGroup` | Laya a vu un crash qui ne ressemble à aucun de ceux dont elle se souvient. Mêmes champs. |
+| `bmm.ai.ready` | Laya est devenue disponible : `what` vaut `installed`, `loaded` ou `enabled`. |
+
+**Seulement si.** Le déclencheur prend un filtre sur ce que porte l'événement : `family=disk`
+ne lance la tâche que pour les crashs de cette famille, `family=disk|memory` pour l'une ou
+l'autre, `cause=disk_full, abstained=false` pour les deux conditions à la fois. En code :
+`on event "bmm.ai.crashLabelled" where "family=disk"`.
+
+Ce que porte l'événement arrive en `{event.…}`. Pour un mod manquant : `{event.id}`,
+`{event.name}` et `{event.pack}` — c'est la différence entre une tâche qui sait qu'un mod manque
+et une tâche qui peut aller le chercher.
+
+```bmms
+task "Réparation" {
+    on event "bmm.mod.missing"
+
+    print "{event.name} manque dans {event.pack}"
+    do mod.add(url: "https://…/{event.id}.zip", name: "{event.name}")
+}
+```
+
+!!! note "C'est le même anneau qu'un webhook"
+
+    Les événements sonnent les hooks qu'utilisent déjà `wait.hook`, `bmm://hook` et
+    `POST /api/hook`. Une tâche peut donc attendre un événement BMM exactement comme elle attend
+    quelque chose d'extérieur, le déclencheur accepte un nom à toi, et tout ce qui marche pour
+    l'un marche pour l'autre.
+
+!!! warning "`bmm.error` ne part pas pendant qu'une tâche tourne"
+
+    Volontairement. Une tâche déclenchée par `bmm.error` qui échoue lèverait un toast d'erreur,
+    qui ferait partir `bmm.error`, qui la relancerait — indéfiniment, sans que rien nulle part
+    ne l'explique, parce que chaque étape prise séparément se comporte correctement.
+
+    Une erreur levée pendant qu'une tâche tourne est l'échec de cette tâche. Il est déjà dans
+    son journal et dans le panneau d'exécution, et c'est là qu'il a sa place.
+
+Une tâche armée à 10h ne part pas pour ce qui s'est passé à 9h : le premier sondage apprend où
+en est l'anneau, et agit à partir de là. Et une rafale — cinq mods manquants dans un pack —
+lance la tâche **une fois**, avec le plus récent, au lieu de cinq fois à se courir après sur le
+même dossier.
+
+## Quel mod gagne un fichier partagé
+
+BMM déploie en copiant les fichiers dans le jeu : deux mods actifs qui livrent le même chemin ne
+fusionnent pas — l'un des deux est ce qu'il y a sur le disque. La règle est **le dernier
+gagne**, et l'ordre est celui dans lequel les mods ont été activés.
+
+Cet ordre est visible maintenant, et modifiable. Dans une vue de conflit, il nomme le gagnant et
+propose de l'inverser ; depuis une tâche, c'est l'action **Définir quel mod gagne les fichiers
+partagés**.
+
+```bmms
+ensure modWins(id: "big-map-pack") {
+    do mods.order(id: "big-map-pack", mode: "last")
+}
+```
+
+Cette combinaison est tout l'intérêt des deux fonctionnalités. La tâche se déclenche, trouve le
+mod toujours gagnant, et ne fait rien — puis remet les choses en place le jour où quelque chose
+que tu as installé lui a pris ses fichiers.
+
+| | |
+|---|---|
+| `mode: "last"` | Le faire gagner : déployé en dernier. |
+| `mode: "first"` | Le faire perdre : déployé en premier. |
+| `order: "a, b, c"` | Ces mods passent en dernier, dans cet ordre. Ce qui est actif et non nommé garde sa place devant. |
+
+`{order.moved}` dit combien de fichiers ont changé de main. Zéro est une réponse ordinaire et
+utile : l'ordre a changé et rien sur le disque, donc les mods déplacés ne partagent aucun
+fichier.
+
+**Activer un modpack**, **Activer tous les mods** et **Appliquer une liste de mods** ont un champ
+**Ordre d'activation** (`placement` en script) : où vont les mods qu'ils activent.
+
+```bmms
+do modpack.enable(id: "night-pack", placement: "bottom")
+do mods.enableAll(placement: "keep")
+```
+
+`top` les fait gagner, `bottom` laisse gagner les vôtres, `keep` ne déplace rien de ce qui est déjà
+actif. Vide, c'est le choix du pack, puis le réglage **Activation groupée**. Activer un modpack
+écrit aussi `{order.moved}`. Voir [Ordre d'activation](doc-page:how-it-works/load-order).
+
+!!! note "Les fichiers changent immédiatement"
+
+    Réordonner recopie les fichiers dont le gagnant change — ceux-là seulement, pas tous les
+    fichiers disputés. Une liste qui dirait une chose pendant que le disque en dit une autre
+    serait pire que pas de liste : c'est celle à laquelle les gens se fieraient.
+
+!!! warning "Un nouvel ordre doit être le même ensemble de mods"
+
+    Ni un sous-ensemble, ni avec des ajouts. Un appelant avec une liste périmée sortirait sinon
+    un mod de l'ordre de déploiement pendant que ses fichiers restent dans le jeu, et le profil
+    décrirait un état qui n'existe pas. C'est refusé, et le message dit pourquoi.
+
+## Nommer un endroit au lieu de taper où il est
+
+Tout champ qui propose **Parcourir** propose aussi **BMM…**. Il liste les dossiers que BMM
+connaît déjà, et garde celui que tu choisis sous forme de **nom** plutôt que de chemin :
+
+| Écrit | Veut dire |
+|---|---|
+| `mods:` · `game:` · `backup:` | Les dossiers du profil actif — et ils le suivent quand tu changes de profil |
+| `plugin:my-tools` | Là où ce plugin est installé |
+| `plugin:my-tools/bundle/presets` | Un dossier livré par le plugin |
+| `app:obs` | Une app installée depuis le catalogue d'apps |
+| `profile:<id>` · `modpack:<id>` | Le dossier de mods de ce profil |
+| `appdata:` | Le dossier de données de BMM |
+
+Un chemin tapé est correct sur une machine, jusqu'à ce que le plugin soit réinstallé, que le
+profil change ou que le dossier de données bouge — et là ça échoue à 3h du matin, au milieu
+d'une étape, avec un message sur un dossier que personne ne reconnaît. Un nom garde le même
+sens, **et le garde sur la machine de quelqu'un d'autre**, ce qui est ce qui rend une tâche
+partageable.
+
+Tu peux en écrire un à la main partout où va un chemin. Il est résolu au moment où l'étape
+s'exécute.
+
+!!! note "`C:\mods` n'est pas un nom"
+
+    Tout chemin absolu Windows contient un deux-points : « contient un deux-points » aurait donc
+    silencieusement réinterprété chaque chemin qui marche aujourd'hui. Seuls les mots de ce
+    tableau commencent un nom, et une lettre de lecteur fait un caractère — c'est la différence
+    que le contrôle teste vraiment.
+
+!!! warning "Un nom qui ne se résout pas arrête l'étape"
+
+    Un plugin qui n'est pas installé ici, un profil supprimé. L'étape échoue et dit quel nom
+    elle n'a pas su placer, plutôt que de passer `plugin:my-tools/bundle` à quelque chose qui
+    attend un dossier — ce qui échoue plus tard, ailleurs, avec un pire message.
+
+    Un **modpack multi-profil** n'a pas de dossier : ses mods vivent dans deux ou plus. Prendre
+    le premier serait juste une fois sur deux, ce qui est pire que rien, parce qu'une tâche qui
+    écrit dans le dossier de mods du mauvais profil n'échoue pas. Ces packs restent joignables
+    par id via les actions modpack.
+
+## Les automatisations dans Plugins & API
+
+Les tâches planifiées sont dans **Plugins & API → Automatisations**. La carte des Paramètres qui
+les contenait n'a plus qu'un bouton qui y mène, pour qu'une vieille habitude retrouve son chemin.
+
+L'onglet réunit tout ce qui concerne une automatisation :
+
+- la liste des tâches, avec ce qui tourne, le déclencheur de chacune, sa prochaine exécution et les dernières ;
+- **Nouvelle automatisation**, qui ouvre l'éditeur (blocs, code ou flux — la même tâche) ;
+- **Modèles**, la galerie de tâches prêtes, qui ouvre celle choisie dans l'éditeur ;
+- **Fichiers…** — importer, exporter, inspecter un `.bmmpa`, suivre ou publier un catalogue d'automatisations.
+
+L'éditeur est le seul générateur. Ce que tu y écris est enregistré comme une tâche qui s'exécute
+dans BMM, ou **exporté** (le bouton *Exporter* en haut) de trois façons :
+
+| Export | Ce que tu obtiens |
+|---|---|
+| **Fichier d'automatisation** (`.bmmpa`) | Signé ; importé **désactivé**, toutes permissions coupées. Un plugin peut le livrer (Plugins & API → Créer → Automatisations). |
+| **BMMScript** (`.bmmscript`) | La tâche en texte, lisible et modifiable ; elle se rouvre en blocs. |
+| **Script** (PowerShell, CMD, Python, Node…) | Un script qui s'exécute **hors** de BMM, écrit par le moteur de scripts de Plugins & API. Il atteint BMM par des liens `bmm://` et l'API locale, et lit le jeton de l'API dans la variable `BMM_TOKEN` — le jeton n'est jamais écrit dans le fichier. |
+
+Un script n'a ni déclencheur, ni permissions, ni accès aux conditions de BMM : une étape qu'il ne
+peut pas porter (une condition, une boucle, une étape de navigation ou d'entretien) est écrite en
+**commentaire** qui la nomme, et la fenêtre d'export les liste avant l'enregistrement. Rien n'est
+perdu en silence.
+
+## Naviguer dans BMM depuis une tâche
+
+Le groupe **Naviguer dans BMM** déplace la vue, précisément, et peut désigner des éléments :
+
+| Étape | Ce qu'elle fait | Permission |
+|---|---|---|
+| `nav.page` | Ouvre une page, et un onglet dedans (`onglet/section` pour un onglet dans un onglet) | aucune |
+| `nav.settingsCard` | Fait défiler les Paramètres jusqu'à une carte, la déplie et la met en évidence | aucune |
+| `nav.item` | Ouvre un profil, un mod, un modpack, un dépôt suivi, un plugin ou une application par identifiant et désigne sa carte | aucune |
+| `nav.highlight` | Amène un élément à l'écran et l'entoure, avec une légende | aucune |
+| `nav.waitFor` | Attend qu'un élément soit à l'écran, jusqu'à un délai | aucune |
+| `nav.message` | Affiche une carte avec un titre et un texte, près d'un élément ou en bas ; peut attendre **OK** | aucune |
+| `nav.modal` | Ouvre une des fenêtres **listées** (Outils, Stockage, Intégrité, Graphismes, dépôts enregistrés…) par son propre bouton | **Naviguer et cliquer** |
+| `nav.click` | Appuie sur un des contrôles **listés** (vérifier les mises à jour, vérifier l'intégrité, recharger un catalogue…) | **Naviguer et cliquer** |
+
+Mettre en évidence et attendre acceptent le nom d'un contrôle listé ou n'importe quel sélecteur :
+ils ne font que regarder. Cliquer n'accepte qu'un contrôle listé, et l'élément est revérifié au
+moment du clic — un champ, un consentement, un formulaire d'identifiants ou ce qui ressemble à une
+suppression est refusé, même si la liste dit le contraire. Une étape qui doit continuer quand sa
+cible manque laisse `{nav.ok}` à 0.
+
+## Les étapes d'entretien
+
+| Étape | Ce qu'elle fait | La simulation mesure |
+|---|---|---|
+| `repos.checkFollowed` | Lit les dépôts suivis. *Seulement me prévenir*, *me demander puis me montrer où*, ou *synchroniser selon le suivi de chaque dépôt* | les mises à jour en attente |
+| `catalog.updates` | Les nouvelles versions des applications et plugins **que tu coches** : prévenir, télécharger (dans le dossier `downloads/` de la tâche) ou télécharger et installer | les nouvelles versions |
+| `catalog.install` | Un élément du catalogue par identifiant, selon les règles du catalogue : https et SHA-256 publié, un plugin arrive désactivé, un thème n'est jamais appliqué | — |
+| `mods.verifyIntegrity` | Le dossier du jeu face aux mods actifs, ou chaque mod face à ses empreintes | — (lecture seule) |
+| `cache.clean` | Vide les caches choisis au-delà d'un seuil ; les archives de plantage sont en option | la place libérée |
+| `logs.rotate` | Les journaux de tâche trop gros deviennent `.1.log` ; les vieilles copies et rapports de session partent ; les rapports de plantage restent | ce qui tournerait et partirait |
+| `disk.report` | Chaque profil, ses sauvegardes et les mods les plus lourds, écrits dans `disk-usage.md` | — (lecture seule) |
+| `repo.server` | Démarre ou arrête le serveur de dépôt intégré | s'il démarrerait ou s'arrêterait |
+
+Les téléchargements sont en https uniquement, vérifiés contre le SHA-256 du catalogue à mesure
+qu'ils arrivent, et rangés dans le dossier de la tâche sous un nom sûr ; une différence supprime
+le fichier partiel. Une application livrée sous forme d'installateur est téléchargée, jamais
+installée : son assistant a besoin de toi.
+
+## Appeler l'API locale
+
+`api.call` envoie n'importe quelle route de l'API locale, choisie dans sa référence (la même liste
+que Plugins & API → API) : la méthode et le chemin sont remplis, et un squelette de corps avec les
+champs requis de la route. L'appel passe **par le serveur de l'API**, donc la validation propre à
+la route s'applique. Le statut va dans `{api.status}` et `{api.ok}`, les 4 000 premiers caractères
+de la réponse dans `{api.body}`. Il demande **Déclencher des deeplinks** (une route atteint tout ce
+que l'application expose), et l'API locale doit être active.
+
+## Simulation et aperçu
+
+**Simulation**, en haut de l'éditeur et sur chaque modèle, liste chaque étape dans l'ordre
+d'exécution : si elle affiche, lit, modifie, supprime, accède au réseau ou agit hors de BMM, si
+elle peut ne pas s'exécuter (dans une branche ou une boucle), et quelle permission lui manque. Les
+étapes d'entretien qui savent mesurer sans agir sont lancées avec `dryRun` et montrent leur
+réponse. Rien d'autre ne s'exécute.
+
+**Aperçu de la navigation** rejoue ensuite les étapes de navigation pour de vrai, avec une barre en
+haut : pages, onglets, cartes et éléments s'ouvrent et s'éclairent ; une fenêtre est annoncée au
+lieu d'être ouverte ; un clic est un cercle en pointillés avec *cliquerait* dessous. Échap ou
+**Arrêter** l'interrompt.
+
+## Deux choses plus petites
+
+**Toute liste déroulante de douze entrées ou plus a une barre de recherche.** Elle cherche
+dans toute la ligne : « kill » trouve *Stop app / process* par sa description.
+
+**La référence est à un clic de l'éditeur de code.** Elle ouvre la page générée — construite
+depuis le registre, donc elle ne peut jamais lister une action que cette version n'a pas.

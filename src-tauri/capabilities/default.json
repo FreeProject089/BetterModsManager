@@ -1,0 +1,46 @@
+{
+    "$schema": "../gen/schemas/desktop-schema.json",
+    "identifier": "default",
+    "description": "Default BMM capability — core + the plugins the webview uses. File access, dialogs, shell-open and the sidecar are scoped; most BMM file work happens in Rust commands, which capabilities don't gate.",
+    "windows": ["main"],
+    "permissions": [
+        "core:default",
+        "core:window:default",
+        "core:window:allow-start-dragging",
+        "core:window:allow-start-resize-dragging",
+        "core:window:allow-minimize",
+        "core:window:allow-unminimize",
+        "core:window:allow-maximize",
+        "core:window:allow-unmaximize",
+        "core:window:allow-toggle-maximize",
+        "core:window:allow-is-maximized",
+        "core:window:allow-set-focus",
+        "core:window:allow-close",
+        "core:window:allow-destroy",
+        "core:window:allow-set-fullscreen",
+        "core:window:allow-is-fullscreen",
+        "core:webview:default",
+        "core:event:default",
+        "core:app:default",
+        "core:path:default",
+        "dialog:default",
+        "notification:default",
+        "process:default",
+        "cli:default",
+        "shell:default",
+        "shell:allow-open",
+        {
+            "identifier": "shell:allow-execute",
+            "allow": [{ "name": "binaries/bmm-mcp-server", "sidecar": true }]
+        },
+        "fs:default",
+        "fs:allow-read-file",
+        "fs:allow-write-file",
+        "fs:allow-read-dir",
+        "fs:allow-exists",
+        {
+            "identifier": "fs:scope",
+            "allow": ["$APP/**", "$APPDATA/**", "$RESOURCE/**"]
+        }
+    ]
+}

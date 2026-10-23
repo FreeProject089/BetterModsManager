@@ -1,5 +1,7 @@
+use tauri::Emitter;
 use crate::fs_utils;
 use crate::models::repo::{RepoChunk, RepoFile, RepoMod, ServerRepo};
+use std::collections::HashMap;
 use crate::state::AppState;
 use sha2::{Digest, Sha256};
 use std::fs;
@@ -19,7 +21,7 @@ pub struct RepoProgress {
     pub current_file: String,
 }
 
-#[derive(serde::Serialize, Default, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone)]
 pub struct ProfileSyncSummary {
     pub name: String,
     pub mods_added: usize,
@@ -29,21 +31,393 @@ pub struct ProfileSyncSummary {
     pub bytes_downloaded: u64,
 }
 
-#[derive(serde::Serialize, Default)]
+#[derive(serde::Serialize, serde::Deserialize, Default)]
 pub struct SyncSummary {
     pub profiles: Vec<ProfileSyncSummary>,
+    /// What the manifest's signature said (`check_repo_signature`): "valid" or "unsigned".
+    /// A signature that did not verify never gets here: the sync is refused before a byte
+    /// is written.
+    #[serde(default)]
+    pub signature: String,
 }
 
-const CHUNK_SIZE: usize = 4 * 1024 * 1024; // 4MB
+#[derive(serde::Deserialize)]
+pub struct MiniServerExportOptions {
+    pub port: u16,
+    pub upload_limit: u32,
+    pub admin_password: String,
+    /// Optional password a SUBSCRIBER must supply to download from this repo (empty = open).
+    /// Distinct from admin_password, which only protects the host's own admin panel.
+    #[serde(default)]
+    pub download_password: String,
+    pub server_version: u8,
+    pub use_cloudflare: bool,
+    pub use_upnp: bool,
+    pub enable_docker: Option<bool>,
+    pub docker_host_type: Option<String>,
+    pub server_type: Option<String>,
+    /// Status page, rate limit and scheduled jobs of the generated server (mini_server_extras.rs).
+    #[serde(default)]
+    pub extras: Option<crate::commands::mini_server_extras::MiniServerExtras>,
+}
 
-fn compute_file_hash_and_chunks(path: &Path, need_chunks: bool) -> Result<(String, Option<Vec<RepoChunk>>), String> {
-    let mut file = fs::File::open(path).map_err(|e| e.to_string())?;
+pub(crate) const CHUNK_SIZE: usize = 4 * 1024 * 1024; // 4MB
+use std::time::Instant;
+use std::sync::Mutex as StdMutex;
+lazy_static::lazy_static! {
+    static ref LAST_EMIT: StdMutex<Option<Instant>> = StdMutex::new(None);
+}
+
+// ── Resource governor (G3c) ──────────────────────────────────────────────────────
+// Every heavy site in this file holds a ticket of its kind for the whole operation: the
+// export and the incremental update (Compress), the direct update (Install), the sync
+// (Download), the manifest (Hash). Their parallel passes run on the kind's pool and their
+// file copies go through the governed copy. Under Balanced nothing changes: the Compress pool
+// is the size of the global pool the export ran on, the Hash pool the size of the hash pool
+// the manifest ran on, and the governed copy writes the same bytes, mtime and permissions.
+use crate::governor::config::OpKind;
+use crate::governor::queue::Ticket;
+
+/// A repo zip's gate: the operation's ticket, checked before every entry, and the Compress
+/// MB/s of the disk the zip is written to, paid after every file on the bytes it packed.
+struct TicketGate<'a> {
+    ticket: &'a Ticket,
+    pace: Option<std::sync::Arc<crate::governor::io::RateLimiter>>,
+}
+
+impl<'a> TicketGate<'a> {
+    /// The ticket alone: no MB/s.
+    #[cfg(test)]
+    fn new(ticket: &'a Ticket) -> TicketGate<'a> { TicketGate { ticket, pace: None } }
+    /// A zip written to `out`, paced by the Compress rate of that disk (if one is set).
+    fn writing(ticket: &'a Ticket, out: &Path) -> TicketGate<'a> {
+        TicketGate { ticket, pace: crate::governor::runtime::global().limiter(OpKind::Compress, out) }
+    }
+}
+
+impl super::zipping::ZipGate for TicketGate<'_> {
+    fn checkpoint(&self) -> Result<(), String> {
+        self.ticket.checkpoint().map_err(|_| "repo.cancelled".to_string())
+    }
+    fn wrote(&self, bytes: u64) {
+        self.ticket.add_bytes(bytes, 0);
+        if let Some(l) = &self.pace { l.acquire(bytes); }
+    }
+}
+
+/// Copy one file of a repo under `kind`'s policy for the destination disk (per-volume rate,
+/// the ticket's pause / cancel between chunks), then carry the modification time and the
+/// permissions over as `fs::copy` did, so the exported tree is what it was before.
+/// A cancel answers "repo.cancelled" (the partial file is already removed); any other failure
+/// the "repo.errCopyFile" the export always reported.
+fn governed_copy(kind: OpKind, src: &Path, dst: &Path, ticket: &Ticket) -> Result<u64, String> {
+    use crate::governor::io::CopyError;
+    match crate::governor::runtime::global().copy(kind, src, dst, Some(ticket)) {
+        Ok(n) => {
+            if let Ok(meta) = fs::metadata(src) {
+                // mtime first: a read-only source makes the destination read-only after.
+                if let Ok(t) = meta.modified() {
+                    if let Ok(f) = fs::OpenOptions::new().write(true).open(dst) {
+                        let _ = f.set_modified(t);
+                    }
+                }
+                let _ = fs::set_permissions(dst, meta.permissions());
+            }
+            Ok(n)
+        }
+        Err(CopyError::Cancelled) => Err("repo.cancelled".to_string()),
+        Err(CopyError::Io(_)) => Err("repo.errCopyFile".to_string()),
+    }
+}
+
+fn format_bytes(bytes: u64) -> String {
+    const UNITS: &[&str] = &["B", "KB", "MB", "GB", "TB"];
+    let mut size = bytes as f64;
+    let mut unit_index = 0;
+    
+    while size >= 1024.0 && unit_index < UNITS.len() - 1 {
+        size /= 1024.0;
+        unit_index += 1;
+    }
+    
+    if unit_index == 0 {
+        format!("{} {}", bytes, UNITS[unit_index])
+    } else {
+        format!("{:.2} {}", size, UNITS[unit_index])
+    }
+}
+
+/// Where a client fetches one mod file from.
+///
+/// `files_base_url` lets a manifest published in one place point at mods hosted in another —
+/// the case where someone already serves their files and does not want to upload them a
+/// second time just to have a repo. When it is absent, which is every manifest generated
+/// before the field existed, the files sit next to `repo.json` and this resolves exactly as
+/// it always did.
+///
+/// Both bases are normalised here rather than at their call sites: `base_url` already ends
+/// with a slash, a hand-typed `files_base_url` may or may not, and getting that wrong yields
+/// `host//mods/…` or `hostmods/…` — neither of which fails loudly, they just 404 per file.
+///
+/// `files_layout` covers the rest of the same problem: hosting that already serves the mods
+/// under a directory of its own choosing. It is a template over `{id}` and `{path}`, and the
+/// default — `mods/{id}/{path}` — is what every manifest written before it existed means.
+pub(crate) fn mod_file_url(
+    base_url: &str,
+    files_base_url: Option<&str>,
+    files_layout: Option<&str>,
+    mod_id: &str,
+    relative_path: &str,
+) -> String {
+    let base = files_base_url
+        .map(str::trim)
+        .filter(|b| !b.is_empty())
+        .map(|b| format!("{}/", b.trim_end_matches('/')))
+        .unwrap_or_else(|| base_url.to_string());
+    format!("{}{}", base, mod_file_tail(files_layout, mod_id, relative_path))
+}
+
+/// Where a mod's file sits UNDER the repo root, as a '/'-separated relative path.
+///
+/// Split out of mod_file_url so that a second transport can reuse it. Syncing over SFTP
+/// needs the same answer as syncing over HTTP — the layout template is a property of the
+/// REPO, not of how you reach it — and writing that mapping a second time is how the two
+/// quietly disagree the day somebody changes `files_layout`.
+pub(crate) fn mod_file_tail(files_layout: Option<&str>, mod_id: &str, relative_path: &str) -> String {
+    let path = relative_path.replace('\\', "/");
+    let layout = files_layout
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .unwrap_or("mods/{id}/{path}");
+    // A leading slash in the template would read as "root of the host" once joined, silently
+    // dropping any path already in the base URL.
+    layout
+        .trim_start_matches('/')
+        .replace("{id}", mod_id)
+        .replace("{path}", &path)
+}
+
+/// The folder a synced repo mod is installed under: the first eight BYTES of its id, an
+/// underscore, then its name reduced to letters, digits, space, `-` and `_`.
+///
+/// Written three times before this (the file loop, the loop that records the mods, and the
+/// API's own sync), two of them as `&id[..8]`: a panic on any id shorter than eight bytes or
+/// with a multi-byte character across byte 8 — and the id is whatever the manifest says. The
+/// prefix is also where a manifest could put a separator (`../../ab`), so separators, `:`
+/// and control characters become `_`. For every id BMM or BCWEB writes (a uuid, a folder
+/// name) the result is byte-for-byte what it was, so already-synced mods keep their folder.
+pub(crate) fn repo_mod_folder_name(id: &str, name: &str) -> String {
+    let mut end = id.len().min(8);
+    while !id.is_char_boundary(end) {
+        end -= 1;
+    }
+    let prefix: String = id[..end]
+        .chars()
+        .map(|c| if c == '/' || c == '\\' || c == ':' || c.is_control() { '_' } else { c })
+        .collect();
+    let safe_name = name.replace(|c: char| !c.is_alphanumeric() && c != ' ' && c != '-' && c != '_', "_");
+    format!("{}_{}", prefix, safe_name)
+}
+
+/// The first file path in a manifest that could land outside its mod folder, if any.
+///
+/// Checked BEFORE a sync writes anything, so a hostile manifest is refused whole rather than
+/// half-installed. The write sites join through `safe_relative_path` as well: this is the
+/// early, all-or-nothing answer, that is the one no future caller can forget.
+pub(crate) fn first_unsafe_manifest_path(repo: &ServerRepo) -> Option<String> {
+    repo.profiles
+        .iter()
+        .flat_map(|p| p.mods.iter())
+        .flat_map(|m| m.files.iter())
+        .map(|f| &f.relative_path)
+        .find(|rel| crate::fs_utils::safe_relative_path(rel).is_none())
+        .cloned()
+}
+
+/// What a manifest's signature allows, decided BEFORE a sync writes anything.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RepoSignatureState {
+    /// Signed, and the signature verifies against the manifest as served.
+    Valid,
+    /// Carries no signature at all, and nothing says it should: syncs as it always did,
+    /// reported as unsigned (the info card's badge, `SyncSummary.signature`).
+    Unsigned,
+}
+
+impl RepoSignatureState {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self { Self::Valid => "valid", Self::Unsigned => "unsigned" }
+    }
+}
+
+/// The signature gate of `sync_server_repo`.
+///
+/// The signature used to be displayed (the Verified / Unverified badge) and nothing else: a
+/// manifest whose signature did not verify, or a pinned repo serving no signature at all,
+/// synced exactly like a valid one. Now:
+///
+///  - a manifest that carries a signature or an author id CLAIMS to be signed, so it must
+///    verify (`security::verify_repo_signature`, the check the badge shows), or the sync is
+///    refused: `repo.errSignatureInvalid`;
+///  - `pinned` is the signature the official repo list recorded for this URL when the BMM
+///    team validated it (`__bmmRepoExpectedSig` on the frontend). With a pin, a manifest with
+///    no signature is refused (`repo.errSignatureMissing`: stripping the signature must not
+///    turn a vetted repo into an "unsigned, install anyway" one), and one whose signature is
+///    not the recorded one too (`repo.errSignatureMismatch`: the content changed since it was
+///    validated). ed25519 signatures are deterministic, so equal means same key, same bytes;
+///  - otherwise, no signature: `Unsigned`, synced as before.
+///
+/// There is no override: the repo UI never had a "trust anyway" concept for a signature, and a
+/// one-click bypass of the only integrity check would be the thing people click.
+pub(crate) fn check_repo_signature(repo: &ServerRepo, pinned: Option<&str>) -> Result<RepoSignatureState, String> {
+    let claims = repo.signature.is_some() || repo.author_id.is_some();
+    let pinned = pinned.map(str::trim).filter(|s| !s.is_empty());
+    if claims && !crate::commands::security::verify_repo_signature(repo.clone()) {
+        return Err("repo.errSignatureInvalid".to_string());
+    }
+    if let Some(pin) = pinned {
+        match repo.signature.as_deref() {
+            None => return Err("repo.errSignatureMissing".to_string()),
+            Some(sig) if !sig.trim().eq_ignore_ascii_case(pin) => return Err("repo.errSignatureMismatch".to_string()),
+            Some(_) => {}
+        }
+    }
+    Ok(if claims { RepoSignatureState::Valid } else { RepoSignatureState::Unsigned })
+}
+
+#[cfg(test)]
+mod signature_gate_tests {
+    use super::*;
+    use ed25519_dalek::{Signer, SigningKey};
+
+    fn manifest() -> ServerRepo {
+        serde_json::from_value(serde_json::json!({
+            "name": "R", "description": null, "author": "a", "author_id": null, "signature": null,
+            "version": "1", "game_name": "G", "created_at": "2026-01-01T00:00:00Z",
+            "seed": null, "upload_limit": null, "require_login": null, "modpacks": null,
+            "profiles": [{ "id": "p", "name": "P", "game_name": "G", "mods": [{
+                "id": "m", "name": "M", "version": "1", "author": null, "description": null,
+                "tags": [], "files": [{ "relative_path": "a.txt", "size": 1, "sha256_hash": "00" }],
+                "archive": null, "download_links": [], "dependencies": []
+            }]}]
+        })).unwrap()
+    }
+
+    /// Signed the way `generate_repo` signs: both fields None, compact JSON of the struct.
+    fn signed(mut repo: ServerRepo, seed: u8) -> ServerRepo {
+        let key = SigningKey::from_bytes(&[seed; 32]);
+        repo.author_id = None;
+        repo.signature = None;
+        let sig = key.sign(serde_json::to_string(&repo).unwrap().as_bytes());
+        repo.author_id = Some(hex::encode(key.verifying_key().to_bytes()));
+        repo.signature = Some(hex::encode(sig.to_bytes()));
+        repo
+    }
+
+    #[test]
+    fn an_unsigned_repo_syncs_as_before_and_says_so() {
+        assert_eq!(check_repo_signature(&manifest(), None), Ok(RepoSignatureState::Unsigned));
+        assert_eq!(check_repo_signature(&manifest(), Some("  ")), Ok(RepoSignatureState::Unsigned), "a blank pin is no pin");
+    }
+
+    #[test]
+    fn a_valid_signature_passes() {
+        let r = signed(manifest(), 7);
+        assert_eq!(check_repo_signature(&r, None), Ok(RepoSignatureState::Valid));
+        let pin = r.signature.clone().unwrap().to_uppercase();
+        assert_eq!(check_repo_signature(&r, Some(&pin)), Ok(RepoSignatureState::Valid));
+    }
+
+    /// The server changed a file's hash after signing: the manifest still CLAIMS the author.
+    #[test]
+    fn a_tampered_manifest_is_refused() {
+        let mut r = signed(manifest(), 7);
+        r.profiles[0].mods[0].files[0].sha256_hash = "ff".into();
+        assert_eq!(check_repo_signature(&r, None), Err("repo.errSignatureInvalid".to_string()));
+    }
+
+    #[test]
+    fn a_half_signature_is_refused() {
+        let mut r = manifest();
+        r.author_id = Some("ab".repeat(32));
+        assert_eq!(check_repo_signature(&r, None), Err("repo.errSignatureInvalid".to_string()));
+        let mut r = manifest();
+        r.signature = Some("garbage".into());
+        assert_eq!(check_repo_signature(&r, None), Err("repo.errSignatureInvalid".to_string()));
+    }
+
+    /// Stripping the signature off a pinned repo does not downgrade it to "unsigned".
+    #[test]
+    fn a_pinned_repo_without_a_signature_is_refused() {
+        let pin = signed(manifest(), 7).signature.unwrap();
+        assert_eq!(check_repo_signature(&manifest(), Some(&pin)), Err("repo.errSignatureMissing".to_string()));
+    }
+
+    /// Re-signed with another key (validly!): not the repo the list vouched for.
+    #[test]
+    fn a_pinned_repo_signed_by_someone_else_is_refused() {
+        let pin = signed(manifest(), 7).signature.unwrap();
+        let other = signed(manifest(), 9);
+        assert_eq!(check_repo_signature(&other, None), Ok(RepoSignatureState::Valid));
+        assert_eq!(check_repo_signature(&other, Some(&pin)), Err("repo.errSignatureMismatch".to_string()));
+    }
+}
+
+#[cfg(test)]
+mod manifest_path_tests {
+    use super::*;
+
+    fn manifest(mod_id: &str, rel: &str) -> ServerRepo {
+        serde_json::from_value(serde_json::json!({
+            "profiles": [{ "id": "p", "name": "P", "game_name": "G", "mods": [{
+                "id": mod_id, "name": "Cool Mod", "version": "1", "tags": [],
+                "download_links": [],
+                "files": [{ "relative_path": rel, "size": 1, "sha256_hash": "" }]
+            }]}]
+        }))
+        .unwrap()
+    }
+
+    /// The trigger: a repo someone is invited to sync, whose manifest names a file in the
+    /// Startup folder. Before this, the sync created it there.
+    #[test]
+    fn a_manifest_that_writes_outside_the_mod_folder_is_named() {
+        for bad in [
+            "../../../../AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup/a.bat",
+            "C:\\Users\\Public\\a.bat",
+            "/etc/profile.d/a.sh",
+        ] {
+            assert_eq!(first_unsafe_manifest_path(&manifest("0123456789", bad)).as_deref(), Some(bad));
+        }
+        assert_eq!(first_unsafe_manifest_path(&manifest("0123456789", "Data/ok.dds")), None);
+    }
+
+    /// Same bytes as before for the ids that exist, no panic and no separator for the rest.
+    #[test]
+    fn the_folder_name_is_unchanged_for_real_ids_and_safe_for_hostile_ones() {
+        assert_eq!(repo_mod_folder_name("3f2a9c1e-77aa-4b00-9d1e-000000000000", "Cool Mod!"), "3f2a9c1e_Cool Mod_");
+        assert_eq!(repo_mod_folder_name("cool-mod", "x"), "cool-mod_x");
+        // Shorter than eight bytes: `&id[..8]` panicked here.
+        assert_eq!(repo_mod_folder_name("ab", "x"), "ab_x");
+        // A multi-byte character across byte 8: `&id[..8]` panicked here too.
+        assert_eq!(repo_mod_folder_name("abcdefgé", "x"), "abcdefg_x");
+        // A separator in the id no longer reaches the path.
+        let hostile = repo_mod_folder_name("../../ab", "x");
+        assert!(!hostile.contains('/') && !hostile.contains('\\'), "{hostile}");
+        let base = std::path::Path::new("mods");
+        assert!(base.join(&hostile).components().count() == 2);
+    }
+}
+
+pub(crate) fn compute_file_hash_and_chunks(path: &Path, need_chunks: bool) -> Result<(String, Option<Vec<RepoChunk>>), String> {
+    let file = fs::File::open(path).map_err(|e| e.to_string())?;
+    let mut reader = std::io::BufReader::with_capacity(128 * 1024, file);
     let mut global_hasher = Sha256::new();
     let mut chunks = Vec::new();
     let mut buffer = vec![0u8; CHUNK_SIZE];
     
     loop {
-        let n = file.read(&mut buffer).map_err(|e| e.to_string())?;
+        let n = reader.read(&mut buffer).map_err(|e| e.to_string())?;
         if n == 0 {
             break;
         }
@@ -86,51 +460,143 @@ fn compute_local_chunk_hashes(path: &Path) -> Result<Vec<String>, String> {
     Ok(chunk_hashes)
 }
 
+/// Which modpack list an export should publish.
+///
+/// Supplied wins. `Some(vec![])` is a caller saying "share none", which is a decision and is
+/// honoured; only `None` — "I am not touching this" — falls back to what the repo already
+/// published. Pulled out of the command because the command needs Tauri state and this is
+/// the part that loses data when it is wrong.
+fn carry_modpacks(
+    supplied: Option<Vec<crate::models::repo::RepoModpackShare>>,
+    previous: Option<Vec<crate::models::repo::RepoModpackShare>>,
+) -> Option<Vec<crate::models::repo::RepoModpackShare>> {
+    match supplied {
+        Some(list) => Some(list),
+        None => previous,
+    }
+}
+
+/// Export profiles as a server repo. The command itself only hands the work to a blocking
+/// thread (owner card 4, pentest R13): the export is a long, synchronous job — the slot wait,
+/// the copy + hash pass, per-mod zips, the final archive, and the ticket's checkpoints, which
+/// park the thread they run on while the export is paused. Run inside this `async fn`, all of
+/// that held one of the runtime's few workers (the ones the local API and the built-in repo
+/// server answer on) for the whole export. On a blocking thread the governor keeps its
+/// synchronous semantics unchanged: the Compress ticket is taken there with `begin`, so the
+/// nested tickets the zips take on that same thread are recognised as nested (the rule
+/// `begin` records the thread for), and a pause parks that thread, not a runtime worker.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn export_server_repo(
     window: Window,
     handle: tauri::AppHandle,
-    state: State<'_, AppState>,
     profile_ids: Vec<String>,
     output_dir: String,
     author_name: String,
     seed: Option<String>,
+    modpacks_share_config: Option<Vec<crate::models::repo::RepoModpackShare>>,
+    zip_output: bool,
+    zip_mods: bool,
+    compression: Option<String>,
+    server_options: Option<MiniServerExportOptions>,
+    creds: Option<crate::commands::creds::CredsRequest>,
 ) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        export_server_repo_blocking(
+            window, handle, profile_ids, output_dir, author_name, seed, modpacks_share_config,
+            zip_output, zip_mods, compression, server_options, creds,
+        )
+    })
+    .await
+    .map_err(|e| format!("repo export stopped unexpectedly: {e}"))?
+}
+
+#[allow(clippy::too_many_arguments)]
+fn export_server_repo_blocking(
+    window: Window,
+    handle: tauri::AppHandle,
+    profile_ids: Vec<String>,
+    output_dir: String,
+    author_name: String,
+    seed: Option<String>,
+    modpacks_share_config: Option<Vec<crate::models::repo::RepoModpackShare>>,
+    zip_output: bool,
+    zip_mods: bool,
+    // How the zips this export writes are compressed — the whole-repo archive and the
+    // per-mod ones alike. `None` is deflate, the one every unzipper understands.
+    compression: Option<String>,
+    server_options: Option<MiniServerExportOptions>,
+    // Credentials for the protected sources this repo's mods point at, sealed with the
+    // passphrase the export screen asked for. `None` on every export that did not use the
+    // fold, which is almost all of them.
+    creds: Option<crate::commands::creds::CredsRequest>,
+) -> Result<(), String> {
+    use tauri::Manager;
+    let state = handle.state::<AppState>();
     if author_name.trim().is_empty() {
         return Err("repo.errAuthorRequired".to_string());
     }
+    // Refused up front, before a single file is copied: an unknown method is a typo in a
+    // scheduled task or a script, and the place to learn about it is not a half-written repo.
+    let zip_method = ZipMethod::parse(compression.as_deref())?;
 
-    let output_path = PathBuf::from(&output_dir);
-    if !output_path.exists() {
-        fs::create_dir_all(&output_path).map_err(|_| "repo.errCreateOutputDir".to_string())?;
-    } else if !output_path.is_dir() {
-        return Err("repo.errOutputDirNotDir".to_string());
-    }
+    let mut _tracker = crate::commands::resource_tracker::OpTracker::start("REPO/export")
+        .with_subject(format!("{} profile(s) → {} ({})", profile_ids.len(), output_dir, zip_method.name()));
+
+    let mut _temp_dir: Option<tempfile::TempDir> = None;
+    let output_path = if zip_output {
+        let td = tempfile::tempdir().map_err(|e| format!("Failed to create temp dir: {}", e))?;
+        let path = td.path().to_path_buf();
+        _temp_dir = Some(td);
+        path
+    } else {
+        let p = PathBuf::from(&output_dir);
+        if !p.exists() {
+            fs::create_dir_all(&p).map_err(|_| "repo.errCreateOutputDir".to_string())?;
+        } else if !p.is_dir() {
+            return Err("repo.errOutputDirNotDir".to_string());
+        }
+        p
+    };
+
+    state.install_cancelled.store(false, std::sync::atomic::Ordering::SeqCst);
+    let cancel_flag = state.install_cancelled.clone();
+
+    // One Compress ticket for the whole export: the per-file copy + hash pass, the per-mod
+    // zips and the final archive all answer to it.
+    let gov = crate::governor::runtime::global();
+    let ticket = gov.begin(OpKind::Compress, &format!("repo export → {}", output_dir));
 
     let repo_mods_dir = output_path.join("mods");
     if !repo_mods_dir.exists() {
         fs::create_dir_all(&repo_mods_dir).map_err(|_| "repo.errCreateModDir".to_string())?;
-    } else if !repo_mods_dir.is_dir() {
-        return Err("repo.errOutputDirNotDir".to_string());
     }
+
+    // What the PREVIOUS manifest said, for the fields an export does not rebuild.
+    //
+    // `ServerRepo::new` starts empty, so everything the "Include in the repo…" screen
+    // published — plugins, themes, automations, mod lists, catalogues, bundles, and the
+    // shared modpacks — was thrown away by the next export. That is data loss on the exact
+    // workflow that screen exists for: "adding something to a repo published months ago",
+    // then re-exporting when a mod changes.
+    //
+    // Only the seed was carried over, and only because losing it breaks every client at
+    // once. The rest fail quietly: the repo simply stops offering them and nobody is told.
+    let previous: Option<ServerRepo> = {
+        let manifest_path = output_path.join("repo.json");
+        fs::read_to_string(&manifest_path)
+            .ok()
+            .and_then(|c| serde_json::from_str::<ServerRepo>(&c).ok())
+    };
 
     // Determine the seed to use
     let mut final_seed = seed;
-    
-    // If no seed provided by user, try to recover existing one or generate new
     if final_seed.is_none() {
-        let manifest_path = output_path.join("repo.json");
-        if manifest_path.exists() {
-            if let Ok(content) = fs::read_to_string(&manifest_path) {
-                if let Ok(existing_repo) = serde_json::from_str::<ServerRepo>(&content) {
-                    final_seed = existing_repo.seed;
-                }
-            }
-        }
+        final_seed = previous.as_ref().and_then(|p| p.seed.clone());
     }
 
     let (mut repo, profiles_data, all_tags) = {
-        let data = state.data.lock().unwrap();
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         
         let first_profile = data.profiles.iter().find(|p| profile_ids.contains(&p.id))
             .ok_or("repo.errNoProfile")?;
@@ -154,6 +620,17 @@ pub async fn export_server_repo(
             repo.author = Some(author_name.clone());
         }
 
+        // Supplied wins; otherwise keep what the repo already published. `Some(vec![])` is
+        // a caller saying "share none", which is a decision and is honoured — only `None`,
+        // meaning "I am not touching this", falls back.
+        repo.modpacks = carry_modpacks(
+            modpacks_share_config,
+            previous.as_ref().and_then(|p| p.modpacks.clone()),
+        );
+        // Never supplied by an export at all: extras are written by their own screen, and an
+        // export's job is the mods.
+        repo.extras = previous.as_ref().map(|p| p.extras.clone()).unwrap_or_default();
+
         let mut profiles_data = Vec::new();
         for pid in &profile_ids {
             if let Some(profile) = data.profiles.iter().find(|p| &p.id == pid) {
@@ -176,22 +653,54 @@ pub async fn export_server_repo(
 
     let total_profiles = profiles_data.len();
 
+    // Every mod id that is part of THIS export (across all exported profiles).
+    // Used to keep only the dependencies whose target mod is also exported —
+    // cross-profile deps pointing at a NON-exported profile are dropped.
+    let exported_mod_ids: std::collections::HashSet<String> = profiles_data.iter()
+        .flat_map(|(_p, mods)| mods.iter().map(|m| m.id.clone()))
+        .collect();
+
     // Loop over each profile
     for (p_idx, (profile, exported_mods)) in profiles_data.into_iter().enumerate() {
+        if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err("repo.cancelled".to_string());
+        }
+        // Embed the custom icon (if any) as a data-URI so it ships with the repo.
+        let icon_image_data: Option<String> = profile.icon_image.as_ref().and_then(|fname| {
+            let data_dir = state.data_path.parent().unwrap_or(std::path::Path::new("."));
+            let icon_path = data_dir.join(fname);
+            std::fs::read(&icon_path).ok().map(|bytes| {
+                use base64::{Engine as _, engine::general_purpose};
+                let ext = icon_path.extension().and_then(|e| e.to_str()).unwrap_or("png").to_lowercase();
+                let mime = match ext.as_str() {
+                    "png" => "image/png", "jpg" | "jpeg" => "image/jpeg",
+                    "webp" => "image/webp", "gif" => "image/gif", "svg" => "image/svg+xml",
+                    _ => "application/octet-stream",
+                };
+                format!("data:{};base64,{}", mime, general_purpose::STANDARD.encode(&bytes))
+            })
+        });
         let mut repo_profile = crate::models::repo::RepoProfile {
             id: profile.id.clone(),
             name: profile.name.clone(),
             game_name: profile.game_name.clone(),
             mods: Vec::new(),
+            icon: profile.icon.clone(),
+            color: profile.color.clone(),
+            icon_image: icon_image_data,
         };
 
         let total_mods = exported_mods.len();
         for (idx, mod_entry) in exported_mods.iter().enumerate() {
             let _ = window.emit("bmm://repo-export-progress", RepoProgress {
                 step: format!(r#"{{"key":"repo.stepPreparing","profile":"{}","mod":"{}","current":{},"total":{}}}"#, profile.name, mod_entry.name, idx + 1, total_mods),
-                progress: ((p_idx as f32 / total_profiles as f32) + ((idx as f32 / total_mods as f32) * (1.0 / total_profiles as f32))) * 100.0,
+                progress: (((p_idx as f32 / total_profiles as f32) + ((idx as f32 / total_mods as f32) * (1.0 / total_profiles as f32))) * 85.0),
                 current_file: String::new(),
             });
+
+            if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) {
+                return Err("repo.cancelled".to_string());
+            }
 
             let target_mod_dir = repo_mods_dir.join(&mod_entry.id);
             if !target_mod_dir.exists() {
@@ -211,6 +720,17 @@ pub async fn export_server_repo(
                 }
             }
 
+            // Keep only deps whose target mod is part of this export. A dep may be
+            // a bare "mod-id" or a cross-profile "profile_id::mod-id" — we resolve
+            // to the bare mod id and drop it if that mod isn't being exported.
+            let mut dep_ids: Vec<String> = Vec::new();
+            for d in &mod_entry.dependencies {
+                let mid = d.split_once("::").map(|(_, m)| m.to_string()).unwrap_or_else(|| d.clone());
+                if exported_mod_ids.contains(&mid) && !dep_ids.contains(&mid) {
+                    dep_ids.push(mid);
+                }
+            }
+
             let mut repo_mod = RepoMod {
                 id: mod_entry.id.clone(),
                 name: mod_entry.name.clone(),
@@ -219,14 +739,54 @@ pub async fn export_server_repo(
                 description: mod_entry.description.clone(),
                 tags: resolved_tags,
                 files: Vec::new(),
+                archive: None,
                 download_links: mod_entry.download_links.clone(),
+                dependencies: dep_ids,
+                changelog: None,
+                update_url: mod_entry.update_url.clone(),
+                direct_url: mod_entry.direct_url.clone(),
+                update_sources: mod_entry.update_sources.iter()
+                    .map(|s| crate::models::mod_entry::UpdateSource { sig: None, ..s.clone() }).collect(),
             };
 
-            let files = fs_utils::list_mod_files(&mod_entry.mod_folder_path).map_err(|e| e.to_string())?;
+            // Archived mods (.zip) are read from their extracted cache view so the
+            // repo packs the actual files (fixes "server repo with .zip bugs").
+            let read_root = crate::archive::mod_read_root(&mod_entry.mod_folder_path);
+
+            // ── "Zip mods" mode: pack the whole mod into a single mods/<id>.zip ──
+            if zip_mods {
+                let zip_path = repo_mods_dir.join(format!("{}.zip", mod_entry.id));
+                super::zipping::zip_dir_gated(&read_root, &zip_path, cancel_flag.clone(), zip_method, &TicketGate::writing(&ticket, &zip_path))
+                    .map_err(|e| format!("repo.errZipMod:{}", e))?;
+                let size = fs::metadata(&zip_path).map(|m| m.len()).unwrap_or(0);
+                let (sha256_hash, _) = compute_file_hash_and_chunks(&zip_path, false)?;
+                repo_mod.archive = Some(RepoFile {
+                    relative_path: format!("mods/{}.zip", mod_entry.id),
+                    size,
+                    sha256_hash,
+                    chunks: None,
+                    mtime: None,
+                });
+                // The per-file folder isn't used in this mode.
+                let _ = fs::remove_dir_all(&target_mod_dir);
+                let _ = window.emit("bmm://repo-export-progress", RepoProgress {
+                    step: format!(r#"{{"key":"repo.stepExporting","profile":"{}","mod":"{}","current":{},"total":{}}}"#, profile.name, mod_entry.name, idx + 1, total_mods),
+                    progress: (((p_idx as f32 / total_profiles as f32) + ((idx as f32 / total_mods as f32) * (1.0 / total_profiles as f32))) * 85.0),
+                    current_file: format!("{}.zip", mod_entry.id),
+                });
+                repo_profile.mods.push(repo_mod);
+                continue;
+            }
+
+            let files = fs_utils::list_mod_files(&read_root).map_err(|e| e.to_string())?;
             let total_files = files.len();
-            
-            for (f_idx, rel_path) in files.iter().enumerate() {
-                let src_path = mod_entry.mod_folder_path.join(rel_path);
+
+            use rayon::prelude::*;
+            use std::sync::atomic::{AtomicUsize, Ordering};
+
+            let f_idx_atomic = AtomicUsize::new(0);
+            let repo_files: Result<Vec<RepoFile>, String> = gov.pool(OpKind::Compress).install(|| files.par_iter().map(|rel_path| {
+                let src_path = read_root.join(rel_path);
                 let dst_path = target_mod_dir.join(rel_path);
                 
                 if let Some(parent) = dst_path.parent() {
@@ -235,28 +795,50 @@ pub async fn export_server_repo(
                     }
                 }
 
+                let f_idx = f_idx_atomic.fetch_add(1, Ordering::SeqCst);
+                if f_idx % 5 == 0 && cancel_flag.load(Ordering::SeqCst) {
+                    return Err("repo.cancelled".to_string());
+                }
+                ticket.checkpoint().map_err(|_| "repo.cancelled".to_string())?;
+
                 // Copy file
-                fs::copy(&src_path, &dst_path).map_err(|_| "repo.errCopyFile".to_string())?;
+                governed_copy(OpKind::Compress, &src_path, &dst_path, &ticket)?;
 
                 // Compute Hash
                 let size = fs::metadata(&dst_path).map(|m| m.len()).unwrap_or(0);
                 let (sha256_hash, chunks) = compute_file_hash_and_chunks(&dst_path, size > CHUNK_SIZE as u64)?;
 
-                repo_mod.files.push(RepoFile {
+                // Time-based throttling for progress (max every 100ms)
+                let should_emit = {
+                    let mut last = LAST_EMIT.lock().unwrap();
+                    match *last {
+                        Some(instant) if instant.elapsed().as_millis() < 100 => false,
+                        _ => {
+                            *last = Some(Instant::now());
+                            true
+                        }
+                    }
+                };
+
+                if should_emit || f_idx == total_files - 1 {
+                    let _ = window.emit("bmm://repo-export-progress", RepoProgress {
+                        step: format!(r#"{{"key":"repo.stepExporting","profile":"{}","mod":"{}","current":{},"total":{}}}"#, profile.name, mod_entry.name, idx + 1, total_mods),
+                        progress: (((p_idx as f32 / total_profiles as f32) + ((idx as f32 / total_mods as f32) * (1.0 / total_profiles as f32)) + ((f_idx as f32 / total_files as f32) * (1.0 / (total_mods * total_profiles) as f32))) * 85.0),
+                        current_file: rel_path.to_string_lossy().to_string(),
+                    });
+                }
+
+                Ok(RepoFile {
                     relative_path: rel_path.to_string_lossy().to_string().replace("\\", "/"),
                     size,
                     sha256_hash,
                     chunks,
-                });
+                    mtime: None,
+                })
+            }).collect());
 
-                if f_idx % 10 == 0 || f_idx == total_files - 1 {
-                    let _ = window.emit("bmm://repo-export-progress", RepoProgress {
-                        step: format!(r#"{{"key":"repo.stepExporting","profile":"{}","mod":"{}","current":{},"total":{}}}"#, profile.name, mod_entry.name, idx + 1, total_mods),
-                        progress: ((p_idx as f32 / total_profiles as f32) + ((idx as f32 / total_mods as f32) * (1.0 / total_profiles as f32)) + ((f_idx as f32 / total_files as f32) * (1.0 / (total_mods * total_profiles) as f32))) * 100.0,
-                        current_file: rel_path.to_string_lossy().to_string(),
-                    });
-                }
-            }
+            let repo_files = repo_files?;
+            repo_mod.files = repo_files;
             repo_profile.mods.push(repo_mod);
         }
         repo.profiles.push(repo_profile);
@@ -264,10 +846,32 @@ pub async fn export_server_repo(
 
     let _ = window.emit("bmm://repo-export-progress", RepoProgress {
         step: "repo.stepFinalizing".to_string(),
-        progress: 99.0,
+        progress: 87.0,
         current_file: "repo.json".to_string(),
     });
 
+    // Sealed BEFORE the signature, deliberately.
+    //
+    // The signature covers the manifest, so adding anything to it afterwards produces a repo
+    // whose signature matches nothing — refused by every client, over a feature nobody would
+    // think to blame.
+    //
+    // Carried forward when this export did not use the fold, for the same reason `extras`
+    // and `modpacks` are: re-exporting after changing one mod must not silently strip what
+    // the repo was published with. Sending a request with nothing ticked seals nothing and
+    // clears the block, so the way to remove them is to ask for none.
+    match creds.as_ref() {
+        Some(req) => {
+            repo.credentials = crate::commands::creds::seal_credentials(&state, req)
+                .map_err(|e| e.to_string())?;
+        }
+        None => {
+            repo.credentials = previous.as_ref().and_then(|p| p.credentials.clone());
+        }
+    }
+
+    // The format goes in BEFORE signing: it is part of what is signed (repo_format).
+    repo.format_version = Some(super::repo_format::CURRENT.to_string());
     // Sign the repo (using compact JSON for the signature payload to be stable)
     let json_to_sign = serde_json::to_string(&repo).map_err(|e| e.to_string())?;
     let (author_id, signature) = super::security::sign_message(&handle, json_to_sign.as_bytes())?;
@@ -279,14 +883,60 @@ pub async fn export_server_repo(
     let manifest_path = output_path.join("repo.json");
     fs::write(&manifest_path, final_json).map_err(|_| "repo.errWriteManifest".to_string())?;
 
+    // Generate Info.json with repository statistics
+    let mut total_mods_count = 0;
+    let mut total_size_bytes: u64 = 0;
+    let mut total_files_count = 0;
+    
+    for profile in &repo.profiles {
+        total_mods_count += profile.mods.len();
+        for mod_entry in &profile.mods {
+            total_files_count += mod_entry.files.len();
+            for file in &mod_entry.files {
+                total_size_bytes += file.size;
+            }
+        }
+    }
+
+    #[derive(serde::Serialize)]
+    struct RepoInfo {
+        name: String,
+        author: Option<String>,
+        game_name: String,
+        profiles_count: usize,
+        mods_count: usize,
+        files_count: usize,
+        total_size_bytes: u64,
+        total_size_formatted: String,
+        version: String,
+        created_at: String,
+        seed: Option<String>,
+        author_id: Option<String>,
+        modpacks_count: usize,
+    }
+
+    let info = RepoInfo {
+        name: repo.name.clone(),
+        author: repo.author.clone(),
+        game_name: repo.game_name.clone(),
+        profiles_count: repo.profiles.len(),
+        mods_count: total_mods_count,
+        files_count: total_files_count,
+        total_size_bytes,
+        total_size_formatted: format_bytes(total_size_bytes),
+        version: "1.0".to_string(),
+        created_at: chrono::Local::now().to_rfc3339(),
+        seed: repo.seed.clone(),
+        author_id: repo.author_id.clone(),
+        modpacks_count: repo.modpacks.as_ref().map_or(0, |m| m.len()),
+    };
+
+    let info_json = serde_json::to_string_pretty(&info).map_err(|e| e.to_string())?;
+    let info_path = output_path.join("Info.json");
+    fs::write(&info_path, info_json).map_err(|_| "repo.errWriteInfo".to_string())?;
+
     // Auto-generate mini server by default if it's a new export? 
     // Actually better to have the dedicated button as requested.
-
-    let _ = window.emit("bmm://repo-export-progress", RepoProgress {
-        step: "repo.stepFinished".to_string(),
-        progress: 100.0,
-        current_file: String::new(),
-    });
 
     // 12. Copy Bans/Whitelist if they exist
     if let Ok(wl_path) = whitelist_manager::get_whitelist_file_path(&handle) {
@@ -300,6 +950,1258 @@ pub async fn export_server_repo(
         }
     }
 
+    // 13. Generate Mini Server if requested
+    // Remembered before the options are consumed below: the archive is named by what it holds.
+    let server_options_present = server_options.is_some();
+    if let Some(opt) = server_options {
+        println!("[REPO] Generating integrated mini-server...");
+        let enable_docker = opt.enable_docker.unwrap_or(false);
+        let docker_host_type = opt.docker_host_type.unwrap_or_else(|| "linux".to_string());
+        let server_type = opt.server_type.unwrap_or_else(|| "user".to_string());
+        generate_mini_server_files(
+            &handle,
+            &output_path,
+            opt.port,
+            false, // no auto-start for exported zip usually
+            opt.use_cloudflare,
+            opt.use_upnp,
+            "en",
+            opt.upload_limit,
+            opt.server_version,
+            &opt.admin_password,
+            &opt.download_password,
+            enable_docker,
+            &docker_host_type,
+            &server_type,
+            &opt.extras.clone().unwrap_or_default(),
+        )?;
+    }
+
+    // 14. Zip output if requested
+    if zip_output {
+        let _ = window.emit("bmm://repo-export-progress", RepoProgress {
+            step: "repo.zipping".to_string(),
+            progress: 90.0,
+            current_file: "".to_string(),
+        });
+        
+        let zip_file_name = format!("{}-{}.zip", if server_options_present { "BMM-Standalone-Server" } else { "BMM-Repo" }, chrono::Local::now().format("%Y%m%d-%H%M"));
+        // Final destination is output_dir (user's selected folder)
+        let final_dest = PathBuf::from(&output_dir);
+        if !final_dest.exists() {
+            let _ = fs::create_dir_all(&final_dest);
+        }
+        let zip_path = final_dest.join(&zip_file_name);
+        
+        let cancel_flag_zip = cancel_flag.clone();
+        match super::zipping::zip_dir_gated(&output_path, &zip_path, cancel_flag_zip, zip_method, &TicketGate::writing(&ticket, &zip_path)) {
+            Ok(_) => {
+                println!("[REPO] Zip created at: {:?}", zip_path);
+            },
+            Err(e) => {
+                // Cleanup partial zip if cancelled
+                if zip_path.exists() {
+                    let _ = fs::remove_file(&zip_path);
+                }
+                return Err(format!("Failed to create zip: {}", e));
+            }
+        }
+
+        // Note: _temp_dir will be dropped here, automatically deleting the unzipped version
+    }
+
+    let _ = window.emit("bmm://repo-export-progress", RepoProgress {
+        step: "repo.exportDone".to_string(),
+        progress: 100.0,
+        current_file: String::new(),
+    });
+
+    Ok(())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Incremental Server Repo Update
+//   Modifies an existing repo (repo.json + mods/ folder) without regenerating
+//   everything: add/remove whole profiles, add/update specific mods, remove mods.
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[derive(serde::Deserialize)]
+pub struct ProfileAddSpec {
+    /// Local profile id to add or merge into the repo.
+    /// Accepts both snake_case ("profile_id") from the BMM UI and
+    /// camelCase ("profileId") from external API callers.
+    #[serde(alias = "profileId")]
+    pub profile_id: String,
+    /// Specific local mod ids to include. `None`/empty = all mods in that profile.
+    #[serde(alias = "modIds", default)]
+    pub mod_ids: Option<Vec<String>>,
+}
+
+#[derive(serde::Deserialize)]
+pub struct RepoUpdateOps {
+    /// Mod ids to remove from the repo (across every profile).
+    #[serde(default)]
+    pub remove_mod_ids: Vec<String>,
+    /// Whole profile ids to remove from the repo.
+    #[serde(default)]
+    pub remove_profile_ids: Vec<String>,
+    /// Profiles (and optionally a subset of their mods) to add or update.
+    #[serde(default)]
+    pub add_profiles: Vec<ProfileAddSpec>,
+    /// Optional per-mod author changelog text, keyed by local mod id. Written to
+    /// the resulting `RepoMod.changelog` so users see "what changed" when an
+    /// update is detected. Accepts camelCase ("modChangelogs") from API callers.
+    #[serde(alias = "modChangelogs", default)]
+    pub mod_changelogs: std::collections::HashMap<String, String>,
+}
+
+#[tauri::command]
+pub async fn update_server_repo(
+    window: Window,
+    handle: tauri::AppHandle,
+    state: State<'_, AppState>,
+    repo_dir: String,
+    author_name: Option<String>,
+    ops: RepoUpdateOps,
+) -> Result<RepoUpdateResult, String> {
+    let output_path = PathBuf::from(&repo_dir);
+    let manifest_path = output_path.join("repo.json");
+    if !manifest_path.exists() {
+        return Err("repo.errNoExistingRepo".to_string());
+    }
+
+    state.install_cancelled.store(false, std::sync::atomic::Ordering::SeqCst);
+    let cancel_flag = state.install_cancelled.clone();
+
+    let repo_mods_dir = output_path.join("mods");
+    fs::create_dir_all(&repo_mods_dir).map_err(|_| "repo.errCreateModDir".to_string())?;
+
+    // 1. Load existing repo
+    let mut repo: ServerRepo = {
+        let content = fs::read_to_string(&manifest_path).map_err(|_| "repo.errReadManifest".to_string())?;
+        serde_json::from_str(&content).map_err(|e| format!("repo.json parse error: {}", e))?
+    };
+
+    let mut result = RepoUpdateResult::default();
+
+    // 2. Removals — whole profiles
+    if !ops.remove_profile_ids.is_empty() {
+        let before = repo.profiles.len();
+        repo.profiles.retain(|p| !ops.remove_profile_ids.contains(&p.id));
+        result.profiles_removed = before - repo.profiles.len();
+    }
+
+    // 3. Removals — individual mods (across all profiles)
+    if !ops.remove_mod_ids.is_empty() {
+        for prof in repo.profiles.iter_mut() {
+            let before = prof.mods.len();
+            prof.mods.retain(|m| !ops.remove_mod_ids.contains(&m.id));
+            result.mods_removed += before - prof.mods.len();
+        }
+    }
+
+    // 4. Additions — pull local profile/mod data from state (fast, under lock)
+    #[derive(Clone)]
+    struct PendingMod { profile_id: String, profile: crate::models::profile::Profile, mod_entry: crate::models::mod_entry::ModEntry }
+    let data_dir = state.data_path.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| std::path::PathBuf::from("."));
+    let (pending, all_tags, resolved_author): (Vec<PendingMod>, Vec<crate::models::tag::TagDef>, Option<String>) = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        let mut pending = Vec::new();
+        for spec in &ops.add_profiles {
+            if let Some(profile) = data.profiles.iter().find(|p| p.id == spec.profile_id) {
+                for m in &data.mods {
+                    let in_profile = m.mod_folder_path.starts_with(&profile.mods_path)
+                        || matches!((m.mod_folder_path.canonicalize(), profile.mods_path.canonicalize()),
+                            (Ok(a), Ok(b)) if a.starts_with(&b));
+                    if !in_profile { continue; }
+                    if let Some(ids) = &spec.mod_ids {
+                        if !ids.is_empty() && !ids.contains(&m.id) { continue; }
+                    }
+                    pending.push(PendingMod { profile_id: spec.profile_id.clone(), profile: profile.clone(), mod_entry: m.clone() });
+                }
+            }
+        }
+        let author = author_name.filter(|a| !a.trim().is_empty()).or_else(|| repo.author.clone());
+        (pending, data.custom_tags.clone(), author)
+    };
+    repo.author = resolved_author;
+
+    // 5. Heavy work (copy + hash + sign + write) on a blocking thread so the
+    //    async runtime — and the whole UI — stays responsive. Cancellable per-file.
+    let win = window.clone();
+    let handle2 = handle.clone();
+    let mod_changelogs = ops.mod_changelogs.clone();
+    let join = tokio::task::spawn_blocking(move || -> Result<RepoUpdateResult, String> {
+        // One Compress ticket for the update, taken here (off the async runtime) because
+        // taking it may wait for a slot.
+        let ticket = crate::governor::runtime::global().begin(OpKind::Compress, &format!("repo update → {}", repo_dir));
+        let total = pending.len().max(1);
+        for (idx, pm) in pending.into_iter().enumerate() {
+            if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) { return Err("repo.cancelled".to_string()); }
+
+            let _ = win.emit("bmm://repo-export-progress", RepoProgress {
+                step: format!(r#"{{"key":"repo.stepUpdating","mod":"{}","current":{},"total":{}}}"#, pm.mod_entry.name, idx + 1, total),
+                progress: (idx as f32 / total as f32) * 90.0,
+                current_file: String::new(),
+            });
+
+            let prof_idx = match repo.profiles.iter().position(|p| p.id == pm.profile_id) {
+                Some(i) => i,
+                None => {
+                    let icon_image_data: Option<String> = pm.profile.icon_image.as_ref().and_then(|fname| {
+                        let icon_path = data_dir.join(fname);
+                        std::fs::read(&icon_path).ok().map(|bytes| {
+                            use base64::{Engine as _, engine::general_purpose};
+                            let ext = icon_path.extension().and_then(|e| e.to_str()).unwrap_or("png").to_lowercase();
+                            let mime = match ext.as_str() {
+                                "png" => "image/png", "jpg" | "jpeg" => "image/jpeg",
+                                "webp" => "image/webp", "gif" => "image/gif", "svg" => "image/svg+xml",
+                                _ => "application/octet-stream",
+                            };
+                            format!("data:{};base64,{}", mime, general_purpose::STANDARD.encode(&bytes))
+                        })
+                    });
+                    repo.profiles.push(crate::models::repo::RepoProfile {
+                        id: pm.profile.id.clone(), name: pm.profile.name.clone(),
+                        game_name: pm.profile.game_name.clone(), mods: Vec::new(),
+                        icon: pm.profile.icon.clone(), color: pm.profile.color.clone(),
+                        icon_image: icon_image_data,
+                    });
+                    result.profiles_added += 1;
+                    repo.profiles.len() - 1
+                }
+            };
+
+            let mut resolved_tags = Vec::new();
+            for tag_id in &pm.mod_entry.tags {
+                if let Some(tag_data) = all_tags.iter().find(|t| &t.id == tag_id) {
+                    resolved_tags.push(RepoTag {
+                        id: tag_data.id.clone(), name: tag_data.name.clone(),
+                        color_bg: tag_data.color.clone(), color_text: "#FFFFFF".to_string(),
+                    });
+                }
+            }
+
+            let target_mod_dir = repo_mods_dir.join(&pm.mod_entry.id);
+            if target_mod_dir.exists() { let _ = fs::remove_dir_all(&target_mod_dir); }
+            fs::create_dir_all(&target_mod_dir).map_err(|_| "repo.errCreateModDir".to_string())?;
+
+            // Archived mods (.zip) read from their extracted cache view.
+            let read_root = crate::archive::mod_read_root(&pm.mod_entry.mod_folder_path);
+            let files = fs_utils::list_mod_files(&read_root).map_err(|e| e.to_string())?;
+            let mut repo_files = Vec::new();
+            for rel_path in &files {
+                if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) { return Err("repo.cancelled".to_string()); }
+                ticket.checkpoint().map_err(|_| "repo.cancelled".to_string())?;
+                let src_path = read_root.join(rel_path);
+                let dst_path = target_mod_dir.join(rel_path);
+                if let Some(parent) = dst_path.parent() {
+                    fs::create_dir_all(parent).map_err(|_| "repo.errCreateSubfolder".to_string())?;
+                }
+                governed_copy(OpKind::Compress, &src_path, &dst_path, &ticket)?;
+                let size = fs::metadata(&dst_path).map(|m| m.len()).unwrap_or(0);
+                let (sha256_hash, chunks) = compute_file_hash_and_chunks(&dst_path, size > CHUNK_SIZE as u64)?;
+                repo_files.push(RepoFile {
+                    relative_path: rel_path.to_string_lossy().to_string().replace("\\", "/"),
+                    size, sha256_hash, chunks,
+                    mtime: None,
+                });
+            }
+
+            let repo_mod = RepoMod {
+                id: pm.mod_entry.id.clone(), name: pm.mod_entry.name.clone(),
+                version: pm.mod_entry.version.clone(), author: pm.mod_entry.author.clone(),
+                description: pm.mod_entry.description.clone(), tags: resolved_tags,
+                files: repo_files, archive: None, download_links: pm.mod_entry.download_links.clone(),
+                // bare mod ids; pruned to mods present in the repo after the loop
+                dependencies: pm.mod_entry.dependencies.iter()
+                    .map(|d| d.split_once("::").map(|(_, m)| m.to_string()).unwrap_or_else(|| d.clone()))
+                    .collect(),
+                changelog: mod_changelogs.get(&pm.mod_entry.id)
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty()),
+                update_url: pm.mod_entry.update_url.clone(),
+                direct_url: pm.mod_entry.direct_url.clone(),
+                update_sources: pm.mod_entry.update_sources.iter()
+                    .map(|s| crate::models::mod_entry::UpdateSource { sig: None, ..s.clone() }).collect(),
+            };
+
+            let prof = &mut repo.profiles[prof_idx];
+            if let Some(existing) = prof.mods.iter_mut().find(|m| m.id == repo_mod.id) {
+                *existing = repo_mod; result.mods_updated += 1;
+            } else {
+                prof.mods.push(repo_mod); result.mods_added += 1;
+            }
+        }
+
+        // GC orphaned mod folders
+        let referenced: std::collections::HashSet<String> = repo.profiles.iter()
+            .flat_map(|p| p.mods.iter().map(|m| m.id.clone())).collect();
+        // Drop dependencies pointing at mods that are not part of this repo
+        // (cross-profile deps to non-exported profiles).
+        for p in repo.profiles.iter_mut() {
+            for m in p.mods.iter_mut() {
+                m.dependencies.retain(|d| referenced.contains(d));
+            }
+        }
+        if let Ok(entries) = fs::read_dir(&repo_mods_dir) {
+            for e in entries.flatten() {
+                if e.path().is_dir() {
+                    let name = e.file_name().to_string_lossy().to_string();
+                    if !referenced.contains(&name) { let _ = fs::remove_dir_all(e.path()); }
+                }
+            }
+        }
+
+        // Re-sign + write
+        let _ = win.emit("bmm://repo-export-progress", RepoProgress {
+            step: "repo.stepFinalizing".to_string(), progress: 92.0, current_file: "repo.json".to_string(),
+        });
+        repo.author_id = None; repo.signature = None;
+        repo.format_version = Some(super::repo_format::CURRENT.to_string());
+        let json_to_sign = serde_json::to_string(&repo).map_err(|e| e.to_string())?;
+        let (author_id, signature) = super::security::sign_message(&handle2, json_to_sign.as_bytes())?;
+        repo.author_id = Some(author_id); repo.signature = Some(signature);
+        let final_json = serde_json::to_string_pretty(&repo).map_err(|e| e.to_string())?;
+        fs::write(&manifest_path, final_json).map_err(|_| "repo.errWriteManifest".to_string())?;
+
+        // Info.json
+        let mut tm = 0; let mut tb: u64 = 0; let mut tf = 0;
+        for p in &repo.profiles { tm += p.mods.len(); for m in &p.mods { tf += m.files.len(); for f in &m.files { tb += f.size; } } }
+        let info = serde_json::json!({
+            "name": repo.name, "author": repo.author, "game_name": repo.game_name,
+            "profiles_count": repo.profiles.len(), "mods_count": tm, "files_count": tf,
+            "total_size_bytes": tb, "total_size_formatted": format_bytes(tb), "version": "1.0",
+            "created_at": chrono::Local::now().to_rfc3339(), "seed": repo.seed,
+            "author_id": repo.author_id, "modpacks_count": repo.modpacks.as_ref().map_or(0, |m| m.len()),
+        });
+        let _ = fs::write(output_path.join("Info.json"), serde_json::to_string_pretty(&info).unwrap_or_default());
+
+        result.total_profiles = repo.profiles.len();
+        result.total_mods = tm;
+        Ok(result)
+    });
+
+    let result = join.await.map_err(|e| format!("update task failed: {}", e))??;
+
+    let _ = window.emit("bmm://repo-export-progress", RepoProgress {
+        step: "repo.exportDone".to_string(), progress: 100.0, current_file: String::new(),
+    });
+
+    Ok(result)
+}
+
+#[derive(serde::Serialize, Default, Clone)]
+pub struct RepoUpdateResult {
+    pub profiles_added: usize,
+    pub profiles_removed: usize,
+    pub mods_added: usize,
+    pub mods_updated: usize,
+    pub mods_removed: usize,
+    pub total_profiles: usize,
+    pub total_mods: usize,
+}
+
+#[derive(serde::Serialize)]
+pub struct HubRepoSummary {
+    pub folder: String,
+    pub name: String,
+    pub game_name: String,
+    pub profiles: usize,
+    pub mods: usize,
+    pub size: u64,
+}
+
+/// Scan a directory and return every immediate sub-folder that contains a
+/// repo.json (used by the hub dashboard preview in BMM).
+#[tauri::command(async)]
+pub fn scan_repo_hub(hub_dir: String) -> Result<Vec<HubRepoSummary>, String> {
+    let root = PathBuf::from(&hub_dir);
+    if !root.is_dir() { return Err("repo.errOutputDirNotDir".to_string()); }
+    let mut out = Vec::new();
+
+    // First, check if the root itself has a repo.json (hub root repo)
+    if let Ok(content) = fs::read_to_string(root.join("repo.json")) {
+        if let Ok(repo) = serde_json::from_str::<ServerRepo>(&content) {
+            let mut mods = 0usize; let mut size = 0u64;
+            for p in &repo.profiles {
+                mods += p.mods.len();
+                for m in &p.mods { for f in &m.files { size += f.size; } }
+            }
+            out.push(HubRepoSummary {
+                folder: ".".to_string(),  // indicates root repo
+                name: repo.name,
+                game_name: repo.game_name,
+                profiles: repo.profiles.len(),
+                mods, size,
+            });
+        }
+    }
+
+    // Then scan subdirectories
+    for entry in fs::read_dir(&root).map_err(|e| e.to_string())?.flatten() {
+        if !entry.path().is_dir() { continue; }
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name == "public" || name == "node_modules" { continue; }
+        let manifest = entry.path().join("repo.json");
+        if !manifest.exists() { continue; }
+        if let Ok(content) = fs::read_to_string(&manifest) {
+            if let Ok(repo) = serde_json::from_str::<ServerRepo>(&content) {
+                let mut mods = 0usize; let mut size = 0u64;
+                for p in &repo.profiles {
+                    mods += p.mods.len();
+                    for m in &p.mods { for f in &m.files { size += f.size; } }
+                }
+                out.push(HubRepoSummary {
+                    folder: name,
+                    name: repo.name,
+                    game_name: repo.game_name,
+                    profiles: repo.profiles.len(),
+                    mods, size,
+                });
+            }
+        }
+    }
+    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    Ok(out)
+}
+
+/// Write the access gate beside a generated server: the module, the verifier, and a starter
+/// `access.json` explaining itself.
+///
+/// The verifier is the SAME FILE BetterCommunity runs, copied without edits, so a proof one
+/// accepts the other accepts. `scripts/check-keyauth-copy.mjs` fails the build if the two ever
+/// drift, because two implementations of "does this client hold the key" is two chances to
+/// disagree — and they disagree by refusing a key that works elsewhere, which reads to its
+/// owner as "my key is broken".
+///
+/// An EXISTING access.json is never overwritten. Regenerating a server must not silently drop
+/// the keys somebody authorised since the last time.
+fn write_access_gate(dir: &Path) -> Result<(), String> {
+    fs::write(
+        dir.join("access-gate.js"),
+        include_str!("../templates/mini-server/access-gate.js.template"),
+    ).map_err(|_| "repo.errWriteServerJs".to_string())?;
+    fs::write(
+        dir.join("keyauth.mjs"),
+        include_str!("../templates/mini-server/keyauth.mjs.template"),
+    ).map_err(|_| "repo.errWriteServerJs".to_string())?;
+
+    Ok(())
+}
+
+/// Drop a self-explaining, empty `access.json` into a folder that has none.
+///
+/// Separate from the modules above because they live at the SERVER root and this lives with
+/// the thing it protects — per repo folder in a hub, beside the server in a standalone.
+fn write_access_starter(dir: &Path) -> Result<(), String> {
+    if !dir.join("access.json").exists() {
+        // Empty, and therefore open — the same meaning a blank password has everywhere else in
+        // BMM. It exists so the shape is in front of the reader rather than in a document they
+        // have to find, and so adding a key is editing a file that is already there.
+        let starter = serde_json::json!({
+            "_comment": [
+                "Leave everything empty to keep this repo open.",
+                "password: subscribers must send it as X-Repo-Password (or ?password=).",
+                "pubkeys: one-line OpenSSH PUBLIC keys (ssh-ed25519/ssh-rsa/ecdsa-sha2-...).",
+                "  Listing even one makes a signed proof REQUIRED for everyone - add your own first.",
+                "audience: the address your subscribers type, scheme + host + port, exactly.",
+                "  BMM signs the address it dialled, so a wrong value here refuses everybody."
+            ],
+            "password": "",
+            "pubkeys": [],
+            "audience": "",
+        });
+        fs::write(
+            dir.join("access.json"),
+            serde_json::to_string_pretty(&starter).unwrap_or_default(),
+        ).map_err(|_| "repo.errWriteServerJs".to_string())?;
+    }
+    Ok(())
+}
+
+/// Generate a multi-repo hub into `hub_dir`.
+/// `serve = true`  → a Node/Express server that hosts all repos + dashboards.
+/// `serve = false` → a static directory (index.html + hub-repos.json) you can
+///                   drop on any web host; you fill each repo's external URL.
+#[tauri::command]
+pub fn generate_repo_hub(
+    hub_dir: String,
+    port: u16,
+    upload_limit: u32,
+    serve: Option<bool>,
+    admin_password: Option<String>,
+) -> Result<(), String> {
+    let root = PathBuf::from(&hub_dir);
+    fs::create_dir_all(&root).map_err(|_| "repo.errCreateOutputDir".to_string())?;
+    let serve = serve.unwrap_or(true);
+
+    if serve {
+        // ── Node/Express serving hub ──
+        let pw = admin_password.clone().unwrap_or_default();
+        // Embed the BMM logo as a base64 data-URI so the dashboard is fully
+        // self-contained even when served by the standalone Node process.
+        static BMM_LOGO_PNG: &[u8] = include_bytes!("../../../frontend/assets/BMm.png");
+        use base64::{Engine as _, engine::general_purpose};
+        let logo_b64 = format!("data:image/png;base64,{}", general_purpose::STANDARD.encode(BMM_LOGO_PNG));
+
+        let server_js = include_str!("../templates/mini-server/hub-server.js.template")
+            .replace("{{PORT}}", &port.to_string())
+            .replace("{{UPLOAD_LIMIT}}", &upload_limit.to_string())
+            .replace("{{ADMIN_PASSWORD}}", &pw)
+            // Left blank deliberately: only the owner knows the address subscribers type, and
+            // guessing it would produce a server that refuses every proof for a reason nothing
+            // names. With no keys listed it is never consulted; the moment one is, the server
+            // says exactly what to set.
+            .replace("{{PUBLIC_ORIGIN}}", "");
+        let dashboard = include_str!("../templates/mini-server/hub-dashboard.html.template")
+            .replace("{{LOGO_B64}}", &logo_b64);
+        let repo_page = include_str!("../templates/mini-server/hub-repo.html.template");
+        let package   = include_str!("../templates/mini-server/hub-package.json.template");
+
+        let public_dir = root.join("public");
+        fs::create_dir_all(&public_dir).map_err(|_| "repo.errCreateOutputDir".to_string())?;
+
+        fs::write(root.join("hub-server.js"), server_js).map_err(|_| "repo.errWriteServerJs".to_string())?;
+        fs::write(public_dir.join("hub-dashboard.html"), dashboard).map_err(|_| "repo.errWriteDashboardHtml".to_string())?;
+        fs::write(public_dir.join("hub-repo.html"), repo_page).map_err(|_| "repo.errWriteDashboardHtml".to_string())?;
+        fs::write(root.join("package.json"), package).map_err(|_| "repo.errWritePackageJson".to_string())?;
+        // The gate itself at the hub root, and a starter access.json inside EACH repo folder:
+        // credentials here are per node, so that is where the file has to be.
+        write_access_gate(&root)?;
+        for s in scan_repo_hub(hub_dir.clone()).unwrap_or_default() {
+            let folder = root.join(&s.folder);
+            if folder.is_dir() { write_access_starter(&folder).ok(); }
+        }
+
+        let bat = "@echo off\r\ntitle BMM Repo Hub\r\ncd /d \"%~dp0\"\r\nwhere node >nul 2>nul || (echo Node.js is required: https://nodejs.org && pause && exit /b)\r\nif not exist node_modules (echo Installing dependencies... && npm install)\r\nnode hub-server.js\r\npause\r\n";
+        fs::write(root.join("Start-Hub.bat"), bat).map_err(|_| "repo.errWriteScript".to_string())?;
+        let sh = "#!/usr/bin/env bash\ncd \"$(dirname \"$0\")\"\ncommand -v node >/dev/null 2>&1 || { echo 'Node.js is required: https://nodejs.org'; exit 1; }\n[ -d node_modules ] || { echo 'Installing dependencies...'; npm install; }\nnode hub-server.js\n";
+        fs::write(root.join("start-hub.sh"), sh).map_err(|_| "repo.errWriteScript".to_string())?;
+    } else {
+        // ── Static directory (no Node) ──
+        static BMM_LOGO_PNG_S: &[u8] = include_bytes!("../../../frontend/assets/BMm.png");
+        use base64::{Engine as _, engine::general_purpose};
+        let logo_b64_s = format!("data:image/png;base64,{}", general_purpose::STANDARD.encode(BMM_LOGO_PNG_S));
+        let index = include_str!("../templates/mini-server/hub-static.html.template")
+            .replace("{{LOGO_B64}}", &logo_b64_s);
+        fs::write(root.join("index.html"), index).map_err(|_| "repo.errWriteDashboardHtml".to_string())?;
+        // A static export has NO SERVER PROCESS, so BMM cannot enforce a password or a key
+        // here: whatever web server you point at this folder decides who may read it. Saying
+        // so in a file beside the export beats leaving somebody to assume the access controls
+        // they configured elsewhere came along with it.
+        let note = "Static hub export
+                    =================
+
+                    This folder is plain files. There is no BMM process serving it, so a
+                    download password and authorised public keys CANNOT be enforced here --
+                    whatever web server you put in front of this folder decides who may read
+                    it (nginx auth_basic, a Caddy directive, your host's own controls).
+
+                    If you want BMM to enforce them, generate the hub with the Node server
+                    instead: each repo folder then gets an access.json, and the server checks
+                    it on every request.
+";
+        let _ = fs::write(root.join("README-access.txt"), note);
+
+        // Build hub-repos.json by scanning sub-folders (url left empty to fill)
+        let summaries = scan_repo_hub(hub_dir.clone()).unwrap_or_default();
+        let repos_json: Vec<serde_json::Value> = summaries.iter().map(|s| serde_json::json!({
+            "folder": s.folder, "name": s.name, "game_name": s.game_name,
+            "profiles": s.profiles, "mods": s.mods, "size": s.size,
+            "url": "",            // ← fill with where this repo is actually hosted
+            "description": "",
+        })).collect();
+        let cfg = serde_json::json!({ "repos": repos_json });
+        fs::write(root.join("hub-repos.json"), serde_json::to_string_pretty(&cfg).unwrap_or_default())
+            .map_err(|_| "repo.errWriteManifest".to_string())?;
+    }
+
+    Ok(())
+}
+
+#[derive(serde::Serialize)]
+pub struct ProfileModItem { pub id: String, pub name: String, pub version: String }
+
+/// Lightweight list of a profile's mods (id/name/version) — for the update UI's
+/// per-mod selection, for ANY profile (not just the active one).
+#[tauri::command]
+pub fn get_profile_mod_list(state: State<AppState>, profile_id: String) -> Result<Vec<ProfileModItem>, String> {
+    let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+    let profile = data.profiles.iter().find(|p| p.id == profile_id)
+        .ok_or("repo.errNoProfile")?;
+    let mut out = Vec::new();
+    for m in &data.mods {
+        let belongs = m.mod_folder_path.starts_with(&profile.mods_path)
+            || matches!((m.mod_folder_path.canonicalize(), profile.mods_path.canonicalize()),
+                (Ok(a), Ok(b)) if a.starts_with(&b));
+        if belongs {
+            out.push(ProfileModItem { id: m.id.clone(), name: m.name.clone(), version: m.version.clone() });
+        }
+    }
+    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    Ok(out)
+}
+
+/// Normalise a repo URL the same way `sync_server_repo` does, so origins recorded
+/// at sync time match what the update checker / config commands look up.
+pub fn normalize_repo_url(url: &str) -> String {
+    let mut u = url.trim().to_string();
+    if let Some(s) = u.strip_suffix("/repo.json") { u = s.to_string(); }
+    while u.ends_with('/') { u.pop(); }
+    u.to_lowercase()
+}
+
+/// One available mod update found by `check_mod_updates`.
+#[derive(serde::Serialize, Debug, Clone)]
+pub struct ModUpdateInfo {
+    pub mod_id: String,          // local ModEntry id
+    pub name: String,
+    pub current_version: String,
+    pub new_version: String,
+    pub repo_url: String,        // normalised source repo (or direct download URL)
+    pub repo_mod_id: String,
+    pub changelog: Option<String>,
+    /// True when this update comes from a direct-download URL (no repo manifest).
+    /// The UI applies it via `apply_direct_update` instead of the repo-sync flow,
+    /// and shows a tentative "maybe an update" label since the remote version is
+    /// unknown — only that the file content changed.
+    #[serde(default)]
+    pub direct: bool,
+    /// (direct only) Human-readable summary of what we actually know about the
+    /// change — e.g. a size delta or which validator moved — shown in the UI.
+    #[serde(default)]
+    pub detail: Option<String>,
+}
+
+/// A configured direct-download source with its current remote state. Always
+/// returned (changed or not) so the UI can always offer a manual re-download —
+/// a direct download has no version, so there's nothing to be "up to date" about.
+#[derive(serde::Serialize)]
+pub struct DirectSourceInfo {
+    pub mod_id: String,
+    pub name: String,
+    pub url: String,
+    /// Human summary of the current remote (e.g. "Remote: 12.3 MB").
+    pub detail: String,
+    /// True when the remote differs from the baseline captured when configured.
+    pub changed: bool,
+}
+
+/// A repo that could not be reached during an update check.
+#[derive(serde::Serialize)]
+pub struct RepoCheckError {
+    pub repo_url: String,
+    pub error: String,
+}
+
+/// Full result of an update check: available updates + the repos that failed.
+#[derive(serde::Serialize, Default)]
+pub struct ModUpdateCheckResult {
+    pub updates: Vec<ModUpdateInfo>,
+    pub errors: Vec<RepoCheckError>,
+    /// How many installed mods were actually update-trackable (linked to a repo
+    /// with a repo_mod_id). 0 means nothing is configured for updates yet — the
+    /// UI uses this to avoid a misleading "everything is up to date".
+    pub checked: usize,
+    /// Mod ids for which a direct-download baseline was captured for the FIRST time
+    /// this run (nothing to compare against yet). The UI says "now tracking" rather
+    /// than "up to date" so the user understands a future change will be detected.
+    #[serde(default)]
+    pub baselined: Vec<String>,
+    /// Every configured direct-download source with its current remote state, so
+    /// the UI can always offer a manual re-download (and highlight changes).
+    #[serde(default)]
+    pub direct_sources: Vec<DirectSourceInfo>,
+}
+
+/// Check every installed mod that is update-trackable against the repo(s) it is
+/// linked to. A mod is linked through any of:
+///   * `source_repo` + `repo_mod_id` (recorded automatically on sync),
+///   * `update_url` (+ `repo_mod_id`),
+///   * each user-configured `update_sources` entry, and
+///   * any caller-supplied `global_repos` (matched by the mod's `repo_mod_id`).
+///
+/// Each unique repo is fetched once. Repos that fail to respond are reported in
+/// `errors` (not silently dropped) so the UI can surface the problem.
+#[tauri::command]
+pub async fn check_mod_updates(
+    state: State<'_, AppState>,
+    handle: tauri::AppHandle,
+    global_repos: Option<Vec<String>>,
+) -> Result<ModUpdateCheckResult, String> {
+    // 1. Build, per mod, the list of (normalised repo_url, repo_mod_id) to check.
+    struct Candidate { mod_id: String, name: String, cur_ver: String, repo_url: String, rid: String, cur_hash: Option<String> }
+    struct DirectCand { mod_id: String, name: String, cur_ver: String, url: String, sig: Option<String>, primary: bool }
+    let mut candidates: Vec<Candidate> = Vec::new();
+    let mut directs: Vec<DirectCand> = Vec::new();
+    let globals: Vec<String> = global_repos.unwrap_or_default()
+        .into_iter().map(|r| normalize_repo_url(&r)).filter(|r| !r.is_empty()).collect();
+    {
+        let data = state.data.lock().map_err(|_| "Lock failed".to_string())?;
+        for m in &data.mods {
+            // Primary direct-download source (checked before fallbacks).
+            if let Some(u) = m.direct_url.as_ref().filter(|u| !u.trim().is_empty()) {
+                directs.push(DirectCand {
+                    mod_id: m.id.clone(), name: m.name.clone(), cur_ver: m.version.clone(),
+                    url: u.trim().to_string(), sig: m.direct_sig.clone(), primary: true,
+                });
+            }
+            let main_rid = m.repo_mod_id.as_ref().filter(|r| !r.trim().is_empty()).cloned();
+            // de-dupe (repo_url, rid) pairs for this mod
+            let mut seen: std::collections::HashSet<(String, String)> = std::collections::HashSet::new();
+            let mut push = |repo: &str, rid: Option<String>, list: &mut Vec<Candidate>| {
+                let repo_n = normalize_repo_url(repo);
+                if repo_n.is_empty() { return; }
+                let rid = match rid.filter(|r| !r.trim().is_empty()) { Some(r) => r, None => return };
+                if seen.insert((repo_n.clone(), rid.clone())) {
+                    // The files' fingerprint speaks only for the repo the mod was synced from.
+                    let cur_hash = m.source_repo.as_deref().map(normalize_repo_url)
+                        .filter(|s| *s == repo_n).and(m.repo_content_hash.clone());
+                    list.push(Candidate {
+                        mod_id: m.id.clone(), name: m.name.clone(), cur_ver: m.version.clone(),
+                        repo_url: repo_n, rid, cur_hash,
+                    });
+                }
+            };
+            if let Some(r) = &m.source_repo { push(r, main_rid.clone(), &mut candidates); }
+            if let Some(r) = &m.update_url  { push(r, main_rid.clone(), &mut candidates); }
+            for src in &m.update_sources {
+                if src.is_direct() {
+                    // Direct-download fallback.
+                    if !src.repo_url.trim().is_empty() {
+                        directs.push(DirectCand {
+                            mod_id: m.id.clone(), name: m.name.clone(), cur_ver: m.version.clone(),
+                            url: src.repo_url.trim().to_string(), sig: src.sig.clone(), primary: false,
+                        });
+                    }
+                } else {
+                    let rid = src.repo_mod_id.clone().or_else(|| main_rid.clone());
+                    push(&src.repo_url, rid, &mut candidates);
+                }
+            }
+            for g in &globals { push(g, main_rid.clone(), &mut candidates); }
+        }
+    }
+    let checked = candidates.iter().map(|c| c.mod_id.clone())
+        .chain(directs.iter().map(|d| d.mod_id.clone()))
+        .collect::<std::collections::HashSet<_>>().len();
+    if candidates.is_empty() && directs.is_empty() {
+        return Ok(ModUpdateCheckResult::default());
+    }
+
+    let creator_id = crate::commands::security::get_creator_id(handle).ok();
+
+    // 2. Fetch each unique repo once; cache manifest mod maps + record failures.
+    let mut result = ModUpdateCheckResult { checked, ..Default::default() };
+    let mut repo_cache: std::collections::HashMap<String, Option<std::collections::HashMap<String, crate::commands::repo_follow::Offered>>> = std::collections::HashMap::new();
+    let mut flagged: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    for c in candidates {
+        // already found an update for this mod from another source → skip
+        if flagged.contains(&c.mod_id) { continue; }
+
+        if !repo_cache.contains_key(&c.repo_url) {
+            match fetch_repo_info(c.repo_url.clone(), creator_id.clone(), None).await {
+                Ok(manifest) => {
+                    // One id in several repo profiles: the newest copy (it was the first met).
+                    repo_cache.insert(c.repo_url.clone(), Some(crate::commands::repo_follow::manifest_index(&manifest)));
+                }
+                Err(e) => {
+                    result.errors.push(RepoCheckError { repo_url: c.repo_url.clone(), error: e });
+                    repo_cache.insert(c.repo_url.clone(), None);
+                }
+            }
+        }
+
+        if let Some(Some(map)) = repo_cache.get(&c.repo_url) {
+            if let Some(o) = map.get(&c.rid) {
+                // Newer as numbers (never a downgrade, never "1.0" vs "1.0.0"), or the same
+                // version with other files (repo_follow::update_reason).
+                if let Some(reason) = crate::commands::repo_follow::update_reason(&c.cur_ver, c.cur_hash.as_deref(), &o.version, Some(&o.content_hash)) {
+                    flagged.insert(c.mod_id.clone());
+                    result.updates.push(ModUpdateInfo {
+                        mod_id: c.mod_id,
+                        name: c.name,
+                        current_version: c.cur_ver,
+                        new_version: o.version.clone(),
+                        repo_url: c.repo_url,
+                        repo_mod_id: c.rid,
+                        changelog: o.changelog.clone(),
+                        direct: false,
+                        detail: (reason == "content").then(|| "content".to_string()),
+                    });
+                }
+            }
+        }
+    }
+
+    // 3. Direct-download sources. A direct download has no version, so we ALWAYS
+    //    surface the source (for a manual re-download) and additionally flag it as
+    //    an "update" when its remote content changed since the baseline.
+    for d in directs {
+        match fetch_url_validator(&d.url).await {
+            Ok(sig) => {
+                let changed = matches!(&d.sig, Some(prev) if *prev != sig);
+                result.direct_sources.push(DirectSourceInfo {
+                    mod_id: d.mod_id.clone(),
+                    name: d.name.clone(),
+                    url: d.url.clone(),
+                    detail: sig_human_size(&sig)
+                        .map(|s| format!("Remote: {s}"))
+                        .unwrap_or_else(|| "Remote file reachable".to_string()),
+                    changed,
+                });
+                match &d.sig {
+                    // No baseline yet (shouldn't normally happen — baselines are
+                    // captured when the source is configured) → record one now.
+                    None => {
+                        if let Ok(mut data) = state.data.lock() {
+                            if let Some(m) = data.mods.iter_mut().find(|m| m.id == d.mod_id) {
+                                if d.primary {
+                                    if m.direct_sig.is_none() { m.direct_sig = Some(sig); }
+                                } else if let Some(src) = m.update_sources.iter_mut()
+                                    .find(|s| s.is_direct() && s.repo_url.trim() == d.url) {
+                                    if src.sig.is_none() { src.sig = Some(sig); }
+                                }
+                            }
+                        }
+                        let _ = state.save();
+                        if !result.baselined.contains(&d.mod_id) { result.baselined.push(d.mod_id.clone()); }
+                    }
+                    Some(prev) if *prev != sig => {
+                        if !flagged.contains(&d.mod_id) {
+                            flagged.insert(d.mod_id.clone());
+                            result.updates.push(ModUpdateInfo {
+                                mod_id: d.mod_id,
+                                name: d.name,
+                                current_version: d.cur_ver,
+                                new_version: String::new(),
+                                repo_url: d.url,
+                                repo_mod_id: String::new(),
+                                changelog: None,
+                                direct: true,
+                                detail: Some(describe_sig_change(prev, &sig)),
+                            });
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Err(e) => result.errors.push(RepoCheckError { repo_url: d.url, error: e }),
+        }
+    }
+    Ok(result)
+}
+
+/// Fetch a robust change-detection signature for a direct-download URL.
+///
+/// Rather than trusting a single header, it combines *every* validator the host
+/// exposes — ETag, Last-Modified and total size — so a change in any of them is
+/// caught. When the host exposes none (common on file lockers / dumb static
+/// hosts), it falls back to hashing the first 64 KB of the file plus its length,
+/// giving a real content fingerprint without downloading the whole archive.
+/// Redirects are followed so "latest" links that 302 to a versioned asset work.
+/// Human-readable summary of how a direct-download validator changed (size delta
+/// when known, else which validator moved) — shown so the user sees the data BMM
+/// actually has, since a direct download exposes no version number.
+fn describe_sig_change(old: &str, new: &str) -> String {
+    let size_of = |s: &str| -> Option<u64> {
+        for p in s.split('|') {
+            if let Some(v) = p.strip_prefix("len:").or_else(|| p.strip_prefix("total:")) {
+                if let Ok(n) = v.trim().parse::<u64>() { return Some(n); }
+            }
+        }
+        None
+    };
+    let human = |b: u64| -> String {
+        let f = b as f64;
+        if f >= 1_048_576.0 { format!("{:.1} MB", f / 1_048_576.0) }
+        else if f >= 1024.0 { format!("{:.0} KB", f / 1024.0) }
+        else { format!("{} B", b) }
+    };
+    if let (Some(a), Some(b)) = (size_of(old), size_of(new)) {
+        if a != b { return format!("Size: {} → {}", human(a), human(b)); }
+    }
+    let has = |s: &str, k: &str| s.split('|').any(|p| p.starts_with(k));
+    if has(old, "etag:") || has(new, "etag:") { "Remote file changed (ETag)".to_string() }
+    else if has(old, "lm:") || has(new, "lm:") { "Remote file changed (last-modified date)".to_string() }
+    else { "Remote file content changed".to_string() }
+}
+
+/// Extract a human-readable size from a validator signature, if it carries one.
+fn sig_human_size(sig: &str) -> Option<String> {
+    for p in sig.split('|') {
+        if let Some(v) = p.strip_prefix("len:").or_else(|| p.strip_prefix("total:")) {
+            if let Ok(b) = v.trim().parse::<u64>() {
+                let f = b as f64;
+                return Some(if f >= 1_048_576.0 { format!("{:.1} MB", f / 1_048_576.0) }
+                    else if f >= 1024.0 { format!("{:.0} KB", f / 1024.0) }
+                    else { format!("{} B", b) });
+            }
+        }
+    }
+    None
+}
+
+async fn fetch_url_validator(url: &str) -> Result<String, String> {
+    use sha2::{Digest, Sha256};
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::limited(10))
+        .timeout(std::time::Duration::from_secs(25))
+        .build().map_err(|e| e.to_string())?;
+
+    let mut parts: Vec<String> = Vec::new();
+    let mut have_strong = false;
+
+    // 1. Cheap HEAD for header validators.
+    if let Ok(resp) = client.head(url).send().await {
+        if resp.status().is_success() {
+            let h = resp.headers();
+            let get = |n: reqwest::header::HeaderName| h.get(n).and_then(|v| v.to_str().ok()).map(|s| s.to_string());
+            if let Some(e) = get(reqwest::header::ETAG) { parts.push(format!("etag:{e}")); have_strong = true; }
+            if let Some(lm) = get(reqwest::header::LAST_MODIFIED) { parts.push(format!("lm:{lm}")); have_strong = true; }
+            if let Some(cl) = get(reqwest::header::CONTENT_LENGTH) { parts.push(format!("len:{cl}")); }
+        }
+    }
+
+    // 2. Strong validator already → done (no need to pull any bytes).
+    if have_strong {
+        parts.sort();
+        return Ok(parts.join("|"));
+    }
+
+    // 3. No strong validator: fingerprint the first 64 KB via a ranged GET, and
+    //    capture the total size from Content-Range / Content-Length.
+    let resp = client.get(url)
+        .header(reqwest::header::RANGE, "bytes=0-65535")
+        .send().await.map_err(|e| e.to_string())?;
+    let code = resp.status().as_u16();
+    if !resp.status().is_success() && code != 206 {
+        return Err(format!("HTTP {}", resp.status()));
+    }
+    {
+        let h = resp.headers();
+        let total = h.get(reqwest::header::CONTENT_RANGE)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|cr| cr.rsplit('/').next().map(|s| s.to_string()))
+            .filter(|t| t != "*")
+            .or_else(|| h.get(reqwest::header::CONTENT_LENGTH)
+                .and_then(|v| v.to_str().ok()).map(|s| s.to_string()));
+        if let Some(t) = total { parts.push(format!("total:{t}")); }
+    }
+    // A server that ignores the Range header answers with the whole file: streamed against
+    // the download cap rather than buffered with `bytes()` whatever its size.
+    let bytes = {
+        let mut resp = resp;
+        let mut cap = crate::fs_utils::DownloadCap::new();
+        let mut buf: Vec<u8> = Vec::new();
+        while let Some(chunk) = resp.chunk().await.map_err(|e| e.to_string())? {
+            cap.add(chunk.len() as u64)?;
+            buf.extend_from_slice(&chunk);
+        }
+        buf
+    };
+    if !bytes.is_empty() {
+        let mut hasher = Sha256::new();
+        hasher.update(&bytes);
+        let digest = hasher.finalize();
+        parts.push(format!("p{}:{}", bytes.len(), hex::encode(&digest[..8])));
+    }
+
+    if parts.is_empty() {
+        return Err("Remote exposes no validator and served no content".to_string());
+    }
+    parts.sort();
+    Ok(parts.join("|"))
+}
+
+/// Detect a single shared top-level folder in an archive, so its files can be
+/// extracted directly into the mod folder (mirrors the repo/.bmmplug convention).
+/// Returns None when entries live at the archive root or under multiple roots.
+fn archive_single_root<R: std::io::Read + std::io::Seek>(
+    archive: &mut zip::ZipArchive<R>,
+) -> Option<std::path::PathBuf> {
+    let mut root: Option<String> = None;
+    let mut has_subpath = false;
+    for i in 0..archive.len() {
+        let file = archive.by_index(i).ok()?;
+        let name = match file.enclosed_name() { Some(p) => p.to_path_buf(), None => continue };
+        let mut comps = name.components();
+        let first = comps.next()?.as_os_str().to_string_lossy().to_string();
+        if comps.next().is_some() { has_subpath = true; }
+        match &root {
+            None => root = Some(first),
+            Some(r) if *r != first => return None,
+            _ => {}
+        }
+    }
+    if has_subpath { root.map(std::path::PathBuf::from) } else { None }
+}
+
+/// Apply a direct-download update: re-download the configured archive and
+/// overwrite the mod's folder in place (Zip Slip safe), then record the new
+/// remote validator so the update clears.
+#[tauri::command]
+pub async fn apply_direct_update(
+    state: State<'_, AppState>,
+    mod_id: String,
+    url: Option<String>,
+) -> Result<(), String> {
+    let (url, folder) = {
+        let data = state.data.lock().map_err(|_| "Lock failed".to_string())?;
+        let m = data.mods.iter().find(|m| m.id == mod_id)
+            .ok_or_else(|| "Mod not found".to_string())?;
+        // Use the caller-supplied URL when it matches a configured direct source
+        // (primary or a fallback); otherwise fall back to the primary direct URL.
+        let wanted = url.map(|u| u.trim().to_string()).filter(|u| !u.is_empty());
+        let known = |u: &str| {
+            m.direct_url.as_deref().map(|p| p.trim() == u).unwrap_or(false)
+                || m.update_sources.iter().any(|s| s.is_direct() && s.repo_url.trim() == u)
+        };
+        let url = match wanted {
+            Some(u) if known(&u) => u,
+            _ => m.direct_url.clone()
+                .map(|u| u.trim().to_string())
+                .filter(|u| !u.is_empty())
+                .ok_or_else(|| "No direct download URL configured".to_string())?,
+        };
+        (url, m.mod_folder_path.clone())
+    };
+
+    let folder_c = folder.clone();
+    let url_c = url.clone();
+    tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
+        // One Install ticket for the download and the write-over (foreground work: background
+        // hashing steps aside while it runs). A cancel stops between archive entries; the
+        // update is in place, so the entries already written stay, as after any failure here.
+        let ticket = crate::governor::runtime::global().begin(OpKind::Install, &format!("direct update → {}", folder_c.display()));
+        let response = reqwest::blocking::get(&url_c)
+            .map_err(|e| format!("Download failed: {}", e))?;
+        if !response.status().is_success() {
+            return Err(format!("HTTP error: {}", response.status()));
+        }
+        // Read against the 4 GiB download cap: this one is held in memory before it is unpacked.
+        crate::fs_utils::DownloadCap::new().check_announced(response.content_length())?;
+        let bytes = {
+            use std::io::Read;
+            let mut buf = Vec::new();
+            crate::fs_utils::CappedReader::new(response)
+                .read_to_end(&mut buf)
+                .map_err(|e| if e.to_string() == crate::fs_utils::DOWNLOAD_TOO_LARGE { e.to_string() } else { format!("Read failed: {}", e) })?;
+            buf
+        };
+        ticket.add_bytes(bytes.len() as u64, 0);
+        std::fs::create_dir_all(&folder_c).map_err(|e| e.to_string())?;
+
+        let is_zip = bytes.len() >= 4 && bytes[0] == 0x50 && bytes[1] == 0x4B;
+        if is_zip {
+            let cursor = std::io::Cursor::new(&bytes);
+            let mut archive = zip::ZipArchive::new(cursor)
+                .map_err(|e| format!("Zip error: {}", e))?;
+            // The size caps of archive.rs (security summary §9): declared, then streamed.
+            crate::archive::check_zip_declared(&mut archive, bytes.len() as u64).map_err(|e| e.to_string())?;
+            let budget = crate::archive::ExtractBudget::for_archive(bytes.len() as u64);
+            let strip = archive_single_root(&mut archive);
+            for i in 0..archive.len() {
+                ticket.checkpoint().map_err(|_| "repo.cancelled".to_string())?;
+                let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
+                // CWE-22 Zip Slip: enclosed_name() returns None for escaping paths.
+                let safe = match file.enclosed_name() { Some(p) => p.to_path_buf(), None => continue };
+                let rel = match &strip {
+                    Some(pfx) => safe.strip_prefix(pfx).map(|p| p.to_path_buf()).unwrap_or(safe),
+                    None => safe,
+                };
+                if rel.as_os_str().is_empty() { continue; }
+                let outpath = folder_c.join(&rel);
+                if file.name().ends_with('/') {
+                    std::fs::create_dir_all(&outpath).ok();
+                } else {
+                    if let Some(parent) = outpath.parent() { std::fs::create_dir_all(parent).ok(); }
+                    let mut outfile = budget.writer(std::fs::File::create(&outpath).map_err(|e| e.to_string())?);
+                    let n = std::io::copy(&mut file, &mut outfile).map_err(|e| e.to_string())?;
+                    ticket.add_bytes(0, n);
+                }
+            }
+        } else {
+            // Non-archive payload: save it as a single file under the mod folder.
+            let raw = url_c.split(|c| c == '?' || c == '#').next().unwrap_or(&url_c);
+            // Through the same guard as a manifest path: the last URL segment can still be
+            // `C:x.bat` (a drive-relative path that REPLACES the folder when joined) or `..`.
+            let name = raw.rsplit(|c| c == '/' || c == '\\').next()
+                .and_then(crate::fs_utils::safe_relative_path)
+                .unwrap_or_else(|| PathBuf::from("mod_file"));
+            std::fs::write(folder_c.join(name), &bytes).map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    }).await.map_err(|e| e.to_string())??;
+
+    // Record the new validator as the baseline for whichever source we used, and
+    // refresh the fingerprint.
+    let new_sig = fetch_url_validator(&url).await.ok();
+    {
+        let mut data = state.data.lock().map_err(|_| "Lock failed".to_string())?;
+        if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
+            if m.direct_url.as_deref().map(|p| p.trim() == url).unwrap_or(false) {
+                m.direct_sig = new_sig.clone();
+            }
+            for s in m.update_sources.iter_mut().filter(|s| s.is_direct() && s.repo_url.trim() == url) {
+                s.sig = new_sig.clone();
+            }
+            m.content_id = crate::models::mod_entry::derive_content_id(&m.mod_folder_path);
+            m.cached_files = None;
+            m.last_scan_mtime = 0;
+        }
+    }
+    let _ = state.save();
+    Ok(())
+}
+
+/// Configure a mod's update linkage: its stable `repo_mod_id` and the list of
+/// repos that can update it. Empty strings clear the corresponding field.
+#[tauri::command]
+pub async fn set_mod_update_config(
+    state: State<'_, AppState>,
+    mod_id: String,
+    repo_mod_id: Option<String>,
+    update_url: Option<String>,
+    update_sources: Option<Vec<crate::models::mod_entry::UpdateSource>>,
+    direct_url: Option<String>,
+    update_source_protected: Option<bool>,
+) -> Result<(), String> {
+    {
+        let mut data = state.data.lock().map_err(|_| "Lock failed".to_string())?;
+        let m = data.mods.iter_mut().find(|m| m.id == mod_id)
+            .ok_or_else(|| "Mod not found".to_string())?;
+        if let Some(rid) = repo_mod_id {
+            let t = rid.trim();
+            m.repo_mod_id = if t.is_empty() { None } else { Some(t.to_string()) };
+        }
+        // `Option<bool>` rather than `bool`: a caller that does not mention the flag must not
+        // clear it, which is the difference between "unticked" and "not asked about".
+        if let Some(p) = update_source_protected { m.update_source_protected = p; }
+        if let Some(url) = update_url {
+            let t = url.trim();
+            m.update_url = if t.is_empty() { None } else { Some(normalize_repo_url(t)) };
+        }
+        if let Some(url) = direct_url {
+            let t = url.trim();
+            let new_url = if t.is_empty() { None } else { Some(t.to_string()) };
+            // Changing the URL invalidates the stored signature so the next check
+            // re-captures a baseline instead of falsely flagging an update.
+            if new_url != m.direct_url { m.direct_sig = None; }
+            m.direct_url = new_url;
+        }
+        if let Some(srcs) = update_sources {
+            // Preserve already-captured direct-download baselines by URL so a
+            // re-save doesn't reset change-detection.
+            let prev_sigs: std::collections::HashMap<String, Option<String>> = m.update_sources.iter()
+                .filter(|s| s.is_direct())
+                .map(|s| (s.repo_url.trim().to_string(), s.sig.clone()))
+                .collect();
+            m.update_sources = srcs.into_iter()
+                .filter(|s| !s.repo_url.trim().is_empty())
+                .map(|mut s| {
+                    if s.is_direct() {
+                        s.kind = "direct".to_string();
+                        s.repo_url = s.repo_url.trim().to_string();
+                        s.repo_mod_id = None;
+                        s.sig = prev_sigs.get(&s.repo_url).cloned().flatten();
+                    } else {
+                        s.kind = "repo".to_string();
+                        s.repo_url = normalize_repo_url(&s.repo_url);
+                        s.repo_mod_id = s.repo_mod_id.filter(|r| !r.trim().is_empty());
+                        s.sig = None;
+                    }
+                    s
+                })
+                .collect();
+        }
+    }
+    let _ = state.save();
+
+    // Capture baselines for any direct-download sources that don't have one yet, so
+    // the FIRST "check for updates" is already meaningful (no "tracking started").
+    let pending: Vec<String> = {
+        let data = state.data.lock().map_err(|_| "Lock failed".to_string())?;
+        let mut urls = Vec::new();
+        if let Some(m) = data.mods.iter().find(|m| m.id == mod_id) {
+            if m.direct_sig.is_none() {
+                if let Some(u) = m.direct_url.as_ref().filter(|u| !u.trim().is_empty()) {
+                    urls.push(u.trim().to_string());
+                }
+            }
+            for s in &m.update_sources {
+                if s.is_direct() && s.sig.is_none() && !s.repo_url.trim().is_empty() {
+                    urls.push(s.repo_url.trim().to_string());
+                }
+            }
+        }
+        urls
+    };
+    let mut captured = false;
+    for url in pending {
+        if let Ok(sig) = fetch_url_validator(&url).await {
+            let mut data = state.data.lock().map_err(|_| "Lock failed".to_string())?;
+            if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
+                if m.direct_url.as_deref().map(|p| p.trim() == url).unwrap_or(false) && m.direct_sig.is_none() {
+                    m.direct_sig = Some(sig.clone());
+                }
+                for s in m.update_sources.iter_mut()
+                    .filter(|s| s.is_direct() && s.repo_url.trim() == url && s.sig.is_none()) {
+                    s.sig = Some(sig.clone());
+                }
+            }
+            captured = true;
+        }
+    }
+    if captured { let _ = state.save(); }
+    Ok(())
+}
+
+/// Read an existing repo.json and return its current profiles + mods so the UI
+/// can show what's inside before updating.
+/// The folder's own name, as a first guess at a repo name. Better than "Repo" and better
+/// than empty: somebody who points at `DCS-Winter-2026` meant that.
+fn repo_dir_name(dir: &str) -> String {
+    PathBuf::from(dir)
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .filter(|n| !n.trim().is_empty())
+        .unwrap_or_else(|| "Repo".to_string())
+}
+
+#[tauri::command]
+pub fn read_local_repo(repo_dir: String) -> Result<ServerRepo, String> {
+    let manifest_path = PathBuf::from(&repo_dir).join("repo.json");
+    if !manifest_path.exists() {
+        // An EMPTY repo rather than an error.
+        //
+        // "There is no manifest here" and "this folder is not a repo" are different facts,
+        // and only the caller can tell them apart — the update screen's whole purpose is to
+        // put mods into a folder and write a manifest describing them. Refusing here made the
+        // one starting point that needs no manifest the one case that could not begin.
+        //
+        // The folder is checked for existence first, so a mistyped path is still an error.
+        if !PathBuf::from(&repo_dir).is_dir() {
+            return Err("repo.errNoExistingRepo".to_string());
+        }
+        // Built by deserialising an EMPTY object, so every field takes the serde default
+        // declared beside it rather than a second set written here that could disagree.
+        let mut empty: ServerRepo = serde_json::from_str("{}")
+            .map_err(|e| format!("repo.errReadManifest|{}", e))?;
+        empty.name = repo_dir_name(&repo_dir);
+        return Ok(empty);
+    }
+    let content = fs::read_to_string(&manifest_path).map_err(|_| "repo.errReadManifest".to_string())?;
+    serde_json::from_str(&content).map_err(|e| format!("repo.json parse error: {}", e))
+}
+
+pub use super::zipping::ZipMethod;
+
+#[tauri::command]
+pub async fn cancel_repo_export(state: State<'_, AppState>) -> Result<(), String> {
+    state.install_cancelled.store(true, std::sync::atomic::Ordering::SeqCst);
     Ok(())
 }
 fn generate_mini_server_files(
@@ -311,27 +2213,118 @@ fn generate_mini_server_files(
     use_upnp: bool,
     _lang: &str,
     upload_limit: u32,
+    server_version: u8,
+    admin_password: &str,
+    download_password: &str,
+    enable_docker: bool,
+    docker_host_type: &str,
+    server_type: &str,
+    extras: &crate::commands::mini_server_extras::MiniServerExtras,
 ) -> Result<(), String> {
+    // 0. The scheduled jobs and the public URL are checked before anything is written: a typo
+    // in a schedule must be refused here, not logged on a machine the owner may never look at.
+    crate::commands::mini_server_extras::build_config(extras)?;
+
     // 1. Get custom cloudflared path or "AUTO"
     let state = handle.state::<crate::state::AppState>();
     let cf_path = {
-        let data = state.data.lock().unwrap();
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         data.settings.cloudflared_path.clone().unwrap_or_else(|| "AUTO".to_string())
     };
 
-    // 2. Load and Prepare Hybrid Template (One-file solution)
-    let hybrid_template = include_str!("../templates/mini-server/server.hybrid.bat.template");
-    let mut hybrid_content = hybrid_template.replace("PORT_PLACEHOLDER", &port.to_string());
-    hybrid_content = hybrid_content.replace("USE_CLOUDFLARE_PLACEHOLDER", if use_cloudflare { "true" } else { "false" });
-    hybrid_content = hybrid_content.replace("USE_UPNP_PLACE_HOLDER", if use_upnp { "true" } else { "false" });
-    hybrid_content = hybrid_content.replace("CLOUDFLARE_BINARY_PLACEHOLDER", &cf_path.replace("\\", "/"));
-    hybrid_content = hybrid_content.replace("UPLOAD_LIMIT_PLACEHOLDER", &upload_limit.to_string());
+    // Declare upfront so auto-start block can access it regardless of server_type
+    let main_bat_path: Option<std::path::PathBuf>;
 
-    // 3. Write Single Executable Batch File
-    let main_bat_path = output_path.join("BMM-Standalone-Server.bat");
-    fs::write(&main_bat_path, hybrid_content).map_err(|_| "repo.errWriteScript".to_string())?;
+    if server_type == "server" {
+        // GENERATE SERVER (EXPRESS/NODE) FILES
+        let package_template = include_str!("../templates/mini-server/package.json.template");
+        let server_js_template = include_str!("../templates/mini-server/server.express.js.template");
+        let dashboard_template = include_str!("../templates/mini-server/dashboard.html.template");
+        let bat_template = include_str!("../templates/mini-server/start.server.bat.template");
+        let sh_template = include_str!("../templates/mini-server/start.server.sh.template");
 
-    // 4. Copy Bans if exists
+        let mut server_js_content = server_js_template.replace("{{PORT}}", &port.to_string());
+        server_js_content = server_js_content.replace("{{UPLOAD_LIMIT}}", &upload_limit.to_string());
+        server_js_content = server_js_content.replace("{{ADMIN_PASSWORD}}", admin_password);
+        server_js_content = server_js_content.replace("{{DOWNLOAD_PASSWORD}}", download_password);
+        // Blank on purpose — see write_access_gate. Only the owner knows the address their
+        // subscribers type, and a guess would refuse every proof for a reason nothing names.
+        server_js_content = server_js_content.replace("{{PUBLIC_ORIGIN}}", "");
+
+        let public_dir = output_path.join("public");
+        if !public_dir.exists() {
+            fs::create_dir_all(&public_dir).map_err(|_| "repo.errCreatePublicDir".to_string())?;
+        }
+
+        fs::write(output_path.join("package.json"), package_template).map_err(|_| "repo.errWritePackageJson".to_string())?;
+        fs::write(output_path.join("server.js"), server_js_content).map_err(|_| "repo.errWriteServerJs".to_string())?;
+        write_access_gate(output_path)?;
+        write_access_starter(output_path)?;
+        fs::write(public_dir.join("dashboard.html"), dashboard_template).map_err(|_| "repo.errWriteDashboardHtml".to_string())?;
+        
+        let bat_path = output_path.join("BMM-Standalone-Server.bat");
+        fs::write(&bat_path, bat_template).map_err(|_| "repo.errWriteScript".to_string())?;
+        let main_sh_path = output_path.join("BMM-Standalone-Server.sh");
+        fs::write(&main_sh_path, sh_template).map_err(|_| "repo.errWriteScript".to_string())?;
+        main_bat_path = Some(bat_path);
+    } else {
+        // GENERATE USER (POLYGLOT) FILES
+        let hybrid_template = if server_version == 2 {
+            include_str!("../templates/mini-server/server.v2.bat.template")
+        } else {
+            include_str!("../templates/mini-server/server.hybrid.bat.template")
+        };
+        
+        let mut hybrid_content = hybrid_template.replace("PORT_PLACEHOLDER", &port.to_string());
+        hybrid_content = hybrid_content.replace("USE_CLOUDFLARE_PLACEHOLDER", if use_cloudflare { "true" } else { "false" });
+        hybrid_content = hybrid_content.replace("USE_UPNP_PLACE_HOLDER", if use_upnp { "true" } else { "false" });
+        hybrid_content = hybrid_content.replace("CLOUDFLARE_BINARY_PLACEHOLDER", &cf_path.replace("\\", "/"));
+        hybrid_content = hybrid_content.replace("UPLOAD_LIMIT_PLACEHOLDER", &upload_limit.to_string());
+        hybrid_content = hybrid_content.replace("ADMIN_PASSWORD_PLACEHOLDER", admin_password);
+        hybrid_content = hybrid_content.replace("PUBLIC_ORIGIN_PLACEHOLDER", "");
+        // Both scripts read the same access.json beside them, so a folder generated for
+        // Windows and run on Linux (or the reverse) enforces the same thing.
+        write_access_gate(output_path)?;
+        write_access_starter(output_path)?;
+
+        // 3. Write Windows Batch File
+        let bat_path = output_path.join("BMM-Standalone-Server.bat");
+        fs::write(&bat_path, &hybrid_content).map_err(|_| "repo.errWriteScript".to_string())?;
+        main_bat_path = Some(bat_path);
+
+        // 4. Write Linux Shell File
+        let linux_template = if server_version == 2 {
+            include_str!("../templates/mini-server/server.v2.sh.template")
+        } else {
+            include_str!("../templates/mini-server/server.hybrid.sh.template")
+        };
+        
+        let mut linux_content = linux_template.replace("PORT_PLACEHOLDER", &port.to_string());
+        linux_content = linux_content.replace("USE_CLOUDFLARE_PLACEHOLDER", if use_cloudflare { "true" } else { "false" });
+        linux_content = linux_content.replace("USE_UPNP_PLACE_HOLDER", if use_upnp { "true" } else { "false" });
+        linux_content = linux_content.replace("CLOUDFLARE_BINARY_PLACEHOLDER", &cf_path.replace("\\", "/"));
+        linux_content = linux_content.replace("UPLOAD_LIMIT_PLACEHOLDER", &upload_limit.to_string());
+        linux_content = linux_content.replace("ADMIN_PASSWORD_PLACEHOLDER", admin_password);
+        linux_content = linux_content.replace("PUBLIC_ORIGIN_PLACEHOLDER", "");
+
+        let main_sh_path = output_path.join("BMM-Standalone-Server.sh");
+        fs::write(&main_sh_path, linux_content).map_err(|_| "repo.errWriteScript".to_string())?;
+    }
+
+    // 4b. Status page, health, feed, ranges, rate limit and scheduled jobs: bmm-extras.js and its
+    // server.config.json, the READMEs (EN/FR), the systemd unit, the Windows task, the self-test.
+    crate::commands::mini_server_extras::write_extras(output_path, port, server_type, server_version, extras)?;
+    // The script editions read the download password from access.json only: without this, the
+    // password typed in the generator was silently ignored by them. (Express bakes it in.)
+    if server_type != "server" {
+        match crate::commands::mini_server_extras::seed_download_password(output_path, download_password) {
+            Ok(false) if !download_password.trim().is_empty() => println!("[REPO] access.json already sets a password: kept"),
+            Err(e) => println!("[REPO] access.json: {e}"),
+            _ => {}
+        }
+    }
+
+    // 5. Copy Bans if exists
     if let Ok(ban_path) = ban_manager::get_ban_file_path(handle) {
         if ban_path.exists() {
             let _ = fs::copy(ban_path, output_path.join("bans.json"));
@@ -345,35 +2338,74 @@ fn generate_mini_server_files(
         }
     }
 
-    // 6. Auto-start logic
+    // 6. Generate Docker files if enabled
+    if enable_docker {
+        let (dockerfile_content, compose_template) = if server_type == "server" {
+            // Express/Node server — uses its own Dockerfiles that call `node server.js`
+            let df = if docker_host_type == "windows" {
+                include_str!("../templates/docker/Dockerfile.server.windows.template")
+            } else {
+                include_str!("../templates/docker/Dockerfile.server.linux.template")
+            };
+            (df, include_str!("../templates/docker/docker-compose.server.yml.template"))
+        } else {
+            // Polyglot / user mode — existing Dockerfiles that run the .sh/.bat script
+            let df = if docker_host_type == "windows" {
+                include_str!("../templates/docker/Dockerfile.windows.template")
+            } else {
+                include_str!("../templates/docker/Dockerfile.linux.template")
+            };
+            (df, include_str!("../templates/docker/docker-compose.yml.template"))
+        };
+
+        // Dockerfile + docker-compose.yml, and the admin password in .env beside them (with its
+        // .gitignore / .dockerignore lines), not in the compose file. See docker_export.rs.
+        let written = crate::commands::docker_export::write_docker_files(
+            output_path, dockerfile_content, &crate::commands::mini_server_extras::compose_for(compose_template, extras), port, admin_password,
+        ).map_err(|_| "repo.errWriteCompose".to_string())?;
+
+        println!("[DOCKER] Docker files generated at: {:?}, {:?}, {:?}", written.dockerfile, written.compose, written.env);
+    }
+
+    // 7. Auto-start logic
     if auto_start {
         #[cfg(target_os = "windows")]
         {
             use winreg::enums::*;
             use winreg::RegKey;
-            println!("[STARTUP] Enabling autostart for standalone server...");
+            if let Some(bat) = &main_bat_path {
+                println!("[STARTUP] Enabling autostart for standalone server...");
+                let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+                match hkcu.open_subkey_with_flags("Software\\Microsoft\\Windows\\CurrentVersion\\Run", KEY_SET_VALUE) {
+                    Ok(run) => {
+                        let mut path_str = if let Ok(abs_path) = fs::canonicalize(bat) {
+                            abs_path.to_string_lossy().to_string().replace("\\\\?\\", "").replace("/","\\")
+                        } else {
+                            bat.to_string_lossy().to_string()
+                        };
+
+                        if path_str.contains(' ') && !path_str.starts_with('"') {
+                            path_str = format!("\"{}\"", path_str);
+                        }
+
+                        match run.set_value("BMM-Mini-Server", &path_str) {
+                            Ok(_) => println!("[STARTUP] Registry key set successfully."),
+                            Err(e) => println!("[STARTUP] Failed to set registry value: {}", e),
+                        }
+                    },
+                    Err(e) => println!("[STARTUP] Failed to open registry key: {}", e),
+                }
+            }
+        }
+    } else {
+        #[cfg(target_os = "windows")]
+        {
+            use winreg::enums::*;
+            use winreg::RegKey;
             let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-            match hkcu.open_subkey_with_flags("Software\\Microsoft\\Windows\\CurrentVersion\\Run", KEY_SET_VALUE) {
-                Ok(run) => {
-                    // Ensure absolute path and remove UNC prefix which can break registry commands
-                    let mut path_str = if let Ok(abs_path) = fs::canonicalize(&main_bat_path) {
-                        abs_path.to_string_lossy().to_string().replace("\\\\?\\", "").replace("/","\\")
-                    } else {
-                        main_bat_path.to_string_lossy().to_string()
-                    };
-
-                    // CRITICAL: Must be quoted if contains spaces
-                    if path_str.contains(' ') && !path_str.starts_with('"') {
-                        path_str = format!("\"{}\"", path_str);
-                    }
-
-                    println!("[STARTUP] Writing to registry: BMM-Mini-Server -> {}", path_str);
-                    match run.set_value("BMM-Mini-Server", &path_str) {
-                        Ok(_) => println!("[STARTUP] Registry key set successfully."),
-                        Err(e) => println!("[STARTUP] Failed to set registry value: {}", e),
-                    }
-                },
-                Err(e) => println!("[STARTUP] Failed to open registry key: {}", e),
+            if let Ok(run) = hkcu.open_subkey_with_flags("Software\\Microsoft\\Windows\\CurrentVersion\\Run", KEY_SET_VALUE) {
+                let _ = run.delete_value("BMM-Mini-Server");
+                println!("[STARTUP] Autostart disabled (registry key removed).");
             }
         }
     }
@@ -381,17 +2413,50 @@ fn generate_mini_server_files(
     Ok(())
 }
 
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StandaloneServerConfig {
+    pub repo_path: String,
+    pub port: u16,
+    pub auto_start: bool,
+    pub use_cloudflare: bool,
+    pub use_upnp: bool,
+    pub lang: String,
+    pub upload_limit: u32,
+    pub server_version: Option<u8>,
+    pub admin_password: Option<String>,
+    pub download_password: Option<String>,
+    pub enable_docker: Option<bool>,
+    pub docker_host_type: Option<String>,
+    pub server_type: Option<String>,
+    /// Status page, rate limit and scheduled jobs (mini_server_extras.rs). Absent = defaults.
+    #[serde(default)]
+    pub extras: Option<crate::commands::mini_server_extras::MiniServerExtras>,
+}
+
 #[tauri::command]
 pub async fn generate_standalone_server(
     handle: tauri::AppHandle,
-    repo_path: String,
-    port: u16,
-    auto_start: bool,
-    use_cloudflare: bool,
-    use_upnp: bool,
-    lang: String,
-    upload_limit: u32,
+    payload: StandaloneServerConfig,
 ) -> Result<(), String> {
+    let _tracker = crate::commands::resource_tracker::OpTracker::start("REPO/standalone-gen")
+        .with_subject(payload.repo_path.clone());
+    let StandaloneServerConfig {
+        repo_path,
+        port,
+        auto_start,
+        use_cloudflare,
+        use_upnp,
+        lang,
+        upload_limit,
+        server_version,
+        admin_password,
+        download_password,
+        enable_docker,
+        docker_host_type,
+        server_type,
+        extras,
+    } = payload;
     let mut repo_json = PathBuf::from(&repo_path);
     
     // If user selected a directory, try to find repo.json inside it
@@ -405,40 +2470,224 @@ pub async fn generate_standalone_server(
 
     let output_path = repo_json.parent().ok_or_else(|| "repo.miniServerErrNoDir".to_string())?;
 
-    generate_mini_server_files(&handle, output_path, port, auto_start, use_cloudflare, use_upnp, &lang, upload_limit)
+    let version = server_version.unwrap_or(1);
+    let pw = admin_password.unwrap_or_else(|| "admin".to_string());
+    let enable_docker = enable_docker.unwrap_or(false);
+    let docker_host_type = docker_host_type.unwrap_or_else(|| "linux".to_string());
+    let stype = server_type.unwrap_or_else(|| "user".to_string());
+    generate_mini_server_files(&handle, output_path, port, auto_start, use_cloudflare, use_upnp, &lang, upload_limit, version, &pw, &download_password.unwrap_or_default(), enable_docker, &docker_host_type, &stype, &extras.unwrap_or_default())
 }
 
 #[tauri::command]
-pub async fn fetch_repo_info(url: String, creator_id: Option<String>) -> Result<ServerRepo, String> {
-    let mut target_url = url;
-    if !target_url.ends_with("repo.json") {
-        if target_url.ends_with('/') {
-            target_url.push_str("repo.json");
-        } else {
-            target_url.push_str("/repo.json");
-        }
-    }
+pub async fn fetch_repo_info(url: String, creator_id: Option<String>, password: Option<String>) -> Result<ServerRepo, String> {
+    // `192.168.1.20:8000`, `[::1]:8000`, `HTTP://host/mods/`, `host/?k=share`: one rule for
+    // what was typed (repo_addr), which falls back to the old prefix-and-append for anything
+    // it refuses, so an address that used to work still does.
+    let target_url = crate::commands::repo_addr::manifest_url(&url);
 
-    let mut client_builder = reqwest::Client::builder();
+    // Direct (no system proxy) for a LAN / loopback host: a proxy cannot reach 192.168.x.
+    let mut client_builder = crate::commands::repo_addr::client_builder(&target_url);
+    let mut headers = reqwest::header::HeaderMap::new();
     if let Some(ref cid) = creator_id {
-        let mut headers = reqwest::header::HeaderMap::new();
         if let Ok(hv) = reqwest::header::HeaderValue::from_str(cid) {
             headers.insert("X-Creator-ID", hv);
         }
+    }
+    if let Some(ref pw) = password {
+        if !pw.is_empty() {
+            if let Ok(hv) = reqwest::header::HeaderValue::from_str(pw) { headers.insert("X-Repo-Password", hv); }
+        }
+    }
+    crate::commands::repo_keyauth::add_proof(&mut headers, &target_url);
+    if !headers.is_empty() {
         client_builder = client_builder.default_headers(headers);
     }
     let client = client_builder.build().map_err(|e| e.to_string())?;
     let res = client.get(&target_url).send().await.map_err(|e| e.to_string())?;
-    
+
     if !res.status().is_success() {
+        // 401 = this repo requires a download password (or the one given is wrong).
+        if res.status() == 401 {
+            return Err("repo.errPasswordRequired".to_string());
+        }
         if res.status() == 403 {
-            return Err("repo.errForbidden".to_string());
+            // The sandbox gate (IP/key/account bans + whitelist, incl. the site-wide
+            // policy) sends a structured body distinguishing WHY access was denied,
+            // so BMM can tell the user what to do instead of a generic "forbidden".
+            #[derive(serde::Deserialize, Default)]
+            struct GateError { error: Option<String>, #[serde(rename = "accountLinked")] account_linked: Option<bool> }
+            let body: GateError = res.json().await.unwrap_or_default();
+            return Err(match body.error.as_deref() {
+                Some("banned") => "repo.errBanned".to_string(),
+                Some("not_whitelisted") if body.account_linked == Some(true) => "repo.errNotWhitelisted".to_string(),
+                Some("not_whitelisted") => "repo.errNotWhitelistedLink".to_string(),
+                _ => "repo.errForbidden".to_string(),
+            });
+        }
+        // 404 & co: no repo.json AT THAT PATH. This is the normal case for a server that
+        // just serves a folder of mods — the user pastes .../mods/ and the manifest probe
+        // misses. The first version only fell back when a 200 body failed to PARSE, so
+        // the commonest shape of the very server this feature was built for died right
+        // here with errInvalidRepo. Reported from the field with the exact URL.
+        let base = target_url.trim_end_matches("repo.json").trim_end_matches('/').to_string();
+        if let Ok(repo) = discovered_repo(&base, &client).await {
+            return Ok(repo);
         }
         return Err("repo.errInvalidRepo".to_string());
     }
 
-    let repo: ServerRepo = res.json().await.map_err(|_| "repo.errInvalidRepo".to_string())?;
+    // A server that just serves a folder of mods has no repo.json. Until now that was a
+    // dead end even though every file was right there — so fall back to reading the
+    // directory listing and synthesising a manifest from it.
+    //
+    // Done HERE rather than behind a separate button, so everything downstream — the info
+    // card, profile selection, the sync itself, the unverified marking — works unchanged.
+    // Every file it invents carries an EMPTY hash, which the sync path already reads as
+    // "install it, and mark the mod unverified".
+    let body = res.text().await.map_err(|_| "repo.errInvalidRepo".to_string())?;
+    let base = target_url.trim_end_matches("repo.json").trim_end_matches('/').to_string();
+    // The format gate (repo_format): a manifest declaring a format this BMM does not know
+    // is refused with a reason, rather than half-read with every field it adds ignored.
+    if let Ok(doc) = serde_json::from_str::<serde_json::Value>(body.trim_start_matches('\u{feff}')) {
+        crate::commands::repo_format::read_gate(&crate::commands::repo_format::detect(&doc))
+            .map_err(str::to_string)?;
+    }
+    let mut repo: ServerRepo = match serde_json::from_str(&body) {
+        Ok(r) => r,
+        // The first-export shape (format 0.1) has no `download_links`, and the strict reader
+        // refused it whole — the repo looked EMPTY. Read through the in-memory upgrade.
+        Err(_) => match crate::commands::repo_convert::read_legacy(&body) {
+            Some(r) => r,
+            None => return discovered_repo(&base, &client).await,
+        },
+    };
+
+    // A manifest that exists but does not list everything the server holds. The extra mods
+    // are real and installable; they simply have nothing vouching for them, so they join
+    // the list marked exactly like a manifest-less server's would be.
+    //
+    // Best-effort: a host with directory listing disabled just yields nothing here, and the
+    // manifest is served as it always was.
+    //
+    // Never for a SIGNED manifest. Its signature covers exactly the mods it lists: a folder
+    // dropped next to them on the server is precisely what signing exists to keep out, and
+    // appending it here also broke the signature for every later check of this struct (the
+    // badge, check_repo_signature), so a valid repo read as tampered.
+    if repo.signature.is_some() || repo.author_id.is_some() {
+        return Ok(repo);
+    }
+    if let Ok(extra) = uncovered_mods(&repo, &base, &client).await {
+        if !extra.is_empty() {
+            if let Some(p) = repo.profiles.first_mut() {
+                p.mods.extend(extra);
+            }
+        }
+    }
     Ok(repo)
+}
+
+/// Every mod in the server listing that the manifest does not already cover.
+async fn uncovered_mods(
+    repo: &ServerRepo,
+    base: &str,
+    client: &reqwest::Client,
+) -> Result<Vec<crate::models::repo::RepoMod>, String> {
+    let known: std::collections::HashSet<String> = repo.profiles.iter()
+        .flat_map(|p| p.mods.iter())
+        .map(|m| m.id.to_lowercase())
+        .collect();
+    let listing = crate::commands::repo_autoindex::crawl(base, client).await?;
+    Ok(mods_from_listing(&listing).into_iter()
+        .filter(|m| !known.contains(&m.id.to_lowercase()))
+        .collect())
+}
+
+/// Build a whole unverified manifest from a directory listing.
+async fn discovered_repo(base: &str, client: &reqwest::Client) -> Result<ServerRepo, String> {
+    let listing = crate::commands::repo_autoindex::crawl(base, client)
+        .await
+        .map_err(|_| "repo.errInvalidRepo".to_string())?;
+    let mods = mods_from_listing(&listing);
+    if mods.is_empty() {
+        // No manifest AND no readable listing is indistinguishable, from here, from a URL
+        // that is simply not a repo — so it reports the same thing it always did.
+        return Err("repo.errInvalidRepo".to_string());
+    }
+    let name = base.rsplit('/').find(|s| !s.is_empty()).unwrap_or("repo").to_string();
+    Ok(ServerRepo {
+        name,
+        version: "0".to_string(),
+        // No signature and no author: there is nothing to sign, and claiming an author
+        // would be the manifest asserting something nobody said.
+        author: None,
+        author_id: None,
+        signature: None,
+        description: None,
+        game_name: String::new(),
+        created_at: chrono::Utc::now().to_rfc3339(),
+        seed: None,
+        upload_limit: None,
+        require_login: None,
+        files_base_url: None,
+        files_layout: None,
+        modpacks: None,
+        extras: Vec::new(),
+        // Nothing to seal: this manifest is SYNTHESISED from a directory listing, so there
+        // is no export screen behind it and nobody asked for anything to be carried.
+        credentials: None,
+        // Synthesised here from a listing, not read from a manifest: it claims no format.
+        format_version: None,
+        profiles: vec![crate::models::repo::RepoProfile {
+            id: "discovered".to_string(),
+            name: "Server".to_string(),
+            game_name: String::new(),
+            mods,
+            icon: None,
+            color: None,
+            icon_image: None,
+        }],
+    })
+}
+
+/// Group a flat listing into mods, every file carrying an empty hash.
+///
+/// Empty is the point: it is what the sync path reads as "no integrity check available",
+/// which installs the file and marks the mod unverified. A fabricated hash would be worse
+/// than none — it would pass a check that never happened.
+fn mods_from_listing(listing: &[crate::commands::repo_remote::RemoteEntry]) -> Vec<crate::models::repo::RepoMod> {
+    let mut by_mod: std::collections::BTreeMap<String, Vec<RepoFile>> = Default::default();
+    for e in listing {
+        let path = e.rel_path.replace('\\', "/");
+        let mut parts = path.splitn(2, '/');
+        let (Some(id), Some(rel)) = (parts.next().filter(|s| !s.is_empty()), parts.next()) else { continue };
+        if rel.is_empty() { continue; }
+        by_mod.entry(id.to_string()).or_default().push(RepoFile {
+            relative_path: rel.to_string(),
+            size: e.size,
+            sha256_hash: String::new(),
+            chunks: None,
+            mtime: e.mtime,
+        });
+    }
+    by_mod.into_iter().map(|(id, mut files)| {
+        files.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
+        crate::models::repo::RepoMod {
+            id: id.clone(),
+            name: id,
+            version: "0".to_string(),
+            author: None,
+            description: None,
+            tags: Vec::new(),
+            files,
+            archive: None,
+            download_links: Vec::new(),
+            dependencies: Vec::new(),
+            changelog: None,
+            update_url: None,
+            direct_url: None,
+            update_sources: Vec::new(),
+        }
+    }).collect()
 }
 
 #[derive(serde::Deserialize, Clone)]
@@ -446,20 +2695,106 @@ pub async fn fetch_repo_info(url: String, creator_id: Option<String>) -> Result<
 pub struct SyncChoice {
     pub repo_profile_id: String,
     pub target_local_profile_id: Option<String>, // None = Create New
+    /// If Some, only download these specific mod IDs. If None, download all mods.
+    pub selected_mod_ids: Option<Vec<String>>,
 }
 
+/// Add `repo_url` to `sources` as a repo-kind update source, unless it is already there.
+///
+/// Idempotent by URL: re-syncing the same repo must not stack a duplicate entry every time,
+/// which would turn one update check into N identical HTTP requests per mod.
+pub(crate) fn push_repo_source(
+    sources: &mut Vec<crate::models::mod_entry::UpdateSource>,
+    repo_url: &str,
+    repo_mod_id: &str,
+) {
+    let url = normalize_repo_url(repo_url.trim());
+    if url.is_empty() {
+        return;
+    }
+    if sources.iter().any(|s| !s.is_direct() && normalize_repo_url(s.repo_url.trim()) == url) {
+        return;
+    }
+    sources.push(crate::models::mod_entry::UpdateSource {
+        repo_url: url,
+        repo_mod_id: if repo_mod_id.is_empty() { None } else { Some(repo_mod_id.to_string()) },
+        kind: "repo".to_string(),
+        // No baseline: the receiver captures its own on the first check, exactly as it does
+        // for the author's inherited sources.
+        sig: None,
+        // Unmarked, which means "nobody has said". This source is being attached because a
+        // sync succeeded against it, so it is reachable as things stand; whether it will ask
+        // somebody else for a password is not something this side knows.
+        protected: false,
+    });
+}
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncArgs {
     pub url: String,
+    /// Read the repo over SFTP instead of HTTP.
+    ///
+    /// When this is set, `url` is only an identifier -- what the mod records as the repo it
+    /// came from -- and every byte arrives over the SSH connection instead. It is a separate
+    /// field rather than an `ssh://` scheme in `url` because the target carries a user, a
+    /// port, a key path and an auth method, and squeezing those into a URL is how credentials
+    /// end up in logs and in update-source lists.
+    #[serde(default)]
+    pub ssh: Option<crate::commands::repo_ssh::SshSource>,
     pub creator_id: Option<String>,
+    /// Optional download password for a password-protected repo (sent as X-Repo-Password).
+    #[serde(default)]
+    pub password: Option<String>,
+    /// The signature the official repo list recorded for this URL, when it is listed there
+    /// (`check_repo_signature`). A pinned repo must serve exactly that signature.
+    #[serde(default)]
+    pub expected_signature: Option<String>,
     pub game_dir: String,
     pub mods_dir: String,
     pub backup_dir: String,
     pub choices: Vec<SyncChoice>,
+    /// Also record the repo you are syncing from as a visible update source on every mod
+    /// it installs.
+    ///
+    /// Syncing already sets `source_repo`, and the update checker already follows it — but
+    /// that field is internal, so a mod pulled from a repo shows an EMPTY update-source list
+    /// and looks unconfigured. This adds the repo as a real entry alongside the author's own
+    /// sources (it never replaces them), so what you see matches what actually happens.
+    #[serde(default)]
+    pub add_repo_as_update_source: bool,
     pub overwrite_all: bool,
     pub delete_extra: bool,
     pub download_limit: u32,
+    /// For mods stored as a single `.zip` (repo generated with "zip mods"): true =
+    /// extract the archive into a normal mod folder; false = keep it as a `.zip`
+    /// (an archived mod, read on demand). Ignored for classic per-file repos.
+    #[serde(default = "default_true")]
+    pub unzip_archives: bool,
+    /// Leave the active profile as it is. A sync made from the screen switches to the profile
+    /// it installed into (the user is looking at it); an update applied in the background by a
+    /// followed repo must not change what the user is looking at.
+    #[serde(default)]
+    pub keep_active_profile: bool,
+}
+fn default_true() -> bool {
+    true
+}
+
+/// A sync's pause point: its own Pause button (`sync_paused`), then the governor's (a
+/// dashboard pause, `pause_all`, a cancel). True = stop and roll back. Async all the way down:
+/// see the note where `sync_server_repo` takes its ticket.
+async fn sync_wait(
+    pause: &std::sync::atomic::AtomicBool,
+    cancel: &std::sync::atomic::AtomicBool,
+    ticket: &crate::governor::queue::Ticket,
+) -> bool {
+    while pause.load(std::sync::atomic::Ordering::SeqCst) {
+        if cancel.load(std::sync::atomic::Ordering::SeqCst) {
+            return true;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    ticket.checkpoint_async().await.is_err()
 }
 
 #[tauri::command]
@@ -468,26 +2803,60 @@ pub async fn sync_server_repo(
     state: State<'_, AppState>,
     args: SyncArgs,
 ) -> Result<SyncSummary, String> {
+    // One session for the whole sync. Opening one per file would re-authenticate hundreds of
+    // times and, on a server with any rate limiting in front of sshd, get the user blocked
+    // part-way through an install.
+    let ssh_conn = match args.ssh.as_ref() {
+        Some(src) => Some(
+            crate::commands::repo_ssh::open_for_sync(&state, &src.target, src.secret.as_deref())
+                .await?,
+        ),
+        None => None,
+    };
+
     let url = args.url;
     let game_dir = args.game_dir;
     let mods_dir = args.mods_dir;
     let backup_dir = args.backup_dir;
     let choices = args.choices;
 
+    let add_repo_source = args.add_repo_as_update_source;
+    // Mods whose manifest carried no hashes, so the install could not be checked.
+    let mut unverified_mod_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    // Read once: this is sent with every file request, and a per-file disk read for an
+    // unchanging value would be thousands of them on a large sync.
+    let attestation: Option<String> = {
+        use tauri::Manager;
+        crate::commands::identity::my_attestation(window.app_handle())
+    };
+
+    // Normalised repo URL (strip /repo.json + trailing slashes, lowercase) recorded
+    // on each synced mod as its `source_repo`, so the update checker can match it
+    // back to this repo later. Mirrors the frontend's normRepoUrl().
+    let src_repo: String = {
+        let mut u = url.trim().to_string();
+        if let Some(s) = u.strip_suffix("/repo.json") { u = s.to_string(); }
+        while u.ends_with('/') { u.pop(); }
+        u.to_lowercase()
+    };
+
     state.install_cancelled.store(false, std::sync::atomic::Ordering::SeqCst);
     state.sync_paused.store(false, std::sync::atomic::Ordering::SeqCst);
     let cancel_flag = state.install_cancelled.clone();
     let pause_flag = state.sync_paused.clone();
 
-    let check_pause = || {
-        while pause_flag.load(std::sync::atomic::Ordering::SeqCst) {
-            if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) {
-                return true;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(100));
-        }
-        false
-    };
+    // One Download ticket for the whole sync. Its checkpoint joins the sync's own pause and
+    // cancel below: paused or cancelled from the resources dashboard, the sync stops at the
+    // same places, with the same rollback. (Extraction of a zipped mod takes its own Extract
+    // ticket inside archive::extract_to.)
+    //
+    // This is an `async fn`: the ticket is taken with `begin_async` and waited on with
+    // `sync_wait` (timers, not a parked thread). The blocking forms parked one of the async
+    // runtime's workers — the local API's and the repo server's — for every sync waiting for a
+    // slot or sitting paused, and let a second sync on the same worker skip the slot (R13).
+    let ticket = crate::governor::runtime::global().begin_async(OpKind::Download, src_repo.clone()).await;
+    let check_pause = || sync_wait(&pause_flag, &cancel_flag, &ticket);
 
     // 1. Fetch remote repo info
     let _ = window.emit("bmm://repo-sync-progress", RepoProgress {
@@ -496,7 +2865,15 @@ pub async fn sync_server_repo(
         current_file: url.clone(),
     });
     
-    let repo = fetch_repo_info(url.clone(), args.creator_id.clone()).await?;
+    let repo = fetch_repo_info(url.clone(), args.creator_id.clone(), args.password.clone()).await?;
+    // Before anything is written: a signature that does not verify, or a pinned repo that no
+    // longer serves its signature, is refused whole (check_repo_signature).
+    let signature_state = check_repo_signature(&repo, args.expected_signature.as_deref())?;
+    // Before anything is written: a manifest naming a file outside its mod folder is refused
+    // whole (CWE-22). See first_unsafe_manifest_path.
+    if let Some(bad) = first_unsafe_manifest_path(&repo) {
+        return Err(format!("repo.errUnsafePath: {}", bad));
+    }
 
     // Determine the base URL for downloading files
     let base_url = if url.ends_with("repo.json") {
@@ -513,12 +2890,12 @@ pub async fn sync_server_repo(
     }
 
     let total_tasks = choices.len();
-    let mut overall_summary = SyncSummary::default();
+    let mut overall_summary = SyncSummary { signature: signature_state.as_str().to_string(), ..Default::default() };
     let mut synced_profile_ids = Vec::new();
     let mut folders_to_rollback: Vec<PathBuf> = Vec::new();
 
     for (c_idx, choice) in choices.into_iter().enumerate() {
-        if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) || check_pause() {
+        if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) || check_pause().await {
             for path in &folders_to_rollback {
                 if path.exists() { let _ = fs::remove_dir_all(path); }
             }
@@ -530,7 +2907,7 @@ pub async fn sync_server_repo(
 
         // Check if we already have a profile from this repo
         let existing_profile = if let Some(target_id) = &choice.target_local_profile_id {
-            let data = state.data.lock().unwrap();
+            let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
             data.profiles.iter().find(|p| &p.id == target_id).cloned()
         } else {
             None
@@ -586,19 +2963,33 @@ pub async fn sync_server_repo(
         let mut server_mod_subfolders = std::collections::HashSet::new();
 
         for (idx, repo_mod) in repo_profile.mods.into_iter().enumerate() {
-            if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) || check_pause() {
+            if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) || check_pause().await {
                 for path in &folders_to_rollback {
                     if path.exists() { let _ = fs::remove_dir_all(path); }
                 }
                 return Err("Synchronisation annulée".to_string());
             }
 
-            let safe_mod_name = repo_mod.name.replace(|c: char| !c.is_alphanumeric() && c != ' ' && c != '-' && c != '_', "_");
+            // Selective download: skip mods not in the user's selection
+            if let Some(ref selected_ids) = choice.selected_mod_ids {
+                if !selected_ids.contains(&repo_mod.id) {
+                    println!("[Sync] Skipping mod {} (not selected by user)", repo_mod.name);
+                    continue;
+                }
+            }
+
             // Add ID prefix to original folder name to avoid collisions if multiple mods sanitize to same name
-            let mod_subfolder_name = format!("{}_{}", &repo_mod.id[..8], safe_mod_name);
+            let mod_subfolder_name = repo_mod_folder_name(&repo_mod.id, &repo_mod.name);
             let target_mod_dir = mods_path.join(&mod_subfolder_name);
-            server_mod_subfolders.insert(mod_subfolder_name);
+            server_mod_subfolders.insert(mod_subfolder_name.clone());
             
+            // Set by the file loop when the manifest carried no hash for a file. Per mod,
+            // not per file: installing writes every file, so one unchecked file leaves the
+            // whole mod without a guarantee.
+            //
+            // Recorded by id rather than kept in scope, because the mods are CREATED in a
+            // later loop that cannot see this one.
+            let mut mod_unverified = false;
             let is_new_mod = !target_mod_dir.exists();
             if is_new_mod {
                 prof_summary.mods_added += 1;
@@ -608,23 +2999,102 @@ pub async fn sync_server_repo(
 
             fs::create_dir_all(&target_mod_dir).map_err(|e| e.to_string())?;
 
+            // ── Zipped mod: download mods/<id>.zip, then extract or keep as the user chose ──
+            if let Some(ref arch) = repo_mod.archive {
+                let zip_url = format!("{}{}", base_url, arch.relative_path.replace("\\", "/"));
+                let mut cb = reqwest::Client::builder();
+                {
+                    let mut headers = reqwest::header::HeaderMap::new();
+                    if let Some(ref cid) = args.creator_id {
+                        if let Ok(hv) = reqwest::header::HeaderValue::from_str(cid) { headers.insert("X-Creator-ID", hv); }
+                        // Proves which BetterCommunity account is behind that id, for repos
+                        // whose owner gates on accounts rather than on the raw header.
+                        if let Some(tok) = attestation.as_deref() {
+                            if let Ok(hv) = reqwest::header::HeaderValue::from_str(tok) {
+                                headers.insert("X-Creator-Identity", hv);
+                            }
+                        }
+                    }
+                    if let Some(ref pw) = args.password { if !pw.is_empty() {
+                        if let Ok(hv) = reqwest::header::HeaderValue::from_str(pw) { headers.insert("X-Repo-Password", hv); }
+                    } }
+                    crate::commands::repo_keyauth::add_proof(&mut headers, &zip_url);
+                    if !headers.is_empty() { cb = cb.default_headers(headers); }
+                }
+                let client = cb.build().map_err(|e| e.to_string())?;
+                let _ = window.emit("bmm://repo-sync-progress", RepoProgress {
+                    step: format!(r#"{{"key":"repo.stepDownloading","profile":"{}","mod":"{}","current":{},"total":{}}}"#, repo_profile.name, repo_mod.name, idx + 1, total_mods),
+                    progress: (c_idx as f32 / total_tasks as f32) * 100.0,
+                    current_file: arch.relative_path.clone(),
+                });
+                let res = client.get(&zip_url).send().await
+                    .map_err(|e| format!("Network error ({}): {}", arch.relative_path, e))?;
+                if !res.status().is_success() {
+                    return Err(format!("HTTP {} for {}", res.status(), arch.relative_path));
+                }
+                // Stream the archive to disk. `res.bytes()` held the ENTIRE archive in memory
+                // before writing it out, and an archived mod is routinely the largest single
+                // thing a sync transfers — so a big repo could exhaust memory here even though
+                // the per-file path below already streams.
+                let staged_zip = target_mod_dir.join(".bmm_dl.zip");
+                {
+                    let mut res = res;
+                    let mut out = fs::File::create(&staged_zip).map_err(|e| e.to_string())?;
+                    // The Download row's MB/s for the disk this lands on (the governor's budget for
+                    // that disk), waited on a timer: this is async code.
+                    let dl_pace = crate::governor::runtime::global().limiter(OpKind::Download, &staged_zip);
+                    let mut cap = crate::fs_utils::DownloadCap::new();
+                    cap.check_announced(res.content_length())?;
+                    while let Some(chunk) = res.chunk().await.map_err(|e| e.to_string())? {
+                        cap.add(chunk.len() as u64)?;
+                        std::io::Write::write_all(&mut out, &chunk).map_err(|e| e.to_string())?;
+                        ticket.add_bytes(chunk.len() as u64, chunk.len() as u64);
+                        if let Some(l) = &dl_pace { l.acquire_async(chunk.len() as u64).await; }
+                    }
+                    std::io::Write::flush(&mut out).map_err(|e| e.to_string())?;
+                }
+
+                if args.unzip_archives {
+                    crate::archive::extract_to(&staged_zip, &target_mod_dir).map_err(|e| e.to_string())?;
+                    let _ = fs::remove_file(&staged_zip);
+                } else {
+                    // Keep it zipped: store the archive itself (an archived mod) and drop the
+                    // empty staging folder. Move the staged file out FIRST — the staging dir is
+                    // about to be deleted with it inside.
+                    let archive_dest = mods_path.join(format!("{}.zip", mod_subfolder_name));
+                    fs::rename(&staged_zip, &archive_dest).map_err(|e| e.to_string())?;
+                    let _ = fs::remove_dir_all(&target_mod_dir);
+                }
+                prof_summary.files_downloaded += 1;
+                successfully_synced_mods.push(repo_mod);
+                continue;
+            }
+
             let total_files = repo_mod.files.len();
             let mut local_valid_files = std::collections::HashSet::new();
 
             for (f_idx, file) in repo_mod.files.iter().enumerate() {
-                if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) || check_pause() {
+                if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) || check_pause().await {
                     for path in &folders_to_rollback {
                         if path.exists() { let _ = fs::remove_dir_all(path); }
                     }
                     return Err("Synchronisation annulée".to_string());
                 }
 
-                let local_path = target_mod_dir.join(&file.relative_path);
+                // Checked up front already; joined through the guard again so this write can
+                // never be the one that forgot.
+                let Some(rel) = crate::fs_utils::safe_relative_path(&file.relative_path) else {
+                    return Err(format!("repo.errUnsafePath: {}", file.relative_path));
+                };
+                let local_path = target_mod_dir.join(&rel);
                 let mut needs_download = true;
 
                 if local_path.exists() && !args.overwrite_all {
                     if let Ok((local_hash, _)) = compute_file_hash_and_chunks(&local_path, false) {
-                        if local_hash == file.sha256_hash {
+                        // `!is_empty` guards the unverified case: with no recorded hash there
+                        // is no way to tell an up-to-date file from a stale one, so it is
+                        // re-fetched rather than assumed good.
+                        if !file.sha256_hash.trim().is_empty() && local_hash == file.sha256_hash {
                             println!("[Sync] File {} is up to date (hash matches), skipping", file.relative_path);
                             needs_download = false;
                         } else {
@@ -644,24 +3114,43 @@ pub async fn sync_server_repo(
                         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
                     }
 
-                    let file_url = format!("{}mods/{}/{}", base_url, repo_mod.id, file.relative_path.replace("\\", "/"));
+                    let file_url = mod_file_url(
+                        &base_url,
+                        repo.files_base_url.as_deref(),
+                        repo.files_layout.as_deref(),
+                        &repo_mod.id,
+                        &file.relative_path,
+                    );
                     let mut client_builder = reqwest::Client::builder();
-                    if let Some(ref cid) = args.creator_id {
+                    {
                         let mut headers = reqwest::header::HeaderMap::new();
-                        if let Ok(hv) = reqwest::header::HeaderValue::from_str(cid) {
-                            headers.insert("X-Creator-ID", hv);
+                        if let Some(ref cid) = args.creator_id {
+                            if let Ok(hv) = reqwest::header::HeaderValue::from_str(cid) { headers.insert("X-Creator-ID", hv); }
+                        // Proves which BetterCommunity account is behind that id, for repos
+                        // whose owner gates on accounts rather than on the raw header.
+                        if let Some(tok) = attestation.as_deref() {
+                            if let Ok(hv) = reqwest::header::HeaderValue::from_str(tok) {
+                                headers.insert("X-Creator-Identity", hv);
+                            }
                         }
-                        client_builder = client_builder.default_headers(headers);
+                        }
+                        if let Some(ref pw) = args.password { if !pw.is_empty() {
+                            if let Ok(hv) = reqwest::header::HeaderValue::from_str(pw) { headers.insert("X-Repo-Password", hv); }
+                        } }
+                        crate::commands::repo_keyauth::add_proof(&mut headers, &file_url);
+                        if !headers.is_empty() { client_builder = client_builder.default_headers(headers); }
                     }
                     let client = client_builder.build().map_err(|e| e.to_string())?;
 
                     // Differential Sync Logic
                     let mut partial_success = false;
-                    if local_path.exists() && file.chunks.is_some() {
-                        if let Ok(local_chunks) = compute_local_chunk_hashes(&local_path) {
-                            let remote_chunks = file.chunks.as_ref().unwrap();
-                            
-                            let mut file_to_patch = fs::OpenOptions::new().read(true).write(true).create(true).open(&local_path).map_err(|e| e.to_string())?;
+                    // Chunk-level resume is HTTP Range and nothing else. Over SFTP the whole
+                    // file is read; the sync's own hash comparison already decided this file
+                    // needs fetching, which is the delta that saves real time.
+                    if ssh_conn.is_none() && local_path.exists() {
+                        if let Some(remote_chunks) = file.chunks.as_ref() {
+                            if let Ok(local_chunks) = compute_local_chunk_hashes(&local_path) {
+                                let mut file_to_patch = fs::OpenOptions::new().read(true).write(true).open(&local_path).map_err(|e| e.to_string())?;
                             
                             let mut current_offset: u64 = 0;
 
@@ -682,10 +3171,17 @@ pub async fn sync_server_repo(
                                     if res.status() == 206 || res.status() == 200 {
                                         let mut stream = res.bytes_stream();
                                         file_to_patch.seek(SeekFrom::Start(current_offset)).map_err(|e| e.to_string())?;
+                                        let dl_pace = crate::governor::runtime::global().limiter(OpKind::Download, &local_path);
+                                        // A range answer is one chunk; a server that ignores the
+                                        // range sends the whole file: capped either way.
+                                        let mut cap = crate::fs_utils::DownloadCap::new();
 
                                         while let Some(item) = stream.next().await {
                                             let chunk: bytes::Bytes = item.map_err(|e| format!("Stream error: {}", e))?;
+                                            cap.add(chunk.len() as u64)?;
                                             file_to_patch.write_all(&chunk).map_err(|e| e.to_string())?;
+                                            ticket.add_bytes(chunk.len() as u64, chunk.len() as u64);
+                                            if let Some(l) = &dl_pace { l.acquire_async(chunk.len() as u64).await; }
                                             
                                             // Throttling
                                             if args.download_limit > 0 {
@@ -698,7 +3194,7 @@ pub async fn sync_server_repo(
                                     } else if res.status() == 403 {
                                         return Err("repo.errForbidden".to_string());
                                     } else {
-                                        return Err(format!("Le serveur ne supporte pas les Range requests ou erreur HTTP {}", res.status()));
+                                        return Err(format!("The server does not support les Range requests ou erreur HTTP {}", res.status()));
                                     }
                                 }
                                 current_offset += r_chunk.size as u64;
@@ -711,22 +3207,58 @@ pub async fn sync_server_repo(
                             println!("[Sync] No matching chunks found for {}, falling back to full download", file.relative_path);
                         }
                     }
+                }
 
-                    if !partial_success {
-                        let res = client.get(&file_url).send().await.map_err(|e| format!("Erreur réseau ({}): {}", file.relative_path, e))?;
+                if !partial_success {
+                    if let Some(conn) = ssh_conn.as_ref() {
+                        // The SAME layout mapping the URL builder uses -- mod_file_tail is
+                        // shared, so the two transports cannot drift apart the day somebody
+                        // changes `files_layout` on their repo.
+                        let tail = mod_file_tail(
+                            repo.files_layout.as_deref(),
+                            &repo_mod.id,
+                            &file.relative_path,
+                        );
+                        let bytes = conn.read(&tail).await?;
+                        fs::write(&local_path, &bytes)
+                            .map_err(|e| format!("repo.errWriteFile: {}", e))?;
+                        ticket.add_bytes(bytes.len() as u64, bytes.len() as u64);
+                        if let Some(l) = crate::governor::runtime::global().limiter(OpKind::Download, &local_path) {
+                            l.acquire_async(bytes.len() as u64).await;
+                        }
+                        if args.download_limit > 0 {
+                            // Same throttle as the HTTP path, applied once for the whole file
+                            // because SFTP handed it over in one read.
+                            let sleep_ms = (bytes.len() as u64 * 1000) / (args.download_limit as u64 * 1024);
+                            if sleep_ms > 0 {
+                                sleep(Duration::from_millis(sleep_ms)).await;
+                            }
+                        }
+                    } else {
+                        let res = client.get(&file_url).send().await.map_err(|e| format!("Network error ({}): {}", file.relative_path, e))?;
                         if !res.status().is_success() {
                             if res.status() == 403 {
                                 return Err("repo.errForbidden".to_string());
                             }
-                            return Err(format!("Erreur HTTP {} pour le fichier: {}", res.status(), file.relative_path));
+                            return Err(format!("HTTP error {} pour le fichier: {}", res.status(), file.relative_path));
                         }
                         
+                        let mut cap = crate::fs_utils::DownloadCap::new();
+                        cap.check_announced(res.content_length())?;
                         let mut stream = res.bytes_stream();
                         let mut file_out = fs::File::create(&local_path).map_err(|e| format!("Création échouée: {}", e))?;
-                        
+                        let dl_pace = crate::governor::runtime::global().limiter(OpKind::Download, &local_path);
+
                         while let Some(item) = stream.next().await {
                             let chunk: bytes::Bytes = item.map_err(|e| format!("Stream error: {}", e))?;
+                            if let Err(e) = cap.add(chunk.len() as u64) {
+                                drop(file_out);
+                                let _ = fs::remove_file(&local_path);
+                                return Err(e);
+                            }
                             file_out.write_all(&chunk).map_err(|e| e.to_string())?;
+                            ticket.add_bytes(chunk.len() as u64, chunk.len() as u64);
+                            if let Some(l) = &dl_pace { l.acquire_async(chunk.len() as u64).await; }
                             
                             // Throttling
                             if args.download_limit > 0 {
@@ -737,17 +3269,34 @@ pub async fn sync_server_repo(
                             }
                         }
                     }
+                    }
                     prof_summary.files_downloaded += 1;
                     prof_summary.bytes_downloaded += file.size;
                 }
 
-                let (downloaded_hash, _) = compute_file_hash_and_chunks(&local_path, false)?;
-                if downloaded_hash != file.sha256_hash {
-                    return Err("repo.errIntegrity".to_string());
+                // A blank hash is a manifest that never had one — the discovery path builds
+                // exactly that for a server with no repo.json. There is nothing to compare
+                // against, so refusing the file would make such a repo unusable while
+                // comparing against "" would fail every single file. The download is kept and
+                // the MOD is marked, so the missing guarantee survives past this moment
+                // instead of being forgotten the second the file lands.
+                if file.sha256_hash.trim().is_empty() {
+                    mod_unverified = true;
+                } else {
+                    let (downloaded_hash, _) = compute_file_hash_and_chunks(&local_path, false)?;
+                    if downloaded_hash != file.sha256_hash {
+                        return Err("repo.errIntegrity".to_string());
+                    }
                 }
 
-                local_valid_files.insert(file.relative_path.replace("\\", "/"));
+                // The normalised form, which is what list_mod_files reports back below: the raw
+                // string would keep `./a` or `a//b` and the cleanup would delete the file it
+                // just downloaded.
+                local_valid_files.insert(rel.to_string_lossy().replace('\\', "/"));
             } // End of for (f_idx, file)
+            if mod_unverified {
+                unverified_mod_ids.insert(repo_mod.id.clone());
+            }
             if let Ok(all_local) = crate::fs_utils::list_mod_files(&target_mod_dir) {
                 for rel in all_local {
                     let rel_str = rel.to_string_lossy().to_string().replace("\\", "/");
@@ -781,14 +3330,36 @@ pub async fn sync_server_repo(
             }
         }
 
+        // Materialize a shared custom icon (data-URI) into a local file so it's
+        // restored alongside the profile.
+        let restored_icon_image: Option<String> = repo_profile.icon_image.as_ref().and_then(|data_uri| {
+            use base64::{Engine as _, engine::general_purpose};
+            let comma = data_uri.find(',')?;
+            let meta = &data_uri[..comma];
+            let bytes = general_purpose::STANDARD.decode(data_uri[comma + 1..].as_bytes()).ok()?;
+            let ext = if meta.contains("image/png") { "png" }
+                else if meta.contains("image/jpeg") { "jpg" }
+                else if meta.contains("image/webp") { "webp" }
+                else if meta.contains("image/gif") { "gif" }
+                else if meta.contains("svg") { "svg" }
+                else { "png" };
+            let fname = format!("icon_{}.{}", profile_id, ext);
+            let data_dir = state.data_path.parent().unwrap_or(std::path::Path::new("."));
+            std::fs::write(data_dir.join(&fname), &bytes).ok()?;
+            Some(fname)
+        });
+
         // Add or update this specific profile in AppState
         {
-            let mut data = state.data.lock().unwrap();
-            
+            let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+
             if let Some(p) = data.profiles.iter_mut().find(|p| p.id == profile_id) {
                 p.name = format!("{} - {}", repo.name, repo_profile.name);
                 p.game_name = repo_profile.game_name.clone();
                 p.origin_repo_profile_id = Some(repo_profile.id.clone());
+                if repo_profile.icon.is_some() { p.icon = repo_profile.icon.clone(); }
+                if repo_profile.color.is_some() { p.color = repo_profile.color.clone(); }
+                if restored_icon_image.is_some() { p.icon_image = restored_icon_image.clone(); }
             } else {
                 let mut new_profile = crate::models::profile::Profile::new(
                     format!("{} - {}", repo.name, repo_profile.name),
@@ -799,6 +3370,9 @@ pub async fn sync_server_repo(
                 );
                 new_profile.id = profile_id.clone();
                 new_profile.origin_repo_profile_id = Some(repo_profile.id.clone());
+                new_profile.icon = repo_profile.icon.clone();
+                new_profile.color = repo_profile.color.clone();
+                new_profile.icon_image = restored_icon_image.clone();
                 data.profiles.push(new_profile);
             }
             
@@ -806,9 +3380,16 @@ pub async fn sync_server_repo(
             overall_summary.profiles.push(prof_summary);
             
             for repo_mod in successfully_synced_mods {
-                let safe_mod_name = repo_mod.name.replace(|c: char| !c.is_alphanumeric() && c != ' ' && c != '-' && c != '_', "_");
-                let target_mod_dir = mods_path.join(format!("{}_{}", &repo_mod.id[..8], safe_mod_name));
-                
+                let folder_name = repo_mod_folder_name(&repo_mod.id, &repo_mod.name);
+                // A zipped mod kept as-is lives at "<folder>.zip" (an archived mod);
+                // extracted (or classic) mods live in the "<folder>" directory.
+                let kept_zipped = repo_mod.archive.is_some() && !args.unzip_archives;
+                let target_mod_dir = if kept_zipped {
+                    mods_path.join(format!("{}.zip", folder_name))
+                } else {
+                    mods_path.join(&folder_name)
+                };
+
                 let mut new_mod = crate::models::mod_entry::ModEntry::new(
                     repo_mod.name.clone(),
                     target_mod_dir
@@ -818,7 +3399,27 @@ pub async fn sync_server_repo(
                 new_mod.author = repo_mod.author.clone();
                 new_mod.description = repo_mod.description.clone();
                 new_mod.download_links = repo_mod.download_links.clone();
-                
+                // Carry over the (already cross-profile-filtered) dependencies.
+                new_mod.dependencies = repo_mod.dependencies.clone();
+                // Update-system origin tracking: remember which repo + stable mod id
+                // this came from, so check_mod_updates can detect newer versions.
+                new_mod.unverified = unverified_mod_ids.contains(&repo_mod.id);
+                new_mod.source_repo = Some(src_repo.clone());
+                new_mod.repo_mod_id = Some(repo_mod.id.clone());
+                // What the files were at this sync: a later manifest whose files differ under the
+                // same version is still an update (check_mod_updates).
+                new_mod.repo_content_hash = Some(mod_content_hash(&repo_mod));
+                // Inherit the author's configured update sources (a site repo, a
+                // direct-download archive, fallbacks). Signatures are not shared —
+                // the receiver captures its own baseline on the first check.
+                new_mod.update_url = repo_mod.update_url.clone();
+                new_mod.direct_url = repo_mod.direct_url.clone();
+                new_mod.update_sources = repo_mod.update_sources.iter()
+                    .map(|s| crate::models::mod_entry::UpdateSource { sig: None, ..s.clone() }).collect();
+                if add_repo_source {
+                    push_repo_source(&mut new_mod.update_sources, &src_repo, &repo_mod.id);
+                }
+
                 let mut tag_ids = Vec::new();
                 for repo_tag in repo_mod.tags {
                     if !data.custom_tags.iter().any(|t| t.id == repo_tag.id) {
@@ -826,30 +3427,69 @@ pub async fn sync_server_repo(
                             id: repo_tag.id.clone(),
                             name: repo_tag.name.clone(),
                             color: repo_tag.color_bg.clone(),
-                            icon: "fas fa-tag".to_string(),
+                            // An icon-pack ref, not a Font-Awesome class: nothing
+                            // renders `fas fa-*` any more, so repo-synced tags came
+                            // out icon-less while claiming to have one.
+                            icon: "lucide:tag".to_string(),
+                            color2: None,
                         });
                     }
                     tag_ids.push(repo_tag.id);
                 }
                 new_mod.tags = tag_ids;
-                if !data.mods.iter().any(|m| m.mod_folder_path == new_mod.mod_folder_path) {
+                // The record this repo mod already has in THIS mods folder: by origin first
+                // (a mod the repo renamed lives in a new folder but is the same mod), then by
+                // folder. Matching by folder alone pushed a second record with the same id on
+                // every rename (commands/mod_ids.rs).
+                let found = crate::commands::mod_ids::find_synced_record(&data.mods, &src_repo, &repo_mod.id, &mods_path, &new_mod.mod_folder_path);
+                if found.is_none() {
+                    // A new record: the repo's id unless another record (the same repo synced
+                    // into another profile) holds it already.
+                    new_mod.id = crate::commands::mod_ids::local_id_for(&data.mods, &repo_mod.id, &mods_path);
                     data.mods.push(new_mod);
-                } else if let Some(existing) = data.mods.iter_mut().find(|m| m.mod_folder_path == new_mod.mod_folder_path) {
+                } else if let Some(existing) = found.and_then(|i| data.mods.get_mut(i)) {
+                    // Renamed in the repo: the record follows the files to their new folder.
+                    existing.mod_folder_path = new_mod.mod_folder_path;
+                    existing.repo_content_hash = new_mod.repo_content_hash;
                     existing.name = new_mod.name;
                     existing.version = new_mod.version;
                     existing.author = new_mod.author;
                     existing.description = new_mod.description;
                     existing.tags = new_mod.tags;
                     existing.download_links = new_mod.download_links;
+                    existing.dependencies = new_mod.dependencies;
+                    // Re-synced from a repo that now has hashes: the mod earns its
+                    // verification back. The reverse also holds, which is the point.
+                    existing.unverified = new_mod.unverified;
+                    existing.source_repo = new_mod.source_repo;
+                    existing.repo_mod_id = new_mod.repo_mod_id;
+                    // Only fill update sources when the local mod has none — never
+                    // clobber a user's own customised sources on re-sync.
+                    if existing.update_url.is_none() { existing.update_url = new_mod.update_url; }
+                    if existing.direct_url.is_none() {
+                        existing.direct_url = new_mod.direct_url;
+                        if existing.direct_url.is_some() { existing.direct_sig = None; }
+                    }
+                    if existing.update_sources.is_empty() { existing.update_sources = new_mod.update_sources; }
+                    // Appended even when the user already has sources — that is the whole
+                    // point of the option, and push_repo_source() is idempotent so
+                    // re-syncing never stacks duplicates.
+                    if add_repo_source {
+                        let rid = existing.repo_mod_id.clone().unwrap_or_default();
+                        push_repo_source(&mut existing.update_sources, &src_repo, &rid);
+                    }
                 }
             }
+            // Dependencies arrive as repo ids; in a profile where a record got a derived
+            // local id they must name that record, not the other profile's copy.
+            crate::commands::mod_ids::relink_synced_dependencies(&mut data.mods, &src_repo, &mods_path);
         }
     } // End of for (c_idx, choice)
 
     // Assign active profile to the first synced one
     {
-        let mut data = state.data.lock().unwrap();
-        if let Some(first_id) = synced_profile_ids.first() {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some(first_id) = synced_profile_ids.first().filter(|_| !args.keep_active_profile) {
             data.active_profile_id = Some(first_id.clone());
         }
     }
@@ -880,11 +3520,241 @@ pub fn resume_repo_sync(state: State<'_, AppState>) {
     state.sync_paused.store(false, std::sync::atomic::Ordering::SeqCst);
 }
 
+// Placed before the later test modules on purpose: scripts/check-governed.mjs strips
+// `#[cfg(test)]` modules by matching braces and gives up at the first one it cannot
+// balance (further down this file), counting everything after it as app code.
+#[cfg(test)]
+mod governed_repo_tests {
+    use super::{governed_copy, TicketGate, ZipMethod};
+    use crate::commands::zipping::{zip_dir, zip_dir_gated};
+    use crate::governor::config::OpKind;
+    use crate::governor::queue::Queue;
+    use std::path::Path;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::Arc;
+
+    fn write_tree(root: &Path) {
+        let mut blob = Vec::with_capacity(400 * 1024);
+        let mut x: u32 = 0x9E37_79B9;
+        for i in 0..(400 * 1024) {
+            x ^= x << 13; x ^= x >> 17; x ^= x << 5;
+            blob.push(if i % 2 == 0 { (i / 64) as u8 } else { (x & 0xFF) as u8 });
+        }
+        std::fs::create_dir_all(root.join("Data/nested/deeper")).unwrap();
+        std::fs::create_dir_all(root.join("Data/empty_dir")).unwrap();
+        std::fs::write(root.join("Data/big.bin"), &blob).unwrap();
+        std::fs::write(root.join("Data/nested/deeper/a.lua"), b"print('a')\n").unwrap();
+        std::fs::write(root.join("empty.bin"), b"").unwrap();
+        for i in 0..30 {
+            std::fs::write(root.join(format!("f{i:02}.txt")), format!("line {i}\n").repeat(100)).unwrap();
+        }
+    }
+
+    /// Every entry's name, method, CRC, sizes and RAW compressed bytes: everything a zip holds
+    /// except the timestamp, which is not ours to compare (see below).
+    fn entries(zip: &Path) -> Vec<(String, String, u32, u64, u64, Vec<u8>)> {
+        use std::io::Read;
+        let mut a = zip::ZipArchive::new(std::fs::File::open(zip).unwrap()).unwrap();
+        (0..a.len()).map(|i| {
+            let mut e = a.by_index_raw(i).unwrap();
+            let mut raw = Vec::new();
+            e.read_to_end(&mut raw).unwrap();
+            (e.name().to_string(), format!("{:?}", e.compression()), e.crc32(), e.size(), e.compressed_size(), raw)
+        }).collect()
+    }
+
+    /// Balanced reproduces today: a repo zip written under a Compress ticket is the zip the
+    /// ungoverned writer produces, for every method the export offers.
+    ///
+    /// Byte identity of the WHOLE file only holds within one 2-second DOS-time window: the zip
+    /// crate is built with its `time` feature, so `FileOptions::default()` stamps every entry
+    /// with "now", and two zips of the same folder written a second apart differ in those four
+    /// bytes per entry whoever writes them. So: every entry is compared field by field and on
+    /// its raw compressed bytes on every try, and the whole files byte for byte on the first
+    /// pair that falls in the same window (three tries; a pair straddling a boundary is
+    /// retried, not excused).
+    #[test]
+    fn compress_output_is_byte_identical_under_balanced() {
+        let td = tempfile::tempdir().unwrap();
+        let src = td.path().join("mod");
+        write_tree(&src);
+        let gov = crate::governor::runtime::global();
+        for m in [ZipMethod::Deflate, ZipMethod::Zstd, ZipMethod::Bzip2, ZipMethod::Stored] {
+            let mut whole_equal = false;
+            for attempt in 0..3 {
+                let plain = td.path().join(format!("plain-{}-{attempt}.zip", m.name()));
+                let governed = td.path().join(format!("governed-{}-{attempt}.zip", m.name()));
+                zip_dir(&src, &plain, Arc::new(AtomicBool::new(false)), m).unwrap();
+                let ticket = gov.begin(OpKind::Compress, "test: balanced zip");
+                zip_dir_gated(&src, &governed, Arc::new(AtomicBool::new(false)), m, &TicketGate::new(&ticket)).unwrap();
+                drop(ticket);
+                assert_eq!(entries(&plain), entries(&governed), "{m:?}: an entry differs");
+                if std::fs::read(&plain).unwrap() == std::fs::read(&governed).unwrap() {
+                    whole_equal = true;
+                    break;
+                }
+            }
+            assert!(whole_equal, "{m:?}: the governed zip is not byte-identical to the ungoverned one");
+        }
+    }
+
+    /// A cancelled Compress ticket stops a repo zip before the next entry.
+    #[test]
+    fn a_cancelled_compress_ticket_stops_the_zip() {
+        let td = tempfile::tempdir().unwrap();
+        let src = td.path().join("mod");
+        write_tree(&src);
+        let q = Queue::default();
+        let t = q.begin(OpKind::Compress, "test: cancel zip");
+        q.cancel(t.id());
+        let out = td.path().join("x.zip");
+        let err = zip_dir_gated(&src, &out, Arc::new(AtomicBool::new(false)), ZipMethod::Deflate, &TicketGate::new(&t)).unwrap_err();
+        assert_eq!(err, "repo.cancelled");
+    }
+
+    /// The export's file copy: the governed copy writes the bytes `fs::copy` wrote, and keeps
+    /// what `fs::copy` kept (modification time, read-only flag).
+    #[test]
+    fn governed_copy_matches_fs_copy() {
+        let td = tempfile::tempdir().unwrap();
+        let src = td.path().join("src.bin");
+        let data: Vec<u8> = (0..3_000_000u32).map(|i| (i * 31 % 251) as u8).collect();
+        std::fs::write(&src, &data).unwrap();
+        let old = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_600_000_000);
+        std::fs::OpenOptions::new().write(true).open(&src).unwrap().set_modified(old).unwrap();
+
+        let by_fs = td.path().join("fs.bin");
+        std::fs::copy(&src, &by_fs).unwrap();
+        let by_gov = td.path().join("gov.bin");
+        let ticket = crate::governor::runtime::global().begin(OpKind::Compress, "test: copy");
+        let n = governed_copy(OpKind::Compress, &src, &by_gov, &ticket).unwrap();
+        drop(ticket);
+        assert_eq!(n, data.len() as u64);
+        assert_eq!(std::fs::read(&by_gov).unwrap(), std::fs::read(&by_fs).unwrap());
+        let m = |p: &Path| std::fs::metadata(p).unwrap().modified().unwrap();
+        assert_eq!(m(&by_gov), m(&by_fs), "the modification time is carried over like fs::copy");
+
+        // Read-only source: fs::copy makes a read-only copy, so does the governed one.
+        let mut perms = std::fs::metadata(&src).unwrap().permissions();
+        perms.set_readonly(true);
+        std::fs::set_permissions(&src, perms.clone()).unwrap();
+        let ro = td.path().join("ro.bin");
+        let ticket = crate::governor::runtime::global().begin(OpKind::Compress, "test: copy ro");
+        governed_copy(OpKind::Compress, &src, &ro, &ticket).unwrap();
+        drop(ticket);
+        assert!(std::fs::metadata(&ro).unwrap().permissions().readonly());
+        assert_eq!(m(&ro), old);
+        // Let the temp dir clean up.
+        for p in [&src, &ro] {
+            let mut w = std::fs::metadata(p).unwrap().permissions();
+            #[allow(clippy::permissions_set_readonly_false)]
+            w.set_readonly(false);
+            std::fs::set_permissions(p, w).unwrap();
+        }
+
+        // A cancelled ticket: "repo.cancelled", and no partial file.
+        let q = Queue::default();
+        let t = q.begin(OpKind::Compress, "test: cancelled copy");
+        q.cancel(t.id());
+        let dst = td.path().join("never.bin");
+        assert_eq!(governed_copy(OpKind::Compress, &src, &dst, &t).unwrap_err(), "repo.cancelled");
+        assert!(!dst.exists());
+    }
+}
+
+#[cfg(test)]
+mod zip_method_tests {
+    use super::*;
+    use crate::commands::zipping::zip_dir as zip_directory;
+
+    #[test]
+    fn parse_accepts_the_four_names_their_spellings_and_the_default() {
+        assert_eq!(ZipMethod::parse(None).unwrap(), ZipMethod::Deflate);
+        assert_eq!(ZipMethod::parse(Some("")).unwrap(), ZipMethod::Deflate);
+        assert_eq!(ZipMethod::parse(Some(" Deflated ")).unwrap(), ZipMethod::Deflate);
+        assert_eq!(ZipMethod::parse(Some("ZSTD")).unwrap(), ZipMethod::Zstd);
+        assert_eq!(ZipMethod::parse(Some("bz2")).unwrap(), ZipMethod::Bzip2);
+        assert_eq!(ZipMethod::parse(Some("none")).unwrap(), ZipMethod::Stored);
+        for n in ZipMethod::NAMES { assert_eq!(ZipMethod::parse(Some(n)).unwrap().name(), n); }
+    }
+
+    #[test]
+    fn parse_refuses_anything_else_and_names_it() {
+        let e = ZipMethod::parse(Some("lzma")).unwrap_err();
+        assert!(e.starts_with("repo.errCompression|"), "{e}");
+        assert!(e.ends_with("lzma"), "{e}");
+    }
+
+    /// A zip written with each method opens with the reader the sync path uses, and every
+    /// entry reads back byte for byte. The one that matters is zstd: the crate feature is
+    /// what makes it readable, and a build without it would write archives it cannot open.
+    #[test]
+    fn every_method_round_trips_through_the_readers_the_app_uses() {
+        let src = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(src.path().join("sub")).unwrap();
+        let body: Vec<u8> = (0..200_000u32).map(|i| (i % 251) as u8).collect();
+        std::fs::write(src.path().join("a.bin"), &body).unwrap();
+        std::fs::write(src.path().join("sub/b.txt"), b"hello hello hello hello").unwrap();
+        let noflag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let mut sizes = std::collections::HashMap::new();
+        for m in [ZipMethod::Stored, ZipMethod::Deflate, ZipMethod::Bzip2, ZipMethod::Zstd] {
+            let out = tempfile::tempdir().unwrap();
+            let zip_path = out.path().join("x.zip");
+            zip_directory(src.path(), &zip_path, noflag.clone(), m).unwrap();
+            let mut ar = zip::ZipArchive::new(std::fs::File::open(&zip_path).unwrap()).unwrap();
+            let mut got = Vec::new();
+            std::io::Read::read_to_end(&mut ar.by_name("a.bin").unwrap(), &mut got).unwrap();
+            assert_eq!(got, body, "{m:?}");
+            let mut txt = String::new();
+            std::io::Read::read_to_string(&mut ar.by_name("sub/b.txt").unwrap(), &mut txt).unwrap();
+            assert_eq!(txt, "hello hello hello hello", "{m:?}");
+            sizes.insert(m, std::fs::metadata(&zip_path).unwrap().len());
+        }
+        // Stored is the biggest by construction; the three real methods all shrink it.
+        for m in [ZipMethod::Deflate, ZipMethod::Bzip2, ZipMethod::Zstd] {
+            assert!(sizes[&m] < sizes[&ZipMethod::Stored], "{m:?} did not compress: {:?}", sizes);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::io::Write;
     use tempfile::NamedTempFile;
+
+    // repo_format restates two rules of this file so the CLI can mount it alone. These pin
+    // the copies to the originals: a converter that hashed with another chunk size, or looked
+    // for files under another layout, would "fix" every hash of a correct manifest.
+    #[test]
+    fn chunk_size_matches_the_sync() {
+        assert_eq!(super::super::repo_format::CHUNK_SIZE, CHUNK_SIZE as u64);
+    }
+
+    #[test]
+    fn layout_matches_the_sync() {
+        for layout in [None, Some(""), Some("  "), Some("addons/{id}/{path}"), Some("/flat/{path}")] {
+            for (id, rel) in [("m", "a.txt"), ("cool-mod", "Data\\sub\\b.esp")] {
+                assert_eq!(
+                    super::super::repo_format::file_tail(layout, id, rel),
+                    mod_file_tail(layout, id, rel),
+                    "{layout:?} {id} {rel}"
+                );
+            }
+        }
+    }
+
+    /// The converter's chunk table is the exporter's, entry for entry.
+    #[test]
+    fn converter_hashes_like_the_exporter() {
+        let mut file = NamedTempFile::new().unwrap();
+        file.write_all(&vec![3u8; CHUNK_SIZE + 77]).unwrap();
+        let (hash, chunks) = compute_file_hash_and_chunks(file.path(), true).unwrap();
+        let (_, hash2, chunks2) = super::super::repo_format::hash_file(file.path()).unwrap();
+        assert_eq!(hash, hash2);
+        let a = serde_json::to_value(chunks).unwrap();
+        assert_eq!(a, serde_json::Value::Array(chunks2.unwrap()));
+    }
 
     #[test]
     fn test_compute_local_chunk_hashes() {
@@ -923,5 +3793,1751 @@ mod tests {
         assert!(!large_hash.is_empty());
         assert!(chunks.is_some());
         assert_eq!(chunks.unwrap().len(), 2);
+    }
+}
+
+/// Where a client should look for mod files, given where the manifest lands relative to the
+/// scanned folder.
+///
+/// Returns None for the historical case — the folder is literally named `mods` and the
+/// manifest sits beside it — so manifests that already relied on the implicit
+/// `mods/{id}/{path}` keep serialising without the field.
+fn default_layout_for(mods_dir: &Path, output_path: &Path) -> Option<String> {
+    let out_dir = output_path.parent()?;
+    // Only a folder directly beneath the manifest can be addressed relatively; anything else
+    // (a sibling tree, an absolute path elsewhere) needs files_base_url and an explicit
+    // layout, and guessing here would produce a confidently wrong URL.
+    let rel = mods_dir.strip_prefix(out_dir).ok()?;
+    let rel = rel.to_string_lossy().replace('\\', "/");
+    let rel = rel.trim_matches('/');
+    if rel.is_empty() || rel == "mods" {
+        return None;
+    }
+    Some(format!("{}/{{id}}/{{path}}", rel))
+}
+
+/// One folder to read mods from, and which of its subdirectories to take.
+///
+/// The manifest used to describe exactly one directory, which made two ordinary situations
+/// impossible: a collection kept in more than one place, and "publish these profiles" when
+/// the profiles do not share a mods folder — the second was refused outright, with an error
+/// telling the owner to publish them as separate repos, which is not what they asked for.
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ManifestSource {
+    /// Directory whose subdirectories are the mods.
+    pub dir: String,
+    /// Restrict to these subdirectory names. See `GenerateManifestArgs::only_dirs`: None is
+    /// "all of them", an empty list is "the selection resolved to nothing" and is refused.
+    #[serde(default)]
+    pub only_dirs: Option<Vec<String>>,
+    /// What to call this source in the report — a profile name, usually. Never written into
+    /// the manifest: a client has no use for where the owner happened to keep the files.
+    #[serde(default)]
+    pub label: Option<String>,
+}
+
+/// What one source contributed. Reported per source because "312 mods" over four folders
+/// hides the folder that contributed none, which is the one with the wrong path in it.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ManifestSourceReport {
+    pub dir: String,
+    pub label: Option<String>,
+    pub mods: usize,
+    pub files: usize,
+    pub bytes: u64,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenerateManifestArgs {
+    /// Directory whose subdirectories are the mods. The single-folder form, kept because the
+    /// API, the CLI and every existing publish script speak it; `sources` supersedes it.
+    #[serde(default)]
+    pub mods_dir: Option<String>,
+    /// Several folders at once. When present and non-empty this is what gets read, and
+    /// `mods_dir`/`only_dirs` are ignored.
+    #[serde(default)]
+    pub sources: Option<Vec<ManifestSource>>,
+    /// Publish these local profiles, resolved to folders by the command itself.
+    ///
+    /// The screen used to do this resolution in JavaScript, by asking for every known mod and
+    /// keeping the ones whose path started with the profile's mods folder. That is a string
+    /// comparison over paths the app did not normalise, and when it matched nothing it did
+    /// not fail — it produced an EMPTY selection, which the backend then refused with "the
+    /// selection is empty", for a profile full of mods. Resolved here, against AppData, by
+    /// the same rule the full export uses.
+    #[serde(default)]
+    pub profile_ids: Option<Vec<String>>,
+    /// Where to write the manifest. Defaults to `repo.json` beside `mods_dir` rather than
+    /// inside it, so a later scan never picks the manifest up as one of the mod files.
+    pub output_path: Option<String>,
+    pub name: Option<String>,
+    pub author: Option<String>,
+    pub game_name: Option<String>,
+    /// Absolute URL of the directory the layout below is relative to.
+    pub files_base_url: Option<String>,
+    /// `{id}` / `{path}` template; default `mods/{id}/{path}`.
+    pub files_layout: Option<String>,
+    /// Keep the previous manifest's identity, so re-generating is a new revision of the same
+    /// repo rather than a different one. On by default — see the command docs.
+    #[serde(default = "default_true")]
+    pub reuse_existing: bool,
+    /// Restrict the manifest to these subdirectory names. This is how "publish only these
+    /// profiles / this modpack" works without a second code path: the caller resolves its
+    /// selection to folder names, and the scan skips everything else.
+    ///
+    /// None indexes the whole directory. An empty list is NOT the same thing — it means "the
+    /// selection resolved to nothing", and silently publishing everything in that case is how
+    /// a private mod ends up on a public server.
+    #[serde(default)]
+    pub only_dirs: Option<Vec<String>>,
+    /// Local modpack ids to ship with the manifest.
+    ///
+    /// A modpack references its mods by BMM's internal mod id, but a manifest generated from
+    /// a folder identifies mods by folder name. The command remaps the references before they
+    /// reach the scanner; a modpack whose mods are not all published is reported rather than
+    /// shipped half-empty, because a modpack that silently installs 9 of its 12 mods is worse
+    /// than one that is missing.
+    #[serde(default)]
+    pub modpack_ids: Option<Vec<String>>,
+    /// "public" | "whitelist_repo" | "whitelist_custom" — defaults to public.
+    #[serde(default)]
+    pub modpack_share_mode: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenerateManifestReport {
+    pub output_path: String,
+    pub mods: usize,
+    pub files: usize,
+    pub total_bytes: u64,
+    /// Mod ids present now that the previous manifest did not have.
+    pub added: Vec<String>,
+    /// Mod ids the previous manifest had that are no longer on disk, now dropped. Reported
+    /// because a mistyped path is otherwise indistinguishable from a deliberate removal —
+    /// both write a perfectly valid manifest, one of them describing an empty server.
+    pub removed: Vec<String>,
+    /// Mod ids whose file content changed.
+    pub changed: Vec<String>,
+    /// Modpacks shipped with the manifest.
+    pub modpacks: usize,
+    /// Modpacks left OUT because some of their mods are not in this manifest, as
+    /// "name (n missing)". Silence here would ship a pack that half-installs.
+    pub modpacks_skipped: Vec<String>,
+    /// True when the manifest carries a fresh signature.
+    pub signed: bool,
+    /// One line per folder read. A source that contributed nothing still appears, with zero.
+    pub sources: Vec<ManifestSourceReport>,
+}
+
+/// Generate a `repo.json` for a directory of mods that is already hosted somewhere.
+///
+/// The other two paths both assume BMM is the origin: `export_server_repo` copies every mod
+/// into an output folder, and the `/api/repo/gen` lightweight mode still needs the mods
+/// imported into a BMM profile first. Neither helps someone who already runs a mod server and
+/// only wants a manifest describing it. This reads a folder and writes one file — nothing is
+/// copied, nothing is imported, and the directory it describes is never modified.
+///
+/// One subdirectory of `mods_dir` is one mod, and its **folder name is the mod id**, so the
+/// URLs in the manifest line up with the folder exactly as it already sits on the server.
+///
+/// Re-running it over the same folder is also how a repo is updated: the previous manifest's
+/// seed, id and creation date are carried forward so clients see a new revision of the repo
+/// they already track rather than an unrelated one, and the report says which mods were
+/// added, changed or dropped.
+#[tauri::command]
+pub async fn generate_repo_manifest(
+    handle: AppHandle,
+    state: State<'_, AppState>,
+    mut args: GenerateManifestArgs,
+) -> Result<GenerateManifestReport, String> {
+    // Resolved here rather than in the scanner: this is the only layer that can see both
+    // AppData (which knows a mod's BMM id and where its folder is) and the manifest's
+    // folder-name ids.
+    if let Some(ids) = args.profile_ids.clone().filter(|v| !v.is_empty()) {
+        let from_profiles = {
+            let data = state.data.lock().map_err(|_| "Failed to lock AppState".to_string())?;
+            sources_from_profiles(&data, &ids)?
+        };
+        // Appended, so "these profiles AND this folder" is one repo rather than a choice.
+        let mut all = args.sources.take().unwrap_or_default();
+        all.extend(from_profiles);
+        args.sources = Some(all);
+    }
+
+    let (packs, folder_of) = {
+        let data = state.data.lock().map_err(|_| "Failed to lock AppState".to_string())?;
+        let folder_of: HashMap<String, String> = data.mods.iter()
+            .filter_map(|m| {
+                let name = m.mod_folder_path.file_name()?.to_string_lossy().to_string();
+                Some((m.id.clone(), name))
+            })
+            .collect();
+        let wanted = args.modpack_ids.clone().unwrap_or_default();
+        let packs: Vec<crate::models::modpack::LocalModpack> = data.modpacks.iter()
+            .filter(|mp| wanted.iter().any(|w| w == &mp.id))
+            .cloned()
+            .collect();
+        (packs, folder_of)
+    };
+
+    let share_mode = args.modpack_share_mode.clone().unwrap_or_else(|| "public".to_string());
+    let handle2 = handle.clone();
+    let handle3 = handle.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        generate_repo_manifest_sync(
+            args,
+            packs,
+            folder_of,
+            share_mode,
+            |bytes| super::security::sign_message(&handle2, bytes),
+            move |done, total, name| {
+                let _ = handle3.emit("bmm://repo-manifest-progress", serde_json::json!({
+                    "done": done, "total": total, "name": name,
+                    "progress": if total == 0 { 0.0 } else { done as f64 * 100.0 / total as f64 },
+                }));
+            },
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Profiles, as folders to read.
+///
+/// The rule is the one `export_server_repo` already uses: a mod belongs to a profile when its
+/// folder sits under the profile's mods folder, compared on the raw paths and again on the
+/// canonical ones so a trailing separator or a junction does not silently exclude everything.
+/// Profiles sharing a mods folder become ONE source — scanning it twice would make every mod
+/// in it collide with itself.
+///
+/// This used to be done in JavaScript, by asking for every known mod and keeping the ones
+/// whose path string started with the profile's mods folder. When that matched nothing it did
+/// not fail: it produced an EMPTY selection, and the backend refused it with "the selection is
+/// empty" for a profile full of mods. A profile that really has no mods is an error naming the
+/// profile — "nothing selected" and "everything in the folder" must never be confused.
+pub(crate) fn sources_from_profiles(
+    data: &crate::state::AppData,
+    profile_ids: &[String],
+) -> Result<Vec<ManifestSource>, String> {
+    let mut out: Vec<ManifestSource> = Vec::new();
+    for pid in profile_ids {
+        let Some(profile) = data.profiles.iter().find(|p| &p.id == pid) else {
+            return Err(format!("Unknown profile: {pid}"));
+        };
+        let mut names: Vec<String> = Vec::new();
+        for m in &data.mods {
+            let under = m.mod_folder_path.starts_with(&profile.mods_path)
+                || match (m.mod_folder_path.canonicalize(), profile.mods_path.canonicalize()) {
+                    (Ok(a), Ok(b)) => a.starts_with(&b),
+                    _ => false,
+                };
+            if !under { continue; }
+            // The FOLDER NAME, which is what the manifest calls a mod — taken from the path
+            // rather than from the mod's display name, which is a different string entirely.
+            if let Some(name) = m.mod_folder_path.file_name() {
+                names.push(name.to_string_lossy().to_string());
+            }
+        }
+        names.sort();
+        names.dedup();
+        if names.is_empty() {
+            return Err(format!(
+                "Profile '{}' has no mods under {} — nothing would be published",
+                profile.name,
+                profile.mods_path.display()
+            ));
+        }
+        let dir = profile.mods_path.to_string_lossy().to_string();
+        match out.iter_mut().find(|s| s.dir.eq_ignore_ascii_case(&dir)) {
+            Some(existing) => {
+                if let Some(have) = existing.only_dirs.as_mut() { have.extend(names); }
+                existing.label = Some(match existing.label.take() {
+                    Some(l) => format!("{l}, {}", profile.name),
+                    None => profile.name.clone(),
+                });
+            }
+            None => out.push(ManifestSource {
+                dir,
+                only_dirs: Some(names),
+                label: Some(profile.name.clone()),
+            }),
+        }
+    }
+    Ok(out)
+}
+
+/// The folders to read, from either form of the arguments.
+///
+/// Two sources naming the same directory are merged rather than scanned twice — two profiles
+/// under one mods folder is the normal case, not a mistake. Merging their selections is a
+/// union, and a source that asked for the whole directory wins over one that named a few
+/// folders in it: the owner asked for everything in that folder somewhere in the selection.
+fn resolve_sources(args: &GenerateManifestArgs) -> Result<Vec<ManifestSource>, String> {
+    let listed: Vec<ManifestSource> = match args.sources.as_ref().filter(|v| !v.is_empty()) {
+        Some(v) => v.clone(),
+        None => {
+            let dir = args.mods_dir.as_deref().map(str::trim).filter(|s| !s.is_empty())
+                .ok_or("No folder given — pick at least one mods folder")?;
+            vec![ManifestSource {
+                dir: dir.to_string(),
+                only_dirs: args.only_dirs.clone(),
+                label: None,
+            }]
+        }
+    };
+
+    let mut out: Vec<ManifestSource> = Vec::new();
+    for s in listed {
+        let dir = s.dir.trim().trim_end_matches(['/', '\\']).to_string();
+        if dir.is_empty() {
+            return Err("One of the folders is empty".to_string());
+        }
+        // Compared by canonical path where possible: `D:\mods` and `D:\mods\` and
+        // `D:\games\..\mods` are one folder, and scanning it twice would make every mod in
+        // it collide with itself.
+        let key = std::fs::canonicalize(&dir).unwrap_or_else(|_| PathBuf::from(&dir));
+        match out.iter_mut().find(|e| {
+            std::fs::canonicalize(&e.dir).unwrap_or_else(|_| PathBuf::from(&e.dir)) == key
+        }) {
+            Some(existing) => {
+                match (existing.only_dirs.as_mut(), s.only_dirs) {
+                    (Some(have), Some(add)) => have.extend(add),
+                    // One of the two wants the whole folder.
+                    _ => existing.only_dirs = None,
+                }
+                if existing.label.is_none() { existing.label = s.label; }
+                else if let Some(l) = s.label {
+                    let cur = existing.label.take().unwrap_or_default();
+                    existing.label = Some(format!("{cur}, {l}"));
+                }
+            }
+            None => out.push(ManifestSource { dir, only_dirs: s.only_dirs, label: s.label }),
+        }
+    }
+    Ok(out)
+}
+
+pub(crate) fn generate_repo_manifest_sync(
+    args: GenerateManifestArgs,
+    modpacks: Vec<crate::models::modpack::LocalModpack>,
+    folder_of: HashMap<String, String>,
+    share_mode: String,
+    sign: impl Fn(&[u8]) -> Result<(String, String), String>,
+    // Called as (done, total, folder name). Hashing a DCS collection is minutes of work; with
+    // nothing reported the screen looked frozen and the button dead, which is how "it does
+    // not generate anything" gets reported for something that was busy the whole time.
+    on_progress: impl Fn(usize, usize, &str),
+) -> Result<GenerateManifestReport, String> {
+    use crate::models::repo::RepoProfile;
+    use walkdir::WalkDir;
+
+    let sources = resolve_sources(&args)?;
+    for s in &sources {
+        if !Path::new(&s.dir).is_dir() {
+            return Err(format!("Not a directory: {}", s.dir));
+        }
+    }
+    // The first source is what a single-folder manifest has always been written beside, and
+    // it is the only sensible default when there are several: `repo.json` has to land
+    // somewhere, and inventing a shared ancestor of four folders on different drives is how
+    // a file ends up written to the root of C:.
+    let first_dir = PathBuf::from(&sources[0].dir);
+
+    // One Hash ticket for the manifest (the app command and the API route both land here).
+    // Hashing is background work: it steps aside at its checkpoints while a deploy or an
+    // install writes, and runs on the Hash pool, the size of the hash pool it used before.
+    let gov = crate::governor::runtime::global();
+    let ticket = gov.begin(OpKind::Hash, &format!("repo manifest ← {}", sources[0].dir));
+
+    let output_path = match args.output_path.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        Some(p) => PathBuf::from(p),
+        None => first_dir.parent().unwrap_or(&first_dir).join("repo.json"),
+    };
+
+    // Read the previous manifest before overwriting it — both to carry identity forward and
+    // to be able to report what actually changed.
+    let previous: Option<ServerRepo> = if args.reuse_existing {
+        fs::read_to_string(&output_path).ok().and_then(|s| serde_json::from_str(&s).ok())
+    } else {
+        None
+    };
+    let previous_mods: HashMap<String, String> = previous.as_ref().map(|r| {
+        r.profiles.iter().flat_map(|p| p.mods.iter())
+            .map(|m| (m.id.clone(), mod_content_hash(m)))
+            .collect()
+    }).unwrap_or_default();
+
+    let mut repo_mods = Vec::new();
+    let mut total_files = 0usize;
+    let mut total_bytes = 0u64;
+    let mut source_reports: Vec<ManifestSourceReport> = Vec::new();
+
+    // Counted before anything is hashed, so the progress that follows is out of a real total
+    // rather than climbing towards a number nobody knows. read_dir only — no file is opened.
+    let expected: usize = sources.iter().map(|s| {
+        let only: Option<std::collections::HashSet<String>> = s.only_dirs.as_ref()
+            .map(|v| v.iter().map(|x| x.trim().to_lowercase()).collect());
+        fs::read_dir(&s.dir).map(|rd| rd.filter_map(|e| e.ok())
+            .filter(|e| e.path().is_dir())
+            .filter(|e| match &only {
+                Some(set) => set.contains(&e.file_name().to_string_lossy().to_lowercase()),
+                None => true,
+            })
+            .count()).unwrap_or(0)
+    }).sum();
+    let mut scanned = 0usize;
+
+    // A mod's id is its FOLDER NAME, and the manifest is one flat list of ids — so two
+    // sources each holding a `weapon-pack/` describe two different sets of files under one
+    // name. Merging them silently would publish a repo where half the files 404 for
+    // everybody, so the pair is reported and nothing is written.
+    let mut claimed: HashMap<String, PathBuf> = HashMap::new();
+    let mut collisions: Vec<String> = Vec::new();
+
+    for src in &sources {
+        let src_dir = PathBuf::from(&src.dir);
+        let only: Option<std::collections::HashSet<String>> = src.only_dirs.as_ref()
+            .map(|v| v.iter().map(|s| s.trim().to_lowercase()).collect());
+        if only.as_ref().map(|o| o.is_empty()).unwrap_or(false) {
+            return Err(format!(
+                "The selection for {} is empty — nothing would be published",
+                src_dir.display()
+            ));
+        }
+
+        let mut entries: Vec<_> = fs::read_dir(&src_dir).map_err(|e| e.to_string())?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().is_dir())
+            .filter(|e| match &only {
+                Some(set) => set.contains(&e.file_name().to_string_lossy().to_lowercase()),
+                None => true,
+            })
+            .collect();
+        entries.sort_by_key(|e| e.file_name());
+
+        let mut rep = ManifestSourceReport {
+            dir: src_dir.to_string_lossy().to_string(),
+            label: src.label.clone(),
+            mods: 0,
+            files: 0,
+            bytes: 0,
+        };
+
+        for entry in entries {
+            let dir = entry.path();
+            let id = entry.file_name().to_string_lossy().to_string();
+            scanned += 1;
+            on_progress(scanned, expected, &id);
+
+            match claimed.get(&id.to_lowercase()) {
+                // The same folder reached twice (two profiles under one mods directory) is one
+                // mod, not a conflict.
+                Some(prev) if prev == &dir => continue,
+                Some(prev) => {
+                    collisions.push(format!("{} — {} and {}", id, prev.display(), dir.display()));
+                    continue;
+                }
+                None => {}
+            }
+
+            // The walk is cheap and stays serial; the hashing is what costs, and every file
+            // is independent of every other, so it does not have to be done one at a time.
+            let mut todo: Vec<(String, std::path::PathBuf, u64, Option<i64>)> = Vec::new();
+            for f in WalkDir::new(&dir).into_iter().filter_map(|e| e.ok()) {
+                let p = f.path();
+                if !p.is_file() { continue; }
+                let rel = match p.strip_prefix(&dir) {
+                    Ok(r) => r.to_string_lossy().replace('\\', "/"),
+                    Err(_) => continue,
+                };
+                let meta = f.metadata().ok();
+                let size = meta.as_ref().map(|m| m.len()).unwrap_or(0);
+                // Recorded so a later refresh against a REMOTE listing can tell this file apart
+                // from a changed one without downloading it. Never used to validate a download.
+                let mtime = meta.as_ref()
+                    .and_then(|m| m.modified().ok())
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs() as i64);
+                // Chunk hashes only earn their size on files big enough to resume or patch.
+                todo.push((rel, p.to_path_buf(), size, mtime));
+            }
+            if todo.is_empty() { continue; }
+
+            // On the bounded pool rather than rayon's global one: that pool is capped at half
+            // the cores precisely so hashing cannot saturate the machine and freeze the
+            // window, and building a manifest for a large collection is exactly the case it
+            // was capped for.
+            //
+            // par_iter().map().collect::<Vec<_>>() preserves INPUT order — rayon's indexed
+            // iterators are ordered, so parallelising here cannot shuffle anything. The sort
+            // below is not defending against that; it is defending against WalkDir, whose
+            // depth-first walk is not lexicographic: a mod holding both `data/` and
+            // `data.txt` is visited in the order the filesystem lists them, and '.' sorts
+            // before '/'. The manifest gets signed, so the file order has to come from the
+            // paths and not from how the directory happened to be enumerated.
+            let mut files: Vec<RepoFile> = gov.pool(OpKind::Hash).install(|| {
+                use rayon::prelude::*;
+                todo.par_iter()
+                    .map(|(rel, path, size, mtime)| {
+                        ticket.checkpoint().map_err(|_| "repo.cancelled".to_string())?;
+                        // Chunk hashes only earn their size on files big enough to resume or patch.
+                        let (hash, chunks) = compute_file_hash_and_chunks(path, *size as usize > CHUNK_SIZE)?;
+                        ticket.add_bytes(*size, 0);
+                        Ok(RepoFile {
+                            relative_path: rel.clone(),
+                            size: *size,
+                            sha256_hash: hash,
+                            chunks,
+                            mtime: *mtime,
+                        })
+                    })
+                    .collect::<Result<Vec<_>, String>>()
+            })?;
+            let bytes = files.iter().map(|f| f.size).sum::<u64>();
+            total_bytes += bytes;
+            files.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
+            total_files += files.len();
+            rep.mods += 1;
+            rep.files += files.len();
+            rep.bytes += bytes;
+            claimed.insert(id.to_lowercase(), dir.clone());
+
+            repo_mods.push(RepoMod {
+                id: id.clone(),
+                name: id,
+                version: "1.0.0".to_string(),
+                author: args.author.clone(),
+                description: None,
+                tags: Vec::new(),
+                files,
+                archive: None,
+                download_links: Vec::new(),
+                dependencies: Vec::new(),
+                changelog: None,
+                update_url: None,
+                direct_url: None,
+                update_sources: Vec::new(),
+            });
+        }
+
+        source_reports.push(rep);
+    }
+
+    if !collisions.is_empty() {
+        return Err(format!(
+            "Two folders would publish the same mod id — rename one, or publish them as \
+             separate repos:\n{}",
+            collisions.join("\n")
+        ));
+    }
+
+    if repo_mods.is_empty() {
+        return Err(format!(
+            "No mods found in {} — expected one subdirectory per mod",
+            sources.iter().map(|s| s.dir.as_str()).collect::<Vec<_>>().join(", ")
+        ));
+    }
+
+    // Sorted by id, not left in the order the folders happened to be listed in. The manifest
+    // is signed: without this, moving a folder up the list in the UI changes the payload, and
+    // every subscriber sees a "new revision" of a repo whose content is identical.
+    repo_mods.sort_by(|a, b| a.id.cmp(&b.id));
+
+    let now: HashMap<String, String> = repo_mods.iter()
+        .map(|m| (m.id.clone(), mod_content_hash(m)))
+        .collect();
+    let mut added: Vec<String> =
+        now.keys().filter(|k| !previous_mods.contains_key(*k)).cloned().collect();
+    let mut removed: Vec<String> =
+        previous_mods.keys().filter(|k| !now.contains_key(*k)).cloned().collect();
+    let mut changed: Vec<String> = now.iter()
+        .filter(|(k, v)| previous_mods.get(*k).map(|p| p != *v).unwrap_or(false))
+        .map(|(k, _)| k.clone())
+        .collect();
+    added.sort();
+    removed.sort();
+    changed.sort();
+
+    let game_name = args.game_name.clone()
+        .or_else(|| previous.as_ref().map(|r| r.game_name.clone()))
+        .unwrap_or_default();
+    let name = args.name.clone()
+        .or_else(|| previous.as_ref().map(|r| r.name.clone()))
+        .unwrap_or_else(|| "BMM Repo".to_string());
+
+    let mut repo = ServerRepo::new(name, game_name);
+    if let Some(prev) = &previous {
+        // Same repo, new revision: keep the identity clients already track.
+        repo.seed = prev.seed.clone();
+        repo.created_at = prev.created_at.clone();
+        repo.description = prev.description.clone();
+        repo.require_login = prev.require_login;
+        repo.upload_limit = prev.upload_limit;
+    }
+    if repo.seed.is_none() {
+        repo.seed = Some(uuid::Uuid::new_v4().to_string());
+    }
+    repo.author = args.author.clone()
+        .or_else(|| previous.as_ref().and_then(|r| r.author.clone()));
+    repo.files_base_url = args.files_base_url.as_ref()
+        .map(|u| u.trim().trim_end_matches('/').to_string())
+        .filter(|u| !u.is_empty())
+        .or_else(|| previous.as_ref().and_then(|r| r.files_base_url.clone()));
+    // The layout must describe where the mods actually sit RELATIVE TO the manifest, or the
+    // pair is not portable: pick a folder called `test/` and the old default (`mods/{id}/…`)
+    // wrote a manifest pointing at a directory that does not exist, so copying `repo.json`
+    // and `test/` together produced a repo where every file 404s.
+    //
+    // Derived from the two paths rather than assumed, so "manifest beside the folder" and
+    // "manifest inside it" both come out right. An explicit value always wins.
+    //
+    // Only derivable from ONE folder: with several, the mods do not all sit under a single
+    // directory here, so there is no relative path that describes them. Whoever serves them
+    // has put them under one root on the server — the default `mods/{id}/{path}` — and if
+    // they have not, the layout field is theirs to set.
+    let derived_layout = if sources.len() == 1 {
+        default_layout_for(&first_dir, &output_path)
+    } else {
+        None
+    };
+    repo.files_layout = args.files_layout.as_ref()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .or_else(|| previous.as_ref().and_then(|r| r.files_layout.clone()))
+        .or(derived_layout);
+
+    let profile_id = previous.as_ref()
+        .and_then(|r| r.profiles.first().map(|p| p.id.clone()))
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    repo.profiles = vec![RepoProfile {
+        id: profile_id,
+        name: repo.name.clone(),
+        game_name: repo.game_name.clone(),
+        mods: repo_mods,
+        icon: None,
+        color: None,
+        icon_image: None,
+    }];
+
+    // ---- Modpacks -------------------------------------------------------------------
+    //
+    // A modpack names its mods by BMM's internal mod id; this manifest names them by folder.
+    // Remap, then require that EVERY mod in the pack survived — a pack that quietly installs
+    // 9 of its 12 mods produces a broken game and a bug report that points nowhere.
+    let published: std::collections::HashSet<String> =
+        repo.profiles[0].mods.iter().map(|m| m.id.clone()).collect();
+    let mut shipped = Vec::new();
+    let mut modpacks_skipped = Vec::new();
+    for mut pack in modpacks {
+        let mut missing = 0usize;
+        for r in pack.mods.iter_mut() {
+            match folder_of.get(&r.mod_id) {
+                Some(folder) if published.contains(folder) => r.mod_id = folder.clone(),
+                // Also accept a pack that already names folders (a pack built from a repo).
+                _ if published.contains(&r.mod_id) => {}
+                _ => missing += 1,
+            }
+        }
+        if missing > 0 {
+            modpacks_skipped.push(format!("{} ({} missing)", pack.name, missing));
+            continue;
+        }
+        shipped.push(crate::models::repo::RepoModpackShare {
+            modpack: pack,
+            share_mode: share_mode.clone(),
+            custom_whitelist: None,
+        });
+    }
+    repo.modpacks = if shipped.is_empty() { None } else { Some(shipped) };
+    let modpacks_count = repo.modpacks.as_ref().map_or(0, |m| m.len());
+
+    // ---- Signature ------------------------------------------------------------------
+    //
+    // Re-signed on every generation, including updates. Carrying the previous author_id
+    // forward without a matching signature — or keeping a signature computed over the old
+    // content — makes the repo read as tampered with to anyone who verifies it.
+    //
+    // Both fields must be None while signing: verify_repo_signature() takes them out before
+    // hashing, so a payload that still contained them would never verify.
+    repo.author_id = None;
+    repo.signature = None;
+    repo.format_version = Some(super::repo_format::CURRENT.to_string());
+    let signed = match sign(serde_json::to_string(&repo).map_err(|e| e.to_string())?.as_bytes()) {
+        Ok((author_id, signature)) => {
+            repo.author_id = Some(author_id);
+            repo.signature = Some(signature);
+            true
+        }
+        // An unsigned manifest still works; it just cannot be attributed. Refusing to write
+        // one would make a keyring problem look like "generation is broken".
+        Err(e) => {
+            tracing::warn!("Manifest written unsigned: {}", e);
+            false
+        }
+    };
+
+    if let Some(parent) = output_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let json = serde_json::to_string_pretty(&repo).map_err(|e| e.to_string())?;
+    fs::write(&output_path, json).map_err(|e| e.to_string())?;
+
+    Ok(GenerateManifestReport {
+        output_path: output_path.to_string_lossy().to_string(),
+        mods: repo.profiles[0].mods.len(),
+        modpacks: modpacks_count,
+        modpacks_skipped,
+        signed,
+        files: total_files,
+        total_bytes,
+        added,
+        removed,
+        changed,
+        sources: source_reports,
+    })
+}
+
+/// Content identity of a mod: every file path and hash, order-independent.
+/// Only used to report what changed between two generations.
+pub(crate) fn mod_content_hash(m: &crate::models::repo::RepoMod) -> String {
+    let mut parts: Vec<String> = m.files.iter()
+        .map(|f| format!("{}:{}", f.relative_path, f.sha256_hash))
+        .collect();
+    parts.sort();
+    let mut h = Sha256::new();
+    for p in parts {
+        h.update(p.as_bytes());
+        h.update(b"\n");
+    }
+    format!("{:x}", h.finalize())
+}
+
+#[cfg(test)]
+mod url_tests {
+    use super::mod_file_url;
+
+    // The base coming from the repo URL already ends with a slash; a hand-typed
+    // files_base_url may or may not. Both wrong outcomes 404 per file rather than failing
+    // loudly, so they are asserted rather than assumed.
+    #[test]
+    fn a_manifest_can_point_at_files_hosted_somewhere_else() {
+        // The base names the directory that CONTAINS `mods/`, not `mods/` itself.
+        for base in [
+            "https://cdn.example/bmm",
+            "https://cdn.example/bmm/",
+            "  https://cdn.example/bmm///  ",
+        ] {
+            assert_eq!(
+                mod_file_url("https://repo.example/", Some(base), None, "cool-mod", "tex/a.dds"),
+                "https://cdn.example/bmm/mods/cool-mod/tex/a.dds",
+                "base {base:?} did not normalise",
+            );
+        }
+    }
+
+    #[test]
+    fn without_the_field_nothing_changes() {
+        // Every manifest generated before files_base_url existed has None here, and must
+        // resolve against the directory holding repo.json exactly as it always did.
+        for empty in [None, Some(""), Some("   ")] {
+            assert_eq!(
+                mod_file_url("https://repo.example/r/", empty, None, "cool-mod", "tex/a.dds"),
+                "https://repo.example/r/mods/cool-mod/tex/a.dds",
+                "empty base {empty:?} should fall back",
+            );
+        }
+    }
+
+    #[test]
+    fn windows_separators_become_url_separators() {
+        assert_eq!(
+            mod_file_url("https://r.example/", None, None, "m", r"tex\sub\a.dds"),
+            "https://r.example/mods/m/tex/sub/a.dds"
+        );
+    }
+
+    #[test]
+    fn a_layout_template_adapts_to_hosting_that_already_has_its_own_shape() {
+        // The point of the field: the server does not move, the manifest describes it.
+        assert_eq!(
+            mod_file_url("https://h/", None, Some("addons/{id}/{path}"), "m", "a/b.dds"),
+            "https://h/addons/m/a/b.dds"
+        );
+        // Mods served straight off the root, with no directory at all above them.
+        assert_eq!(
+            mod_file_url("https://h/", None, Some("{id}/{path}"), "m", "a/b.dds"),
+            "https://h/m/a/b.dds"
+        );
+        // A leading slash would otherwise discard the path already in the base URL.
+        assert_eq!(
+            mod_file_url("https://h/sub/", None, Some("/{id}/{path}"), "m", "b.dds"),
+            "https://h/sub/m/b.dds"
+        );
+        // Empty or absent means the historical layout, for every manifest already published.
+        for none in [None, Some(""), Some("  ")] {
+            assert_eq!(
+                mod_file_url("https://h/", None, none, "m", "b.dds"),
+                "https://h/mods/m/b.dds",
+                "layout {none:?} should fall back",
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod manifest_tests {
+    use super::{generate_repo_manifest_sync, GenerateManifestArgs};
+    use crate::models::repo::ServerRepo;
+    use std::fs;
+    use std::path::PathBuf;
+
+    fn scratch(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("bmm_manifest_{}", name));
+        let _ = fs::remove_dir_all(&d);
+        fs::create_dir_all(d.join("mods/cool-mod/textures")).unwrap();
+        fs::create_dir_all(d.join("mods/other-mod")).unwrap();
+        fs::write(d.join("mods/cool-mod/textures/a.dds"), b"aaa").unwrap();
+        fs::write(d.join("mods/cool-mod/readme.txt"), b"hi").unwrap();
+        fs::write(d.join("mods/other-mod/b.pak"), b"bbb").unwrap();
+        d
+    }
+
+    fn args(root: &PathBuf) -> GenerateManifestArgs {
+        GenerateManifestArgs {
+            mods_dir: Some(root.join("mods").to_string_lossy().to_string()),
+            sources: None,
+            profile_ids: None,
+            output_path: None,
+            name: Some("Test Repo".into()),
+            author: Some("me".into()),
+            game_name: Some("Game".into()),
+            files_base_url: Some("https://host/files/".into()),
+            files_layout: None,
+            reuse_existing: true,
+            only_dirs: None,
+            modpack_ids: None,
+            modpack_share_mode: None,
+        }
+    }
+
+    fn read(root: &PathBuf) -> ServerRepo {
+        serde_json::from_str(&fs::read_to_string(root.join("repo.json")).unwrap()).unwrap()
+    }
+
+    /// A real ed25519 signer, fixed key — the production one needs an AppHandle, and a
+    /// stub that returned a constant would let a change to WHAT gets signed pass unnoticed.
+    fn signer(bytes: &[u8]) -> Result<(String, String), String> {
+        use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
+        let sk = SigningKey::from_bytes(&[3u8; 32]);
+        let vk: VerifyingKey = (&sk).into();
+        Ok((hex::encode(vk.to_bytes()), hex::encode(sk.sign(bytes).to_bytes())))
+    }
+
+    fn run(
+        a: GenerateManifestArgs,
+        packs: Vec<crate::models::modpack::LocalModpack>,
+    ) -> Result<super::GenerateManifestReport, String> {
+        let folder_of = packs.iter()
+            .flat_map(|p| p.mods.iter())
+            .map(|m| (m.mod_id.clone(), m.mod_name.clone()))
+            .collect();
+        generate_repo_manifest_sync(a, packs, folder_of, "public".to_string(), signer, |_, _, _| {})
+    }
+
+    /// Hashing runs in parallel now, and rayon returns results in whatever order the
+    /// threads finish. The manifest is SIGNED, so any wobble in ordering would produce a
+    /// different payload — and therefore a different signature — from one run to the next,
+    /// for a folder nobody touched. Subscribers would see the repo change every time the
+    /// owner regenerated it.
+    ///
+    /// Enough files that a serial implementation could not accidentally pass: with one
+    /// file per mod, thread scheduling never gets a chance to reorder anything.
+    #[test]
+    fn generating_twice_over_the_same_folder_is_byte_identical() {
+        let root = scratch("determinism");
+        let many = root.join("mods/many-files");
+        fs::create_dir_all(&many).unwrap();
+        for i in 0..64 {
+            fs::write(many.join(format!("f{i:03}.bin")), format!("payload {i}").as_bytes()).unwrap();
+        }
+        // A directory and a file whose names share a prefix. WalkDir descends `data/`
+        // when it reaches it, so it yields `data/x.bin` BEFORE `data.txt`; sorted by
+        // path, `data.txt` comes first ('.' is 0x2E, '/' is 0x2F). Without this pair the
+        // walk order and the sorted order agree and the sort is unobservable — which is
+        // exactly how a test that cannot fail gets written.
+        fs::create_dir_all(many.join("data")).unwrap();
+        fs::write(many.join("data/x.bin"), b"nested").unwrap();
+        fs::write(many.join("data.txt"), b"sibling").unwrap();
+
+        run(args(&root), vec![]).unwrap();
+        let first = fs::read_to_string(root.join("repo.json")).unwrap();
+        run(args(&root), vec![]).unwrap();
+        let second = fs::read_to_string(root.join("repo.json")).unwrap();
+
+        // created_at moves between runs; everything the signature covers must not.
+        let a: ServerRepo = serde_json::from_str(&first).unwrap();
+        let b: ServerRepo = serde_json::from_str(&second).unwrap();
+        assert_eq!(a.signature, b.signature, "same folder, same bytes, different signature");
+
+        let files_of = |r: &ServerRepo| -> Vec<String> {
+            r.profiles.iter()
+                .flat_map(|p| p.mods.iter())
+                .flat_map(|m| m.files.iter())
+                .map(|f| format!("{}::{}", f.relative_path, f.sha256_hash))
+                .collect()
+        };
+        let fa = files_of(&a);
+        assert_eq!(fa.len(), 69, "3 from scratch() + 64 + the data/ pair");
+        assert_eq!(fa, files_of(&b), "file order or hashes drifted between runs");
+
+        // Sorted, not merely stable: two runs agreeing on a wrong order would still pass
+        // the check above. Sorting is PER MOD — the mods themselves keep folder order —
+        // so the whole flattened list is not sorted, and asserting that it is would be
+        // asserting something the format never promised.
+        for prof in &a.profiles {
+            for m in &prof.mods {
+                let paths: Vec<&String> = m.files.iter().map(|f| &f.relative_path).collect();
+                let mut sorted = paths.clone();
+                sorted.sort();
+                assert_eq!(paths, sorted, "files of mod {} are not in path order", m.id);
+            }
+        }
+    }
+
+    /// One shared modpack, for the carry-over tests.
+    fn share_of(id: &str) -> crate::models::repo::RepoModpackShare {
+        let mut p = pack(id, &[]);
+        p.id = id.to_string();
+        crate::models::repo::RepoModpackShare {
+            modpack: p,
+            share_mode: "public".to_string(),
+            custom_whitelist: None,
+        }
+    }
+
+    fn pack(name: &str, refs: &[(&str, &str)]) -> crate::models::modpack::LocalModpack {
+        crate::models::modpack::LocalModpack {
+            id: format!("pack-{name}"),
+            name: name.to_string(),
+            description: None,
+            created_at: String::new(),
+            updated_at: String::new(),
+            multi_profile: false,
+            dependency_mode: crate::models::modpack::DependencyMode::None,
+            skip_integrity_check: false,
+            sr_link: None,
+            game_name: None,
+            order_mode: None,
+            mods: refs.iter().map(|(bmm_id, folder)| crate::models::modpack::ModpackModRef {
+                mod_id: bmm_id.to_string(),
+                mod_name: folder.to_string(),
+                mod_version: "1".into(),
+                profile_id: None,
+                profile_name: None,
+                sha256: String::new(),
+                file_manifest: Vec::new(),
+                include_dependencies: false,
+                download_link: None,
+                fallback_link: None,
+                fallback_type: None,
+            }).collect(),
+        }
+    }
+
+    #[test]
+    fn the_manifest_is_signed_and_the_signature_actually_verifies() {
+        let root = scratch("signed");
+        let report = run(args(&root), vec![]).unwrap();
+        assert!(report.signed);
+        let repo = read(&root);
+        assert!(repo.signature.is_some() && repo.author_id.is_some());
+        assert!(
+            crate::commands::security::verify_repo_signature(repo),
+            "the written manifest must verify against its own signature",
+        );
+    }
+
+    #[test]
+    fn an_update_is_re_signed_over_the_new_content() {
+        let root = scratch("resign");
+        run(args(&root), vec![]).unwrap();
+        let first = read(&root);
+
+        fs::write(root.join("mods/cool-mod/readme.txt"), b"changed").unwrap();
+        run(args(&root), vec![]).unwrap();
+        let second = read(&root);
+
+        // Different content must mean a different signature. Carrying the old one forward
+        // reads as tampering to every client that verifies.
+        assert_ne!(first.signature, second.signature);
+        assert!(crate::commands::security::verify_repo_signature(second));
+    }
+
+    /// Re-exporting a repo used to throw away everything the extras screen had published.
+    ///
+    /// Only the seed was carried across, and only because losing it breaks every client at
+    /// once. Modpacks and extras failed quietly instead: the repo simply stopped offering
+    /// them and nobody was told — on the exact workflow the "Include in the repo…" screen
+    /// exists for, which is adding something to a repo published months ago.
+    #[test]
+    fn an_export_that_says_nothing_about_modpacks_keeps_the_ones_already_published() {
+        let existing = vec![share_of("a")];
+        let out = super::carry_modpacks(None, Some(existing.clone()));
+        assert_eq!(out.unwrap().len(), 1, "silence must not un-publish");
+    }
+
+    #[test]
+    fn sharing_none_is_a_decision_and_is_honoured() {
+        // `Some(vec![])` is somebody saying "share no modpacks", which is different from
+        // saying nothing at all. Folding the two together would make "remove them" impossible.
+        let out = super::carry_modpacks(Some(vec![]), Some(vec![share_of("a")]));
+        assert!(out.unwrap().is_empty());
+    }
+
+    #[test]
+    fn what_is_supplied_replaces_what_was_there() {
+        let out = super::carry_modpacks(
+            Some(vec![share_of("new")]),
+            Some(vec![share_of("old")]),
+        );
+        let list = out.unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].modpack.id, "new");
+    }
+
+    #[test]
+    fn a_modpack_ships_with_its_mod_ids_remapped_to_folder_names() {
+        let root = scratch("packs");
+        // The pack names mods by BMM id; the manifest names them by folder.
+        let p = pack("Starter", &[("bmm-id-1", "cool-mod"), ("bmm-id-2", "other-mod")]);
+        let report = run(args(&root), vec![p]).unwrap();
+
+        assert_eq!(report.modpacks, 1);
+        assert!(report.modpacks_skipped.is_empty());
+        let repo = read(&root);
+        let shipped = repo.modpacks.unwrap();
+        let ids: Vec<_> = shipped[0].modpack.mods.iter().map(|m| m.mod_id.clone()).collect();
+        // Without the remap these would still be bmm-id-*, matching nothing in the manifest.
+        assert_eq!(ids, vec!["cool-mod", "other-mod"]);
+        assert_eq!(shipped[0].share_mode, "public");
+    }
+
+    #[test]
+    fn a_modpack_whose_mods_are_not_all_published_is_skipped_not_shipped_broken() {
+        let root = scratch("packs-partial");
+        let mut a = args(&root);
+        a.only_dirs = Some(vec!["cool-mod".into()]);      // other-mod is NOT published
+        let p = pack("Starter", &[("bmm-id-1", "cool-mod"), ("bmm-id-2", "other-mod")]);
+        let report = run(a, vec![p]).unwrap();
+
+        assert_eq!(report.modpacks, 0);
+        assert_eq!(report.modpacks_skipped, vec!["Starter (1 missing)"]);
+        assert!(read(&root).modpacks.is_none());
+    }
+
+    #[test]
+    fn it_writes_a_manifest_without_touching_the_mods() {
+        let root = scratch("plain");
+        let before: Vec<_> = walkdir::WalkDir::new(root.join("mods")).into_iter()
+            .filter_map(|e| e.ok()).map(|e| e.path().to_path_buf()).collect();
+
+        let report = run(args(&root), vec![]).unwrap();
+
+        assert_eq!(report.mods, 2);
+        assert_eq!(report.files, 3);
+        assert_eq!(report.total_bytes, 8);
+        // The manifest lands NEXT TO the mods dir, never inside it — otherwise the next run
+        // would index repo.json as one of the mod's own files.
+        assert_eq!(report.output_path, root.join("repo.json").to_string_lossy());
+
+        let after: Vec<_> = walkdir::WalkDir::new(root.join("mods")).into_iter()
+            .filter_map(|e| e.ok()).map(|e| e.path().to_path_buf()).collect();
+        assert_eq!(before, after, "generation must not add, move or copy anything");
+
+        let repo = read(&root);
+        assert_eq!(repo.files_base_url.as_deref(), Some("https://host/files"));
+        let ids: Vec<_> = repo.profiles[0].mods.iter().map(|m| m.id.as_str()).collect();
+        // Folder name IS the id — that is what makes the URLs line up with the live server.
+        assert_eq!(ids, vec!["cool-mod", "other-mod"]);
+    }
+
+    #[test]
+    fn the_generated_urls_point_at_the_files_as_they_already_sit() {
+        let root = scratch("urls");
+        let mut a = args(&root);
+        a.files_layout = Some("addons/{id}/{path}".into());
+        run(a, vec![]).unwrap();
+
+        let repo = read(&root);
+        let m = repo.profiles[0].mods.iter().find(|m| m.id == "cool-mod").unwrap();
+        let f = m.files.iter().find(|f| f.relative_path == "textures/a.dds").unwrap();
+        assert_eq!(
+            super::mod_file_url(
+                "https://ignored/",
+                repo.files_base_url.as_deref(),
+                repo.files_layout.as_deref(),
+                &m.id,
+                &f.relative_path,
+            ),
+            "https://host/files/addons/cool-mod/textures/a.dds",
+        );
+    }
+
+    #[test]
+    fn regenerating_is_an_update_of_the_same_repo_and_reports_the_diff() {
+        let root = scratch("update");
+        run(args(&root), vec![]).unwrap();
+        let first = read(&root);
+
+        // One mod edited, one added, one deleted from disk.
+        fs::write(root.join("mods/cool-mod/readme.txt"), b"changed").unwrap();
+        fs::create_dir_all(root.join("mods/new-mod")).unwrap();
+        fs::write(root.join("mods/new-mod/c.pak"), b"c").unwrap();
+        fs::remove_dir_all(root.join("mods/other-mod")).unwrap();
+
+        let report = run(args(&root), vec![]).unwrap();
+        assert_eq!(report.added, vec!["new-mod"]);
+        assert_eq!(report.changed, vec!["cool-mod"]);
+        // Silence here would let a mistyped path look exactly like a deliberate removal.
+        assert_eq!(report.removed, vec!["other-mod"]);
+
+        let second = read(&root);
+        // Clients track a repo by its seed: a new one would read as an unrelated repo and
+        // strand everyone already subscribed.
+        assert_eq!(first.seed, second.seed);
+        assert_eq!(first.created_at, second.created_at);
+        assert_eq!(first.profiles[0].id, second.profiles[0].id);
+    }
+
+    #[test]
+    fn the_manifest_describes_the_folder_it_actually_scanned() {
+        // Pick a folder named `test`, and the manifest must point at `test/…`. The old
+        // default was a hardcoded `mods/{id}/{path}`, so `repo.json` + the folder copied
+        // together produced a repo where every single file 404s — valid JSON, dead repo.
+        let root = scratch("portable");
+        fs::create_dir_all(root.join("test/alpha")).unwrap();
+        fs::write(root.join("test/alpha/a.pak"), b"a").unwrap();
+
+        let mut a = args(&root);
+        a.mods_dir = Some(root.join("test").to_string_lossy().to_string());
+        a.files_base_url = None;
+        run(a, vec![]).unwrap();
+
+        let repo: ServerRepo =
+            serde_json::from_str(&fs::read_to_string(root.join("repo.json")).unwrap()).unwrap();
+        assert_eq!(repo.files_layout.as_deref(), Some("test/{id}/{path}"));
+
+        // Resolved against wherever repo.json is served from, the URL hits the real file.
+        let m = &repo.profiles[0].mods[0];
+        assert_eq!(
+            super::mod_file_url(
+                "https://host/r/",
+                repo.files_base_url.as_deref(),
+                repo.files_layout.as_deref(),
+                &m.id,
+                &m.files[0].relative_path,
+            ),
+            "https://host/r/test/alpha/a.pak",
+        );
+    }
+
+    #[test]
+    fn a_folder_named_mods_keeps_the_historical_implicit_layout() {
+        // Manifests published before files_layout existed mean mods/{id}/{path}; emitting it
+        // explicitly here would be harmless but noisy, and absent must stay the same thing.
+        let root = scratch("classic");
+        run(args(&root), vec![]).unwrap();
+        assert_eq!(read(&root).files_layout, None);
+    }
+
+    #[test]
+    fn a_selection_publishes_only_what_was_selected() {
+        let root = scratch("subset");
+        let mut a = args(&root);
+        a.only_dirs = Some(vec!["cool-mod".into()]);
+        let report = run(a, vec![]).unwrap();
+        assert_eq!(report.mods, 1);
+        let ids: Vec<_> = read(&root).profiles[0].mods.iter().map(|m| m.id.clone()).collect();
+        assert_eq!(ids, vec!["cool-mod"]);
+    }
+
+    #[test]
+    fn an_empty_selection_refuses_rather_than_publishing_everything() {
+        // The failure mode this guards: a profile that resolves to no folders quietly
+        // becoming "publish the entire mods directory", private mods included.
+        let root = scratch("empty-sel");
+        let mut a = args(&root);
+        a.only_dirs = Some(vec![]);
+        assert!(run(a, vec![]).is_err());
+    }
+
+    // ---- Profiles → folders -------------------------------------------------------------
+    //
+    // The resolution that used to live in the screen, as a `startsWith` over path strings.
+    // When it matched nothing it produced an empty selection rather than an error, and the
+    // backend refused THAT with "the selection is empty" — for a profile full of mods.
+
+    fn profile_at(name: &str, mods_path: &PathBuf) -> crate::models::profile::Profile {
+        let mut p = crate::models::profile::Profile::new(
+            name.to_string(), "Game".into(), mods_path.clone(), mods_path.clone(), mods_path.clone(),
+        );
+        p.id = format!("id-{name}");
+        p
+    }
+
+    fn mod_at(folder: &PathBuf) -> crate::models::mod_entry::ModEntry {
+        let mut m: crate::models::mod_entry::ModEntry =
+            serde_json::from_str(r#"{
+                "id": "m", "name": "M", "version": "1", "author": null, "description": null,
+                "dependencies": [], "enabled": true, "mod_folder_path": "",
+                "status": "Enabled", "added_at": "now"
+            }"#).unwrap();
+        m.id = folder.to_string_lossy().to_string();
+        m.mod_folder_path = folder.clone();
+        m
+    }
+
+    fn data_with(profiles: Vec<crate::models::profile::Profile>,
+                 mods: Vec<crate::models::mod_entry::ModEntry>) -> crate::state::AppData {
+        let mut d = crate::state::AppData::default();
+        d.profiles = profiles;
+        d.mods = mods;
+        d
+    }
+
+    #[test]
+    fn a_profile_resolves_to_its_folder_and_its_mod_folder_names() {
+        let root = scratch("prof");
+        let mods_path = root.join("mods");
+        let d = data_with(
+            vec![profile_at("Alpha", &mods_path)],
+            vec![mod_at(&mods_path.join("cool-mod")), mod_at(&mods_path.join("other-mod"))],
+        );
+        let out = super::sources_from_profiles(&d, &["id-Alpha".to_string()]).unwrap();
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].only_dirs.as_deref(), Some(&["cool-mod".to_string(), "other-mod".to_string()][..]));
+        assert_eq!(out[0].label.as_deref(), Some("Alpha"));
+    }
+
+    #[test]
+    fn two_profiles_under_one_folder_become_one_source() {
+        // Scanned twice, every mod in that folder would collide with itself and the whole
+        // manifest would be refused.
+        let root = scratch("prof-share");
+        let mods_path = root.join("mods");
+        let d = data_with(
+            vec![profile_at("Alpha", &mods_path), profile_at("Beta", &mods_path)],
+            vec![mod_at(&mods_path.join("cool-mod"))],
+        );
+        let out = super::sources_from_profiles(&d, &["id-Alpha".into(), "id-Beta".into()]).unwrap();
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].label.as_deref(), Some("Alpha, Beta"));
+    }
+
+    #[test]
+    fn two_profiles_on_different_folders_are_two_sources_not_a_refusal() {
+        // THE bug: this pair used to be turned away with "publish them as separate repos".
+        let root = scratch("prof-split");
+        let a = root.join("mods");
+        let b = root.join("elsewhere");
+        fs::create_dir_all(b.join("third-mod")).unwrap();
+        let d = data_with(
+            vec![profile_at("Alpha", &a), profile_at("Beta", &b)],
+            vec![mod_at(&a.join("cool-mod")), mod_at(&b.join("third-mod"))],
+        );
+        let out = super::sources_from_profiles(&d, &["id-Alpha".into(), "id-Beta".into()]).unwrap();
+        assert_eq!(out.len(), 2);
+    }
+
+    #[test]
+    fn a_profile_with_no_mods_names_itself_instead_of_selecting_nothing() {
+        let root = scratch("prof-empty");
+        let d = data_with(vec![profile_at("Alpha", &root.join("mods"))], vec![]);
+        let err = super::sources_from_profiles(&d, &["id-Alpha".to_string()]).unwrap_err();
+        assert!(err.contains("Alpha"), "{err}");
+        // And NOT the message that sent everyone looking at the wrong thing.
+        assert!(!err.contains("The selection"), "{err}");
+    }
+
+    // ---- Several folders at once -------------------------------------------------------
+    //
+    // The manifest described exactly one directory, so "publish these two profiles" was
+    // refused whenever the profiles did not share a mods folder — with an error telling the
+    // owner to publish them as separate repos, which is not the thing they asked for.
+
+    /// A second folder, somewhere else entirely, in the same manifest.
+    fn second_folder(root: &PathBuf, mod_name: &str) -> String {
+        let d = root.join("elsewhere").join(mod_name);
+        fs::create_dir_all(&d).unwrap();
+        fs::write(d.join("c.pak"), b"ccc").unwrap();
+        root.join("elsewhere").to_string_lossy().to_string()
+    }
+
+    fn src(dir: &str) -> super::ManifestSource {
+        super::ManifestSource { dir: dir.to_string(), only_dirs: None, label: None }
+    }
+
+    #[test]
+    fn two_folders_produce_one_manifest_holding_both() {
+        let root = scratch("multi");
+        let other = second_folder(&root, "third-mod");
+        let mut a = args(&root);
+        a.sources = Some(vec![src(&root.join("mods").to_string_lossy()), src(&other)]);
+
+        let rep = run(a, vec![]).unwrap();
+        assert_eq!(rep.mods, 3, "two from mods/, one from elsewhere/");
+
+        let repo = read(&root);
+        let mut ids: Vec<String> = repo.profiles[0].mods.iter().map(|m| m.id.clone()).collect();
+        ids.sort();
+        assert_eq!(ids, vec!["cool-mod", "other-mod", "third-mod"]);
+
+        // Per source, because "3 mods" over two folders hides the folder that gave none —
+        // which is the one with the wrong path in it.
+        assert_eq!(rep.sources.len(), 2);
+        assert_eq!(rep.sources[0].mods, 2);
+        assert_eq!(rep.sources[1].mods, 1);
+    }
+
+    #[test]
+    fn the_order_the_folders_were_given_in_does_not_change_the_manifest() {
+        // It is SIGNED. Left in source order, dragging a folder up the list in the UI
+        // rewrites the payload, and every subscriber sees a new revision of a repo whose
+        // content nobody touched.
+        let root = scratch("multi-order");
+        let other = second_folder(&root, "third-mod");
+        let mods = root.join("mods").to_string_lossy().to_string();
+
+        let mut a = args(&root);
+        a.sources = Some(vec![src(&mods), src(&other)]);
+        run(a, vec![]).unwrap();
+        let forward: ServerRepo = read(&root);
+
+        let mut b = args(&root);
+        b.sources = Some(vec![src(&other), src(&mods)]);
+        run(b, vec![]).unwrap();
+        let reversed: ServerRepo = read(&root);
+
+        assert_eq!(forward.signature, reversed.signature);
+    }
+
+    #[test]
+    fn the_same_folder_twice_is_one_folder_not_a_collision() {
+        // Two profiles under one mods directory is the ordinary case. Scanned twice, every
+        // mod in it would collide with itself and the whole manifest would be refused.
+        let root = scratch("multi-same");
+        let mods = root.join("mods").to_string_lossy().to_string();
+        let mut a = args(&root);
+        a.sources = Some(vec![
+            src(&mods),
+            src(&format!("{}{}", mods, std::path::MAIN_SEPARATOR)),
+        ]);
+
+        let rep = run(a, vec![]).unwrap();
+        assert_eq!(rep.mods, 2);
+        assert_eq!(rep.sources.len(), 1, "merged into one source, not scanned twice");
+    }
+
+    #[test]
+    fn two_folders_holding_the_same_mod_name_are_refused_by_name() {
+        // A mod's id is its folder name and the manifest is one flat list, so the two would
+        // collapse into one entry describing one of them — a repo where half the files 404
+        // for everybody. The error has to say WHICH folders, or it is unactionable.
+        let root = scratch("multi-clash");
+        let clash = root.join("elsewhere/cool-mod");
+        fs::create_dir_all(&clash).unwrap();
+        fs::write(clash.join("z.pak"), b"zzz").unwrap();
+
+        let mut a = args(&root);
+        a.sources = Some(vec![
+            src(&root.join("mods").to_string_lossy()),
+            src(&root.join("elsewhere").to_string_lossy()),
+        ]);
+
+        let err = run(a, vec![]).unwrap_err();
+        assert!(err.contains("cool-mod"), "{err}");
+        assert!(err.contains("elsewhere"), "{err}");
+        assert!(!root.join("repo.json").exists(), "a refused generation wrote a manifest");
+    }
+
+    #[test]
+    fn a_selection_still_applies_per_folder() {
+        // "Publish these profiles" is a per-folder filter — one folder taken whole and
+        // another restricted must not turn into everything.
+        let root = scratch("multi-only");
+        let other = second_folder(&root, "third-mod");
+        let mut a = args(&root);
+        a.sources = Some(vec![
+            super::ManifestSource {
+                dir: root.join("mods").to_string_lossy().to_string(),
+                only_dirs: Some(vec!["cool-mod".into()]),
+                label: Some("Profile A".into()),
+            },
+            src(&other),
+        ]);
+
+        let rep = run(a, vec![]).unwrap();
+        assert_eq!(rep.mods, 2);
+        let repo = read(&root);
+        let ids: Vec<String> = repo.profiles[0].mods.iter().map(|m| m.id.clone()).collect();
+        assert!(!ids.contains(&"other-mod".to_string()), "the filter leaked: {ids:?}");
+        assert_eq!(rep.sources[0].label.as_deref(), Some("Profile A"));
+    }
+
+    #[test]
+    fn several_folders_do_not_get_a_guessed_layout() {
+        // With one folder the layout is derived from where the manifest lands beside it.
+        // With several there is no such relative path, and guessing one from the first
+        // folder would point every mod from the others at a directory that does not exist.
+        let root = scratch("multi-layout");
+        fs::create_dir_all(root.join("test/alpha")).unwrap();
+        fs::write(root.join("test/alpha/a.pak"), b"a").unwrap();
+        let other = second_folder(&root, "third-mod");
+
+        let mut a = args(&root);
+        a.files_base_url = None;
+        a.sources = Some(vec![src(&root.join("test").to_string_lossy()), src(&other)]);
+        run(a, vec![]).unwrap();
+
+        assert_eq!(read(&root).files_layout, None, "a layout was guessed from one of several folders");
+    }
+
+    #[test]
+    fn an_empty_or_wrong_folder_is_an_error_rather_than_an_empty_repo() {
+        let root = scratch("empty");
+        let empty = root.join("nothing");
+        fs::create_dir_all(&empty).unwrap();
+        let mut a = args(&root);
+        a.mods_dir = Some(empty.to_string_lossy().to_string());
+        assert!(run(a, vec![]).is_err());
+
+        let mut a = args(&root);
+        a.mods_dir = Some(root.join("does-not-exist").to_string_lossy().to_string());
+        assert!(run(a, vec![]).is_err());
+    }
+}
+
+#[cfg(test)]
+mod update_source_tests {
+    use super::push_repo_source;
+    use crate::models::mod_entry::UpdateSource;
+
+    fn src(url: &str, kind: &str) -> UpdateSource {
+        UpdateSource { repo_url: url.into(), repo_mod_id: None, kind: kind.into(), sig: None, protected: false }
+    }
+
+    #[test]
+    fn the_repo_is_added_alongside_the_authors_own_sources() {
+        // The option must ADD, never replace: the author's sources are how a mod keeps
+        // updating if the repo it was mirrored through disappears.
+        let mut v = vec![src("https://author.example/repo.json", "repo"), src("https://cdn/x.zip", "direct")];
+        push_repo_source(&mut v, "https://myserver.tld/repo/", "cool-mod");
+        assert_eq!(v.len(), 3);
+        assert_eq!(v[2].kind, "repo");
+        assert_eq!(v[2].repo_mod_id.as_deref(), Some("cool-mod"));
+        assert!(v[0].repo_url.contains("author.example"));
+    }
+
+    #[test]
+    fn re_syncing_the_same_repo_does_not_stack_duplicates() {
+        // Without this, every sync appends another copy and one update check becomes N
+        // identical HTTP requests per mod, growing forever.
+        let mut v = Vec::new();
+        for _ in 0..5 {
+            push_repo_source(&mut v, "https://myserver.tld/repo/", "cool-mod");
+        }
+        assert_eq!(v.len(), 1);
+    }
+
+    #[test]
+    fn a_url_that_only_differs_cosmetically_is_the_same_source() {
+        let mut v = Vec::new();
+        push_repo_source(&mut v, "https://myserver.tld/repo/repo.json", "m");
+        push_repo_source(&mut v, "https://MyServer.tld/repo/", "m");
+        assert_eq!(v.len(), 1, "normalised URLs must not produce a second entry");
+    }
+
+    #[test]
+    fn an_empty_url_adds_nothing() {
+        let mut v = Vec::new();
+        push_repo_source(&mut v, "   ", "m");
+        assert!(v.is_empty());
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Auto-sync on launch
+// ---------------------------------------------------------------------------
+
+/// Which of the two sync modes a repo is configured to use, normalised.
+///
+/// Anything unrecognised — including a mode written by a future version — falls back to
+/// "missing". That mode only ADDS files, so a value this build cannot interpret can never
+/// be read as permission to overwrite the user's local edits.
+pub(crate) fn normalize_sync_mode(raw: Option<&str>) -> String {
+    match raw.map(str::trim).unwrap_or("") {
+        "all" => "all".to_string(),
+        _ => "missing".to_string(),
+    }
+}
+
+#[derive(serde::Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AutoSyncRepo {
+    pub url: String,
+    pub name: String,
+    pub mode: String,
+}
+
+/// The repos to check when BMM starts.
+#[tauri::command]
+pub fn get_auto_sync_repos(state: State<'_, AppState>) -> Result<Vec<AutoSyncRepo>, String> {
+    let data = state.data.lock().map_err(|_| "Failed to lock AppState".to_string())?;
+    Ok(collect_auto_sync(&data.settings.connected_server_repos))
+}
+
+pub(crate) fn collect_auto_sync(repos: &[crate::state::ConnectedServerRepo]) -> Vec<AutoSyncRepo> {
+    repos.iter()
+        .filter(|r| r.auto_sync)
+        // A repo with no URL cannot be fetched; including it would surface as a failed
+        // auto-sync the user cannot act on, for a repo they cannot see is broken.
+        .filter(|r| !r.url.trim().is_empty())
+        .map(|r| AutoSyncRepo {
+            url: r.url.trim().to_string(),
+            name: r.name.clone(),
+            mode: normalize_sync_mode(r.auto_sync_mode.as_deref()),
+        })
+        .collect()
+}
+
+/// Turn auto-sync on or off for one repo, and set the mode it should use.
+#[tauri::command]
+pub fn set_repo_auto_sync(
+    state: State<'_, AppState>,
+    url: String,
+    enabled: bool,
+    mode: Option<String>,
+) -> Result<(), String> {
+    let target = normalize_repo_url(url.trim());
+    let mut data = state.data.lock().map_err(|_| "Failed to lock AppState".to_string())?;
+    if target.is_empty() { return Err("Repo not found".to_string()); }
+    // Matched on the normalised URL: the list stores what the user typed, and a repo saved
+    // with a trailing slash would otherwise be a different repo from the same one without —
+    // leaving the toggle looking like it did nothing. Absent = added: only the local API ever
+    // added repos to this list, so the sync screen's checkbox answered "Repo not found" for
+    // every repo joined from the screen itself.
+    let list = &mut data.settings.connected_server_repos;
+    let at = match list.iter().position(|r| normalize_repo_url(r.url.trim()) == target) {
+        Some(i) => i,
+        None => {
+            list.push(crate::state::ConnectedServerRepo { url: url.trim().to_string(), ..Default::default() });
+            list.len() - 1
+        }
+    };
+    let repo = &mut list[at];
+    repo.auto_sync = enabled;
+    repo.auto_sync_mode = Some(normalize_sync_mode(mode.as_deref()));
+    drop(data);
+    state.save().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod auto_sync_tests {
+    use super::{collect_auto_sync, normalize_sync_mode};
+    use crate::state::ConnectedServerRepo;
+
+    fn repo(url: &str, auto: bool, mode: Option<&str>) -> ConnectedServerRepo {
+        ConnectedServerRepo {
+            url: url.into(),
+            name: "R".into(),
+            auto_sync: auto,
+            auto_sync_mode: mode.map(str::to_string),
+            follow: None,
+        }
+    }
+
+    #[test]
+    fn only_repos_that_opted_in_are_checked_at_launch() {
+        let list = vec![
+            repo("https://a.tld/repo/", true, Some("all")),
+            repo("https://b.tld/repo/", false, Some("all")),
+            repo("https://c.tld/repo/", true, None),
+        ];
+        let got = collect_auto_sync(&list);
+        assert_eq!(got.len(), 2);
+        assert_eq!(got[0].mode, "all");
+        assert_eq!(got[1].mode, "missing", "no mode stored must mean the additive one");
+    }
+
+    #[test]
+    fn an_unreadable_mode_never_becomes_overwrite() {
+        // The failure that matters: a typo, or a mode written by a newer build, resolving to
+        // "all" would overwrite local edits on every launch without anyone asking for it.
+        for raw in [None, Some(""), Some("  "), Some("ALL"), Some("everything"), Some("missing")] {
+            assert_eq!(normalize_sync_mode(raw), "missing", "mode {raw:?} must be additive");
+        }
+        assert_eq!(normalize_sync_mode(Some("all")), "all");
+    }
+
+    #[test]
+    fn a_repo_with_no_url_is_skipped_rather_than_failing_at_launch() {
+        let list = vec![repo("   ", true, Some("all"))];
+        assert!(collect_auto_sync(&list).is_empty());
+    }
+}
+
+#[cfg(test)]
+mod listing_fallback_tests {
+    use super::mods_from_listing;
+    use crate::commands::repo_remote::RemoteEntry;
+
+    fn e(p: &str, size: u64) -> RemoteEntry {
+        RemoteEntry { rel_path: p.to_string(), size, mtime: Some(1_700_000_000) }
+    }
+
+    #[test]
+    fn groups_by_top_folder_and_leaves_every_hash_empty() {
+        let mods = mods_from_listing(&[
+            e("cool-mod/textures/a.dds", 30),
+            e("cool-mod/readme.txt", 2),
+            e("other/b.pak", 10),
+        ]);
+        assert_eq!(mods.len(), 2);
+        assert_eq!(mods[0].id, "cool-mod");
+        // Sorted within the mod, like a generated manifest.
+        assert_eq!(mods[0].files[0].relative_path, "readme.txt");
+        assert_eq!(mods[0].files[1].relative_path, "textures/a.dds");
+
+        // The whole point. An empty hash is what the sync path reads as "no integrity
+        // check available" — it installs the file and marks the mod unverified. A
+        // fabricated hash would be worse than none: it would pass a check that never
+        // happened.
+        for m in &mods {
+            for f in &m.files {
+                assert!(f.sha256_hash.is_empty(), "{} was given a hash it cannot have", f.relative_path);
+                assert!(f.chunks.is_none());
+            }
+        }
+    }
+
+    /// A file sitting at the root of the listing belongs to no mod. Taking it would
+    /// invent a mod named after the file.
+    #[test]
+    fn ignores_files_outside_a_mod_folder() {
+        let mods = mods_from_listing(&[
+            e("README.md", 1),
+            e("repo.json", 1),
+            e("real-mod/x.pak", 5),
+        ]);
+        assert_eq!(mods.len(), 1);
+        assert_eq!(mods[0].id, "real-mod");
+    }
+
+    #[test]
+    fn size_survives_and_a_backslash_listing_is_normalised() {
+        let mods = mods_from_listing(&[e(r"m\sub\f.bin", 42)]);
+        assert_eq!(mods.len(), 1);
+        assert_eq!(mods[0].id, "m");
+        assert_eq!(mods[0].files[0].relative_path, "sub/f.bin");
+        assert_eq!(mods[0].files[0].size, 42);
+    }
+}
+
+#[cfg(test)]
+mod live_fallback_tests {
+    //! Runs ONLY when the .Assets test server is up (`python serve_test_repo.py`,
+    //! port 8777). Skips silently otherwise: CI has no server, and a test that fails
+    //! for environmental reasons teaches people to ignore red.
+
+    use super::fetch_repo_info;
+
+    /// Is the TEST server up — not merely "is something listening on 8777".
+    ///
+    /// A bare TCP connect was not enough. Any process holding that port made this answer
+    /// true, the test then ran against a stranger and failed with
+    /// `the fallback must synthesise a repo from the listing: "repo.errInvalidRepo"` — which
+    /// reads exactly like the bug it was written to catch. Measured on a machine where
+    /// something else owned 8777 and answered 404 to /mods/.
+    ///
+    /// A test that goes red for environmental reasons teaches people to ignore red, which is
+    /// the thing the module comment above says it is avoiding. So the probe asks for the
+    /// resource the test needs and requires a 200.
+    fn server_up() -> bool {
+        use std::io::{Read, Write};
+        let Ok(mut s) = std::net::TcpStream::connect_timeout(
+            &"127.0.0.1:8777".parse().unwrap(),
+            std::time::Duration::from_millis(300),
+        ) else {
+            return false;
+        };
+        let _ = s.set_read_timeout(Some(std::time::Duration::from_millis(500)));
+        if s.write_all(b"GET /mods/ HTTP/1.0\r\nHost: 127.0.0.1\r\n\r\n").is_err() {
+            return false;
+        }
+        let mut head = [0u8; 32];
+        let n = s.read(&mut head).unwrap_or(0);
+        String::from_utf8_lossy(&head[..n]).contains(" 200")
+    }
+
+    /// The exact reproduction from the field: the URL the user pasted, verbatim.
+    /// `/mods/` has no repo.json, so the manifest probe 404s — and the old code
+    /// surfaced repo.errInvalidRepo instead of reading the directory index.
+    #[tokio::test]
+    async fn a_bare_mods_folder_url_fetches_as_a_discovered_repo() {
+        if !server_up() { eprintln!("skipped: test server not running"); return; }
+
+        let repo = fetch_repo_info("http://127.0.0.1:8777/mods/".into(), None, None)
+            .await
+            .expect("the fallback must synthesise a repo from the listing");
+
+        assert_eq!(repo.profiles.len(), 1);
+        assert_eq!(repo.profiles[0].id, "discovered");
+        assert!(!repo.profiles[0].mods.is_empty(), "the listing has mods in it");
+        // Nothing vouches for these files: no author, no signature, empty hashes.
+        assert!(repo.signature.is_none() && repo.author_id.is_none());
+        for m in &repo.profiles[0].mods {
+            for f in &m.files {
+                assert!(f.sha256_hash.is_empty(), "{} got a hash from nowhere", f.relative_path);
+            }
+        }
+    }
+}
+
+/// Owner card 4 (pentest R13): `export_server_repo` did its whole export — the slot wait, the
+/// copy + hash pass, the per-mod zips, the final archive, the ticket's paused checkpoints —
+/// synchronously inside an `async fn`, parking one of the runtime's few workers (the ones the
+/// local API and the built-in repo server answer on) for the length of the export. The command
+/// cannot run here without a `Window`, so this reads the source the way the gates do: the
+/// command body hands everything to a blocking thread, and the blocking half takes the ticket
+/// itself (on the thread that runs the work, so the nested-ticket rule means what it says).
+#[cfg(test)]
+mod export_off_runtime_tests {
+    fn body_of(src: &str, sig: &str) -> String {
+        let at = src.find(sig).unwrap_or_else(|| panic!("`{sig}` not found in repo.rs (renamed?)"));
+        let rest = &src[at..];
+        let end = rest.find("\n}\n").expect("the function's closing brace");
+        rest[..end].to_string()
+    }
+
+    #[test]
+    fn the_export_command_does_its_work_on_a_blocking_thread() {
+        // A Windows checkout (core.autocrlf, the CI runner's default) hands include_str! CRLF
+        // lines, so "\n}\n" and "\nfn " never match there; read the source with LF endings.
+        let src = include_str!("repo.rs").replace("\r\n", "\n");
+        let src = src.as_str();
+        let cmd = body_of(src, "pub async fn export_server_repo(");
+        assert!(cmd.contains("spawn_blocking("), "the async command must hand the export to spawn_blocking");
+        for sync_work in ["fs::", ".begin(", "checkpoint()", "zip_dir_gated", "par_iter", "sign_message", ".lock()"] {
+            assert!(!cmd.contains(sync_work), "the async command still does `{sync_work}` on a runtime worker");
+        }
+        let blocking = body_of(src, "fn export_server_repo_blocking(");
+        // Defined at the start of a line, so not `async fn` (this test's own text says it).
+        assert!(src.contains("\nfn export_server_repo_blocking("), "the blocking half must be a plain, synchronous fn");
+        assert!(blocking.contains("gov.begin(OpKind::Compress"), "the blocking half takes its Compress ticket itself");
     }
 }

@@ -1,0 +1,8 @@
+{
+  "version": "1.0",
+  "name": "Automations",
+  "presets": [
+    { "id": "nightly-backup", "name": "Nightly backup", "description": "Backs up every night", "author": "Cy", "version": "1.0",
+      "download_url": "presets/nightly-backup.bmmpa", "sha256": "8888888888888888888888888888888888888888888888888888888888888888", "tags": ["backup"], "tasks": 3 }
+  ]
+}

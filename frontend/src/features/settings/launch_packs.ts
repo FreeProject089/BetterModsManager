@@ -1,0 +1,543 @@
+/**
+ * launch_packs.ts — Management of application groups (Launch Packs)
+ */
+import { invoke, pickFile, saveFile } from '../../core/api.js';
+import { copyIdButtons, wireCopyIds } from '../../core/copy-id.js';
+import { t } from '../../core/i18n.js';
+import { toast } from '../../ui/app.js';
+import { escHtml } from '../../core/utils.js';
+import { uiIcon } from '../../ui/icons.js';
+
+let currentSelectedExes: string[] = [];
+let currentSelectedIcon: string | null = null;
+/** When set, the modal is in EDIT mode for this pack ID. null = CREATE mode. */
+let editingPackId: string | null = null;
+/** Existing icon path of the pack being edited (for the preview when no new icon picked). */
+let editingExistingIconPath: string | null = null;
+
+export async function initLaunchPackSettings() {
+    const btnCreate = document.getElementById('btn-create-launchpack');
+    if (!btnCreate) return;
+
+    btnCreate.addEventListener('click', () => {
+        openLaunchPackModal();
+    });
+
+    const btnAddExe = document.getElementById('lp-btn-add-exe');
+    if (btnAddExe) {
+        btnAddExe.addEventListener('click', async () => {
+            const path = await pickFile(['exe', 'bat', 'ps1', 'cmd', 'lnk']);
+            if (path) {
+                if (!currentSelectedExes.includes(path as string)) {
+                    currentSelectedExes.push(path as string);
+                    renderSelectedExes();
+                }
+            }
+        });
+    }
+
+    // ── App Picker (Steam-style) ───────────────────────────────────────────────
+    const btnDetect = document.getElementById('lp-btn-detect-exe');
+    if (btnDetect) {
+        btnDetect.addEventListener('click', () => openAppPicker());
+    }
+
+    const btnSelectIcon = document.getElementById('lp-btn-select-icon');
+    if (btnSelectIcon) {
+        btnSelectIcon.addEventListener('click', async () => {
+            const path = await pickFile(['png', 'jpg', 'jpeg', 'bmp']);
+            if (path) {
+                currentSelectedIcon = path as string;
+                const preview = document.getElementById('lp-icon-preview');
+                if (preview) {
+                    const assetUrl = (window as any).__TAURI__?.tauri?.convertFileSrc(path) || `asset.localhost/${path}`;
+                    preview.innerHTML = `<img src="${assetUrl}" style="width:100%;height:100%;object-fit:cover;" />`;
+                }
+            }
+        });
+    }
+
+    const btnConfirm = document.getElementById('lp-btn-confirm') as HTMLButtonElement;
+    if (btnConfirm) {
+        btnConfirm.addEventListener('click', async () => {
+            const nameInput = document.getElementById('lp-input-name') as HTMLInputElement;
+            const name = nameInput?.value.trim();
+
+            if (!name) {
+                return toast(t('settings.launchPackNameRequired') || 'Name is required', 'error');
+            }
+            if (currentSelectedExes.length === 0) {
+                return toast(t('settings.launchPackNoExes') || 'Add at least one application', 'error');
+            }
+
+            btnConfirm.disabled = true;
+            btnConfirm.innerHTML = `<span>${t('common.loading') || '...'}</span>`;
+
+            try {
+                if (editingPackId) {
+                    await invoke('update_launch_pack', {
+                        id: editingPackId,
+                        name,
+                        exePaths: currentSelectedExes,
+                        iconSourcePath: currentSelectedIcon
+                    });
+                    toast(t('settings.launchPackUpdated') || t('settings.launchPackAdded'), 'success');
+                } else {
+                    await invoke('create_launch_pack', {
+                        name,
+                        exePaths: currentSelectedExes,
+                        iconSourcePath: currentSelectedIcon
+                    });
+                    toast(t('settings.launchPackAdded'), 'success');
+                }
+
+                document.getElementById('modal-launchpack')?.classList.remove('open');
+                editingPackId = null;
+                editingExistingIconPath = null;
+                renderLaunchPacks();
+            } catch (err) {
+                toast(t('settings.launchPackError', { err: String(err) }), 'error');
+            } finally {
+                btnConfirm.disabled = false;
+                btnConfirm.innerHTML = `<span>${t('common.confirm')}</span>`;
+            }
+        });
+    }
+
+    // Importing rebuilds the machine-specific half here: a new .vbs, a new .lnk, the
+    // icon re-encoded. What travels is the decision — the name and which programs.
+    const btnImport = document.getElementById('btn-import-launchpack');
+    btnImport?.addEventListener('click', async () => {
+        const path = await pickFile(['bmmlaunch']);
+        if (!path) return;
+        try {
+            const res = await invoke('import_launch_pack', { path: String(path) }) as
+                { pack: { name: string }; missing: string[] };
+            await renderLaunchPacks();
+            if (res.missing?.length) {
+                // Not a failure, and not something to swallow either. A pack whose
+                // programs live on another drive is the normal case for a shared pack,
+                // and it will start nothing until those paths are fixed.
+                toast((t('settings.lpImportedMissing') || 'Imported "{n}" — {c} program(s) were not found at their paths on this PC')
+                    .replace('{n}', res.pack.name)
+                    .replace('{c}', String(res.missing.length)), 'error');
+            } else {
+                toast((t('settings.lpImported') || 'Imported "{n}"').replace('{n}', res.pack.name), 'success');
+            }
+        } catch (err) {
+            toast(String(err), 'error');
+        }
+    });
+
+    renderLaunchPacks();
+}
+
+export async function renderLaunchPacks() {
+    const container = document.getElementById('launchpack-list-container');
+    if (!container) return;
+
+    try {
+        const packs = await invoke('get_launch_packs') as any[];
+        container.innerHTML = '';
+
+        if (packs.length === 0) {
+            container.innerHTML = `<p class="stg-empty-line">${t('settings.launchPackNone')}</p>`;
+            return;
+        }
+
+        packs.forEach((pack: any) => {
+            const card = document.createElement('div');
+            card.className = 'stg-item';
+            
+            const iconUrl = pack.icon_path ? ((window as any).__TAURI__?.tauri?.convertFileSrc(pack.icon_path) || `asset.localhost/${pack.icon_path}`) : null;
+            const iconHtml = iconUrl 
+                ? `<img src="${iconUrl}" class="stg-item-ic" alt="" />`
+                : `<div class="stg-item-ic">${uiIcon('launch', 16)}</div>`;
+
+            card.innerHTML = `
+                ${iconHtml}
+                <div class="stg-item-main">
+                    <div class="stg-item-name">${escHtml(pack.name)}</div>
+                    <div class="stg-item-meta">${pack.executable_paths.length} ${t('settings.launchPackExes') || 'Apps'}</div>
+                    <div class="lp-card-ids">${copyIdButtons('launchpack', pack.id, { compact: true, doc: { executable_paths: pack.executable_paths || [] } })}</div>
+                </div>
+                <div class="stg-item-actions">
+                    <button class="btn btn-primary btn-xs btn-run-lp" data-id="${pack.id}">${t('settings.launchPackRun')}</button>
+                    <button class="btn btn-ghost btn-xs btn-edit-lp" data-id="${pack.id}" data-tooltip="${t('common.edit') || 'Edit'}">${uiIcon('edit', 12)}</button>
+                    <button class="btn btn-ghost btn-xs btn-exp-lp" data-id="${pack.id}" data-name="${escHtml(pack.name)}" data-tooltip="${t('common.export') || 'Export'}">${uiIcon('export', 12)}</button>
+                    <button class="btn btn-ghost btn-xs btn-open-lp" data-id="${pack.id}" data-tooltip="${t('settings.launchPackOpenFolder') || 'Open folder'}">${uiIcon('open-folder', 12)}</button>
+                    <button class="btn btn-ghost btn-xs btn-del-lp" data-id="${pack.id}" style="color:var(--danger);" data-tooltip="${t('common.delete') || 'Delete'}">${uiIcon('delete', 12)}</button>
+                </div>
+            `;
+
+            wireCopyIds(card, toast);
+            container.appendChild(card);
+        });
+
+        // Event listeners for run and delete
+        container.querySelectorAll('.btn-run-lp').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                try {
+                    await invoke('run_launch_pack', { id: (btn as HTMLElement).dataset.id });
+                    toast(t('common.success'), 'success');
+                } catch (err) {
+                    toast(t('settings.launchPackError', { err: String(err) }), 'error');
+                }
+            });
+        });
+
+        container.querySelectorAll('.btn-edit-lp').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = (btn as HTMLElement).dataset.id;
+                const pack = packs.find(p => p.id === id);
+                if (pack) openEditLaunchPackModal(pack);
+            });
+        });
+
+        container.querySelectorAll('.btn-exp-lp').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const el = btn as HTMLElement;
+                const dest = await saveFile({
+                    defaultPath: `${(el.dataset.name || 'launchpack').replace(/[\\/:*?"<>|]/g, '_')}.bmmlaunch`,
+                    filters: [{ name: 'BMM Launch Pack', extensions: ['bmmlaunch'] }],
+                });
+                if (!dest) return;
+                try {
+                    await invoke('export_launch_pack', { id: el.dataset.id, destPath: dest });
+                    toast(t('settings.lpExported') || 'Launch pack exported', 'success');
+                } catch (err) {
+                    toast(String(err), 'error');
+                }
+            });
+        });
+
+        container.querySelectorAll('.btn-open-lp').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                try {
+                    // Open the folder containing the pack
+                    await invoke('open_launch_pack_folder', { id: (btn as HTMLElement).dataset.id });
+                } catch (err) {
+                    toast(String(err), 'error');
+                }
+            });
+        });
+
+        container.querySelectorAll('.btn-del-lp').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const id = (btn as HTMLElement).dataset.id;
+                const pack = packs.find(p => p.id === id);
+                if (!pack) return;
+
+                const deleteModal = document.getElementById('modal-launchpack-delete');
+                const deleteText = document.getElementById('lp-delete-confirm-text');
+                const deleteConfirmBtn = document.getElementById('lp-btn-delete-confirm');
+
+                if (deleteModal && deleteText && deleteConfirmBtn) {
+                    deleteText.innerHTML = t('settings.launchPackDeleteConfirmText', { name: `<span style="color: var(--bmm-danger); font-weight: 800; background: rgba(239, 68, 68, 0.1); padding: 2px 6px; border-radius: 4px;">${escHtml(pack.name)}</span>` });
+                    deleteModal.classList.add('open');
+
+                    // Clean previous listeners
+                    const newBtn = deleteConfirmBtn.cloneNode(true) as HTMLButtonElement;
+                    deleteConfirmBtn.parentNode?.replaceChild(newBtn, deleteConfirmBtn);
+
+                    newBtn.addEventListener('click', async () => {
+                        try {
+                            newBtn.disabled = true;
+                            await invoke('delete_launch_pack', { id });
+                            toast(t('settings.launchPackDeleted'), 'success');
+                            deleteModal.classList.remove('open');
+                            renderLaunchPacks();
+                        } catch (err) {
+                            toast(t('settings.launchPackError', { err: String(err) }), 'error');
+                        } finally {
+                            newBtn.disabled = false;
+                        }
+                    });
+                }
+            });
+        });
+
+    } catch (err) {
+        console.error('Failed to render launch packs:', err);
+    }
+}
+
+function openLaunchPackModal() {
+    const modal = document.getElementById('modal-launchpack');
+    if (!modal) return;
+
+    // CREATE mode
+    editingPackId = null;
+    editingExistingIconPath = null;
+
+    const nameInput = document.getElementById('lp-input-name') as HTMLInputElement;
+    if (nameInput) nameInput.value = '';
+
+    currentSelectedExes = [];
+    currentSelectedIcon = null;
+
+    const preview = document.getElementById('lp-icon-preview');
+    if (preview) {
+        preview.innerHTML = `${uiIcon('image', 20, { style: 'color:var(--text-muted)' })}`;
+    }
+
+    _setLaunchPackModalTitle(false);
+    renderSelectedExes();
+    modal.classList.add('open');
+}
+
+function openEditLaunchPackModal(pack: any) {
+    const modal = document.getElementById('modal-launchpack');
+    if (!modal) return;
+
+    editingPackId = pack.id;
+    editingExistingIconPath = pack.icon_path || null;
+
+    const nameInput = document.getElementById('lp-input-name') as HTMLInputElement;
+    if (nameInput) nameInput.value = pack.name || '';
+
+    currentSelectedExes = (pack.executable_paths || []).map((p: any) => typeof p === 'string' ? p : String(p));
+    currentSelectedIcon = null; // null = keep existing on backend side
+
+    const preview = document.getElementById('lp-icon-preview');
+    if (preview) {
+        if (editingExistingIconPath) {
+            const assetUrl = (window as any).__TAURI__?.tauri?.convertFileSrc(editingExistingIconPath) || `asset.localhost/${editingExistingIconPath}`;
+            preview.innerHTML = `<img src="${assetUrl}" style="width:100%;height:100%;object-fit:cover;" />`;
+        } else {
+            preview.innerHTML = `${uiIcon('image', 20, { style: 'color:var(--text-muted)' })}`;
+        }
+    }
+
+    _setLaunchPackModalTitle(true);
+    renderSelectedExes();
+    modal.classList.add('open');
+}
+
+function _setLaunchPackModalTitle(isEdit: boolean) {
+    const titleEl = document.querySelector('#modal-launchpack .modal-title') as HTMLElement | null;
+    if (titleEl) {
+        const key = isEdit ? 'settings.launchPackEditTitle' : 'settings.launchPackCreateTitle';
+        const fallback = isEdit ? 'Edit Launch Pack' : 'Create Launch Pack';
+        titleEl.textContent = t(key) || fallback;
+    }
+}
+
+function renderSelectedExes() {
+    const list = document.getElementById('lp-exe-list');
+    if (!list) return;
+
+    list.innerHTML = '';
+    currentSelectedExes.forEach((path, index) => {
+        const item = document.createElement('div');
+        item.style.cssText = 'display:flex; align-items:center; gap:8px; padding:6px 10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); border-radius:6px; font-size:11px;';
+
+        const fileName = path.split(/[\\/]/).pop();
+        item.innerHTML = `
+            <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" data-tooltip="${escHtml(path)}">${escHtml(fileName || path)}</span>
+            <button class="btn-del-exe" data-index="${index}" aria-label="${t('common.remove') || 'Remove'}" style="display:inline-flex; background:none; border:none; color:var(--text-muted); cursor:pointer; padding:2px;">${uiIcon('close', 14)}</button>
+        `;
+        list.appendChild(item);
+    });
+
+    list.querySelectorAll('.btn-del-exe').forEach(btn => {
+        btn.addEventListener('click', () => {
+            currentSelectedExes.splice(parseInt((btn as HTMLElement).dataset.index!), 1);
+            renderSelectedExes();
+        });
+    });
+}
+
+// ── Steam-style App Picker ────────────────────────────────────────────────────
+
+interface InstalledApp { name: string; exe_path: string; icon_path?: string | null; }
+
+let _appPickerCache: InstalledApp[] | null = null;
+let _appPickerLoading = false;
+
+async function openAppPicker() {
+    const modal = document.getElementById('modal-app-picker');
+    if (!modal) return;
+    modal.classList.add('open');
+    _renderAppPickerList([]);
+    _wireAppPickerEvents();
+
+    if (_appPickerLoading) return;
+    if (_appPickerCache) { _renderAppPickerList(_appPickerCache); return; }
+
+    _appPickerLoading = true;
+    const statusEl = document.getElementById('app-picker-status');
+    if (statusEl) statusEl.textContent = t('settings.appPicker.scanning');
+
+    try {
+        const apps: InstalledApp[] = await invoke('scan_installed_apps');
+        _appPickerCache = apps;
+        _renderAppPickerList(apps);
+    } catch (e) {
+        const tbody = document.getElementById('app-picker-list');
+        if (tbody) tbody.innerHTML = `<tr><td colspan="4" style="padding:20px;text-align:center;color:var(--error);font-size:12px;">${t('settings.appPicker.error', { err: String(e) })}</td></tr>`;
+    } finally {
+        _appPickerLoading = false;
+    }
+}
+
+// Icon cache: exe_path → data:image/png;base64,...
+const _iconCache = new Map<string, string>();
+// Generic program icon SVG (used as placeholder / fallback)
+const _genericIcon = `${uiIcon('monitor', 20, { style: 'color:var(--text-muted);opacity:.5' })}`;
+
+function _renderAppPickerList(apps: InstalledApp[], filter = '') {
+    const tbody = document.getElementById('app-picker-list');
+    if (!tbody) return;
+
+    const filtered = filter
+        ? apps.filter(a => a.name.toLowerCase().includes(filter) || a.exe_path.toLowerCase().includes(filter))
+        : apps;
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" style="padding:20px;text-align:center;color:var(--text-muted);font-size:12px;">${apps.length === 0 ? `<span id="app-picker-status">${t('settings.appPicker.noApps')}</span>` : t('settings.appPicker.noResults')}</td></tr>`;
+        return;
+    }
+
+    // Build rows with icon placeholder
+    tbody.innerHTML = filtered.map((app) => {
+        const alreadyAdded = currentSelectedExes.includes(app.exe_path);
+        // If we have a cached icon, embed it immediately; otherwise show placeholder
+        const cachedIcon  = _iconCache.get(app.exe_path);
+        const iconContent = cachedIcon
+            ? `<img src="${cachedIcon}" width="20" height="20" style="border-radius:3px;object-fit:contain;">`
+            : _genericIcon;
+        return `<tr class="app-picker-row" data-exe="${escHtml(app.exe_path)}"
+            style="border-bottom:1px solid rgba(255,255,255,0.03);cursor:pointer;transition:background .1s;"
+            data-hover="background:rgba(255,255,255,0.04)" data-hover-out="background:transparent">
+            <td style="padding:5px 10px;text-align:center;width:28px;">
+                <input type="checkbox" class="app-picker-cb" data-path="${escHtml(app.exe_path)}" data-name="${escHtml(app.name)}"
+                    style="accent-color:var(--accent);width:13px;height:13px;cursor:pointer;"
+                    ${alreadyAdded ? 'checked disabled' : ''}>
+            </td>
+            <td style="padding:5px 6px;width:28px;">
+                <span class="app-icon-cell" data-exe="${escHtml(app.exe_path)}"
+                    style="display:flex;align-items:center;justify-content:center;width:20px;height:20px;">${iconContent}</span>
+            </td>
+            <td style="padding:5px 6px;font-weight:600;color:var(--text-bright);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;" data-tooltip="${escHtml(app.name)}">${escHtml(app.name)}</td>
+            <td style="padding:5px 6px;color:var(--text-muted);font-size:10px;font-family:'JetBrains Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:300px;" data-tooltip="${escHtml(app.exe_path)}">${escHtml(app.exe_path)}</td>
+        </tr>`;
+    }).join('');
+
+    // Click row = toggle checkbox
+    tbody.querySelectorAll('.app-picker-row').forEach(row => {
+        row.addEventListener('click', (e) => {
+            const cb = row.querySelector('.app-picker-cb') as HTMLInputElement;
+            if (!cb || cb.disabled) return;
+            if ((e.target as HTMLElement).tagName === 'INPUT') return;
+            cb.checked = !cb.checked;
+            _updateAppPickerCount();
+        });
+        row.querySelector('.app-picker-cb')?.addEventListener('change', () => _updateAppPickerCount());
+    });
+
+    // Lazy icon loading via IntersectionObserver
+    _observeIconCells(tbody);
+    _updateAppPickerCount();
+}
+
+/** Watches icon cells in the tbody and loads icons as they scroll into view */
+function _observeIconCells(tbody: HTMLElement) {
+    const tauri = (window as any).__TAURI__?.tauri;
+    if (!tauri) return; // Not in Tauri context — no icon extraction
+
+    const io = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (!entry.isIntersecting) return;
+            const cell = entry.target as HTMLElement;
+            const exe   = cell.dataset.exe!;
+            io.unobserve(cell);
+
+            if (_iconCache.has(exe)) {
+                _applyIcon(cell, _iconCache.get(exe)!);
+                return;
+            }
+
+            // Always use extract_exe_icon (runs in Rust, no asset-protocol scope required)
+            _loadExeIcon(cell, exe, tauri);
+        });
+    }, { root: tbody.closest('div'), rootMargin: '100px', threshold: 0 });
+
+    tbody.querySelectorAll<HTMLElement>('.app-icon-cell').forEach(cell => {
+        // Skip if already cached
+        if (_iconCache.has(cell.dataset.exe || '')) {
+            _applyIcon(cell, _iconCache.get(cell.dataset.exe!)!);
+        } else {
+            io.observe(cell);
+        }
+    });
+}
+
+async function _loadExeIcon(cell: HTMLElement, exe: string, tauri: any) {
+    try {
+        const b64: string = await tauri.invoke('extract_exe_icon', { exePath: exe });
+        const dataUrl = `data:image/png;base64,${b64}`;
+        _iconCache.set(exe, dataUrl);
+        _applyIcon(cell, dataUrl);
+    } catch { /* keep generic icon */ }
+}
+
+function _applyIcon(cell: HTMLElement, src: string) {
+    cell.innerHTML = '';
+    const img = document.createElement('img');
+    img.width = 20;
+    img.height = 20;
+    img.style.cssText = 'border-radius:3px;object-fit:contain';
+    img.addEventListener('error', () => { cell.innerHTML = _genericIcon; });
+    img.src = src;   // last: the handler must exist before the load can fail
+    cell.appendChild(img);
+}
+
+function _updateAppPickerCount() {
+    const checked = document.querySelectorAll('#app-picker-list .app-picker-cb:checked:not(:disabled)');
+    const countEl = document.getElementById('app-picker-sel-count');
+    const confirmBtn = document.getElementById('app-picker-confirm') as HTMLButtonElement | null;
+    if (countEl) countEl.textContent = checked.length > 0 ? t('settings.appPicker.selected', { n: String(checked.length) }) : '';
+    if (confirmBtn) confirmBtn.disabled = checked.length === 0;
+}
+
+function _wireAppPickerEvents() {
+    // Search
+    const search = document.getElementById('app-picker-search') as HTMLInputElement | null;
+    if (search && !search.dataset.wired) {
+        search.dataset.wired = '1';
+        search.addEventListener('input', () => {
+            if (_appPickerCache) _renderAppPickerList(_appPickerCache, search.value.toLowerCase().trim());
+        });
+    }
+
+    // Browse fallback
+    const browseBtn = document.getElementById('app-picker-browse');
+    if (browseBtn && !browseBtn.dataset.wired) {
+        browseBtn.dataset.wired = '1';
+        browseBtn.addEventListener('click', async () => {
+            const path = await pickFile(['exe', 'bat', 'ps1', 'cmd', 'lnk']);
+            if (path && !currentSelectedExes.includes(path as string)) {
+                currentSelectedExes.push(path as string);
+                renderSelectedExes();
+                document.getElementById('modal-app-picker')?.classList.remove('open');
+            }
+        });
+    }
+
+    // Confirm: add selected to currentSelectedExes
+    const confirmBtn = document.getElementById('app-picker-confirm');
+    if (confirmBtn && !confirmBtn.dataset.wired) {
+        confirmBtn.dataset.wired = '1';
+        confirmBtn.addEventListener('click', () => {
+            document.querySelectorAll('#app-picker-list .app-picker-cb:checked:not(:disabled)').forEach(cb => {
+                const path = (cb as HTMLElement).dataset.path!;
+                if (path && !currentSelectedExes.includes(path)) {
+                    currentSelectedExes.push(path);
+                }
+            });
+            renderSelectedExes();
+            document.getElementById('modal-app-picker')?.classList.remove('open');
+        });
+    }
+}

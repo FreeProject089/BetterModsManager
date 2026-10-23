@@ -1,0 +1,94 @@
+/* The notification centre's grouped list, its row actions and do-not-disturb, and the
+   notification preferences in Settings (ui/notification-center.ts links this file; the panel's
+   frame is in main.css). Theme tokens only, so it reads the same in light and dark: status
+   TEXT mixes the status colour with the text ink, never the raw fill colour. */
+
+.nc-panel { width: 380px; max-height: min(560px, 76vh); }
+.nc-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 2px 4px 6px; }
+.nc-scroll .nc-list { overflow: visible; padding: 0 0 4px; }
+
+.nc-head-actions { flex-wrap: wrap; justify-content: flex-end; }
+.nc-act { display: inline-flex; align-items: center; gap: 5px; }
+.nc-act svg { width: 13px; height: 13px; flex: none; }
+.nc-act:disabled { opacity: .45; cursor: default; }
+.nc-act:focus-visible, .nc-ibtn:focus-visible, .nc-group-toggle:focus-visible, .nc-chip:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--bmm-accent) 70%, transparent);
+    outline-offset: 1px;
+}
+.nc-dnd.on {
+    border-color: color-mix(in srgb, var(--bmm-warning) 50%, transparent);
+    background: var(--bmm-warning-dim);
+    color: color-mix(in srgb, var(--bmm-warning) 55%, var(--bmm-text-primary));
+}
+
+.nc-group + .nc-group { margin-top: 4px; }
+.nc-group-head { display: flex; align-items: center; gap: 6px; padding: 6px 4px 2px; }
+.nc-group-toggle {
+    flex: 1; min-width: 0;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 2px 4px; border: 0; border-radius: var(--bmm-radius-btn, 6px);
+    background: transparent; color: var(--bmm-text-secondary); cursor: pointer;
+    font: inherit; font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
+    text-align: left;
+}
+.nc-group-toggle:hover { color: var(--bmm-text-primary); }
+.nc-group-chev { display: inline-flex; width: 12px; height: 12px; transition: transform var(--bmm-transition-fast, .15s); }
+.nc-group-chev svg { width: 12px; height: 12px; }
+.nc-group-toggle[aria-expanded="true"] .nc-group-chev { transform: rotate(90deg); }
+.nc-group-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nc-group-n { font-weight: 500; text-transform: none; letter-spacing: 0; }
+.nc-snoozed .nc-item { opacity: .8; }
+
+.nc-item { grid-template-columns: 16px minmax(0, 1fr) auto; }
+.nc-item:focus-visible { outline: 2px solid color-mix(in srgb, var(--bmm-accent) 70%, transparent); outline-offset: -2px; }
+.nc-row-acts { display: inline-flex; align-items: flex-start; gap: 2px; }
+.nc-ibtn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; padding: 0;
+    border: 1px solid transparent; border-radius: var(--bmm-radius-btn, 6px);
+    background: transparent; color: var(--bmm-text-secondary); cursor: pointer;
+    opacity: .75;
+}
+.nc-ibtn svg { width: 13px; height: 13px; }
+.nc-item:hover .nc-ibtn, .nc-item:focus-within .nc-ibtn, .nc-ibtn:focus-visible { opacity: 1; }
+.nc-ibtn:hover { background: var(--bmm-s06); color: var(--bmm-text-primary); }
+.nc-row-acts .nc-del { position: static; opacity: .75; }
+.nc-count {
+    margin-left: 4px; padding: 0 5px; border-radius: 999px;
+    background: var(--bmm-s06); color: var(--bmm-text-secondary); font-weight: 600;
+}
+.nc-snooze-menu { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+
+.nc-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.nc-foot > span { min-width: 0; }
+
+/* The bell while quiet: a muted bell, not a hidden count. */
+.btn-notif-center.is-dnd { opacity: .7; }
+
+/* Repeats of a popup on screen: "×3" instead of three copies (ui/app.ts toast). */
+.toast-count {
+    margin-left: 6px; padding: 0 6px; border-radius: 999px;
+    background: var(--bmm-s08); color: var(--bmm-text-secondary);
+    font-size: 11px; font-weight: 700;
+}
+
+/* ── Settings: how each group is delivered, do not disturb, quiet hours ─────────────── */
+.notif-prefs { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+/* One row per group, split by a hairline: the card around them is the only frame. */
+.notif-pref-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; }
+.notif-pref-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(160px, 280px);
+    align-items: center; gap: 10px;
+    padding: 7px 4px;
+}
+.notif-pref-row + .notif-pref-row { border-top: 1px solid var(--bmm-s06); }
+@media (max-width: 640px) { .notif-pref-row { grid-template-columns: minmax(0, 1fr); } }
+.notif-pref-name { display: flex; flex-direction: column; min-width: 0; font-size: 12.5px; font-weight: 600; color: var(--bmm-text-primary); }
+.notif-pref-hint { font-size: 11px; font-weight: 400; color: var(--bmm-text-secondary); }
+.notif-pref-mode { height: 30px; font-size: 12px; min-width: 0; }
+.notif-quiet { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.notif-quiet-row { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--bmm-text-primary); cursor: pointer; }
+.notif-quiet-times { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; color: var(--bmm-text-secondary); }
+.notif-quiet-times .input { width: auto; height: 28px; padding: 2px 6px; }
+.notif-quiet-note { flex-basis: 100%; margin: 0; font-size: 11px; line-height: 1.5; color: var(--bmm-text-secondary); }

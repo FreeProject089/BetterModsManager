@@ -1,0 +1,985 @@
+# Server Repo
+
+:::tip[Prefer it step by step?]
+The task version of this page is [Follow a repo](doc-page:guide/follow-a-repo): short steps, what you should see, a picture and a Show me button.
+:::
+
+
+A **Server Repo** is a shared, versioned collection of mods. Two things flow through it: you
+**sync** mods *from* a repo into a profile, and BMM uses the repo to tell you when those mods
+have an **update**. You can also **host** one yourself. Without a repo, a mod you installed by
+hand stays at the version you installed, forever, silently.
+
+> Browse Server Repositories — official and partner server repositories.
+
+![Connecting to a repo and syncing](assets/docs/media/gifs/guide-follow.gif)
+
+
+## Simple by default
+
+The page starts with the guided steps for the two everyday jobs: **syncing** a repo into a
+profile, and **hosting** one. Everything else is in **Advanced tools**: type in **Find a tool**
+to filter them, and BMM remembers which ones you opened last time.
+
+| Tool | What it does |
+|---|---|
+| **Create a repo in one click** | From a profile, a modpack or a folder of mods. BMM writes a signed repo, ready to host. |
+| **Build a repo from profiles** | The full generator: several profiles, identity, seed, archive, bundled server. |
+| **Update an existing repo** | Add or remove mods and profiles without rebuilding everything. |
+| **Include more in a repo** | Plugins, themes, modpacks, automations, mod lists, catalogues. See [Everything else the repo carries](#everything-else-the-repo-carries). |
+| **Manifest only (repo.json)** | Describe mods already hosted somewhere. Nothing is copied. |
+| **Update from the server listing** | Your mods live only on the server: refresh `repo.json` from its folder index. |
+| **Validate a repo** | Manifest, files, hashes, signature and format version, in one readable report. |
+| **Set the repo version** | Change the number subscribers see, and re-sign. |
+| **Preview as subscribers see it** | The card BMM shows after Fetch, from the folder or the running server. |
+| **Share link** | A one-click link and a message to send, with password or key notes when needed. |
+| **Host on a static web host** | GitHub Pages, nginx or any host that serves files: instructions and configuration. |
+| **Publish over SSH** | Upload the repo folder to your own server. See [SSH/SFTP](#getting-the-folder-onto-the-server-sshsftp). |
+| **Server options**, **Who connects**, **Multi-repo hub server** | Port, speed, passwords, keys; monitoring, whitelist and bans; several repos on one port. |
+| **Check for mod updates**, **Sync options** | Updates for installed mods, and how the next sync behaves. |
+
+## Connecting to a repo
+
+Browse the official and partner list, or paste a repo URL directly. Once connected, the
+repo's mods appear in your [Library](doc-page:features/library) alongside your local ones, marked with the
+repo's name.
+
+## Syncing mods from a repo
+
+The **Sync** tab is three steps, with a strip on top that fills in as you go:
+
+1. **Paste the address** of the `repo.json` and fetch it. If the source is protected, the password
+   row and the **private key** row sit right there (see [Protecting a repo](#protecting-a-repo-password-or-a-public-key)).
+2. **Choose where mods go**: the profile's own game, mods and backup folders, or folders of your choice.
+3. **Synchronize.** The options (sync mode, clean extra mods, check this repo when BMM starts, follow
+   the repo for updates) are folded under the button.
+
+Each step has a **Learn more** link to this page.
+
+A protected repo asks for its **download password** once — and if you already know the
+repo is protected, open the *"This repo has a download password"* row under the URL field
+and type it before Fetch, instead of fetching, failing, and typing. A server with **no
+`repo.json` at all** still works: Fetch reads its folder index instead, and every mod it
+finds installs marked *unverified*, with the card saying so in as many words.
+
+Syncing pulls the repo's mods onto your machine and into a profile. BMM does a **delta-sync**:
+it compares what the repo has against what you already have and downloads **only the changed
+files**, so updating a 5 GB repo after a small patch costs a few megabytes, not five gigs. A
+long sync can be **cancelled** mid-flight, and you can cap its download speed so it doesn't
+saturate your connection.
+
+A synced mod keeps the **same id** across re-syncs, renames and re-imports, so its history,
+its links and its place in your profiles follow it. Duplicates left by older BMM versions are
+repaired once, at start-up, after a backup.
+
+## Update detection
+
+Once a mod is linked to a repo, *Check for mod updates* compares your installed version to the
+repo's current version and offers the update when they differ. Linking is a separate step from
+connecting:
+
+> Link this mod to one or more repos so BMM can detect updates for it.
+
+One mod can point at several repos. That's deliberate: if a source disappears, the mod is
+still tracked by the other. There's also a **global update repositories** setting in
+[Settings](doc-page:features/settings) — list a repo there and it is added to the update check for every mod
+that already carries a repo mod id.
+
+!!! warning "A global repo only reaches mods that are already linked"
+
+    The app states the rule: a global repo is matched *by the mod's `repo_mod_id`*. A mod you
+    added by hand from a `.zip` has no such id, so a global repo will never find it — link
+    that mod to a repo once, and the globals apply from then on.
+
+### Direct downloads have no version
+
+Worth understanding, because it looks like a bug and isn't:
+
+> No update detected. A direct download has no version, so BMM cannot tell if it is newer.
+
+A raw file URL carries no version number, so BMM has nothing to compare. It offers a **direct
+re-download** instead of pretending to know. If you want real update detection, link the mod
+to a repo that publishes versions.
+
+## Following a repo
+
+Instead of pressing *Check for mod updates* yourself, you can **follow** a repo. **Follow a
+repo** sits in the **Followed repos** card and opens a dialog; a **Follow** button also appears
+where a repo is already known (the repo you just fetched, each browse result, each history
+entry) and opens the same dialog, filled in. Nothing is saved before you press **Follow**.
+Each followed repo then has:
+
+| Setting | Choices |
+|---|---|
+| **Check this repo on its schedule** | On, or paused. |
+| **Check** | Every 15 minutes, every hour, every 6 hours, every day or every week. |
+| **When there is an update** | **Tell me** (the default), **Download it**, or **Download and apply it**. |
+
+*Download it* syncs the updated mods' files into their profile. *Download and apply it* also
+turns the enabled ones off and on again in the active profile, so the game gets the new files.
+**Nothing is downloaded or applied while a game is running**: BMM tells you and tries again at
+the next check. **Check now** checks every followed repo at once; **Check** checks one, and
+**Stop following** removes it. Each check is a row in the [activity centre](doc-page:features/activity).
+
+A check is cheap: BMM asks the server whether `repo.json` changed since last time, and an
+unchanged repo answers « not modified » without sending the manifest again.
+
+:::note[An Atom feed for every repo BMM serves]
+BMM's built-in repo server also serves `feed.xml`, an **Atom feed** of the repo's updates,
+next to `repo.json`. Any feed reader can follow a repo that way, BMM or not, and so can a
+[scheduled task](doc-page:features/scheduler) with an `on feed` trigger.
+:::
+
+### The Follow a repo dialog
+
+| Field | What it does |
+|---|---|
+| **Address** | A web address, or the way you reach the machine. BMM turns it into the `repo.json` address and shows it under the field (*BMM will read …*). |
+| **Download password** *(optional)* | Only if the repo has one. Saved sealed on this PC, never in BMM's settings file (see below). |
+| **Sign with this key** | Which identity key answers a repo [protected by a public key](#protecting-a-repo-password-or-a-public-key). *As now (automatic)* keeps BMM's usual choice. |
+| **Check**, **When there is an update** | The schedule and the mode from the table above. |
+
+The address can be typed in any of these shapes, and they all lead to the same repo:
+
+```text
+192.168.1.20:8000
+http://192.168.1.20:8000/repo.json
+[::1]:8000
+nas.local:8080/mods/
+my-server
+```
+
+An IPv6 address goes in brackets when it carries a port. `HTTP://` in capitals, a share key
+(`?k=…`) and a trailing `#…` are handled. `192.168.1.20:8000` and
+`http://192.168.1.20:8000/repo.json` are **one** followed repo, not two: following an address
+you already follow updates its schedule instead of adding a copy.
+
+**Plain `http://` is accepted.** On this PC or on the local network the dialog says it is
+normal. Over the internet it warns that a download password would travel readable: use
+`https://` there.
+
+**Local addresses skip the system proxy.** Requests to this PC and to local-network addresses
+(`192.168.*`, `10.*`, `172.16-31.*`, `*.local`, IPv6 link-local and unique-local) no longer go
+through a system proxy, which cannot reach them anyway. Internet addresses still use it. BMM's
+blocks on private addresses for scheduled tasks, AI endpoints and custom pages are unchanged:
+those are about addresses you did **not** type.
+
+**Test the connection** reads the repo once and shows its name, version, `repo.json` format,
+signature (*Signed, signature valid*, *Signature does NOT match*, or *Not signed*), game,
+author and how many mods it offers in how many profiles. A signature that does not match means
+the manifest was changed after it was signed: follow it only if you know why. Errors are said
+plainly: nothing answered at this address, the server did not answer in time, the HTTP code it
+answered, or that a password is needed.
+
+#### The saved password
+
+A download password given here is **saved sealed on this PC**: protected by Windows for your
+user account (the system keychain on macOS and Linux), only for this repo's checks, and never in
+BMM's settings file. The scheduled checks use it, so a followed repo with a password no longer
+fails every check. Leave the field empty to keep the saved one; **Forget the saved password**
+removes it, and so does **Stop following**. If the PC cannot seal it, the dialog says so and the
+password lasts for this session only.
+
+## Hosting your own repo
+
+You can turn your own mods into a repo other people sync from. The Host tab is split in two:
+**producing the `repo.json`** (**Generate the repo**), then **serving the files** (**Serve the
+files**). Serving has its own four-step strip: **pick the folder**, **check the `repo.json`**,
+**start sharing**, **send the address**. Each group has a **Learn more** link to this page.
+
+### Three ways to produce the manifest
+
+!!! note "Archive and compression options"
+    In **Build a repo from profiles**, **Compress as .zip** only packs the repo; bundling a **standalone server** is a separate,
+    optional tick inside it (the API's `zipOutput` and `generateServer` flags are independent
+    for the same reason — a plain archive is named `BMM-Repo-*`, one with a server
+    `BMM-Standalone-Server-*`). A **Compression** picker beside those boxes chooses the method
+    for the archive and the per-mod zips: **Deflate** (default — read by every unzipper),
+    **Zstandard** (much faster to write and read, about as small), **Bzip2** (smaller, slower)
+    or **Stored** (no compression, for mods that are already archives). The same `compression`
+    value — `deflate` / `zstd` / `bzip2` / `stored` — is accepted by the `repo.genNow`
+    scheduler action, `/api/repo/gen` and `/api/repo/gen-now`, the script generator, the CLI
+    (`generate-repo --zip-mods --compression zstd`) and the `bmm_generate_repo` MCP tool. The
+    file stays an ordinary `.zip` whatever you pick; only Deflate is guaranteed to open in every
+    third-party unzipper. The **multi-repo hub** (one Node server and dashboard for all
+    your repos) is its own tool, **Multi-repo hub server**.
+
+They are alternatives — pick the one that matches where your mods already are.
+
+| Route | What it does | Use it when |
+|---|---|---|
+| **Create a repo in one click** / **Build a repo from profiles** | Copies every mod into an output folder alongside the manifest (from a folder of mods, the one-click tool describes them where they are instead). | Starting from scratch; the mods are on this machine. |
+| **Manifest only** | Writes just `repo.json` for folders BMM can read here — one, several, or a set of profiles. **Nothing is copied.** | The mods are already where you want them. |
+| **Update from the server listing** | Reads what your server holds — over HTTP, or over SFTP on an SSH machine — and writes the manifest without pulling the repo back. | The mods live only on the server. |
+
+Whichever you use, the manifest lists every mod, its version, per-file SHA-256 hashes (plus
+4 MB block hashes on large files) and any changelog, and is **signed with your creator key** —
+so anyone syncing can confirm it came from you and was not tampered with. Every generation
+re-signs, including updates.
+
+**Your server does not have to move.** The manifest carries a layout template — `{id}` and
+`{path}`, default `mods/{id}/{path}` — so files already served under, say, `addons/<mod>/`
+are described rather than relocated. In *Manifest only* the layout is derived from where the
+manifest lands relative to the folder, so `repo.json` and the folder stay portable together.
+
+**Several folders, one repo.** *Manifest only* takes a list: add as many mods folders as you
+like, or switch to *From profiles* and tick several — profiles kept in different mods folders
+no longer have to become separate repos. A mod's id is its folder name, so two folders holding
+a folder of the same name would describe two different things under one id: that pair is
+reported and nothing is written, rather than being merged into a repo where half the files
+404. With more than one folder the layout is no longer derived (there is no single directory
+to derive it from) — the default `mods/{id}/{path}` applies, and the report says what each
+folder contributed, including the ones that contributed nothing.
+
+### Updating
+
+Run the same generation again. The repo keeps its identity — same seed and id — so
+subscribers see an update rather than an unrelated repo, and you are told what was **added**,
+**changed** and **removed**. That last one matters: a mistyped path writes a perfectly valid
+manifest describing an empty server.
+
+You do not have to bump a version: changes are detected by hash. When you want subscribers
+to see a new number, **Set the repo version** changes it and re-signs the manifest.
+
+*Update from the server* goes further: it compares the listing's sizes and timestamps against
+your last manifest and downloads only what actually changed, reusing the recorded hash for
+everything else. It reports **what the manifest is missing** separately from what merely
+changed — an incomplete repo and a stale one are different problems. It writes `repo.json`
+locally; you upload that one file with the client you already use, so BMM never needs write
+access to your server.
+
+You do not need a local manifest to start. Point it at a base URL and, if the server already
+publishes a `repo.json`, BMM fetches that as the starting point instead of your own last copy
+— so a repo you host but whose manifest you no longer have on this machine can still be
+updated, and a machine that has never seen the repo can produce a correct one. With no local
+path given, the result is written under `RemoteRepos/` rather than next to files you did not
+choose.
+
+!!! note "Over HTTP, this needs directory listing"
+    Reading an HTTP server means reading its own index, so `autoindex on` (nginx) or the
+    equivalent must be enabled. Without it BMM cannot see what the server holds.
+
+    **Over SSH it does not.** SFTP lists directories itself, which is the whole point of the
+    route below: a machine you reach by SSH usually publishes no index at all, and is exactly
+    the case where the mods exist nowhere else.
+
+### Reading an SSH machine instead
+
+Open **This repo is on an SSH machine** on the same screen and pick one of the servers you
+configured under *SSH servers*. Host, port, account and folder come from there — asking
+for them twice would be a second copy of the same facts, free to drift, and a fingerprint
+trusted in one place and unknown in the other.
+
+Two fields are yours to fill in, because they are the two things BMM never stores:
+
+| Field | Notes |
+|---|---|
+| **Account password** | Filling it in means "authenticate this run by password", and it takes precedence over the key. |
+| **Private key** | Optional. Empty means the key already saved on the chosen server; fill it — or pick one from the identity keyring — to use a different key for this run without editing the server. |
+| **Passphrase** | For the key, if it has one. |
+
+The same block sits in **Update the Server Repo**, where it does one more thing: a server that
+authenticates by *password* could not be used there at all before. The stored-target helpers
+refuse one on purpose — nothing about a password is written down, so a scheduled run has
+nobody to ask. In front of a dialog there is somebody to ask.
+
+**Host.** Serve the generated repo over BMM's built-in HTTP server so others can reach it.
+Optional switches make it public without port-forwarding gymnastics:
+
+| Option | What it does |
+|---|---|
+| **Cloudflare Tunnel** | Exposes your local server at a public URL with no router config. |
+| **UPnP** | Opens the port on your router automatically, for a direct connection. |
+| **Upload limit** | Caps outbound speed so hosting doesn't starve your own connection. |
+| **Download password** | Optional. Subscribers must enter it on first connect (sent as `X-Repo-Password`); blank = open repo. Distinct from the admin password. |
+
+Repo owners also get **access control** — allow lists and bans by IP, by creator key, or by
+**BetterCommunity account** — so a private repo stays private.
+
+Account entries are worth preferring. `X-Creator-ID` is supplied by the caller, so a ban on
+it is evaded by dropping the header and an allow list is passed by claiming an id that is on
+it. An account entry is checked against a short-lived attestation signed by BetterCommunity
+and verified offline, and it matches every identifier that account holds — its bcid, its
+linked creator ids and its linked Discord ids — so banning the account follows the person
+rather than one of their handles. Account entries apply only when the repo requires an
+account, since that is the only case where a signed identity exists.
+
+### Checking it before you publish
+
+- **Validate a repo** reads `repo.json`, re-hashes every file it lists, and checks the
+  signature and the format version, in one pass with progress and **Cancel**. Nothing is
+  written. Run again, it only re-reads the files that changed.
+- **Preview as subscribers see it** shows the card BMM displays after Fetch.
+- **Share link** gives a one-click link and a ready message, with the password or key notes
+  a protected repo needs.
+- A manifest written by an older BMM shows its **format version**, and **Convert…** brings it
+  up to date: it always shows a dry run of every change first, asks before writing, keeps the
+  old file as a `.bak` and re-signs. A repo written in a newer format than your BMM reads is
+  refused with a clear message. See [Format versions](doc-page:reference/repo-format#9-format-versions-and-converting-an-old-manifest).
+
+### Hosting without BMM running
+
+**Host on a static web host** gives the files and the configuration for GitHub Pages, nginx
+or any host that serves files: the repo is then just files, and no BMM has to stay open.
+See also [Hosting it without BMM](doc-page:reference/repo-format#7-hosting-it-without-bmm).
+
+### The standalone mini-server
+
+**Mini-server** (an advanced tool on the Server Repo screen) writes a folder that serves the repo
+on its own, on another machine: a script edition (v1 or v2, Node.js downloaded if missing) or a
+Node.js + Express one, with Docker files if you ask for them. Every edition now ships the same
+extras, close to what BMM's built-in server does:
+
+| Address | What |
+|---|---|
+| `/repo.json`, mod files | `ETag`, `Last-Modified`, `304 Not Modified`, `Range` (resumed downloads), `HEAD` |
+| `/feed.xml` | The Atom feed of the repo, the same file name as the built-in server, behind the same password |
+| `/status` | A status page with no outside resource, light or dark with the system: repo name, version, format version, file count and size, last update, feed link, an **Open in BMM** button (`bmm://repo/connect?url=…`) and the scheduled tasks |
+| `/status.json`, `/health` | The same as JSON; `200` while `repo.json` is readable (Docker and systemd use it) |
+
+The download password goes to `access.json` in every edition; subscribers send it as
+`X-Repo-Password` or `?password=`. A rate limit per address, the log, the public address and the
+jobs are in `server.config.json` beside the server, which it re-reads when you edit it;
+environment variables (`PORT`, `BMM_PUBLIC_URL`, `BMM_RATE_LIMIT`, `BMM_JOBS=off`…) win over it.
+
+**Scheduled tasks.** The generator asks, in plain choices, how often to check the files and to
+back up `repo.json`, and whether to rotate the log. **Advanced** adds: rewrite the hashes of an
+unsigned manifest when a file changed (a signed one is never rewritten: re-export it from BMM),
+bump its version, your own schedule (an interval such as `15m`, `6h`, `1d`, or a cron line such
+as `0 3 * * *`), a sync from a source (`git pull`, `rsync`, or a folder BMM exports into, then a
+rescan), the rate limit and the public address. A schedule BMM cannot read is refused before
+anything is written. On the server, each task's last run, result and next run show on `/status`.
+
+The folder also carries `README-SERVER.md` and `README-SERVER.fr.md` (addresses, configuration,
+HTTPS behind Caddy or nginx), a systemd unit and a Windows start-at-boot script in `bmm-server/`,
+and a self-test: `node bmm-server/selftest.js`. Nothing in `bmm-server/` is ever served.
+
+## Admin panel & monitoring
+
+Hosting comes with two host-side tools, both on the Server Repo screen:
+
+**Monitoring** — a live table refreshed every second: each connected client's IP, creator ID,
+protocol (**Local / LAN / WAN**), the file being downloaded with progress and speed, plus idle
+sessions and totals (clients, combined speed, active files). From any row you can **whitelist**
+or **ban** that client in one click. It also merges the `monitoring.json` that a
+hybrid standalone server writes into the same folder, so both servers show in one place.
+
+**Whitelist & bans** — two managers with search, manual add (by IP and/or creator key),
+one-click removal and JSON export. The whitelist has a master on/off switch: off = everyone may
+download (minus bans); on = only listed identities pass.
+
+The generated standalone server exposes matching endpoints:
+
+| Endpoint | Access |
+|---|---|
+| `/monitoring.json` | Public, read-only totals: active downloads, bytes sent, each running file's progress. No IP address and no Creator ID. |
+| `/dashboard` | Public page; it shows nothing until you log in with the admin password. |
+| `/admin/monitoring`, `/admin/data`, `/admin/update`, `/admin/logs` | Admin password (Authorization header, constant-time compare). `/admin/monitoring` is who is downloading: IP, Creator ID, sessions. |
+
+The built-in server (hosting from BMM itself) publishes the same aggregate `monitoring.json`;
+who is downloading is shown only in BMM's Monitoring table, on the host's machine.
+
+```mermaid
+flowchart TD
+    subgraph HOST["Host (BMM)"]
+        BUILTIN[["Built-in server"]]
+        MON["Monitoring table<br/>(every second)"]
+        WL["Whitelist and<br/>ban managers"]
+    end
+    subgraph SRV["Standalone server"]
+        GATE{"Access gate"}
+        SERVE["Send the file"]
+        ADMIN["/admin/*<br/>(admin password)"]
+    end
+    subgraph DIR["Served folder"]
+        LISTS[("bans.json<br/>whitelist.json")]
+        MJSON[("monitoring.json")]
+    end
+    CLIENT(["Subscriber"]) --> GATE
+    GATE -- "pass" --> SERVE
+    SERVE -- "hybrid only" --> MJSON
+    GATE -- "reads" --> LISTS
+    ADMIN -- "writes" --> LISTS
+    BUILTIN -- "live state" --> MON
+    MON -- "reads" --> MJSON
+    WL -- "writes" --> LISTS
+```
+
+The managers write `bans.json` and `whitelist.json` into the served folder, and the standalone
+server re-reads them on every request. It checks, in order: bans, the login requirement, the
+whitelist, then the download password and any key access; requests from its own machine skip the
+gate. The built-in server checks the download password and key access first, then the login
+requirement, then bans and the whitelist.
+
+### Publishing a new version
+
+When you update your mods, use **Update an existing repo**: an incremental flow that bumps
+versions and lets you write a per-mod changelog (shown to users when the update is detected).
+It only rewrites what changed, mirroring the delta-sync on the download side. The mod-author
+walkthrough lives in the developer guide *Making your mod updatable*.
+
+## Getting the folder onto the server (SSH/SFTP)
+
+Exporting writes a folder. Putting it on the machine that serves it is one panel, and it is
+the same panel everywhere that sentence makes sense — no separate file-transfer program in
+between, and no screen you have to visit first.
+
+There are two halves, and they used to be one card:
+
+- **SSH servers** — the machines you own. Configured once, from anywhere: the button is on
+  every panel that publishes, and it opens over whatever you were looking at.
+- **The publish panel** — pick one of those servers, say where it lands, type the passphrase,
+  go.
+
+That split is the point. A server is not a property of an export: it is a machine, and you use
+it from the repo screen, from the manifest screen and from a catalogue. Configuring it inside
+"Generate a repository" meant publishing a catalogue began with visiting a page about
+something else.
+
+### Where the panel appears
+
+Everywhere the sentence "publish this" or "fetch this" is true:
+
+| Screen | What it sends, without being told | Direction |
+|---|---|---|
+| **Generate a repository** | the exported folder | publish · fetch |
+| **Update a repo** | the folder you are editing | publish · fetch |
+| **Manifest only** | the `repo.json` it just wrote — the file, not the folder around it | publish |
+| **A catalogue you are building** | the file you saved | publish |
+
+Each one already knows what it has, so there is nothing to retype. Where a card cannot know —
+a catalogue whose file you saved through a system dialog — the panel asks, rather than
+guessing.
+
+### What the panel asks
+
+| | |
+|---|---|
+| **Server** | One of your saved servers. The list updates while the card is open, so a server added from the same panel appears without navigating anywhere. |
+| **Destination** | The server's base folder, filled in. Changing it here applies **to this transfer only** — a one-off publish into a subfolder must not silently move where every other card publishes. **Browse…** walks the server's folders. |
+| **Passphrase or password** | Read at the moment of use and stored nowhere. A key without a passphrase leaves it empty. |
+
+Publishing asks for confirmation and **names the server**. It overwrites what people are
+downloading right now, and with several configured, *which one* is the question worth
+answering.
+
+!!! note "This is also what automations reuse"
+
+    What you save under **SSH servers** is the connection the scheduled action **Publish repo
+    over SSH** and `POST /api/repo/publish-ssh` both use. Neither can name a host or a key of
+    its own, on purpose: a task or a caller able to name those could make BMM read a private
+    key of its choosing and ship a repo to a machine of its choosing.
+
+    Which means a key protected by a **passphrase cannot run unattended** — nothing about that
+    passphrase is kept, so there would be nobody to ask. A scheduled publish against one fails
+    with a message rather than hanging on a prompt no one will see.
+
+### Credentials can travel with the repo
+
+The export card carries the same **"Include credentials for protected sources"** fold as the
+`.MM` export, and it means the same thing: download passwords for the hosts this repo's mods
+actually point at, and identity keys, sealed with a passphrase into a block inside
+`repo.json`.
+
+Only that block is encrypted, never the manifest — a repo nobody can read is a repo nobody
+can check. It is sealed **before** the repo is signed, so the signature still verifies, and
+it is carried forward when you re-export without touching the fold, exactly like modpacks
+and extras. Sealing with the fold open but nothing ticked is how you remove it.
+
+Who this is for: a private repo whose mods live behind a password. Without the block, the
+person you hand the repo to gets addresses that answer 401 and no way to know why before
+trying.
+
+### The SSH servers dialog
+
+**SSH servers** lists your saved servers with their state: *Incomplete*, *Not tested yet*,
+*Server key trusted*, *Test passed* or *Last test failed*. Pick one to edit it, or **Add a
+server**. Every field of the form says what is wrong with it while you type: the host (a name or
+an IP, no spaces, no `http://`), the port (1 to 65535), the user, the key file, the base folder,
+and the name used in `ssh://name/` addresses (letters, digits, dot, dash and underscore). Pasting
+`me@nas.local:2222` into the host fills the user and the port.
+
+**Test the connection** goes step by step and says which step failed: reach the server, check
+its key, sign in, then look at the base folder (it exists, it is writable, and if not, who owns
+it).
+
+Keyboard: :kbd[Up] and :kbd[Down] move through the servers, :kbd[Enter] goes to the form,
+:kbd[Enter] or :kbd[Ctrl+S] saves, :kbd[Escape] closes. Deleting a server and discarding changes
+ask in BMM's own dialogs.
+
+### What you fill in
+
+| Field | Notes |
+|---|---|
+| **Host, port, user** | The same three things any SSH client asks for. Port defaults to 22. |
+| **Key or password** | Two buttons at the top. A password is what most accounts already have; a key is what a server running `PasswordAuthentication no` requires. |
+| **Private key** | OpenSSH or PuTTY `.ppk`, both read as they are — no conversion step. |
+| **Identity key** | The chooser under the path field lists the keys from *Settings → Identity & API*. A keyring entry is a name and a path, which is exactly what SFTP needs, so the key a catalogue knows you by can open a shell too. Picking one **fills** the path field rather than replacing what it means, and the reverse is deliberately not wired: configuring a server must not silently change which identity BMM presents to catalogues. |
+| **Remote folder** | An absolute path. **Browse…** opens the server's folders so you can pick it rather than type it. |
+
+**Test the connection** does everything an upload does except upload: it authenticates, opens
+the folder, and writes-then-deletes a probe file. "The folder exists" and "I may write into
+it" are different questions, and only the second one matters — the upload version of that
+failure happens after transferring everything.
+
+When the probe is refused, the report says **why** rather than only that it was: the remote
+folder's owner and mode, and the account BMM connected as. That is almost always the whole
+story and it is invisible from your side of the connection:
+
+```text
+/srv belongs to uid 0:0 with mode rwxr-xr-x, and BMM connected as "bob".
+On the server: sudo chown bob /srv — or publish into a subfolder you own, e.g. /srv/bmm.
+```
+
+`/srv`, `/var/www` and `/opt` are root-owned and mode 755 on most distributions: **everyone
+may list them and only root may create a file in one.** Nothing is wrong with your account or
+your key, which is why "permission denied" on its own sends people to check the one thing that
+was never the problem.
+
+### Which SSH keys work
+
+Verified by decoding one of each with the library BMM actually uses, not from memory.
+
+| Key type | Accepted |
+|---|---|
+| **ed25519** | Yes — the modern default, and the one to prefer |
+| **RSA** (3072, 4096) | Yes |
+| **ECDSA** nistp256 / nistp384 / nistp521 | Yes |
+| **DSA** | No — OpenSSH removed it; `ssh-keygen -t dsa` refuses to generate one |
+
+The **container** matters as much as the algorithm. Any of these are read as they are:
+
+| Header in the file | What produced it |
+|---|---|
+| `-----BEGIN OPENSSH PRIVATE KEY-----` | `ssh-keygen` today |
+| `PuTTY-User-Key-File-…` | PuTTY / WinSCP (`.ppk`) — no conversion needed |
+| `-----BEGIN RSA PRIVATE KEY-----` | `ssh-keygen -m PEM` (PKCS#1) |
+| `-----BEGIN PRIVATE KEY-----`, `-----BEGIN EC PRIVATE KEY-----` | PKCS#8 |
+| `-----BEGIN ENCRYPTED PRIVATE KEY-----` | PKCS#8, passphrase-protected |
+
+A passphrase-protected key works: type the passphrase in the field beside the key. It is used
+for that connection and never stored, which is why an unattended run — a scheduled task, a
+deeplink — needs a key with **no** passphrase.
+
+!!! warning "RSA needs a modern server, and BMM now asks for one"
+    The legacy `ssh-rsa` signature is SHA-1, refused by default since OpenSSH 8.8. BMM
+    negotiates `rsa-sha2-512` / `rsa-sha2-256` with the server instead. If yours is older than
+    8.8 and offers nothing else, use an ed25519 key.
+
+#### The public half goes on the server
+
+BMM only ever reads the PRIVATE key. The PUBLIC one has to be in `~/.ssh/authorized_keys` on
+the server, and it must be the **one-line OpenSSH format**:
+
+```
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA… you@machine
+```
+
+PuTTY's *Save public key* writes something else — the RFC4716 block:
+
+```
+---- BEGIN SSH2 PUBLIC KEY ----
+Comment: "256-bit ED25519…"
+AAAAC3NzaC1lZDI1NTE5AAAA…
+---- END SSH2 PUBLIC KEY ----
+```
+
+`authorized_keys` cannot read that, and the server rejects the key while everything looks
+correct. Convert it, or derive the public half from the private key you already have:
+
+```bash
+ssh-keygen -i -m RFC4716 -f exported.pub    # RFC4716 → OpenSSH
+ssh-keygen -y -f ~/.ssh/id_ed25519          # straight from the private key
+```
+
+In PuTTYgen the same thing is the *Public key for pasting into OpenSSH authorized_keys* box at
+the top of the window — not the **Save public key** button.
+
+### Fetching it back
+
+**Fetch from the server** is the same connection in the other direction: it copies the repo
+the server is actually serving into your export folder. Use it to edit a repo from a second
+machine, to recover a lost local copy, or to confirm that what is online is what you think.
+
+Files of the same name are overwritten by the server's version; local files the server does
+not have are left alone. Deleting them would let a fetch aimed at the wrong folder destroy
+something unrelated.
+
+### What is stored, and what is not
+
+Host, port, user, remote folder, the chosen method and the **path** to your key are saved. The
+key itself never is, and neither is the passphrase or the password. A key copied into BMM's
+config would be a key in every backup, every export and every crash report that attaches
+settings.
+
+The passphrase or password is typed in the form, used for **Test** and **Browse**, and never
+stored.
+
+### The server's key
+
+**First connection.** A server BMM has never seen shows its key fingerprint (`SHA256:…`) and
+asks *First connection to this server. Is this its key?* **before anything is sent to it**: no
+password, no key signature. Compare it with the server's own, on the server:
+
+```bash
+ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
+```
+
+If both say the same `SHA256:…`, press **Trust this server**; the fingerprint is recorded and
+must match on every later connection. If they differ, press **Do not connect**.
+
+**A changed key is refused.** If the server later presents another key, BMM refuses to connect
+and shows the *Trusted* and the *Now* fingerprints side by side. It is refused outright rather
+than warned about: the case it protects against is exactly the one where a warning gets clicked
+through. If you rebuilt or reinstalled the server, use **Forget the fingerprint**, then test
+again: the next connection shows the new key and asks again. If you did not, do not connect:
+someone may be between you and the server.
+
+### Order of transfer
+
+Files are sent first and `repo.json` **last**, deliberately. Subscribers read the manifest and
+then fetch what it lists, so sending it first would hand everyone syncing during the upload
+window a manifest promising files that do not exist yet.
+
+### Syncing FROM an SSH repo
+
+The other side of the same connection: installing mods from a repo that lives on an SSH
+server rather than behind an HTTP URL.
+
+Put **`ssh://`** in the sync URL field. That value carries no host, user or key — everything
+about where to connect comes from the target configured above. The rest of the sync screen
+works exactly as it does over HTTP: the profile list, the choices, delta by hash, the
+"add as update source" checkbox.
+
+Because it is only a URL, every existing entry point inherits it with no new action:
+
+| Entry point | Value |
+|---|---|
+| Sync screen | `ssh://` in the URL field |
+| Deeplink | `bmm://repo/sync?url=ssh://` |
+| Scheduler | *Sync repo*, URL `ssh://` |
+| Local API | `POST /api/repo/sync` with `"url": "ssh://"` |
+
+!!! note "Two differences from HTTP"
+    Chunk-level **resume** is an HTTP Range feature and is not used over SFTP — a file that
+    needs fetching is fetched whole. The per-file delta that saves the real time still
+    applies: the sync compares hashes and only asks for what changed.
+
+    A **password**-authenticated source works while the SSH panel is open and filled in.
+    Unattended runs need a key with no passphrase, for the same reason publishing does.
+
+### Without opening the screen
+
+| Entry point | Publish | Fetch |
+|---|---|---|
+| Scheduler | *Publish repo over SSH* | *Fetch repo over SSH* |
+| Deeplink | `bmm://repo/publish-ssh?dir=<folder>` | `bmm://repo/fetch-ssh?dir=<folder>` |
+| Local API | `POST /api/repo/publish-ssh` | `POST /api/repo/fetch-ssh` |
+
+All of them use the target saved in Server Repo. **None can name a different host, key or
+password** — the call says "publish (or fetch) what I already configured", and that is all it
+can say. The rule matters most for fetching, which writes to your own disk.
+
+A deeplink clicked on a web page asks first, and for publishing opens the folder picker at
+`dir` so **you** choose what is uploaded; a network path in `dir` is refused. A scheduled task
+and the local API are not asked.
+
+Unattended runs need a key with **no passphrase**, and cannot use a password at all: nothing
+is stored and there is nobody to ask at 04:00, so they fail with a message rather than waiting
+forever on a prompt no one will see.
+
+## Protecting a repo: password, or a public key
+
+Two different guarantees, and they can be used together.
+
+A **download password** is a shared secret. Anyone who has it can sync, and anyone who has it
+can pass it on — which is the point when you want to hand access to a group, and the problem
+when you want to hand it to one machine.
+
+A **public key** cannot be handed on so easily. You paste the public half into the repo's
+access list; the client has to hold the matching private half and *sign* for it on every
+request. Nothing that travels over the wire can be replayed elsewhere, and revoking a key is
+deleting one line.
+
+!!! warning "Related to the SSH key above, but not the same job"
+    The SSH key is how BMM logs in to a *server* to move files. This key is how BMM proves
+    *who it is* to a repository or catalogue it fetches over HTTPS.
+
+    The same **file** can do both, and the SSH panel will offer you this keyring to pick from.
+    What is not shared is the *choice*: picking a key for an SFTP target does not change which
+    identity BMM presents to catalogues. One is "let me in", the other is "this is who I am",
+    and answering one by changing the other is how you end up presenting the wrong identity
+    without ever deciding to.
+
+### A protected source and no key yet
+
+When a source asks for a private key and the keyring is empty, BMM no longer leaves you stuck. The
+key row says *You have no private key yet* and offers two buttons: **Create one** (BMM makes a key
+and copies its **public line** to the clipboard, ready to send to whoever runs the source) and
+**Add…** (import a key file you already have). The key joins your keyring either way.
+**Manage keys** (here, and in the SSH panel) goes straight to the keyring in Settings.
+
+### On the client (BMM)
+
+Keys live in **Settings → Identity & API → Identity keys**. Add as many as you like, each
+under a name you choose. One is the **default** — the one presented to anything that asks —
+and any individual server can be pointed at a different one, so a work identity and a personal
+one can coexist without swapping files between runs.
+
+Where a key chooser appears elsewhere in BMM — a protected catalogue, a repo, the SSH panel —
+it lists these same keys by name. Choosing one for a source is remembered for that server's
+origin.
+
+Only the **path** is stored. The file is read at the moment a proof is signed and the bytes
+are dropped — BMM never writes key material to disk, exactly as with the SSH passphrase.
+
+It must be an **unencrypted private key** — **ed25519, RSA or ECDSA**, OpenSSH format or
+PuTTY `.ppk`. A passphrase-protected file is refused, because BMM has nowhere to keep the
+passphrase and nobody to ask for it while signing. BMM checks the file when you pick it rather
+than failing later against someone else's server, so a wrong file is reported as a wrong file.
+
+```bash
+ssh-keygen -t ed25519 -N "" -f ~/.ssh/bmm_identity
+```
+
+### On the server
+
+Paste the **public** half — the `.pub` file, one-line OpenSSH format, the same form
+`authorized_keys` wants:
+
+- **A repo hosted on BetterCommunity** → the repo dashboard, *Access* → *Authorised public
+  keys*.
+- **A community catalogue** → your catalogue's *Access* panel, same field. This covers every
+  kind a catalogue can hold: plugin, theme, preset and app.
+- **A catalogue index you host yourself** → it is just a JSON file on your server, so it is
+  protected by whatever protects that server, and BMM presents both the password and the key
+  when fetching it.
+
+!!! note "BetterCommunity's own index is public on purpose"
+    `/api/catalogs.json` is the platform's directory of listed public catalogues. It has no
+    access gate and is not meant to get one — closing it would hide the catalogues it exists
+    to advertise. Protect the individual catalogues instead; a private one never appears in
+    it in the first place.
+- **A repo you serve yourself** from BMM → the same list, passed to the built-in server.
+
+Adding a key makes it **required for everyone**. It is not one more way onto an allow list —
+it is a condition on every request, so add your own key before you add anybody else's.
+
+**ed25519, RSA and ECDSA** are accepted, and anything unparseable is refused at the moment you
+paste it. That refusal is deliberate: a key that cannot be verified would store a requirement
+nothing could ever satisfy, and would lock out every client including you.
+
+The earlier wire format accepted ed25519 only. That was a defensible trade until it met the
+common case — somebody whose only key is an RSA `.ppk` from PuTTY, being told to regenerate
+their identity because their perfectly good key was the wrong shape.
+
+### What the client sends
+
+A short-lived signed statement, not the key:
+
+```
+X-BMM-Key-Proof: bmmk2.<payload>.<signature>
+```
+
+The payload names the public key, the **origin it is addressed to**, and an expiry two minutes
+out. Being addressed to one origin is what stops a proof captured by one server from opening
+another — a signature for `https://a.example` is refused by `https://b.example`, and the
+server checks that against its own configured address, never against the address the request
+claims to be for.
+
+Signing is cached per origin, so a sync of a thousand files costs one signature every two
+minutes rather than a thousand.
+
+
+## Everything else the repo carries
+
+A repo used to mean profiles of mods, plus modpacks. The rest of a setup — the plugin that
+drives it, the automation that keeps it in step, the theme, the mod lists, the catalogues to
+follow — had to be published somewhere else and described in prose, so what somebody received
+was a folder of mods and a reading exercise.
+
+**Server Repo → Include in the repo…** takes a repo FOLDER, not a fresh export. That is
+deliberate: it works on a repo you exported five minutes ago and on one you published last
+spring, without regenerating a single mod.
+
+### Choosing what goes in
+
+**Include in the repo…** opens the list. It used to open a Windows folder dialog *first*,
+whenever the export-path box happened to be empty — so the answer to "what can I include?"
+was a file explorer, and you only saw the list after committing to a folder. The list never
+depended on the folder.
+
+The destination is now a row inside the screen with **Choose a folder…** beside it. Picking a
+different folder re-reads it and re-seeds what is ticked: those ticks are a fact about ONE
+repo, and carrying them over from the folder you looked at before would publish things nobody
+chose. A folder that is not a repo says so on the screen, next to the button that can fix it.
+
+### Choosing now, publishing later
+
+The picker records a **decision**. It used to write, immediately, into a repo folder that had
+to exist already — so publishing a plugin alongside a repo meant generating the repo,
+remembering to come back, adding the plugin, and generating again if a profile had changed.
+Choosing and publishing were the same act, in the wrong order.
+
+Open it with no folder chosen and what you tick is kept. It goes in when the repo is made,
+and **every** path that leaves a folder worth publishing applies it:
+
+| | |
+|---|---|
+| **Generate** | a fresh repo, at the end of the export |
+| **Manifest only** | after `repo.json` is written |
+| **Update an existing repo** | after the update finishes |
+| **Update from the server** | the same handler as above |
+
+A badge beside the button says how many are waiting, because a selection applied later is one
+people forget they made — and it disappears the moment they are written.
+
+!!! note "It clears once, and not on a failure"
+
+    Applied, it stops being pending: otherwise the same selection lands in every repo you
+    generate afterwards, including ones it was never meant for. A **failure** keeps it — that
+    is usually a file that has moved or a folder that is not writable, and clearing would make
+    the fix "choose all fourteen again" instead of "generate again".
+
+Choosing a folder still writes into it straight away, which is the right thing when the repo
+is already published and you are adding to it. The button says which of the two it will do.
+
+### Two shapes, and the difference matters
+
+=== "Files travel with the repo"
+
+    A **plugin**, an **automation**, a **theme**, a **mod list** (`.mm`), a **catalogue
+    bundle** (`.bmmbundle`) and a **launch pack** (`.bmmlaunch`) are copied into
+    `extras/<kind>/` and listed in `repo.json` with a sha256. They are checked on arrival
+    exactly as a mod file is.
+
+    These are snapshots by nature. What you published is what somebody gets.
+
+=== "Catalogues and app sources travel as addresses"
+
+    A **catalogue** is a thing that CHANGES. Copying one into a repo would publish a frozen
+    fork that quietly stops matching its source, and the reader would have no way to tell —
+    so only the address travels, and whoever follows it gets the catalogue as it is on the
+    day they look.
+
+!!! tip "Where the bundle comes from"
+
+    The picker lists every catalogue you follow. An `https://` one appears as an address to
+    recommend; a `.bmmbundle` you follow appears as a file to carry — the format always
+    allowed both and the picker only ever offered the first, so the one kind of catalogue
+    that needs no host was the one kind a repo could not pass on.
+
+    **Carry a catalogue file…** takes one that is not in your followed list at all: a bundle
+    somebody sent you, or one you just published from the app catalogue's Create screen. It
+    is opened and checked before it is offered, so a zip that is not a catalogue fails there
+    rather than on somebody else's machine.
+
+### Modpacks are on this screen too
+
+They used to be a list on the export form, so a modpack could only be shared while
+re-exporting every mod in the repo. That is the thing this screen exists to avoid.
+
+A modpack is **not** an extra and is not treated as one: an extra is a file under
+`extras/` listed in `repo.extras`, while a modpack is an entry in `repo.modpacks` with its
+own **share mode** — public, the repo's whitelist, or a list of ids you type. The control for
+that rides on the modpack rows only, because the other kinds have nothing like it.
+
+Ticking and unticking is the whole list: this screen shows what the repo publishes and you
+edit it, so unticking the last modpack means the repo stops sharing it.
+
+!!! warning "Re-exporting used to throw all of this away"
+
+    `repo.json` is rebuilt from scratch by an export, and only the **seed** was carried
+    across — because losing that breaks every client at once. Everything this screen
+    published failed quietly instead: plugins, themes, automations, mod lists, catalogues,
+    bundles and shared modpacks simply stopped being offered, with nothing said.
+
+    They are carried over now. An export supplies mods; what it says nothing about, it
+    leaves alone.
+
+### What arrives, and what it is allowed to do
+
+Nothing installed from a repo runs.
+
+| Kind | On arrival |
+|---|---|
+| Plugin | Installed **disabled**, with **no permissions** — and any permission previously granted to that id is cleared. |
+| Automation | Added to the scheduler **disabled**. |
+| Theme | Installed. It is data. |
+| Mod list · bundle | Saved, and BMM **asks** before opening it. |
+| Catalogue · app source | Followed, and listed with the repo as its origin so you can un-follow it later. |
+
+!!! warning "Why plugins and automations are unticked by default"
+
+    A plugin is code that runs inside BMM; an automation can run commands on your machine.
+    Syncing a repo is a decision about mods. A default tick would turn it into a decision
+    about running a stranger's code that nobody made out loud.
+
+    The permission clearing is the less obvious half. Ids are chosen by whoever writes the
+    manifest, so without it a repo could name its plugin after one you had already trusted
+    and inherit the grant in silence.
+
+!!! note "A kind this build does not know"
+
+    It is still **listed**, named, and refused with a reason. A repo published by a newer BMM
+    must not look like a repo with things missing from it.
+
+### The manifest
+
+```json
+{
+  "extras": [
+    { "kind": "plugin", "id": "dcs-helper", "name": "DCS Helper", "version": "1.2",
+      "file": { "relative_path": "dcs-helper.bmmplug", "size": 40122, "sha256_hash": "…" } },
+    { "kind": "catalog", "id": "…", "name": "Squadron themes",
+      "url": "https://example.org/themes/catalog.json", "catalog_type": "theme" },
+    { "kind": "modlist", "id": "ops", "name": "Ops list", "locked": true,
+      "file": { "relative_path": "ops.mm", "size": 8210, "sha256_hash": "…" } }
+  ]
+}
+```
+
+`kind` is one of `plugin` · `task` · `theme` · `modlist` · `bundle` · `launchpack` ·
+`catalog` · `app`. A locked mod list says so in the manifest, so the screen can tell you it
+needs a passphrase *before* the download rather than after — otherwise what arrives is a file
+that will not open and no way to tell whether that is the point or a broken transfer.
+
+!!! warning "A launch pack is never installed by a sync"
+
+    A launch pack is a **list of programs to start on your machine**, chosen by whoever
+    published the repo. Every other extra can be applied at the end of a sync; this one is
+    written out and offered, with a confirm that says what it is, and the toast afterwards
+    names how many of those programs are not where the file claims they are. A pack whose
+    games sit on `D:` for the publisher and `C:` for you is the ordinary case, and both
+    silently importing something that starts nothing and silently dropping half of it are
+    worse than saying so.
+
+**Adding extras re-signs `repo.json`**, because they are inside what the signature covers.
+Leaving the old signature would publish a manifest that fails its own check, which reads to a
+downloader as tampering and is indistinguishable from it.
+
+!!! tip "File names are narrowed on purpose"
+
+    A carried file's name keeps only `A-Z a-z 0-9 . _ -`. Hosts normalise paths — BetterCommunity
+    replaces everything else, spaces included — so a name this kept that the host does not
+    would put `My Theme.bmmtheme` in the manifest, `My_Theme.bmmtheme` on the server, and a
+    404 on a file sitting right there. The failure reads as a publisher who forgot to upload
+    something.
+
+### From a script, the CLI or an assistant
+
+```bash
+bmm repo-extras https://example.org/repo
+bmm repo-take https://example.org/repo theme night-ops
+```
+
+`POST /api/repo/extras` does the same thing over HTTP (`repo.write`). Reading needs no new
+endpoint — `/api/repo/info` returns the manifest, and `extras` is part of it. The MCP tools
+are `bmm_repo_extras` and `bmm_repo_extra_take`.
+
+!!! note "The entry is looked up, not described"
+
+    The endpoint takes a repo URL plus a `kind` and an `id`, and finds the entry in the
+    manifest it fetched. A caller that could hand over its own `{kind, url, sha256}` would be
+    using BMM's installer to install arbitrary files — and the hash check would be checking
+    the caller's own number.

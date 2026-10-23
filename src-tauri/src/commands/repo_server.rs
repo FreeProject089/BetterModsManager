@@ -1,10 +1,11 @@
+use tauri::Emitter;
 use std::sync::Mutex;
 use tokio::sync::Mutex as AsyncMutex;
 use tokio::sync::oneshot;
 use local_ip_address::local_ip;
 use std::path::PathBuf;
 use igd::{search_gateway, PortMappingProtocol};
-use tokio::process::{Command, Child};
+use tokio::process::Child;
 use std::process::Stdio;
 use tokio::io::{BufReader, AsyncBufReadExt};
 use tokio_util::io::ReaderStream;
@@ -18,6 +19,34 @@ use tauri::Manager;
 use regex::Regex;
 use bytes::Bytes;
 use percent_encoding::percent_decode_str;
+
+/// Emitted when a client fetches repo.json (anti-spam: 30s per client)
+#[derive(serde::Serialize, Clone)]
+pub struct ServerClientConnectedPayload {
+    pub ip: String,
+    pub creator_id: Option<String>,
+    pub protocol: String,
+}
+
+/// Emitted when a mod file download starts on the server
+#[derive(serde::Serialize, Clone)]
+pub struct ServerDownloadStartedPayload {
+    pub ip: String,
+    pub creator_id: Option<String>,
+    pub file: String,
+    pub total_size: u64,
+    pub protocol: String,
+}
+
+/// Emitted when a mod file download finishes on the server
+#[derive(serde::Serialize, Clone)]
+pub struct ServerDownloadFinishedPayload {
+    pub ip: String,
+    pub creator_id: Option<String>,
+    pub file: String,
+    pub total_size: u64,
+    pub protocol: String,
+}
 
 #[derive(serde::Serialize)]
 pub struct ActiveDownload {
@@ -42,6 +71,16 @@ pub struct RepoServerState {
     pub upload_limit: Mutex<u32>, // KB/s
     pub seed: Mutex<Option<String>>,
     pub active_downloads: Arc<Mutex<HashMap<String, ActiveDownload>>>,
+    /// Anti-spam: tracks last notification instant per "ip|creator_id" — 30s cooldown
+    pub connected_clients: Arc<Mutex<HashMap<String, std::time::Instant>>>,
+    /// Track session download notifications per client - only notify once per session start
+    pub session_download_started: Arc<Mutex<HashMap<String, bool>>>,
+    /// Track session completion notifications per client - only notify when all downloads complete
+    pub session_download_completed: Arc<Mutex<HashMap<String, bool>>>,
+    /// True while a repo sync is in progress (set by the API, cleared by the UI flow).
+    pub sync_busy: Arc<std::sync::atomic::AtomicBool>,
+    /// True while a repo generation/export is in progress.
+    pub gen_busy: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Default for RepoServerState {
@@ -58,15 +97,65 @@ impl Default for RepoServerState {
             upload_limit: Mutex::new(0),
             seed: Mutex::new(None),
             active_downloads: Arc::new(Mutex::new(HashMap::new())),
+            connected_clients: Arc::new(Mutex::new(HashMap::new())),
+            session_download_started: Arc::new(Mutex::new(HashMap::new())),
+            session_download_completed: Arc::new(Mutex::new(HashMap::new())),
+            sync_busy: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            gen_busy: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
+}
+
+/// Set/clear the sync/gen busy flags (called by the UI flow to release the
+/// guard the API endpoints use to reject concurrent processes).
+#[tauri::command]
+pub fn set_repo_busy(state: tauri::State<'_, RepoServerState>, kind: String, busy: bool) {
+    use std::sync::atomic::Ordering;
+    match kind.as_str() {
+        "sync" => state.sync_busy.store(busy, Ordering::SeqCst),
+        "gen"  => state.gen_busy.store(busy, Ordering::SeqCst),
+        _ => {}
+    }
+}
+
+/// Read the "require a BetterCommunity login to download" flag from a repo's repo.json.
+#[tauri::command]
+pub fn get_repo_require_login(repo_dir: String) -> bool {
+    let manifest = std::path::PathBuf::from(&repo_dir).join("repo.json");
+    std::fs::read_to_string(&manifest).ok()
+        .and_then(|c| serde_json::from_str::<serde_json::Value>(&c).ok())
+        .and_then(|v| v.get("require_login").or_else(|| v.get("requireLogin")).and_then(|b| b.as_bool()))
+        .unwrap_or(false)
+}
+
+/// Set the "require a BetterCommunity login to download" flag in a repo's repo.json.
+#[tauri::command]
+pub fn set_repo_require_login(repo_dir: String, require: bool) -> Result<(), String> {
+    let manifest = std::path::PathBuf::from(&repo_dir).join("repo.json");
+    let content = std::fs::read_to_string(&manifest).map_err(|e| e.to_string())?;
+    let mut val: serde_json::Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+    // Called on EVERY start of the built-in server. Rewriting an unchanged answer turned a
+    // `null` into `false` — a different serialisation of the same meaning — and that alone
+    // made a signed manifest fail its own signature check (and lose its format key order).
+    let current = val.get("require_login").or_else(|| val.get("requireLogin"))
+        .and_then(serde_json::Value::as_bool).unwrap_or(false);
+    if current == require {
+        return Ok(());
+    }
+    if let Some(obj) = val.as_object_mut() {
+        obj.insert("require_login".into(), serde_json::Value::Bool(require));
+        obj.remove("requireLogin");
+    }
+    let out = serde_json::to_string_pretty(&val).map_err(|e| e.to_string())?;
+    std::fs::write(&manifest, out).map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 async fn get_cloudflared_path(handle: &tauri::AppHandle) -> Result<PathBuf, String> {
     // 1. Check user settings first
     let state = handle.state::<crate::state::AppState>();
     let settings = {
-        let data = state.data.lock().unwrap();
+        let data = state.data.lock().map_err(|_| "Failed to lock AppState".to_string())?;
         data.settings.clone()
     };
 
@@ -79,7 +168,7 @@ async fn get_cloudflared_path(handle: &tauri::AppHandle) -> Result<PathBuf, Stri
     }
 
     // 2. Default auto-download path
-    let app_dir = handle.path_resolver().app_data_dir().ok_or("Impossible de trouver le dossier AppData")?;
+    let app_dir = handle.path().app_data_dir().ok().ok_or("Impossible de trouver le dossier AppData")?;
     let bin_dir = app_dir.join("bin");
     if !bin_dir.exists() {
         std::fs::create_dir_all(&bin_dir).map_err(|e| e.to_string())?;
@@ -96,31 +185,19 @@ async fn get_cloudflared_path(handle: &tauri::AppHandle) -> Result<PathBuf, Stri
         };
         let url = format!("https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-{}.exe", arch);
         
-        let client = reqwest::Client::builder()
-            .user_agent("BetterModsManager/1.0")
-            .build()
-            .map_err(|e| format!("Client error: {}", e))?;
-
-        let response = client.get(&url).send().await.map_err(|e| format!("Erreur de téléchargement: {}", e))?;
+        let response = crate::commands::net::client().get(&url)
+            .header(reqwest::header::USER_AGENT, "BetterModsManager/1.0")
+            .send().await.map_err(|e| format!("Download error: {}", e))?;
         if !response.status().is_success() {
             return Err(format!("Échec du téléchargement (Status {}): {}", response.status(), url));
         }
 
-        let bytes = response.bytes().await.map_err(|e| format!("Erreur de lecture: {}", e))?;
-        std::fs::write(&cf_path, &bytes).map_err(|e| format!("Erreur d'écriture: {}", e))?;
+        let bytes = response.bytes().await.map_err(|e| format!("Read error: {}", e))?;
+        std::fs::write(&cf_path, &bytes).map_err(|e| format!("Write error: {}", e))?;
         println!("[Tunnel] Download complete.");
     }
 
     Ok(cf_path)
-}
-
-async fn fetch_public_ip() -> Result<String, String> {
-    reqwest::get("https://api.ipify.org")
-        .await
-        .map_err(|e| format!("Network error: {}", e))?
-        .text()
-        .await
-        .map_err(|e| format!("Parse error: {}", e))
 }
 
 #[derive(serde::Serialize)]
@@ -139,6 +216,15 @@ pub async fn start_repo_server(
     path: String,
     port: u16,
     upload_limit: u32,
+    // Optional download password. Empty or absent = open repo, as before.
+    download_password: Option<String>,
+    // Owner-pasted PUBLIC keys, one OpenSSH line each (`ssh-ed25519 AAAA… you@machine`).
+    // Empty or absent = no key requirement. `//` and not `///`: a doc comment is not allowed
+    // on a function parameter, which is a compile error rather than a warning.
+    //
+    // Converted below rather than at request time, so a key that cannot be read is reported
+    // when the owner SETS it, not the first time a subscriber is silently refused.
+    authorized_keys: Option<Vec<String>>,
 ) -> Result<StartServerResult, String> {
     // 1. Check if already running
     // 2. Validate path
@@ -175,10 +261,13 @@ pub async fn start_repo_server(
         }
     };
 
+    // Repo owner may require a BetterCommunity identity for every download.
+    let require_login = repo_data.require_login.unwrap_or(false);
+
     // 3. Create graceful shutdown channel
     let (tx, rx) = oneshot::channel();
     {
-        let mut tx_lock = state.shutdown_tx.lock().unwrap();
+        let mut tx_lock = state.shutdown_tx.lock().unwrap_or_else(|p| p.into_inner());
         if tx_lock.is_some() {
             return Err("Le serveur est déjà en cours d'exécution".to_string());
         }
@@ -189,26 +278,156 @@ pub async fn start_repo_server(
 
 
     let active_downloads = state.active_downloads.clone();
+    let _connected_clients = state.connected_clients.clone();
+    let session_download_started = state.session_download_started.clone();
+    let session_download_completed = state.session_download_completed.clone();
     let serve_dir_clone = serve_dir.clone();
-    
+
     let key_filter = warp::header::optional::<String>("x-creator-key")
         .and(warp::header::optional::<String>("x-creator-id"))
         .map(|k1: Option<String>, k2: Option<String>| k1.or(k2));
+
+    // A BetterCommunity-signed attestation of who the caller is. Optional: a repo that does
+    // not require an account never looks at it.
+    let identity_filter = warp::header::optional::<String>("x-creator-identity");
+
+    // Download password. Same contract as the generated mini-server, deliberately — the
+    // subscriber side already prompts for one and sends X-Repo-Password, so matching it
+    // means a password-protected built-in server needs no client change at all.
+    //
+    // ?password= is accepted too, because a browser cannot set a header and the owner will
+    // want to check their own repo from one.
+    let password_filter = warp::header::optional::<String>("x-repo-password")
+        .and(warp::query::<std::collections::HashMap<String, String>>())
+        .map(|h: Option<String>, q: std::collections::HashMap<String, String>| {
+            h.or_else(|| q.get("password").cloned())
+        });
+    let required_password: Option<String> = download_password
+        .map(|p| p.trim().to_string())
+        .filter(|p| !p.is_empty());
+
+    // Key authorisation. The owner pastes public keys; a subscriber proves it holds one of the
+    // matching private keys. Unlike the creator-id allow list, this is not something a client
+    // can simply claim — see repo_keyauth.rs.
+    let mut authorized_pubkeys: Vec<String> = Vec::new();
+    for line in authorized_keys.unwrap_or_default() {
+        let line = line.trim().to_string();
+        if line.is_empty() {
+            continue;
+        }
+        authorized_pubkeys.push(crate::commands::repo_keyauth::pubkey_from_openssh(&line)?);
+    }
+    let key_auth_required = !authorized_pubkeys.is_empty();
+
+    // Which audiences this server answers to.
+    //
+    // The client signs the ORIGIN IT DIALLED, which a malicious server cannot change. This
+    // list only has to EXCLUDE other people's addresses, not perfectly enumerate its own: too
+    // narrow costs a false rejection (diagnosable, and the message names both sides), too wide
+    // would cost security — and it cannot accidentally contain somebody else's host.
+    let mut audiences: Vec<String> = vec![
+        format!("http://127.0.0.1:{}", port),
+        format!("http://localhost:{}", port),
+    ];
+    if let Ok(ip) = local_ip() {
+        audiences.push(format!("http://{}:{}", ip, port));
+    }
+    let proof_filter = warp::header::optional::<String>(crate::commands::repo_keyauth::HEADER);
 
     let handle_clone = handle.clone();
     let file_route = warp::get()
         .and(warp::path::tail())
         .and(warp::addr::remote())
         .and(key_filter)
-        .and_then(move |tail: warp::path::Tail, addr: Option<std::net::SocketAddr>, key: Option<String>| {
+        .and(identity_filter)
+        .and(password_filter)
+        .and(proof_filter)
+        // A follower's light check: the ETag it got last time. And the address it asked on,
+        // for the links in feed.xml.
+        .and(warp::header::optional::<String>("if-none-match"))
+        .and(warp::header::optional::<String>("host"))
+        .and_then(move |tail: warp::path::Tail, addr: Option<std::net::SocketAddr>, key: Option<String>, attestation: Option<String>, presented: Option<String>, key_proof: Option<String>, if_none_match: Option<String>, host_hdr: Option<String>| {
             let handle = handle_clone.clone();
+            let required_password = required_password.clone();
+            let authorized_pubkeys = authorized_pubkeys.clone();
+            let audiences = audiences.clone();
             let active_downloads = active_downloads.clone();
+            let session_download_started = session_download_started.clone();
+            let session_download_completed = session_download_completed.clone();
             let serve_dir = serve_dir_clone.clone();
             async move {
                 let state = handle.state::<RepoServerState>();
                 let ip = addr.map(|a| a.ip().to_string()).unwrap_or_default();
                 let rel_path_encoded = tail.as_str();
                 let rel_path = percent_decode_str(rel_path_encoded).decode_utf8_lossy().into_owned();
+
+                // 0. CWE-22 path traversal: reject ANY parent-dir component up front.
+                // The `full_path.starts_with(&serve_dir)` guard below is NOT enough —
+                // Path::starts_with() is a component-prefix match, so
+                // `serve_dir.join("../secret")` still "starts_with" serve_dir while the
+                // OS resolves it OUTSIDE. This route is LAN-exposed, so traversal here =
+                // arbitrary file read off the host.
+                if rel_path.split(|c| c == '/' || c == '\\').any(|seg| seg == ".." || seg == "...") {
+                    println!("[Server] Security Block: path traversal attempt '{}' from {}", rel_path, ip);
+                    return Err(warp::reject::not_found());
+                }
+                // 0-bis. The repo folder is also where the STANDALONE server's own files live —
+                // server.js with the admin password written into it, access.json with the
+                // download password, whitelist.json and bans.json (IPs and ids) — and this
+                // server used to hand out any file under the folder. See `builtin_may_serve`.
+                if !builtin_may_serve(&rel_path) {
+                    println!("[Server] Security Block: '{}' is not repo content, from {}", rel_path, ip);
+                    return Err(warp::reject::not_found());
+                }
+
+                // 0a. Download password, checked before ANY file is considered — including
+                // repo.json. Gating only /mods/ would leak the whole manifest (every mod
+                // name, every path, the file layout) to anyone who asked, which is most of
+                // what a protected repo is protecting.
+                if let Some(want) = required_password.as_ref() {
+                    let ok = presented.as_deref().map(|got| ct_eq(got, want)).unwrap_or(false);
+                    if !ok {
+                        println!("[Server] Access Denied: wrong or missing download password from {}", ip);
+                        return Err(warp::reject::custom(BanError));
+                    }
+                }
+
+                // 0a-bis. Key authorisation, checked in the same place and for the same
+                // reason as the password: gating only /mods/ would hand the whole manifest —
+                // every mod name, every path, the layout — to anyone who asked, which is most
+                // of what a protected repo protects.
+                if key_auth_required {
+                    let proof = key_proof.as_deref().unwrap_or("");
+                    let mut ok = None;
+                    let mut last_err = String::from("repo.keyauth.errFormat");
+                    // Tried against each accepted audience rather than parsed-then-compared,
+                    // so the audience check stays inside verify_proof and there is one rule
+                    // for it instead of two.
+                    for aud in audiences.iter() {
+                        match crate::commands::repo_keyauth::verify_proof(proof, &authorized_pubkeys, aud) {
+                            Ok(pk) => { ok = Some(pk); break; }
+                            Err(e) => last_err = e,
+                        }
+                    }
+                    match ok {
+                        Some(pk) => {
+                            // Log WHICH key opened it: an owner revoking access needs to know
+                            // which line to delete, and a shared key shows up as one identity
+                            // arriving from many addresses.
+                            println!("[Server] Key auth OK ({}…) from {}", &pk[..pk.len().min(12)], ip);
+                        }
+                        None => {
+                            println!("[Server] Access Denied: key proof rejected ({}) from {}", last_err, ip);
+                            return Err(warp::reject::custom(BanError));
+                        }
+                    }
+                }
+
+                // 0b. Owner requires a BetterCommunity identity for EVERY file.
+                if require_login && key.is_none() {
+                    println!("[Server] Access Denied: repo requires a BetterCommunity login (no creator id) from {}", ip);
+                    return Err(warp::reject::custom(BanError));
+                }
 
                 // 1. Mandatory Creator ID for any file in /mods/
                 let is_mod_file = rel_path.starts_with("mods/") || rel_path.starts_with("mods\\");
@@ -217,13 +436,42 @@ pub async fn start_repo_server(
                     return Err(warp::reject::custom(BanError));
                 }
 
+                // 1b. Resolve the caller's BetterCommunity account, if they proved one.
+                //
+                // Only consulted when the repo requires an account: elsewhere there is no
+                // signed identity to be had, and matching account entries against an
+                // unauthenticated header is exactly the weakness this replaces.
+                //
+                // A verification failure yields None, never a partial identity — a forged
+                // or expired attestation must be worth no more than sending none at all.
+                let identity = if require_login {
+                    attestation.as_deref().and_then(|token| {
+                        let issuer = crate::commands::identity::issuer_public_key(&handle);
+                        let now = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.as_secs() as i64)
+                            .unwrap_or(0);
+                        match crate::commands::identity::verify_attestation(token, &issuer, now) {
+                            Ok(id) => Some(id),
+                            Err(e) => {
+                                println!("[Server] Identity rejected from {}: {:?}", ip, e);
+                                None
+                            }
+                        }
+                    })
+                } else {
+                    None
+                };
+
                 // 2. Ban Check
-                if ban_manager::is_banned(&ip, key.as_deref()) {
+                if ban_manager::is_banned_with_identity(&ip, key.as_deref(), identity.as_ref()) {
                     return Err(warp::reject::custom(BanError));
                 }
 
                 // 3. Whitelist Check (Server owner can restrict access)
-                if whitelist_manager::is_whitelist_enabled() && !whitelist_manager::is_whitelisted(&ip, key.as_deref()) {
+                if whitelist_manager::is_whitelist_enabled()
+                    && !whitelist_manager::is_whitelisted_with_identity(&ip, key.as_deref(), identity.as_ref())
+                {
                     println!("[Server] Access Denied: User {} ({:?}) not on whitelist", ip, key);
                     return Err(warp::reject::custom(WhitelistError));
                 }
@@ -233,6 +481,46 @@ pub async fn start_repo_server(
                 if !full_path.starts_with(&serve_dir) {
                     println!("[Server] Security Block: Request for {} (decoded: {}) is outside serve_dir", rel_path_encoded, rel_path);
                     return Err(warp::reject::not_found());
+                }
+
+                if is_monitoring_request(&rel_path) {
+                    let dl_path = serve_dir.join("downloads.json");
+                    let content = tokio::fs::read_to_string(&dl_path).await.unwrap_or_else(|_| "{}".to_string());
+                    let json_val: serde_json::Value = serde_json::from_str(&content).unwrap_or(serde_json::json!({}));
+                    let response = {
+                        let active = active_downloads.lock().unwrap_or_else(|p| p.into_inner());
+                        public_monitoring(&json_val, active.values())
+                    };
+                    return Ok(warp::Reply::into_response(warp::reply::json(&response)));
+                }
+
+                // The Atom feed of the repo (commands/repo_follow.rs): built from repo.json on
+                // each request, behind the same gates as repo.json itself.
+                if rel_path.eq_ignore_ascii_case("feed.xml") {
+                    let manifest = serve_dir.join("repo.json");
+                    let body = tokio::fs::read_to_string(&manifest).await.map_err(|_| warp::reject::not_found())?;
+                    let repo = serde_json::from_str::<crate::models::repo::ServerRepo>(body.trim_start_matches('\u{feff}')).ok()
+                        .or_else(|| crate::commands::repo_convert::read_legacy(&body))
+                        .ok_or_else(warp::reject::not_found)?;
+                    let updated = tokio::fs::metadata(&manifest).await.ok().and_then(|m| m.modified().ok())
+                        .map(chrono::DateTime::<chrono::Utc>::from).unwrap_or_else(chrono::Utc::now);
+                    let host = host_hdr.as_deref().filter(|h| !h.is_empty() && !h.contains(['/', '"', '<', ' '])).unwrap_or("localhost");
+                    let feed = crate::commands::repo_follow::atom_feed(&repo, &format!("http://{host}"), updated);
+                    let etag = crate::commands::repo_follow::etag_of(feed.as_bytes());
+                    if crate::commands::repo_follow::etag_matches(if_none_match.as_deref(), &etag) {
+                        return Ok(warp::Reply::into_response(warp::http::Response::builder().status(304).header("ETag", etag).body(String::new()).expect("304")));
+                    }
+                    let response = warp::http::Response::builder()
+                        .header("Content-Type", "application/atom+xml; charset=utf-8")
+                        .header("ETag", etag)
+                        .header("Cache-Control", "no-cache")
+                        .body(feed)
+                        .expect("Failed to build warp response");
+                    return Ok(warp::Reply::into_response(response));
+                }
+
+                if rel_path.starts_with("admin/") || rel_path == "dashboard" {
+                    return Ok(warp::Reply::into_response(warp::reply::with_status(warp::reply::json(&serde_json::json!({})), warp::hyper::StatusCode::UNAUTHORIZED)));
                 }
 
                 if !full_path.is_file() {
@@ -245,18 +533,87 @@ pub async fn start_repo_server(
                 let total_size = metadata.len();
                 let file_name = rel_path.to_string();
 
-                let upload_limit = *state.upload_limit.lock().unwrap();
+                // Determine protocol for events
+                let protocol = if ip.starts_with("127.0.0.1") || ip == "::1" { "Local" }
+                    else if ip.starts_with("192.168.") || ip.starts_with("10.") || ip.starts_with("172.") { "LAN" }
+                    else { "WAN" };
+
+                // Intercept repo.json to filter modpacks based on share_mode and Creator ID
+                if file_name == "repo.json" || file_name == "repo.json\\" || file_name == "repo.json/" {
+                    // Anti-spam notification logic
+                    let client_key = format!("{}|{:?}", ip, key);
+                    let should_notify = {
+                        let mut clients = state.connected_clients.lock().unwrap_or_else(|p| p.into_inner());
+                        let now = std::time::Instant::now();
+                        if let Some(last) = clients.get(&client_key) {
+                            if now.duration_since(*last).as_secs() > 30 {
+                                clients.insert(client_key, now);
+                                true
+                            } else { false }
+                        } else {
+                            clients.insert(client_key, now);
+                            true
+                        }
+                    };
+
+                    if should_notify {
+                        let _ = handle.emit("bmm://server-client-connected", ServerClientConnectedPayload {
+                            ip: ip.clone(),
+                            creator_id: key.clone(),
+                            protocol: protocol.to_string(),
+                        });
+                    }
+
+                    if let Ok(content) = tokio::fs::read_to_string(&full_path).await {
+                        if let Ok(mut repo) = serde_json::from_str::<crate::models::repo::ServerRepo>(&content) {
+                            if let Some(mut packs) = repo.modpacks.take() {
+                                packs.retain(|p| {
+                                    match p.share_mode.as_str() {
+                                        "public" => true,
+                                        "whitelist_repo" => {
+                                            !crate::commands::ban_manager::is_banned(&ip, key.as_deref()) &&
+                                            (!crate::commands::whitelist_manager::is_whitelist_enabled() || crate::commands::whitelist_manager::is_whitelisted(&ip, key.as_deref()))
+                                        },
+                                        "whitelist_custom" => {
+                                            if let Some(ref cw) = p.custom_whitelist {
+                                                cw.contains(&key.clone().unwrap_or_default())
+                                            } else { false }
+                                        },
+                                        _ => false,
+                                    }
+                                });
+                                repo.modpacks = Some(packs);
+                            }
+                            if let Ok(filtered_json) = serde_json::to_string(&repo) {
+                                // A strong ETag over exactly what THIS client gets (the modpack
+                                // filter differs per client): an unchanged repo answers a
+                                // follower's check with a 304 and no body.
+                                let etag = crate::commands::repo_follow::etag_of(filtered_json.as_bytes());
+                                if crate::commands::repo_follow::etag_matches(if_none_match.as_deref(), &etag) {
+                                    return Ok::<_, warp::Rejection>(warp::Reply::into_response(
+                                        warp::http::Response::builder().status(304).header("ETag", etag).body(String::new()).expect("304")));
+                                }
+                                let response = warp::http::Response::builder()
+                                    .header("Content-Type", "application/json")
+                                    .header("ETag", etag)
+                                    .header("Cache-Control", "no-cache")
+                                    .header("Content-Length", filtered_json.len())
+                                    .body(filtered_json)
+                                    .expect("Failed to build warp response");
+                                return Ok::<_, warp::Rejection>(warp::Reply::into_response(response));
+                            }
+                        }
+                    }
+                }
+
+                let upload_limit = *state.upload_limit.lock().unwrap_or_else(|p| p.into_inner());
                 let stream = ReaderStream::new(file);
                 let active_downloads_inner = active_downloads.clone();
                 let ip_clone = ip.clone();
 
                 // Track the download in state
                 {
-                    let mut dl_lock = active_downloads_inner.lock().unwrap();
-                    let protocol = if ip.starts_with("127.0.0.1") || ip == "::1" { "Local" }
-                        else if ip.starts_with("192.168.") || ip.starts_with("10.") || ip.starts_with("172.") { "LAN" }
-                        else { "WAN" };
-
+                    let mut dl_lock = active_downloads_inner.lock().unwrap_or_else(|p| p.into_inner());
                     dl_lock.insert(ip_clone.clone(), ActiveDownload {
                         ip: ip_clone.clone(),
                         file: file_name.clone(),
@@ -268,9 +625,34 @@ pub async fn start_repo_server(
                     });
                 }
 
+                // Emit download-started (only for mod files, not repo.json itself)
+                // Only notify once per session start per client
+                if is_mod_file {
+                    let client_key = format!("{}|{}", ip, key.as_deref().unwrap_or(""));
+                    let should_notify = {
+                        let mut session_notifs = session_download_started.lock().unwrap_or_else(|p| p.into_inner());
+                        if !session_notifs.contains_key(&client_key) {
+                            session_notifs.insert(client_key, true);
+                            true
+                        } else {
+                            false
+                        }
+                    };
+
+                    if should_notify {
+                        let _ = handle.emit("bmm://server-download-started", ServerDownloadStartedPayload {
+                            ip: ip.clone(),
+                            creator_id: key.clone(),
+                            file: file_name.clone(),
+                            total_size,
+                            protocol: protocol.to_string(),
+                        });
+                    }
+                }
+
                 let tracked_stream = stream.map(move |chunk: std::io::Result<Bytes>| {
                     if let Ok(ref bytes) = chunk {
-                        let mut dl_lock = active_downloads_inner.lock().unwrap();
+                        let mut dl_lock = active_downloads_inner.lock().unwrap_or_else(|p| p.into_inner());
                         if let Some(dl) = dl_lock.get_mut(&ip_clone) {
                             dl.downloaded_size += bytes.len() as u64;
                         }
@@ -280,6 +662,15 @@ pub async fn start_repo_server(
 
                 let bytes_sent_acc = Arc::new(AsyncMutex::new(0usize));
                 let interval_start = Arc::new(AsyncMutex::new(std::time::Instant::now()));
+
+                // Clone values for the finish-event closure
+                let handle_finish = handle.clone();
+                let ip_finish = ip.clone();
+                let key_finish = key.clone();
+                let file_finish = file_name.clone();
+                let protocol_finish = protocol.to_string();
+                let is_mod_file_finish = is_mod_file;
+                let bytes_total_sent = 0u64;
 
                 let final_stream = tracked_stream.then(move |chunk| {
                     let bytes_sent = bytes_sent_acc.clone();
@@ -309,15 +700,106 @@ pub async fn start_repo_server(
                     }
                 });
 
+                // Wrap stream to detect completion and emit download-finished
+                let final_stream = if is_mod_file_finish {
+                    let handle_fin = handle_finish.clone();
+                    let ip_fin = ip_finish.clone();
+                    let key_fin = key_finish.clone();
+                    let file_fin = file_finish.clone();
+                    let proto_fin = protocol_finish.clone();
+                    let total = total_size;
+                    let session_completed = session_download_completed.clone();
+                    let serve_dir_fin = serve_dir.clone();
+                    let stream_with_end = final_stream.chain(futures::stream::once(async move {
+                        // Check if this is the last download for this client
+                        let client_key = format!("{}|{}", ip_fin, key_fin.as_deref().unwrap_or(""));
+                        let should_notify_complete = {
+                            let state = handle_fin.state::<RepoServerState>();
+                            let active_downloads = state.active_downloads.lock().unwrap_or_else(|p| p.into_inner());
+                            let completed_notifs = session_completed.lock().unwrap_or_else(|p| p.into_inner());
+                            
+                            // Check if there are no more active downloads for this client
+                            let has_active_downloads = active_downloads.values().any(|dl| {
+                                dl.ip == ip_fin && dl.creator_id == key_fin
+                            });
+                            
+                            // Only notify if no more downloads and we haven't notified yet
+                            !has_active_downloads && !completed_notifs.contains_key(&client_key)
+                        };
+
+                        if should_notify_complete {
+                            let _state = handle_fin.state::<RepoServerState>();
+                            let mut completed_notifs = session_completed.lock().unwrap_or_else(|p| p.into_inner());
+                            completed_notifs.insert(client_key, true);
+                            
+                            let _ = handle_fin.emit("bmm://server-download-finished", ServerDownloadFinishedPayload {
+                                ip: ip_fin,
+                                creator_id: key_fin,
+                                file: file_fin.clone(),
+                                total_size: total,
+                                protocol: proto_fin,
+                            });
+                        }
+                        
+                        // Per-download resource record (file served = bandwidth used)
+                        {
+                            let mut t = crate::commands::resource_tracker::OpTracker::start("REPO/host-serve")
+                                .with_subject(file_fin.clone());
+                            t.set("bytes_sent", total);
+                            t.finish();
+                        }
+
+                        // Update downloads.json stats
+                        let downloads_path = serve_dir_fin.join("downloads.json");
+                        let content = tokio::fs::read_to_string(&downloads_path).await.unwrap_or_else(|_| "{}".to_string());
+                        if let Ok(mut json) = serde_json::from_str::<serde_json::Value>(&content) {
+                            let total_dl = json["totalDownloads"].as_u64().unwrap_or(0);
+                            json["totalDownloads"] = serde_json::json!(total_dl + 1);
+                            
+                            let bytes_sent = json["totalBytesSent"].as_u64().unwrap_or(0);
+                            json["totalBytesSent"] = serde_json::json!(bytes_sent + total);
+
+                            if file_fin.starts_with("mods/") || file_fin.starts_with("mods\\") {
+                                let parts: Vec<&str> = file_fin.split(|c| c == '/' || c == '\\').collect();
+                                if parts.len() > 1 {
+                                    let mod_id = parts[1];
+                                    let mut mods = json["mods"].as_object().cloned().unwrap_or_default();
+                                    let mod_total = mods.get(mod_id).and_then(|v| v.as_u64()).unwrap_or(0);
+                                    mods.insert(mod_id.to_string(), serde_json::json!(mod_total + 1));
+                                    json["mods"] = serde_json::Value::Object(mods);
+                                }
+                            }
+                            if let Ok(new_content) = serde_json::to_string(&json) {
+                                let _ = tokio::fs::write(&downloads_path, new_content).await;
+                            }
+                        }
+
+                        // Signal end-of-stream with an empty Ok chunk
+                        Ok::<Bytes, std::io::Error>(Bytes::new())
+                    }));
+                    warp::Reply::into_response(warp::reply::stream(stream_with_end))
+                } else {
+                    warp::Reply::into_response(warp::reply::stream(final_stream))
+                };
+
+                // Drop unused variable
+                let _ = bytes_total_sent;
+
+
                 let content_type = if full_path.extension().map(|e| e == "json").unwrap_or(false) { "application/json" }
                     else if full_path.extension().map(|e| e == "zip").unwrap_or(false) { "application/zip" }
                     else { "application/octet-stream" };
 
-                let response = warp::http::Response::builder()
-                    .header("Content-Length", total_size)
-                    .header("Content-Type", content_type)
-                    .body(warp::hyper::Body::wrap_stream(final_stream))
-                    .map_err(|_| warp::reject::not_found())?;
+                // warp 0.4: the streamed body is a reply of its own; the headers go on it.
+                let mut response = final_stream;
+                response.headers_mut().insert(
+                    warp::http::header::CONTENT_LENGTH,
+                    warp::http::HeaderValue::from(total_size),
+                );
+                response.headers_mut().insert(
+                    warp::http::header::CONTENT_TYPE,
+                    warp::http::HeaderValue::from_static(content_type),
+                );
 
                 Ok::<_, warp::Rejection>(response)
             }
@@ -325,10 +807,12 @@ pub async fn start_repo_server(
 
     let cors = warp::cors()
         .allow_any_origin()
-        .allow_methods(vec!["GET"])
-        .allow_headers(vec!["*", "x-creator-key", "x-creator-id"]);
+        .allow_methods(vec!["GET", "OPTIONS"])
+        .allow_headers(vec!["*", "x-creator-key", "x-creator-id", "x-creator-identity", "range", "content-type", "accept"]);
     
+    // file_route handles all files including repo.json with connection notifications
     let routes = file_route.with(cors);
+
 
     // 5. Port and Address
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
@@ -353,7 +837,7 @@ pub async fn start_repo_server(
             match gateway.add_port(PortMappingProtocol::TCP, port, local_socket, 0, "Better Mods Manager Repo") {
                 Ok(_) => {
                     upnp_success = true;
-                    *state.upnp_mapped.lock().unwrap() = true;
+                    *state.upnp_mapped.lock().unwrap_or_else(|p| p.into_inner()) = true;
                     public_ip = gateway.get_external_ip().map(|ip| ip.to_string()).ok();
                 },
                 Err(e) => {
@@ -366,18 +850,22 @@ pub async fn start_repo_server(
         }
     }
 
-    // Fallback: Fetch public IP manually if UPnP failed or didn't provide IP
-    if public_ip.is_none() {
-        if let Ok(ip) = fetch_public_ip().await {
-            public_ip = Some(ip);
-        }
-    }
+    // No third-party fallback: the public address comes from the router (UPnP) or not at all.
+    // Asking an IP-echo service would send the user's address to someone else.
 
     // 7. Spawn the server in a Tokio task
-    let (_addr_actual, server) = warp::serve(routes.recover(handle_rejection)).bind_with_graceful_shutdown(addr, async {
-        rx.await.ok();
-    });
-    
+    // warp 0.4 (hyper 1, h2 0.4: RUSTSEC-2026-0258 is fixed there). The listener is bound here
+    // so a port already in use is an error for the caller rather than a panic in the task.
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .map_err(|e| format!("Could not bind port {}: {}", port, e))?;
+    let server = warp::serve(routes.recover(handle_rejection))
+        .incoming(listener)
+        .graceful(async {
+            rx.await.ok();
+        })
+        .run();
+
     tokio::task::spawn(server);
 
     // Return results
@@ -396,24 +884,28 @@ pub async fn start_repo_server(
             let target_url = format!("http://{}:{}", my_local_ip, port);
             println!("[Tunnel] Target URL: {}", target_url);
 
-            let mut child = Command::new(cf_path)
+            let mut child = crate::commands::proc::hidden_tokio_command(cf_path)
                 .args(["tunnel", "--no-autoupdate", "--protocol", "http2", "--url", &target_url])
                 .stderr(Stdio::piped())
                 .stdout(Stdio::null())
                 .spawn()
-                .map_err(|e| format!("Erreur au lancement du tunnel: {}", e))?;
+                .map_err(|e| format!("Tunnel launch error: {}", e))?;
 
             if let Some(stderr) = child.stderr.take() {
                 let mut reader = BufReader::new(stderr).lines();
-                let re = Regex::new(r"https://[a-z0-9-]+\.trycloudflare\.com").unwrap();
+                let re = Regex::new(r"https://[a-z0-9-]+\.trycloudflare\.com").expect("Invalid static tunnel regex");
                 
                 let start_time = std::time::Instant::now();
-                while start_time.elapsed().as_secs() < 30 {
+                while start_time.elapsed().as_secs() < 45 {
                     if let Ok(Some(line)) = reader.next_line().await {
                         println!("[Tunnel Log] {}", line);
                         if let Some(mat) = re.find(&line) {
                             let m_str: &str = mat.as_str();
                             tunnel_url = Some(format!("{}/repo.json", m_str));
+                            
+                            // Wait additional time for tunnel to be fully ready
+                            println!("[Tunnel] URL found, waiting 5 seconds for tunnel to be ready...");
+                            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
                             break;
                         }
                     } else {
@@ -421,7 +913,7 @@ pub async fn start_repo_server(
                     }
                 }
             }
-            *state.tunnel_process.lock().unwrap() = Some(child);
+            *state.tunnel_process.lock().unwrap_or_else(|p| p.into_inner()) = Some(child);
         },
         Err(e) => {
             println!("[Tunnel] Failed to setup cloudflared: {}", e);
@@ -430,13 +922,13 @@ pub async fn start_repo_server(
 
     // 9. Store state
     {
-        *state.lan_url.lock().unwrap() = Some(lan_url.clone());
-        *state.public_url.lock().unwrap() = public_url.clone();
-        *state.tunnel_url.lock().unwrap() = tunnel_url.clone();
-        *state.serve_path.lock().unwrap() = Some(path);
-        *state.active_port.lock().unwrap() = port;
-        *state.upload_limit.lock().unwrap() = upload_limit;
-        *state.seed.lock().unwrap() = Some(server_seed.clone());
+        *state.lan_url.lock().unwrap_or_else(|p| p.into_inner()) = Some(lan_url.clone());
+        *state.public_url.lock().unwrap_or_else(|p| p.into_inner()) = public_url.clone();
+        *state.tunnel_url.lock().unwrap_or_else(|p| p.into_inner()) = tunnel_url.clone();
+        *state.serve_path.lock().unwrap_or_else(|p| p.into_inner()) = Some(path);
+        *state.active_port.lock().unwrap_or_else(|p| p.into_inner()) = port;
+        *state.upload_limit.lock().unwrap_or_else(|p| p.into_inner()) = upload_limit;
+        *state.seed.lock().unwrap_or_else(|p| p.into_inner()) = Some(server_seed.clone());
     }
 
     Ok(StartServerResult {
@@ -450,27 +942,46 @@ pub async fn start_repo_server(
 
 #[tauri::command]
 pub fn get_repo_server_status(state: tauri::State<'_, RepoServerState>) -> Result<Option<StartServerResult>, String> {
-    let tx_lock = state.shutdown_tx.lock().unwrap();
-    if tx_lock.is_none() {
+    let tx_lock = state.shutdown_tx.lock().unwrap_or_else(|p| p.into_inner());
+    let mut is_running = tx_lock.is_some();
+    
+    // Additional check: if shutdown_tx is None but we have stored URLs, 
+    // check if the port is still in use (server might still be running)
+    if !is_running {
+        let port = *state.active_port.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some(_lan_url) = state.lan_url.lock().unwrap_or_else(|p| p.into_inner()).clone() {
+            // Check if port is still in use
+            if let Ok(listener) = std::net::TcpListener::bind(("127.0.0.1", port)) {
+                // Port is free, server is not running
+                drop(listener);
+            } else {
+                // Port is in use, server is still running despite state loss
+                is_running = true;
+            }
+        }
+    }
+    
+    if !is_running {
         return Ok(None);
     }
     
     Ok(Some(StartServerResult {
-        lan_url: state.lan_url.lock().unwrap().clone().unwrap_or_default(),
-        public_url: state.public_url.lock().unwrap().clone(),
-        tunnel_url: state.tunnel_url.lock().unwrap().clone(),
-        upnp_success: *state.upnp_mapped.lock().unwrap(),
-        seed: state.seed.lock().unwrap().clone(),
+        lan_url: state.lan_url.lock().unwrap_or_else(|p| p.into_inner()).clone().unwrap_or_default(),
+        public_url: state.public_url.lock().unwrap_or_else(|p| p.into_inner()).clone(),
+        tunnel_url: state.tunnel_url.lock().unwrap_or_else(|p| p.into_inner()).clone(),
+        upnp_success: *state.upnp_mapped.lock().unwrap_or_else(|p| p.into_inner()),
+        seed: state.seed.lock().unwrap_or_else(|p| p.into_inner()).clone(),
     }))
 }
+
 
 #[tauri::command]
 pub async fn stop_repo_server(state: tauri::State<'_, RepoServerState>) -> Result<(), String> {
     // 1. Remove UPnP mapping if it exists
     {
-        let mut upnp_lock = state.upnp_mapped.lock().unwrap();
+        let mut upnp_lock = state.upnp_mapped.lock().unwrap_or_else(|p| p.into_inner());
         if *upnp_lock {
-            let port = *state.active_port.lock().unwrap();
+            let port = *state.active_port.lock().unwrap_or_else(|p| p.into_inner());
             if let Ok(gateway) = search_gateway(Default::default()) {
                 let _ = gateway.remove_port(PortMappingProtocol::TCP, port);
             }
@@ -479,20 +990,22 @@ pub async fn stop_repo_server(state: tauri::State<'_, RepoServerState>) -> Resul
     }
 
     // 2. Stop Tunnel
-    let child = state.tunnel_process.lock().unwrap().take();
+    let child = state.tunnel_process.lock().unwrap_or_else(|p| p.into_inner()).take();
     if let Some(mut child) = child {
         println!("[Tunnel] Stopping tunnel...");
         let _ = child.kill().await;
     }
 
     // 3. Shutdown the server
-    let mut tx_lock = state.shutdown_tx.lock().unwrap();
+    let mut tx_lock = state.shutdown_tx.lock().unwrap_or_else(|p| p.into_inner());
     if let Some(tx) = tx_lock.take() {
         // Clear state
-        *state.lan_url.lock().unwrap() = None;
-        *state.public_url.lock().unwrap() = None;
-        *state.tunnel_url.lock().unwrap() = None;
-        *state.serve_path.lock().unwrap() = None;
+        *state.lan_url.lock().unwrap_or_else(|p| p.into_inner()) = None;
+        *state.public_url.lock().unwrap_or_else(|p| p.into_inner()) = None;
+        *state.tunnel_url.lock().unwrap_or_else(|p| p.into_inner()) = None;
+        *state.serve_path.lock().unwrap_or_else(|p| p.into_inner()) = None;
+        state.session_download_started.lock().unwrap_or_else(|p| p.into_inner()).clear();
+        state.session_download_completed.lock().unwrap_or_else(|p| p.into_inner()).clear();
         
         let _ = tx.send(());
         Ok(())
@@ -501,6 +1014,193 @@ pub async fn stop_repo_server(state: tauri::State<'_, RepoServerState>) -> Resul
     }
 }
 
+
+/// Compare a presented secret against the expected one without leaking, through timing,
+/// how much of it was right.
+///
+/// `==` on strings returns at the first differing byte, so an attacker on the LAN can
+/// recover a password one character at a time by measuring responses. Written out rather
+/// than pulled from `subtle`, which is only a transitive dependency here.
+///
+/// The length is folded into the accumulator instead of being an early return, so a wrong
+/// length costs the same as a wrong byte.
+fn ct_eq(a: &str, b: &str) -> bool {
+    let (a, b) = (a.as_bytes(), b.as_bytes());
+    // `usize`, not `as u8`: truncated to a byte, two lengths 256 apart folded to 0, and the
+    // zero padding below then accepted the password followed by 256 NUL bytes.
+    let mut diff = a.len() ^ b.len();
+    for i in 0..a.len().max(b.len()) {
+        diff |= (a.get(i).copied().unwrap_or(0) ^ b.get(i).copied().unwrap_or(0)) as usize;
+    }
+    diff == 0
+}
+
+/// Whether the built-in server may hand out this path (already percent-decoded).
+///
+/// At the root: the manifest, its stats and the synthesised monitoring feed — nothing else.
+/// Every other file the exporter writes at the root belongs to the STANDALONE server and some
+/// of them are secrets: `server.js` carries the admin password verbatim, `access.json` the
+/// download password, `whitelist.json` / `bans.json` IP addresses and ids, `downloads.json`
+/// the statistics. A client never asks for any of them: mods, archives and extras all live in
+/// sub-folders (`mods/…`, `extras/…`, or a `files_layout` of the owner's), and those stay open
+/// exactly as before, except `node_modules`.
+fn builtin_may_serve(rel: &str) -> bool {
+    let norm = rel.replace('\\', "/");
+    let segs: Vec<&str> = norm.split('/').filter(|s| !s.is_empty()).collect();
+    match segs.as_slice() {
+        [] => false,
+        [one] => {
+            let n = one.to_ascii_lowercase();
+            n == "repo.json" || n == "info.json" || n == "monitoring.json" || n == "feed.xml"
+        }
+        // bmm-server/: the standalone server's job state and repo.json backups (mini_server_extras.rs).
+        [first, ..] => !first.eq_ignore_ascii_case("node_modules") && !first.eq_ignore_ascii_case("bmm-server"),
+    }
+}
+
+/// Is this request the synthesised monitoring feed, however it is spelled?
+///
+/// `builtin_may_serve` admits the root name case-insensitively and with a trailing slash; the
+/// route must intercept every one of those spellings, or `GET /MONITORING.json` falls through
+/// to the file on disk (the standalone hybrid server writes one there, with IPs in it).
+fn is_monitoring_request(rel: &str) -> bool {
+    let norm = rel.replace('\\', "/");
+    let segs: Vec<&str> = norm.split('/').filter(|s| !s.is_empty()).collect();
+    matches!(segs.as_slice(), [one] if one.eq_ignore_ascii_case("monitoring.json"))
+}
+
+/// The public `monitoring.json` of the built-in repo server: aggregates only.
+///
+/// Security summary §9 #9. The feed is public (no password, reachable over UPnP and a tunnel),
+/// and it used to list every active downloader's IP address and Creator ID: personal data of
+/// third parties, published by the user. It now says how many downloads are running, how many
+/// bytes they have moved, and each running file's progress, and nothing about who is
+/// downloading. The detail (IP, Creator ID, protocol, speed) stays in the host's own BMM
+/// screen, which reads it through `get_active_downloads`, not through this feed.
+///
+/// `downloads_json` is the server's `downloads.json`: only its counters and its per-mod
+/// counts are copied, so a key someone adds to that file is not published by accident.
+pub(crate) fn public_monitoring<'a>(
+    downloads_json: &serde_json::Value,
+    active: impl Iterator<Item = &'a ActiveDownload>,
+) -> serde_json::Value {
+    let total_dls = downloads_json["totalDownloads"].as_u64().unwrap_or(0);
+    let total_bytes = downloads_json["totalBytesSent"].as_u64().unwrap_or(0);
+    let mods: serde_json::Map<String, serde_json::Value> = downloads_json["mods"]
+        .as_object()
+        .map(|m| {
+            m.iter()
+                .filter_map(|(k, v)| v.as_u64().map(|n| (k.clone(), serde_json::json!(n))))
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut files = Vec::new();
+    let mut active_bytes: u64 = 0;
+    for dl in active {
+        active_bytes = active_bytes.saturating_add(dl.downloaded_size);
+        files.push(serde_json::json!({
+            "file": dl.file,
+            "downloaded": dl.downloaded_size,
+            "total": dl.total_size,
+        }));
+    }
+    serde_json::json!({
+        "server": {
+            "version": "1.0",
+            "uptime": 0,
+            "totalBytes": total_bytes,
+            "totalDls": total_dls,
+            "modsDownloads": mods,
+            "activeCount": files.len(),
+            "activeBytes": active_bytes,
+        },
+        "active": files,
+        "sessions": [],
+        "history": []
+    })
+}
+
+#[cfg(test)]
+mod public_monitoring_tests {
+    use super::{is_monitoring_request, public_monitoring, ActiveDownload};
+
+    fn dl(ip: &str, id: Option<&str>, file: &str, done: u64, total: u64) -> ActiveDownload {
+        ActiveDownload {
+            ip: ip.into(),
+            file: file.into(),
+            total_size: total,
+            downloaded_size: done,
+            start_time: 0,
+            creator_id: id.map(Into::into),
+            protocol: "WAN".into(),
+        }
+    }
+
+    #[test]
+    fn the_public_feed_carries_no_ip_and_no_creator_id() {
+        let active = vec![
+            dl("203.0.113.7", Some("BC-SECRET-ID-1"), "mods/a/x.pak", 10, 100),
+            dl("198.51.100.9", Some("BC-SECRET-ID-2"), "mods/b/y.pak", 5, 50),
+        ];
+        let stats = serde_json::json!({
+            "totalDownloads": 3, "totalBytesSent": 999,
+            "mods": { "a": 2, "b": 1, "leak": "203.0.113.7" },
+            "clients": ["203.0.113.7"]
+        });
+        let out = public_monitoring(&stats, active.iter());
+        let text = out.to_string();
+        for secret in ["203.0.113.7", "198.51.100.9", "BC-SECRET-ID", "\"ip\"", "creatorId", "WAN"] {
+            assert!(!text.contains(secret), "the public feed must not carry {secret}: {text}");
+        }
+        assert_eq!(out["server"]["activeCount"], 2);
+        assert_eq!(out["server"]["activeBytes"], 15);
+        assert_eq!(out["server"]["totalDls"], 3);
+        assert_eq!(out["server"]["totalBytes"], 999);
+        assert_eq!(out["server"]["modsDownloads"]["a"], 2);
+        assert_eq!(out["active"][0]["downloaded"], 10);
+        assert_eq!(out["active"][1]["total"], 50);
+    }
+
+    #[test]
+    fn every_spelling_the_server_admits_is_intercepted() {
+        for s in ["monitoring.json", "MONITORING.json", "Monitoring.JSON", "monitoring.json/", "/monitoring.json"] {
+            assert!(is_monitoring_request(s), "{s}");
+            assert!(super::builtin_may_serve(s), "{s} is servable, so it must be intercepted");
+        }
+        assert!(!is_monitoring_request("mods/monitoring.json"));
+    }
+}
+
+#[cfg(test)]
+mod servable_tests {
+    use super::builtin_may_serve;
+
+    /// Everything a syncing client requests still answers.
+    #[test]
+    fn repo_content_is_served() {
+        for ok in [
+            "repo.json", "repo.json/", "Info.json", "monitoring.json",
+            "mods/3f2a9c1e/Data/a.dds", "mods/3f2a9c1e.zip", "mods\\x\\y.lua",
+            "extras/plugin/p-1.bmmplugin", "addons/cool/readme.txt", "public/dashboard.html",
+        ] {
+            assert!(builtin_may_serve(ok), "{ok} refused");
+        }
+    }
+
+    /// The standalone server's files, which the exporter writes into the same folder.
+    #[test]
+    fn the_standalone_servers_secrets_are_not() {
+        for bad in [
+            "server.js", "SERVER.JS", "access.json", "whitelist.json", "bans.json",
+            "downloads.json", "package.json", "BMM-Standalone-Server.bat", "Dockerfile",
+            "docker-compose.yml", "keyauth.mjs", "access-gate.js", "hub-server.js",
+            "repo.json::$DATA", "node_modules/express/index.js", "", "/",
+            "bmm-extras.js", "server.config.json", "README-SERVER.md", "bmm-server/backups/repo-20260101-000000.json", "BMM-SERVER/jobs-state.json",
+        ] {
+            assert!(!builtin_may_serve(bad), "{bad} served");
+        }
+    }
+}
 
 async fn handle_rejection(err: warp::Rejection) -> Result<impl warp::Reply, std::convert::Infallible> {
     if err.find::<BanError>().is_some() {
@@ -513,13 +1213,43 @@ async fn handle_rejection(err: warp::Rejection) -> Result<impl warp::Reply, std:
 }
 
 #[tauri::command]
+pub fn get_connected_clients(state: tauri::State<'_, RepoServerState>) -> Result<Vec<serde_json::Value>, String> {
+    let mut result = Vec::new();
+
+    let clients = state.connected_clients.lock().unwrap_or_else(|p| p.into_inner());
+    for (key, last_seen) in clients.iter() {
+        let elapsed_secs = last_seen.elapsed().as_secs();
+        
+        // Parse key format: "ip|creator_id"
+        let parts: Vec<&str> = key.split('|').collect();
+        let ip = parts.get(0).unwrap_or(&"").to_string();
+        let creator_id = parts.get(1).map(|s| s.to_string()).filter(|s| !s.is_empty());
+        
+        // Determine protocol
+        let protocol = if ip.starts_with("127.0.0.1") || ip == "::1" { "Local" }
+            else if ip.starts_with("192.168.") || ip.starts_with("10.") || ip.starts_with("172.") { "LAN" }
+            else { "WAN" };
+
+        result.push(serde_json::json!({
+            "ip": ip,
+            "creator_id": creator_id,
+            "protocol": protocol,
+            "last_seen": elapsed_secs,
+            "status": "idle"
+        }));
+    }
+
+    Ok(result)
+}
+
+#[tauri::command]
 pub fn get_active_downloads(state: tauri::State<'_, RepoServerState>) -> Result<Vec<serde_json::Value>, String> {
     let mut result = Vec::new();
     let now_ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
 
     // 1. Get Built-in Downloads
     {
-        let mut downloads = state.active_downloads.lock().unwrap();
+        let mut downloads = state.active_downloads.lock().unwrap_or_else(|p| p.into_inner());
         // Remove if older than 5 seconds and 100% complete
         downloads.retain(|_, dl| {
             let progress = if dl.total_size > 0 { dl.downloaded_size as f32 / dl.total_size as f32 } else { 1.0 };
@@ -546,7 +1276,7 @@ pub fn get_active_downloads(state: tauri::State<'_, RepoServerState>) -> Result<
     }
 
     // 2. Aggregate Standalone Server (External Monitoring)
-    if let Some(path_str) = state.serve_path.lock().unwrap().as_ref() {
+    if let Some(path_str) = state.serve_path.lock().unwrap_or_else(|p| p.into_inner()).as_ref() {
         let monitoring_path = std::path::PathBuf::from(path_str).join("monitoring.json");
         if monitoring_path.exists() {
             if let Ok(content) = std::fs::read_to_string(monitoring_path) {
@@ -562,4 +1292,54 @@ pub fn get_active_downloads(state: tauri::State<'_, RepoServerState>) -> Result<
     }
 
     Ok(result)
+}
+
+#[cfg(test)]
+mod password_tests {
+    use super::ct_eq;
+
+    #[test]
+    fn matches_only_the_exact_secret() {
+        assert!(ct_eq("hunter2", "hunter2"));
+        assert!(ct_eq("", ""));
+
+        // Wrong in every way it can be wrong.
+        assert!(!ct_eq("hunter2", "hunter3"));   // last byte
+        assert!(!ct_eq("Hunter2", "hunter2"));   // case
+        assert!(!ct_eq("hunter", "hunter2"));    // short
+        assert!(!ct_eq("hunter22", "hunter2"));  // long
+        assert!(!ct_eq("", "hunter2"));          // absent
+        assert!(!ct_eq("hunter2", ""));          // an empty expectation never matches here;
+                                                 // "no password" is handled before the call
+    }
+
+    /// The length used to be folded in as `u8`: 256 extra NUL bytes (an `?password=` value
+    /// can carry them as %00) made the lengths "equal" and the padding matched.
+    #[test]
+    fn a_length_difference_of_256_is_still_a_difference() {
+        let padded = format!("hunter2{}", "\0".repeat(256));
+        assert!(!ct_eq(&padded, "hunter2"));
+        assert!(!ct_eq("hunter2", &padded));
+        assert!(!ct_eq(&"\0".repeat(256), ""));
+    }
+
+    /// A prefix must not be treated as a match. This is the shape of the attack the
+    /// constant-time compare exists for: guess a byte, keep it if the server takes longer.
+    #[test]
+    fn a_correct_prefix_is_still_wrong() {
+        let secret = "correct-horse-battery-staple";
+        for n in 0..secret.len() {
+            assert!(!ct_eq(&secret[..n], secret), "prefix of length {n} was accepted");
+        }
+        assert!(ct_eq(secret, secret));
+    }
+
+    /// Bytes past the shorter string are folded in rather than skipped, so a wrong length
+    /// does not exit early. Not a timing measurement — that would be flaky in CI — but it
+    /// pins the property the implementation relies on: no early return anywhere.
+    #[test]
+    fn length_mismatch_does_not_short_circuit() {
+        assert!(!ct_eq("a", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+        assert!(!ct_eq("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "a"));
+    }
 }

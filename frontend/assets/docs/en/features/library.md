@@ -1,0 +1,138 @@
+# Library
+
+:::tip[Prefer it step by step?]
+The task version of this page is [Install your first mod](doc-page:guide/install-first-mod): short steps, what you should see, a picture and a Show me button.
+:::
+
+
+The **Library** is where every mod you own lives — installed or not, from any source. If you
+only ever learn one screen in BMM, make it this one: everything else (profiles, modpacks,
+lists) is a different way of arranging what the Library holds.
+
+![Adding a mod and enabling it](assets/docs/media/gifs/guide-add-mods.gif)
+
+
+## Adding your first mod
+
+=== "From a file"
+
+    With the Library screen open, drag a `.zip` (or `.rar`, `.7z`, `.tar`…) or a mod folder
+    onto the window. The **Add Mod** dialog opens pre-filled — the path set, the name taken
+    from the file name — so all that's left is to confirm. The mod is added to the **active
+    profile's** mods folder.
+
+=== "From a repo"
+
+    See [Server Repo](doc-page:features/repo). A repo is a shared source: connect it, **sync**, and the
+    synced mods land in a profile (a dedicated one, or one you pick) and appear here
+    alongside your local ones.
+
+!!! tip "Archived mods stay archived"
+
+    A `.zip` is kept zipped. BMM extracts it to a temporary cache only when something
+    actually needs the files, so a big library doesn't cost you disk space you're not using.
+
+## Conflicts
+
+Two mods that ship the **same file** are in conflict. This isn't a bug in either of them —
+it's what happens when two people edit the same thing — and BMM's job is to make sure you
+find out *before* you commit, not after the game breaks.
+
+When you enable a mod that overlaps another, BMM stops and says:
+
+> Activating this mod will overwrite files from the following mods.
+
+You then get the detail, not just a warning: **Conflicting Files** lists the exact paths that
+exist in both mods, because *these files exist in both mods and create a direct conflict*.
+
+### The rule
+
+**The last mod activated wins.** Its version of the shared file overwrites the other's. That
+is why the **Activation Order** matters and why BMM lets you set it: the order *is* the
+resolution. Two people with the same mods in a different order do not have the same game.
+
+To change it, open the profile's **activation order** (the list icon on its card, or `Ctrl+K` →
+**Activation order**) and drag the mods: each row says which files it overrides and which of its
+own are overridden, and **Apply order** re-copies only the files that change hands. See
+[Activation order](doc-page:how-it-works/load-order).
+
+From the library itself: a mod's detail panel shows its **position** and whom it overrides, with
+Top / Up / Down / Bottom buttons; right-click a card for the same moves; `Alt+↑` / `Alt+↓` move the
+selected mod; and the list icon next to the sort menu opens the full order. A move from the library
+is applied at once.
+
+### Global Conflict View
+
+Rather than discovering conflicts one at a time, the global view shows every overlap in the
+current profile at once. Worth a look after a big import — a `.MM` list or a modpack can
+bring in a dozen mods that have never met.
+
+### Linked mods
+
+Separate from conflicts, and easy to confuse with them:
+
+> The following mods are linked to this one and could be disabled.
+
+That's a dependency, not an overlap. BMM asks rather than cascading silently — if you disable
+a mod that others build on, you get to choose whether they go too.
+
+## What "installed" means here
+
+A mod in the Library is *available*; a mod is *installed* only relative to a
+[profile](doc-page:features/profiles). That distinction is the thing newcomers trip on: uninstalling from a
+profile doesn't delete the mod, it just stops that profile from using it. The mod stays in
+the Library, ready for another profile.
+
+## Controls worth knowing
+
+The Library rewards a few gestures:
+
+- **Single-click** a card to open its **details**, a drawer that slides in from the side (see
+  [Mod details](#mod-details) below).
+- **Double-click** a card to toggle it on or off instantly.
+- **Right-click** a card *while it's activating* to cancel the operation.
+- **Drag & drop** a `.zip` or folder onto the window to add it.
+
+## Mod details
+
+Selecting a mod opens its details in a **side drawer**, so the list stays in view beside it. The
+drawer has five tabs:
+
+| Tab | What it holds |
+|---|---|
+| **Overview** | The description (Markdown works: bold, lists, links), version, author, tags, and Enable / Disable and Open folder |
+| **Details** | The fields you can edit: name, version, author, description, requirements, links (each with a type and a label) |
+| **Files** | The mod's files, with a search box |
+| **Conflicts & order** | The files it shares with other mods, who wins, and a way into the [Conflicts view](doc-page:how-it-works/conflicts) |
+| **Updates & links** | Where the mod comes from, the repo it follows, and its **Content ID** (copy it, or compute it from the files) |
+
+- **Next and previous.** The ‹ and › buttons in the header, or :kbd[↓] and :kbd[↑], move to the next
+  or previous mod of the list without closing the drawer.
+- **Close** with the X or :kbd[Esc].
+- **Unsaved changes.** If you edited the details and then move to another mod or close the drawer,
+  BMM asks **Discard your changes?** first, so a half-written description is never lost by a stray
+  click. The header shows *Unsaved changes* while there are some.
+
+## While mods turn on or off
+
+Turning a mod on or off is a background job that belongs to BMM, not to the Library screen.
+You can go anywhere in the app while it runs; only an explicit **Cancel** stops it.
+
+- **The activity pill** in the title bar shows the mod being copied, where it is in its batch
+  (`3/12`), the bytes copied so far, how many mods are waiting, and a **Cancel** button. It
+  appears on every view and also follows batches started elsewhere (Enable all, an order list).
+- **The cards** walk through their states: *Queued*, then *Copying 45%* with a thin bar at the
+  bottom, then *On* (a short glow, and the activation-order number pops in) or *Failed*.
+  Deactivation is the same walk, in amber, ending on *Off*.
+- **Several toggles in a row** queue up and run one after another, in the order you clicked.
+- **Cancel** undoes the mod in progress (its partial copy is reverted), leaves the mods already
+  done as they are, and does not start the ones still waiting.
+- A **summary toast** at the end says how many went through and names the ones that failed.
+
+The animation follows **Settings › Graphics & display › Reduce animations** and Windows' own "show fewer
+animations": the states still show, they just stop moving.
+
+There's no multi-select in the list itself — you pick one mod at a time. When you need a
+batch (building a [modpack](doc-page:features/modpacks), or importing a [`.MM` list](doc-page:features/modlist)), the
+selection modal gives you checkboxes and a select-all. Full detail in
+[Tips & controls](doc-page:reference/tips).

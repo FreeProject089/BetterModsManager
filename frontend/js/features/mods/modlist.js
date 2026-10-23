@@ -1,0 +1,890 @@
+// @ts-nocheck
+/**
+ * modlist.js — Mod List Import/Export/Install Logic
+ */
+import { invoke, pickFolder, pickFile, saveFile } from '../../core/api.js';
+import { appState } from '../../core/state.js';
+import { exportOrigins } from '../../core/creds-fold.js';
+import { t } from '../../core/i18n.js';
+import { dispatchBmmAction, BMM_ACTIONS } from '../../ui/tutorial-events.js';
+import { refreshMods } from './mods.js';
+import { renderProfiles } from '../profiles/profiles.js';
+import { getGithubPat } from '../settings/settings.js';
+import { escHtml, escAttr, formatBytes } from '../../core/utils.js';
+import { renderTagChip } from '../../ui/icon-pack.js';
+let lastImportedModlistJson = null;
+/** A cancel token for one export or install run (commands/modlist.rs `runs`). The Rust side
+ *  stops THAT run, and the governor tickets doing its copy or download with it. */
+function newRunId() {
+    try {
+        return crypto.randomUUID();
+    }
+    catch {
+        return `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+    }
+}
+/** The install run in progress, if any: what the Cancel button stops. */
+let _installRun = null;
+// Re-exporting toast from app.js for now or until moved to a better place
+import { toast, toastSaved } from '../../ui/app.js';
+import { uiIcon, brandIcon } from '../../ui/icons.js';
+/**
+ * The origins the mods in the ACTIVE profile update from.
+ *
+ * What the export is about to write, read the same way the exporter reads it: source_repo,
+ * a per-mod update address, and each extra update source. A host the list does not mention
+ * has no business having its password carried in that list.
+ */
+/**
+ * Read a `.mm`, asking for its passphrase only if it turns out to be locked.
+ *
+ * Asked AFTER the first attempt, never before: almost no list is locked, and a prompt in
+ * front of every import teaches people that one is expected. The backend refuses a locked
+ * list by NAME rather than failing to parse, so "this is locked" and "this is broken" stay
+ * different sentences with different next steps.
+ *
+ * Exported because the mod-list catalogue reads the same files and has to ask the same
+ * question — every time, since nothing about the phrase is remembered.
+ */
+/**
+ * A list arrived carrying credentials. Say what applying them would mean, then ask.
+ *
+ * Applied is never the default, and the two halves are asked for separately. A download
+ * password for a host you are about to fetch from and somebody else's SIGNING KEY are
+ * different things with different consequences: the first lets you get the mods, the second
+ * changes who you are to every server you talk to. Agreeing to one must not agree to the
+ * other.
+ *
+ * The hosts and the key names are shown, because "apply the credentials?" is a question
+ * nobody can answer — whether it is safe depends entirely on WHICH, and that is knowable
+ * here.
+ */
+async function offerListCredentials(credentials, passphrase) {
+    let preview;
+    try {
+        preview = await invoke('modlist_credentials_open', { credentials, passphrase });
+    }
+    catch {
+        // A list whose credentials will not open is still a usable list. Said once, quietly,
+        // rather than failing the import that already succeeded.
+        toast(t('mm.creds.inUnreadable'), 'warning', 7000);
+        return;
+    }
+    const hosts = Object.keys(preview.passwords || {});
+    const keys = preview.key_names || [];
+    if (!hosts.length && !keys.length)
+        return;
+    const lines = [];
+    if (hosts.length) {
+        lines.push(t('mm.creds.inPw').replace('{n}', String(hosts.length))
+            .replace('{list}', hosts.map((h) => { try {
+            return new URL(h).host;
+        }
+        catch {
+            return h;
+        } }).join(', ')));
+    }
+    if (keys.length) {
+        lines.push(t('mm.creds.inKeys').replace('{n}', String(keys.length)).replace('{list}', keys.join(', ')));
+    }
+    const takePw = hosts.length && await window.confirmCustom?.(t('mm.creds.inTitle'), `${lines.join('\n\n')}\n\n${t('mm.creds.inAskPw')}`);
+    if (takePw) {
+        const { rememberSourcePassword } = await import('../../core/source-fetch.js');
+        // For this run only, exactly like a password you typed yourself. Writing them down
+        // because they arrived in a file would be a different rule for the same secret.
+        for (const [origin, pw] of Object.entries(preview.passwords))
+            rememberSourcePassword(origin, pw);
+        toast(t('mm.creds.inPwDone').replace('{n}', String(hosts.length)), 'success');
+    }
+    if (!keys.length)
+        return;
+    const takeKeys = await window.confirmCustom?.(t('mm.creds.inKeysTitle'), `${t('mm.creds.inKeysWarn')}\n\n${keys.join(', ')}`);
+    if (!takeKeys)
+        return;
+    try {
+        const added = await invoke('modlist_credentials_apply_keys', { credentials, passphrase, names: keys });
+        // Named, and counted against what was offered: a name already on the ring is skipped
+        // rather than overwritten, and silence about that would read as "it worked".
+        toast(added.length
+            ? t('mm.creds.inKeysDone').replace('{list}', added.join(', '))
+            : t('mm.creds.inKeysNone'), added.length ? 'success' : 'info', 7000);
+    }
+    catch (e) {
+        toast(String(e).slice(0, 160), 'error', 7000);
+    }
+}
+export async function importListAsking(path) {
+    try {
+        return await invoke('import_modlist', { path, passphrase: null });
+    }
+    catch (e) {
+        if (!String(e).includes('mm.errLocked'))
+            throw e;
+        const { promptRepoPassword } = await import('../repo/repo-sync.js');
+        const pass = await promptRepoPassword();
+        if (pass == null)
+            throw new Error('mm.cancelled');
+        try {
+            const list = await invoke('import_modlist', { path, passphrase: pass });
+            // The phrase that opened the list opens its credentials too, so this never asks
+            // for it twice — but it does ask whether to APPLY them, which is a different
+            // question and the one with consequences.
+            if (list?.credentials)
+                await offerListCredentials(list.credentials, pass);
+            return list;
+        }
+        catch (e2) {
+            throw new Error(String(e2).includes('bmm.enc.errWrongPass')
+                ? t('bmm.enc.errWrongPass') : String(e2));
+        }
+    }
+}
+export function initModlist() {
+    const exportBtn = document.getElementById('btn-export-mm');
+    const importBtn = document.getElementById('btn-import-mm');
+    const exportCard = document.getElementById('export-form-card');
+    const cancelExport = document.getElementById('btn-cancel-export');
+    const confirmExportBtn = document.getElementById('btn-confirm-export');
+    const previewCard = document.getElementById('imported-preview');
+    const installBtn = document.getElementById('btn-install-from-mm');
+    if (!exportBtn || !importBtn)
+        return;
+    exportBtn.addEventListener('click', () => {
+        exportCard.style.display = exportCard.style.display === 'none' ? '' : 'none';
+        previewCard.style.display = 'none';
+    });
+    // Top cancel button — only works when export is NOT yet running (form is visible)
+    cancelExport.addEventListener('click', () => {
+        exportCard.style.display = 'none';
+    });
+    // Dim the SHA badge when toggle is off
+    const hashToggle = document.getElementById('mm-include-hashes');
+    const hashesBadge = document.getElementById('mm-hashes-badge');
+    hashToggle?.addEventListener('change', () => {
+        if (hashesBadge)
+            hashesBadge.style.opacity = hashToggle.checked ? '1' : '0.3';
+    });
+    const abortExportBtn = document.getElementById('btn-abort-export');
+    // The hosts this list would carry credentials FOR, named before anything is ticked.
+    //
+    // "Include download passwords" with nothing else on screen is a decision made blind:
+    // whether it is safe depends entirely on WHICH hosts, and that is knowable here.
+    const credsFold = document.getElementById('mm-creds');
+    credsFold?.addEventListener('toggle', () => {
+        const hostsEl = document.getElementById('mm-creds-hosts');
+        if (!hostsEl || !credsFold.open)
+            return;
+        const origins = exportOrigins();
+        hostsEl.textContent = origins.length
+            ? t('mm.creds.hosts').replace('{list}', origins.map((o) => {
+                try {
+                    return new URL(o).host;
+                }
+                catch {
+                    return o;
+                }
+            }).join(', ')) + ' — ' + t('mm.creds.sessionOnly')
+            : t('mm.creds.sessionOnly');
+    });
+    confirmExportBtn.addEventListener('click', async () => {
+        const listName = document.getElementById('mm-list-name').value.trim() || 'Ma liste';
+        const description = document.getElementById('mm-description').value.trim();
+        const author = document.getElementById('mm-author').value.trim();
+        const includeHashes = document.getElementById('mm-include-hashes')?.checked ?? true;
+        // ── Credentials, if they were asked for ──────────────────────────────
+        const wantPw = document.getElementById('mm-creds-pw')?.checked ?? false;
+        const wantKeys = document.getElementById('mm-creds-keys')?.checked ?? false;
+        const credsPass = document.getElementById('mm-creds-pass')?.value || '';
+        let creds = null;
+        if (wantPw || wantKeys) {
+            // Refused here as well as in Rust. Failing at the far end after the export has
+            // walked every mod costs minutes for a mistake visible before it started.
+            if (!credsPass) {
+                toast(t('mm.creds.noPass'), 'warning', 8000);
+                return;
+            }
+            const { knownSourcePasswords } = await import('../../core/source-fetch.js');
+            // Only the hosts THIS list points at. Handing over every password the session
+            // happens to hold would be exporting credentials for sources the list does not
+            // even mention.
+            const wanted = new Set(exportOrigins());
+            const all = wantPw ? knownSourcePasswords() : {};
+            const passwords = {};
+            for (const [origin, pw] of Object.entries(all))
+                if (wanted.has(origin))
+                    passwords[origin] = pw;
+            creds = { passwords, includeKeys: wantKeys, passphrase: credsPass };
+        }
+        // Named after the list, not "modlist.mm". Somebody who typed "DCS Cold War" and then
+        // saved three of these had three files called modlist.mm to tell apart.
+        // Character by character rather than a regex: the set to strip includes a backslash,
+        // and a backslash inside a regex inside a template is exactly where an escape gets
+        // eaten and the guard silently stops guarding.
+        const ILLEGAL = '<>:"/|?*' + String.fromCharCode(92);
+        const safeName = [...(listName || 'modlist')]
+            .map((c) => (ILLEGAL.includes(c) || c.charCodeAt(0) < 32 ? '-' : c))
+            .join('').slice(0, 60).trim() || 'modlist';
+        const path = await saveFile({ defaultPath: `${safeName}.mm`, filters: [{ name: 'Mod List', extensions: ['mm', 'json'] }] });
+        if (!path)
+            return;
+        const progressOverlay = document.getElementById('export-progress-overlay');
+        const progressBar = document.getElementById('export-progress-bar');
+        const progressCount = document.getElementById('export-progress-count');
+        const progressLabel = document.getElementById('export-progress-label');
+        if (progressOverlay)
+            progressOverlay.style.display = '';
+        // Hide the top-level form buttons while export runs so only the in-overlay cancel is shown
+        cancelExport.style.display = 'none';
+        confirmExportBtn.disabled = true;
+        const resetUI = () => {
+            confirmExportBtn.disabled = false;
+            cancelExport.style.display = '';
+            if (progressOverlay) {
+                progressOverlay.style.display = 'none';
+                if (progressBar)
+                    progressBar.style.width = '0%';
+                if (progressCount)
+                    progressCount.textContent = '';
+                if (progressLabel)
+                    progressLabel.textContent = '';
+            }
+        };
+        let unlisten = null;
+        let wasCancelled = false;
+        const runId = newRunId();
+        // Cancel: the progress closes NOW and says so once; the Rust side stops this run (its
+        // file walk and any hash in progress) in the background. The Save button stays off
+        // until that run has really returned, so a second export cannot overlap the first.
+        const onAbort = () => {
+            if (wasCancelled)
+                return;
+            wasCancelled = true;
+            void invoke('cancel_export_modlist', { runId }).catch(() => { });
+            if (progressOverlay)
+                progressOverlay.style.display = 'none';
+            cancelExport.style.display = '';
+            toast(t('mm.exportCancelled'), 'info');
+        };
+        abortExportBtn?.addEventListener('click', onAbort);
+        try {
+            unlisten = await window.__TAURI__.event.listen('bmm://mm-export-progress', (e) => {
+                const { current, total, mod_name, done, cancelled } = e.payload;
+                if (cancelled) {
+                    wasCancelled = true;
+                    return;
+                }
+                const pct = total > 0 ? Math.round((current / total) * 100) : 0;
+                if (progressBar)
+                    progressBar.style.width = pct + '%';
+                if (progressCount)
+                    progressCount.textContent = `${current}/${total}`;
+                if (progressLabel)
+                    progressLabel.textContent = done ? '' : (mod_name || '');
+            });
+            await invoke('export_modlist', { listName, description, author, outputPath: path, includeHashes, creds, runId });
+            if (!wasCancelled) {
+                toastSaved(t('mm.exportSuccess'));
+                dispatchBmmAction(BMM_ACTIONS.MODLIST_EXPORTED, { name: listName });
+                exportCard.style.display = 'none';
+            }
+        }
+        catch (err) {
+            // Cancelled: already said when the button was pressed.
+            if (!wasCancelled)
+                toast(t('mm.exportError').replace('{err}', err), 'error');
+        }
+        finally {
+            abortExportBtn?.removeEventListener('click', onAbort);
+            unlisten?.();
+            resetUI();
+        }
+    });
+    // ONE button. Following a catalogue and making one are the two halves of the same
+    // screen, so they are the two halves of one modal — the second button was a second
+    // place to look for something that turned out to be beside it.
+    document.getElementById('btn-mm-catalog')?.addEventListener('click', async () => {
+        const m = await import('./modlist-catalog.js');
+        await m.openListCatalog();
+    });
+    importBtn.addEventListener('click', async () => {
+        const path = await pickFile([{ name: 'Mod List', extensions: ['mm', 'json'] }]);
+        if (!path)
+            return;
+        try {
+            // Refresh local mods to ensure "Present" status is accurate
+            const localMods = await invoke('get_mods');
+            appState.set('allMods', localMods);
+            const modList = await importListAsking(path);
+            lastImportedModlistJson = JSON.stringify(modList);
+            exportCard.style.display = 'none';
+            previewCard.style.display = '';
+            renderImportedModlist(modList);
+            updateInstallBtnText();
+            // Auto-update path hint based on active profile if not creating a new profile
+            const chkProfile = document.getElementById('chk-import-as-profile');
+            const pathHintEl = document.getElementById('imported-path-hint');
+            if (chkProfile && pathHintEl) {
+                const updatePath = async () => {
+                    if (!chkProfile.checked) {
+                        try {
+                            const activeId = await invoke('get_active_profile_id');
+                            const profiles = await invoke('get_profiles');
+                            const activeP = profiles.find(p => p.id === activeId);
+                            if (activeP) {
+                                pathHintEl.textContent = activeP.mods_path;
+                            }
+                        }
+                        catch (e) {
+                            console.error("Failed to get active profile mods path:", e);
+                        }
+                    }
+                    else {
+                        // Use default game path hint from modList (the .MM creator's suggestion)
+                        pathHintEl.textContent = modList.game_path_hint || '—';
+                    }
+                };
+                chkProfile.addEventListener('change', updatePath);
+                updatePath(); // Initial call
+            }
+            toast(t('mm.importSuccess'), 'success');
+        }
+        catch (err) {
+            toast(t('mm.importError').replace('{err}', err), 'error');
+        }
+    });
+    // Install all mods from imported .MM list
+    installBtn.addEventListener('click', async () => {
+        if (!lastImportedModlistJson) {
+            toast(t('mm.installNone'), 'warning');
+            return;
+        }
+        // Sync the current path hint back into the JSON before sending to backend
+        const pathHintEl = document.getElementById('imported-path-hint');
+        let currentList = JSON.parse(lastImportedModlistJson);
+        if (pathHintEl) {
+            currentList.game_path_hint = pathHintEl.textContent;
+        }
+        // Filter: only install checked mods
+        const checkboxes = previewCard.querySelectorAll('.mm-mod-checkbox');
+        const selectedIndices = Array.from(checkboxes)
+            .filter(cb => cb.checked)
+            .map(cb => parseInt(cb.dataset.index));
+        if (selectedIndices.length === 0) {
+            toast(t('mm.installNone'), 'warning');
+            return;
+        }
+        currentList.mods = currentList.mods.filter((_, idx) => selectedIndices.includes(idx));
+        lastImportedModlistJson = JSON.stringify(currentList);
+        const createProfile = document.getElementById('chk-import-as-profile')?.checked || false;
+        installBtn.disabled = true;
+        installBtn.classList.add('loading');
+        installBtn.innerHTML = `${uiIcon('loader', 14, { style: 'animation:spin 1s linear infinite;vertical-align:middle;margin-right:6px' })} ${t('common.installing')}`;
+        // Show progress UI
+        const progressOverlay = document.getElementById('imported-progress-overlay');
+        const progressList = document.getElementById('imported-progress-list');
+        if (progressOverlay)
+            progressOverlay.style.display = 'flex';
+        if (progressList)
+            progressList.innerHTML = '';
+        // Reset Cancel button state
+        const cancelBtn = document.getElementById('btn-cancel-import-dl');
+        if (cancelBtn) {
+            cancelBtn.disabled = false;
+            cancelBtn.innerHTML = `${uiIcon('close', 12, { style: 'margin-right:6px' })} ${t('prof.cancel').toUpperCase()}`;
+        }
+        // Clear previous results
+        const existingResults = previewCard.querySelectorAll('.install-results-container');
+        existingResults.forEach(r => r.remove());
+        const run = { id: newRunId(), cancelled: false };
+        _installRun = run;
+        try {
+            const githubToken = await getGithubPat();
+            const results = await invoke('install_from_modlist', {
+                modlistJson: lastImportedModlistJson,
+                createProfile: createProfile,
+                githubToken: githubToken,
+                runId: run.id,
+            });
+            // Cancelled while the last step was finishing: what it did is undone on the Rust
+            // side only when the cancel landed in time, so the library is re-read below and
+            // nothing is reported as a success.
+            if (run.cancelled)
+                throw new Error('cancelled');
+            // Final results summary
+            const resultHtml = results.map(r => {
+                const isOk = r.startsWith('[OK]') || r.includes('✅');
+                const txt = r.replace(/^\[OK\] |^\[ERR\] |^✅ |^❌ /g, '');
+                return `<div style="padding:4px 0;font-size:11.5px;font-family:var(--font-mono);color:var(--text-primary);display:flex;align-items:center;gap:8px">
+                    ${isOk ? '<div style="background:var(--success);color:#000;border-radius:2px;padding:0 4px;font-size:9px;font-weight:800">OK</div>' : '<div style="background:var(--danger);color:white;border-radius:2px;padding:0 4px;font-size:9px;font-weight:800">ERR</div>'} 
+                    ${escHtml(txt)}
+                </div>`;
+            }).join('');
+            const resultsDiv = document.createElement('div');
+            resultsDiv.className = 'install-results-container';
+            resultsDiv.style.cssText = 'margin-top:12px;padding:16px;background:rgba(0,0,0,0.4);border-radius:10px;border:1px solid var(--border);box-shadow:0 4px 12px rgba(0,0,0,0.2)';
+            resultsDiv.innerHTML = `<div style="font-size:10px;color:var(--accent);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.08em;font-weight:800">${t('mm.installResults')}</div>${resultHtml}`;
+            previewCard.appendChild(resultsDiv);
+            const successCount = results.filter(r => r.includes('✅') || r.startsWith('[OK]')).length;
+            toast(t('mm.installSuccess').replace('{success}', successCount).replace('{total}', results.length), 'success');
+            dispatchBmmAction(BMM_ACTIONS.MODLIST_IMPORTED, { count: successCount });
+            if (createProfile) {
+                await renderProfiles();
+                // Profile selector in library might need update
+                const libraryTab = document.querySelector('.nav-item[data-view="library"]');
+                if (libraryTab)
+                    libraryTab.click();
+            }
+            else {
+                await refreshMods();
+            }
+        }
+        catch (err) {
+            const msg = String(err?.message ?? err);
+            if (run.cancelled) {
+                // Said when Cancel was pressed. The Rust side has now removed what this run
+                // added: show the library as it is.
+                await refreshMods().catch(() => { });
+            }
+            else if (msg.includes('annulée') || msg.includes('cancelled')) {
+                // Cancelled from elsewhere (the resources dashboard).
+                toast(t('mm.installCancelled'), 'info');
+                await refreshMods().catch(() => { });
+            }
+            else {
+                toast(t('mm.installError').replace('{err}', msg), 'error');
+            }
+        }
+        finally {
+            if (_installRun === run)
+                _installRun = null;
+            installBtn.disabled = false;
+            installBtn.classList.remove('loading');
+            installBtn.innerHTML = `${uiIcon('download', 14)} ${t('mm.installSelection') || t('mm.installAll')}`;
+            // Closed when Cancel was pressed; otherwise left up briefly so the last state reads.
+            if (progressOverlay && !run.cancelled) {
+                setTimeout(() => { progressOverlay.style.display = 'none'; }, 2000);
+            }
+        }
+    });
+    // Handle select/unselect all in imported list
+    previewCard.addEventListener('change', (e) => {
+        if (e.target.id === 'mm-select-all') {
+            const checked = e.target.checked;
+            const checkboxes = previewCard.querySelectorAll('.mm-mod-checkbox');
+            checkboxes.forEach(cb => { cb.checked = checked; });
+            updateInstallBtnText();
+        }
+        else if (e.target.classList.contains('mm-mod-checkbox')) {
+            updateInstallBtnText();
+        }
+    });
+    // Cancel installation: no second question, no waiting. The progress closes at once, the
+    // Rust side stops this run (the copy or download in progress stops at its next block) and
+    // takes back what it added; the Install button reads "Stopping" until that is done, so a
+    // new install cannot start on top of the old one.
+    previewCard.addEventListener('click', (e) => {
+        const btn = e.target.closest('#btn-cancel-import-dl');
+        if (!btn || !_installRun || _installRun.cancelled)
+            return;
+        const run = _installRun;
+        run.cancelled = true;
+        btn.disabled = true;
+        const overlay = document.getElementById('imported-progress-overlay');
+        if (overlay)
+            overlay.style.display = 'none';
+        const ib = document.getElementById('btn-install-from-mm');
+        if (ib)
+            ib.textContent = t('mm.stopping');
+        toast(t('mm.installCancelled'), 'info');
+        invoke('cancel_install_from_modlist', { runId: run.id })
+            .catch((err) => toast(t('mm.cancelError').replace('{err}', String(err)), 'error'));
+    });
+    // Listen for progress events.
+    //
+    // Guarded, and the guard is load-bearing: this runs from initModlist(), which main()
+    // AWAITS. Outside the Tauri webview `__TAURI__` is undefined, so the bare access threw
+    // "Cannot read properties of undefined (reading 'event')" and took the whole boot down
+    // with it — every init after this line never ran, and the app came up with empty lists
+    // and no explanation. Every other listener in this codebase already checks; this one
+    // did not.
+    window.__TAURI__?.event?.listen('bmm://mod-download-progress', (e) => {
+        const data = e.payload; // { mod_index, total_mods, mod_name, progress, status }
+        const container = document.getElementById('imported-progress-list');
+        if (!container)
+            return;
+        let row = document.getElementById(`dl-progress-${data.mod_index}`);
+        if (!row) {
+            row = document.createElement('div');
+            row.id = `dl-progress-${data.mod_index}`;
+            row.style.cssText = 'margin-bottom:10px; background:rgba(255,255,255,0.03); padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.05)';
+            container.appendChild(row);
+        }
+        row.innerHTML = `
+            <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px">
+                <span style="font-weight:600; color:var(--text-primary)">${escHtml(data.mod_name)}</span>
+                <span style="color:var(--accent); font-family:var(--font-mono)">${Math.round(data.progress)}%</span>
+            </div>
+            <div style="height:4px; background:rgba(255,255,255,0.05); border-radius:2px; overflow:hidden">
+                <div style="height:100%; background:var(--accent); width:${data.progress}%; transition:width 0.2s ease; box-shadow:0 0 8px var(--accent)"></div>
+            </div>
+            <div style="font-size:9px; color:var(--text-muted); margin-top:4px; text-transform:uppercase">${escHtml(data.status)}</div>
+        `;
+        // Auto scroll progress list
+        container.scrollTop = container.scrollHeight;
+    });
+    // Handle path override button
+    previewCard.addEventListener('click', async (e) => {
+        const btn = e.target.closest('#btn-override-import-path');
+        if (btn) {
+            const newPath = await pickFolder();
+            if (newPath) {
+                const hintEl = document.getElementById('imported-path-hint');
+                if (hintEl)
+                    hintEl.textContent = newPath;
+                toast(t('common.destUpdated'), 'info');
+            }
+        }
+    });
+}
+function updateInstallBtnText() {
+    const previewCard = document.getElementById('imported-preview');
+    if (!previewCard)
+        return;
+    const count = previewCard.querySelectorAll('.mm-mod-checkbox:checked').length;
+    const total = previewCard.querySelectorAll('.mm-mod-checkbox').length;
+    const btn = document.getElementById('btn-install-from-mm');
+    if (!btn)
+        return;
+    if (count === total) {
+        btn.innerHTML = `${uiIcon('download', 14)} ${t('mm.installAll')}`;
+    }
+    else {
+        btn.innerHTML = `${uiIcon('download', 14)} ${t('mm.installSelection')} (${count})`;
+    }
+}
+export function renderImportedModlist(modlist) {
+    const container = document.getElementById('imported-content');
+    if (!container)
+        return;
+    // A mod carries tag IDs; a .mm carries the DEFINITIONS of the tags its mods use, and has
+    // since tag_defs was added to the format. This screen was printing the id — so a tag
+    // somebody named "Liveries" and gave an icon arrived as a bare UUID. The definitions were
+    // in the file the whole time; nothing was reading them.
+    const tagDefs = new Map((modlist.tag_defs || []).map((d) => [d.id, d]));
+    // Calculate totals
+    let totalFiles = 0;
+    let totalBytes = 0;
+    modlist.mods.forEach(m => {
+        if (m.file_tree) {
+            totalFiles += m.file_tree.length;
+            m.file_tree.forEach(f => { totalBytes += (f.size || 0); });
+        }
+    });
+    // Header section
+    const headerHtml = `
+      <div style="margin-bottom:20px; padding:20px; background:rgba(0,0,0,0.2); border-radius:12px; border:1px solid var(--border)">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px">
+            <div>
+                <h3 style="font-size:20px; font-weight:800; color:var(--text-primary); margin:0">${escHtml(modlist.name)}</h3>
+                <div style="display:flex; align-items:center; gap:8px; margin-top:6px; flex-wrap:wrap">
+                    <span data-i18n="mm.importedBadge" style="font-size:10px; font-weight:700; text-transform:uppercase; padding:2px 8px; background:var(--accent-dim); color:var(--accent); border-radius:4px">${t('mm.importedBadge')}</span>
+                    <span style="font-size:11px; color:var(--text-muted)"><span data-i18n="mm.by">${t('mm.by')}</span> <span style="color:var(--text-secondary); font-weight:600">${escHtml(modlist.author || 'Inconnu')}</span></span>
+                    <span style="font-size:11px; color:var(--text-muted)">• v${modlist.format_version}</span>
+                </div>
+            </div>
+            <div style="display:flex; gap:20px; text-align:right">
+                <div>
+                    <div data-i18n="mm.modsCount" style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em">${t('mm.modsCount')}</div>
+                    <div style="font-size:20px; font-weight:800; color:var(--accent)">${modlist.mods.length}</div>
+                </div>
+                <div>
+                    <div data-i18n="mm.totalWeight" style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em">${t('mm.totalWeight')}</div>
+                    <div style="font-size:20px; font-weight:800; color:var(--cyan)">${formatBytes(totalBytes)}</div>
+                </div>
+            </div>
+        </div>
+        
+        <div style="display:flex; align-items:center; gap:10px; padding:12px; background:rgba(255,255,255,0.02); border-radius:10px; border:1px solid var(--border); margin-top:10px">
+            <div style="flex:1">
+                 <div data-i18n="mm.autoProfile" style="font-size:12px; font-weight:700; color:var(--text-primary)">${t('mm.autoProfile')}</div>
+                 <div data-i18n="mm.autoProfileDesc" style="font-size:10px; color:var(--text-muted)">${t('mm.autoProfileDesc')}</div>
+            </div>
+            <label class="switch">
+                <input type="checkbox" id="chk-import-as-profile" checked>
+                <span class="slider round"></span>
+            </label>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:rgba(0,255,255,0.03); border-radius:8px; border:1px solid rgba(6,182,212,0.1); margin-top:10px">
+            ${uiIcon('folder', 14, { style: 'color:var(--cyan)' })}
+            <div style="flex:1; min-width:0">
+                <div data-i18n="mm.installPath" style="font-size:9px; color:var(--text-muted); text-transform:uppercase; font-weight:700">${t('mm.installPath')}</div>
+                <div style="font-family:var(--font-mono); font-size:11px; color:var(--cyan); white-space:nowrap; overflow:hidden; text-overflow:ellipsis" id="imported-path-hint">${escHtml(modlist.game_path_hint || '—')}</div>
+            </div>
+            <button class="btn btn-sm btn-ghost" id="btn-override-import-path" data-tooltip="${t('modlist.overrideImportPath') || 'Change destination folder'}" style="height:28px; width:28px; border-radius:6px; padding:0; display:flex; align-items:center; justify-content:center">
+                 ${uiIcon('edit', 14)}
+            </button>
+        </div>
+        
+        ${modlist.description ? `
+            <p style="margin-top:12px; font-size:13px; color:var(--text-secondary); line-height:1.5; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px">
+                ${escHtml(modlist.description)}
+            </p>
+        ` : ''}
+      </div>
+    `;
+    // Cards for each mod
+    const currentMods = appState.state.allMods || [];
+    const modsHtml = modlist.mods.map((m, idx) => {
+        const fileCount = m.file_tree ? m.file_tree.length : 0;
+        const modSize = m.file_tree ? m.file_tree.reduce((acc, f) => acc + (f.size || 0), 0) : 0;
+        // Presence check
+        const isAlreadyPresent = currentMods.some(cm => cm.name === m.name);
+        // Hash integrity summary
+        const fileEntries = m.file_tree ? m.file_tree.filter(f => !f.is_directory) : [];
+        const hashedFiles = fileEntries.filter(f => f.sha256).length;
+        const hashBadge = fileEntries.length === 0 ? '' :
+            hashedFiles === fileEntries.length
+                ? `<span style="font-size:9px;font-weight:700;color:var(--bmm-success);background:rgba(16,185,129,0.12);padding:2px 6px;border-radius:4px;border:1px solid rgba(16,185,129,0.25);flex-shrink:0;white-space:nowrap" data-tooltip="${t('mm.hashVerifiedAll')} (${hashedFiles} ${t('mm.hashFiles')})">SHA-256 ${uiIcon('check', 12, { style: 'vertical-align:-2px' })}</span>`
+                : hashedFiles > 0
+                    ? `<span style="font-size:9px;font-weight:700;color:var(--bmm-warning);background:rgba(245,158,11,0.1);padding:2px 6px;border-radius:4px;border:1px solid rgba(245,158,11,0.25);flex-shrink:0;white-space:nowrap" data-tooltip="${t('mm.hashPartial')}">${hashedFiles}/${fileEntries.length} SHA</span>`
+                    : `<span style="font-size:9px;color:var(--text-muted);background:rgba(255,255,255,0.04);padding:2px 6px;border-radius:4px;border:1px solid var(--border);flex-shrink:0;white-space:nowrap" data-tooltip="${t('mm.hashNone')}">${t('mm.noHashes')}</span>`;
+        return `
+        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:12px 16px; margin-bottom:8px; display:flex; flex-direction:column; gap:8px; position:relative; overflow:hidden; ${isAlreadyPresent ? 'opacity: 0.7;' : ''}">
+          <div style="position:absolute; left:0; top:0; bottom:0; width:3px; background:${isAlreadyPresent ? 'var(--success)' : 'var(--accent)'}"></div>
+          
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px">
+            <div style="display:flex; align-items:center; gap:8px; flex:1; min-width:0; flex-wrap:wrap">
+                <span style="font-weight:700; font-size:14px; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:200px">${escHtml(m.name)}</span>
+                <span style="font-family:var(--font-mono); font-size:10px; color:var(--cyan); background:rgba(6,182,212,0.1); padding:1px 6px; border-radius:4px; border:1px solid rgba(6,182,212,0.2); white-space:nowrap">v${escHtml(m.version || '?')}</span>
+                <span style="font-size:10px; color:var(--text-muted); font-family:var(--font-mono); white-space:nowrap">${formatBytes(modSize)}</span>
+                ${isAlreadyPresent ? `<span style="font-size:9px; font-weight:800; color:var(--bmm-success); background:rgba(16,185,129,0.15); padding:2px 6px; border-radius:4px; border:1px solid rgba(16,185,129,0.3); white-space:nowrap">${t('mm.modPresent')}</span>` : `<span style="font-size:9px; font-weight:800; color:var(--accent); background:var(--accent-dim); padding:2px 6px; border-radius:4px; border:1px solid var(--border-accent); white-space:nowrap">${t('mm.modNew')}</span>`}
+                ${hashBadge}
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; flex-shrink:0">
+                <input type="checkbox" class="mm-mod-checkbox" data-index="${idx}" ${isAlreadyPresent ? '' : 'checked'} style="width:18px; height:18px; cursor:pointer; flex-shrink:0" data-tooltip="${isAlreadyPresent ? t('mm.alreadyPresent') : ''}">
+            </div>
+          </div>
+
+          ${m.description ? `<p style="font-size:12px; color:var(--text-secondary); margin:0; opacity:0.8">${escHtml(m.description)}</p>` : ''}
+
+          ${m.install_notes ? `
+            <div style="background:rgba(245,158,11,0.08); border:1px dashed rgba(245,158,11,0.3); border-radius:8px; padding:10px; margin-top:4px">
+                <div style="font-size:10px; font-weight:800; color:var(--bmm-warning); text-transform:uppercase; margin-bottom:4px; display:flex; align-items:center; gap:6px">
+                    ${uiIcon('file-text', 12)}
+                    Installation Notes
+                </div>
+                <p style="font-size:11.5px; color:var(--text-secondary); margin:0; line-height:1.5">${escHtml(m.install_notes)}</p>
+            </div>
+          ` : ''}
+
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
+            ${(m.tags || []).map((tag) => {
+            const def = tagDefs.get(tag);
+            // Only a list written before tag_defs existed reaches the fallback, and back
+            // then the ids WERE the words — so printing the id is right there and wrong
+            // for everything written since.
+            return def
+                ? renderTagChip(def, { fontSize: 9, pad: '2px 6px' })
+                : `<span style="font-size:9px; background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px; color:var(--text-secondary); border:1px solid var(--border)">${escHtml(tag)}</span>`;
+        }).join('')}
+
+            ${m.download_links && m.download_links.length > 0 ? m.download_links.map(l => `
+                <a href="${l.url}" target="_blank" class="btn btn-sm btn-ghost" style="padding:2px 8px; font-size:10px; height:22px; gap:4px; text-decoration:none; color:var(--accent)">
+                    ${getLinkIcon(l.link_type)} ${escHtml(l.label || t('common.link'))}
+                </a>
+            `).join('') : ''}
+          </div>
+
+          ${fileCount > 0 ? (() => {
+            const hashedCount = m.file_tree.filter(f => !f.is_directory && f.sha256).length;
+            const fileCount2 = m.file_tree.filter(f => !f.is_directory).length;
+            const allHashed = hashedCount === fileCount2 && fileCount2 > 0;
+            return `
+            <details style="margin-top:4px">
+              <summary style="font-size:11px; color:var(--text-muted); cursor:pointer; font-family:var(--font-mono); display:flex; align-items:center; gap:6px; user-select:none">
+                ${uiIcon('chevron-right', 12)}
+                ${t('mm.fileTree').replace('{count}', fileCount)}
+                ${allHashed
+                ? `<span style="margin-left:4px;font-size:9px;font-weight:800;padding:1px 6px;border-radius:4px;background:rgba(16,185,129,0.15);color:var(--bmm-success);border:1px solid rgba(16,185,129,0.3);font-family:var(--font-sans);letter-spacing:0.03em" data-tooltip="${t('mm.hashVerifiedAll')}">SHA-256 ${uiIcon('check', 12, { style: 'vertical-align:-2px' })}</span>`
+                : hashedCount > 0
+                    ? `<span style="margin-left:4px;font-size:9px;font-weight:800;padding:1px 6px;border-radius:4px;background:rgba(245,158,11,0.12);color:var(--bmm-warning);border:1px solid rgba(245,158,11,0.3);font-family:var(--font-sans)" data-tooltip="${t('mm.hashPartial')}">${hashedCount}/${fileCount2} SHA-256</span>`
+                    : `<span style="margin-left:4px;font-size:9px;padding:1px 6px;border-radius:4px;background:rgba(255,255,255,0.04);color:var(--text-muted);border:1px solid var(--border);font-family:var(--font-sans)" data-tooltip="${t('mm.hashNone')}">${t('mm.noHashes')}</span>`}
+              </summary>
+              <div style="max-height:180px; overflow-y:auto; margin-top:8px; padding:8px; background:rgba(0,0,0,0.2); border-radius:6px; font-size:10.5px; font-family:var(--font-mono); color:var(--text-muted); border:1px solid rgba(255,255,255,0.03)">
+                ${m.file_tree.map(f => `
+                    <div style="padding:3px 0; display:flex; align-items:center; gap:6px; border-bottom:1px solid rgba(255,255,255,0.02)">
+                        <span style="opacity:0.6;display:inline-flex">${uiIcon(f.is_directory ? 'folder' : 'file', 14)}</span>
+                        <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap" data-tooltip="${escAttr(f.relative_path)}">${escHtml(f.relative_path)}</span>
+                        ${!f.is_directory ? `<span style="opacity:0.4; font-size:9px; flex-shrink:0">${formatBytes(f.size)}</span>` : ''}
+                        ${f.sha256 ? `
+                            <span
+                                style="font-size:9px; color:color-mix(in srgb, var(--bmm-success) 70%, transparent); flex-shrink:0; cursor:pointer; padding:1px 4px; border-radius:3px; border:1px solid rgba(16,185,129,0.2); background:rgba(16,185,129,0.05); transition:background 0.15s"
+                                data-tooltip="${escAttr(f.sha256)}"
+                                data-copy="${escAttr(f.sha256)}" data-copy-flash="rgba(16,185,129,0.2)"
+                                data-hover="background:rgba(16,185,129,0.12)"
+                                data-hover-out="background:rgba(16,185,129,0.05)"
+                            >${f.sha256.substring(0, 8)}…</span>
+                        ` : ''}
+                    </div>
+                `).join('')}
+              </div>
+            </details>`;
+        })() : ''}
+        </div>
+        `;
+    }).join('');
+    container.innerHTML = `
+        <div style="display:flex; flex-direction:column; gap:4px; position:relative">
+            ${headerHtml}
+            
+            <!-- Progress Overlay -->
+            <div id="imported-progress-overlay" style="display:none; position:absolute; top:0; left:0; right:0; bottom:0; background:rgba(10,14,23,0.9); z-index:100; border-radius:12px; flex-direction:column; padding:24px; backdrop-filter:blur(8px)">
+                <div style="display:flex; align-items:center; gap:16px; margin-bottom:24px">
+                    <div style="width:40px; height:40px; background:var(--accent-dim); border-radius:10px; display:flex; align-items:center; justify-content:center">
+                        ${uiIcon('loader', 24, { style: 'color:var(--accent);animation:spin 2s linear infinite' })}
+                    </div>
+                    <div>
+                        <h4 style="margin:0; font-size:16px; font-weight:800; color:var(--text-primary)">${t('mm.installingTitle')}</h4>
+                        <p style="margin:0; font-size:12px; color:var(--text-muted)">${t('mm.installingDesc')}</p>
+                    </div>
+                    <button class="btn btn-danger btn-sm" id="btn-cancel-import-dl" style="margin-left:auto; height:32px; padding:0 16px; font-size:11px; font-weight:800">
+                        ${uiIcon('close', 12, { style: 'margin-right:6px' })}
+                        ${t('prof.cancel').toUpperCase()}
+                    </button>
+                </div>
+                <div id="imported-progress-list" style="flex:1; overflow-y:auto; padding-right:8px">
+                    <!-- Progress bars injected here -->
+                </div>
+            </div>
+
+            <div style="padding:0 4px">
+                <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:10px; display:flex; align-items:center; gap:8px">
+                    ${uiIcon('list', 12)}
+                    ${t('mm.installPreview')}
+                    
+                    <div style="margin-left:auto; display:flex; align-items:center; gap:8px; font-size:10px; color:var(--text-secondary); cursor:pointer; user-select:none">
+                        <input type="checkbox" id="mm-select-all" checked style="cursor:pointer">
+                        <label for="mm-select-all" style="cursor:pointer">${t('common.selectAll')}</label>
+                    </div>
+                </div>
+                ${modsHtml}
+            </div>
+        </div>
+    `;
+}
+function getLinkIcon(type) {
+    const style = 'width:14px;height:14px;vertical-align:middle;margin-right:6px;opacity:0.8';
+    switch (type) {
+        case 'github':
+            return `${brandIcon('github', 14, { style })}`;
+        case 'google_drive':
+            return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}" aria-hidden="true"><path d="M22 10L14 10L14 2L22 10Z"/><path d="M6 22L14 22L22 10L14 10L6 22Z"/><path d="M2 10L10 10L6 22L2 10Z"/></svg>`;
+        case 'mega':
+            return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${style}" aria-hidden="true"><path d="M12 3l9 4v10l-9 4-9-4V7l9-4z"/><path d="M12 8v8M8 12h8"/></svg>`;
+        case 'direct':
+            return `${uiIcon('download', 14, { style })}`;
+        default:
+            return `${uiIcon('link', 14, { style })}`;
+    }
+}
+/**
+ * Put a mod list on, unattended.
+ *
+ * Every step of this is something a person can do by hand in Mods → Import; that is the
+ * rule for anything the scheduler may do on its own. What it adds is doing them in order,
+ * without a screen, and reporting what did not work.
+ *
+ * `exact` is the one with teeth. Without it the list is added to what is already on, which
+ * is what somebody wants when they run two lists for two aircraft. With it the active set
+ * becomes the list and nothing else — which is what a STRICT server means by a mod list,
+ * and getting that wrong is being kicked at the loading screen with no reason given.
+ *
+ * A locked list without a passphrase fails here rather than prompting. A scheduled task
+ * cannot answer a prompt at four in the morning, and a dialog nobody sees is a task that
+ * hangs forever looking like it is working.
+ */
+export async function applyModList(opts) {
+    let path = opts.path || '';
+    if (!path && opts.url) {
+        // Fetched into the app's own data dir, not the system temp: a `.mm` can carry
+        // credentials, and the system temp is readable by every process on the machine.
+        path = await invoke('modlist_fetch', { url: opts.url });
+    }
+    if (!path)
+        throw new Error(t('sched.listApply.noSource'));
+    const list = await invoke('import_modlist', {
+        path, passphrase: opts.passphrase || null,
+    });
+    const wanted = Array.isArray(list?.mods) ? list.mods : [];
+    const out = { enabled: 0, installed: 0, missing: [], disabled: 0 };
+    if (!wanted.length)
+        return out;
+    // Installed FIRST, all of it, before anything is switched on. Enabling as you go means
+    // a failure half-way leaves a half-applied set — which on a strict server is neither the
+    // old state nor the new one, and is harder to explain than either.
+    const here = () => invoke('get_mods').catch(() => []);
+    let mods = await here();
+    const has = (m) => mods.find((x) => x.id === m.id) ||
+        mods.find((x) => String(x.name || '').toLowerCase() === String(m.name || '').toLowerCase());
+    const absent = wanted.filter((m) => !has(m));
+    if (absent.length && opts.install !== false) {
+        await invoke('install_from_modlist', {
+            modlistJson: JSON.stringify({ ...list, mods: absent }),
+            createProfile: false,
+            githubToken: await getGithubPat().catch(() => null),
+        });
+        const after = await here();
+        out.installed = Math.max(0, after.length - mods.length);
+        mods = after;
+    }
+    const newly = [];
+    for (const m of wanted) {
+        const local = has(m);
+        if (!local) {
+            out.missing.push(String(m.name || m.id));
+            continue;
+        }
+        if (local.enabled)
+            continue;
+        try {
+            await invoke('enable_mod', { modId: local.id, bypassSha: false });
+            out.enabled += 1;
+            newly.push(local.id);
+        }
+        catch {
+            out.missing.push(String(m.name || m.id));
+        }
+    }
+    if (opts.exact) {
+        const keep = new Set(wanted.map((m) => (has(m) || {}).id).filter(Boolean));
+        for (const m of await here()) {
+            if (!m.enabled || keep.has(m.id))
+                continue;
+            try {
+                await invoke('disable_mod', { modId: m.id });
+                out.disabled += 1;
+            }
+            catch { /* leave it on */ }
+        }
+    }
+    // The order, once the set is final: the new mods placed by the mode, then the list's own
+    // order over the mods it names. An order that cannot be placed leaves the mods on; it is
+    // reported, not fatal.
+    const mode = opts.orderMode || null;
+    try {
+        if (newly.length)
+            await invoke('mod_order_arrange', { profileId: null, ids: newly, mode });
+        const effective = mode || await invoke('order_bulk_mode_get').catch(() => 'top');
+        if (list?.load_order && effective !== 'keep') {
+            await invoke('mod_order_import', { profileId: null, text: JSON.stringify(list.load_order) });
+        }
+    }
+    catch (e) {
+        out.orderError = String(e);
+    }
+    if (window._refreshModsFn)
+        window._refreshModsFn(true);
+    return out;
+}
+//# sourceMappingURL=modlist.js.map

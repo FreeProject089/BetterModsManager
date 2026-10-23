@@ -1,0 +1,485 @@
+/* modpack.css: the Modpacks page (features/mods/modpack-creator.ts).
+ *
+ * Oct 2026 redesign. Tokens only, so BMM White and the dark themes share every rule.
+ *   1. The page: header row, the one toolbar, the cards (grid or list), the « … » menu.
+ *   2. The pack dialog (#mp-wizard, .mpw): steps band, fields, the mod picker, options, review.
+ *   3. Import / export & share (.mpx), delete, repair (.mp-rep).
+ * The dialogs themselves are css/modal-shell.css; this file only lays out what is inside them,
+ * and inside a dialog a section is spacing and a hairline, never a framed box. */
+
+/* ── 1. The page ────────────────────────────────────────────────────────────────────────── */
+
+/* The page header: the title keeps its width; the action row wraps under it when it must. */
+#view-modpacks > .view-header { flex-wrap: wrap; gap: 12px 16px; }
+#view-modpacks > .view-header > div:first-child { flex: 1 1 260px; min-width: 0; }
+#view-modpacks > .view-header > .view-actions { flex-wrap: wrap; }
+#modpack-header-actions { gap: 8px; }
+#modpack-header-actions .mp-create { gap: 6px; }
+#modpack-header-actions[hidden] { display: none; }
+
+/* One bar: search, filter, sort, count, layout. */
+.mp-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px 10px;
+    flex-wrap: wrap;
+}
+.mp-search {
+    flex: 0 1 320px;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 36px;
+    padding: 0 12px;
+    border-radius: 10px;
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-s04);
+    color: var(--bmm-text-secondary);
+    transition: border-color var(--bmm-transition-fast);
+}
+.mp-search:focus-within { border-color: var(--bmm-accent); }
+.mp-search > svg { flex: none; }
+.mp-search input { flex: 1; min-width: 0; border: 0; outline: none; background: none; color: var(--bmm-text-primary); font-size: 13px; }
+.mp-select { width: auto; flex: none; height: 36px; min-width: 0; }
+.mp-count {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 9px;
+    border-radius: 999px;
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-s04);
+    color: var(--bmm-text-secondary);
+    font-size: 11.5px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.mp-view { flex: none; }
+
+/* Empty states. */
+.mp-empty { padding: 64px 20px; }
+.mp-empty .bms-note { max-width: 420px; }
+.mp-empty-a { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 8px; }
+.mp-empty-a .btn { gap: 6px; }
+.mp-nohit { padding: 40px 20px; }
+.mp-nohit[hidden] { display: none; }
+
+/* Cards: cover, name + state, meta, description; the foot carries the one action and « … ». */
+.modpack-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+    gap: 12px;
+}
+.modpack-card {
+    position: relative;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: "cover main" "foot foot";
+    grid-template-rows: 1fr auto;
+    align-items: start;
+    gap: 12px 14px;
+    min-width: 0;
+    padding: 16px;
+    border-radius: 14px;
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-s02);
+    cursor: pointer;
+    transition: border-color var(--bmm-transition-fast), background-color var(--bmm-transition-fast);
+}
+.modpack-card[hidden] { display: none; }
+/* No geometry change on hover: a card that moves out from under the pointer flickers. */
+.modpack-card:hover,
+.modpack-card:focus-within {
+    border-color: color-mix(in srgb, var(--bmm-accent) 40%, var(--bmm-border));
+    background: var(--bmm-s04);
+}
+.mp-cover {
+    grid-area: cover;
+    width: 46px;
+    height: 46px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    border: 1px solid var(--bmm-border-accent);
+    background: var(--bmm-accent-dim);
+    color: var(--bms-accent-ink);
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    user-select: none;
+}
+.mp-cover--sm { width: 38px; height: 38px; border-radius: 10px; font-size: 13px; }
+.modpack-card.is-on .mp-cover {
+    border-color: color-mix(in srgb, var(--bmm-success) 45%, var(--bmm-border));
+}
+.mp-card-main { grid-area: main; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.mp-card-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.modpack-card-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.3;
+    color: var(--bmm-text-primary);
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+}
+.modpack-card-title:hover { color: var(--bms-accent-ink); }
+.modpack-card-title:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: 2px; border-radius: 4px; }
+.mp-card-head .bms-chip { flex: none; }
+.mp-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    min-width: 0;
+    font-size: 12px;
+    color: var(--bmm-text-secondary);
+}
+.mp-card-meta > span { display: inline-flex; align-items: center; gap: 5px; min-width: 0; white-space: nowrap; }
+.mp-card-meta > span > svg { flex: none; }
+.mp-meta-warn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: color-mix(in srgb, var(--bmm-warning) 62%, var(--bmm-text-primary));
+}
+.modpack-card-desc {
+    margin: 2px 0 0;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--bmm-text-secondary);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.modpack-card-foot {
+    grid-area: foot;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--bmm-border);
+}
+.modpack-card-foot > .bms-chip { flex: none; }
+.mp-apply-btn { gap: 6px; flex: none; }
+.mp-more { flex: none; color: var(--bmm-text-secondary); }
+.mp-more:hover, .mp-more[aria-expanded="true"] { color: var(--bmm-text-primary); background: var(--bmm-s06); }
+
+/* List layout: one row per pack, the action at the end. */
+.modpack-grid.is-list { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.modpack-grid.is-list .modpack-card {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: "cover main foot";
+    grid-template-rows: auto;
+    align-items: center;
+    padding: 10px 14px;
+}
+.modpack-grid.is-list .mp-cover { width: 38px; height: 38px; border-radius: 10px; font-size: 13px; }
+.modpack-grid.is-list .mp-card-main { gap: 3px; }
+.modpack-grid.is-list .modpack-card-desc { display: none; }
+.modpack-grid.is-list .mp-card-head { justify-content: flex-start; }
+.modpack-grid.is-list .modpack-card-title { flex: 0 1 auto; }
+.modpack-grid.is-list .modpack-card-foot { padding-top: 0; border-top: 0; gap: 10px; }
+@media (max-width: 760px) {
+    .modpack-grid.is-list .modpack-card { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "cover main" "foot foot"; }
+}
+
+/* The « … » menu of a card: a small popover, fixed under its button. */
+.mp-menu {
+    position: fixed;
+    z-index: 4500;
+    min-width: 200px;
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    border-radius: 12px;
+    border: 1px solid var(--bmm-border-hover);
+    background: var(--bmm-bg-elevated);
+    box-shadow: var(--bmm-shadow-modal);
+    animation: mp-menu-in 0.12s ease-out;
+}
+.mp-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--bmm-text-primary);
+    font: inherit;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+}
+.mp-menu-item > svg { flex: none; color: var(--bmm-text-secondary); }
+.mp-menu-item:hover, .mp-menu-item:focus-visible { background: var(--bmm-s06); outline: none; }
+.mp-menu-item:focus-visible { box-shadow: inset 0 0 0 2px var(--bmm-accent); }
+.mp-menu-item--danger, .mp-menu-item--danger > svg { color: color-mix(in srgb, var(--bmm-danger) 70%, var(--bmm-text-primary)); }
+.mp-menu-item--danger:hover, .mp-menu-item--danger:focus-visible { background: var(--bmm-danger-dim); }
+.mp-menu-sep { height: 1px; margin: 4px 6px; background: var(--bmm-border); }
+@keyframes mp-menu-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .mp-menu { animation: none; } }
+body.bmm-no-anim .mp-menu { animation: none; }
+
+/* ── 2. The pack dialog ─────────────────────────────────────────────────────────────────── */
+
+/* The steps: numbered pills joined by a hairline; the current one is the accent fill. */
+.mpw-band { padding-top: 10px; padding-bottom: 10px; }
+.mpw-steps { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; min-width: 0; }
+.mpw-steps > li { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.mpw-steps > li + li::before { content: ""; width: 18px; height: 1px; background: var(--bmm-border-hover); flex: none; }
+.mpw-step {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px 4px 4px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--bmm-text-secondary);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 700;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background var(--bmm-transition-fast), color var(--bmm-transition-fast);
+}
+.mpw-step:hover:not(:disabled) { background: var(--bmm-s06); color: var(--bmm-text-primary); }
+.mpw-step:disabled { cursor: default; opacity: 0.55; }
+.mpw-step-n {
+    width: 22px;
+    height: 22px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--bmm-s06);
+    color: var(--bmm-text-secondary);
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+}
+.mpw-step.is-done .mpw-step-n {
+    background: var(--bmm-success-dim);
+    color: color-mix(in srgb, var(--bmm-success) 62%, var(--bmm-text-primary));
+}
+.mpw-step[aria-current="step"] { background: var(--bmm-accent-dim); color: var(--bms-accent-ink); opacity: 1; }
+.mpw-step[aria-current="step"] .mpw-step-n { background: var(--bmm-accent); color: var(--bmm-text-on-accent); }
+@media (max-width: 640px) {
+    .mpw-step:not([aria-current="step"]) .mpw-step-l { display: none; }
+    .mpw-step:not([aria-current="step"]) { padding-right: 4px; }
+}
+
+.mpw .bms-field textarea.form-input { resize: vertical; min-height: 72px; }
+.mpw-2col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+@media (max-width: 640px) { .mpw-2col { grid-template-columns: minmax(0, 1fr); } }
+.mpw-foot-note { min-width: 0; }
+
+/* The mod picker: a bar that stays at the top of the body, then the rows. A row is a tint
+   when hovered or picked, never its own bordered card. */
+.mpw-pick-bar {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    margin: -20px calc(var(--bms-pad-x) * -1) 0;
+    padding: 14px var(--bms-pad-x) 12px;
+    background: var(--bmm-bg-elevated);
+    border-bottom: 1px solid var(--bmm-border);
+}
+.mpw-search { flex: 1 1 220px; }
+.mpw-quick { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.mpw-quick .btn { gap: 6px; }
+.mpw-quick-l { font-size: 12px; color: var(--bmm-text-secondary); white-space: nowrap; }
+.mpw-list { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mpw-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    padding: 8px 10px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background var(--bmm-transition-fast);
+}
+.mpw-row[hidden] { display: none; }
+.mpw-row:hover { background: var(--bmm-s04); }
+.mpw-row.is-sel { background: color-mix(in srgb, var(--bmm-accent) 10%, transparent); }
+.mpw-row.is-sel:hover { background: color-mix(in srgb, var(--bmm-accent) 15%, transparent); }
+.mpw-cb { order: -1; flex: none; width: 16px; height: 16px; margin: 0; accent-color: var(--bmm-accent); cursor: pointer; }
+.mpw-row-txt { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.mp-mod-name, .mpw-row-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--bmm-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.mpw-row-meta { display: flex; flex-wrap: wrap; gap: 0 8px; font-size: 11.5px; color: var(--bmm-text-secondary); min-width: 0; }
+.mpw-row-meta > span + span::before { content: "·"; margin-right: 8px; opacity: 0.7; }
+.mpw-row.is-ghost .mpw-row-name { color: var(--bmm-text-secondary); }
+.mpw-on { flex: none; }
+.mpw-group {
+    margin-top: 12px;
+    padding: 4px 10px;
+    font-size: 10.5px;
+    font-weight: 800;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--bmm-text-secondary);
+}
+.mpw-group[hidden], .mpw-nohit[hidden] { display: none; }
+.mpw-nohit { text-align: center; padding: 20px 0; }
+
+/* A check row (option): the checkbox and its two lines. The risky one is a warning callout. */
+.mp-opt {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background var(--bmm-transition-fast);
+}
+.mp-opt:hover { background: var(--bmm-s03); }
+.mp-opt input { margin-top: 2px; flex: none; accent-color: var(--bmm-accent); width: 16px; height: 16px; }
+.mp-opt-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mp-opt-txt b { font-size: 13px; color: var(--bmm-text-primary); }
+.mp-opt-txt span { font-size: 12px; line-height: 1.45; color: var(--bmm-text-secondary); }
+.mp-opt--warn {
+    border: 1px solid color-mix(in srgb, var(--bmm-warning) 35%, var(--bmm-border));
+    background: color-mix(in srgb, var(--bmm-warning) 6%, transparent);
+}
+.mp-opt--warn:hover { background: color-mix(in srgb, var(--bmm-warning) 10%, transparent); }
+.mp-opt--warn input { accent-color: var(--bmm-warning); }
+.mp-opt--warn .mp-opt-txt b { color: color-mix(in srgb, var(--bmm-warning) 60%, var(--bmm-text-primary)); }
+
+/* Review: the summary, then the order and the per-mod sources. */
+.mpw-sum {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 12px 20px;
+    margin: 0;
+}
+.mpw-sum > div { min-width: 0; }
+.mpw-sum dt { font-size: 10.5px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; color: var(--bmm-text-secondary); }
+.mpw-sum dd { margin: 3px 0 0; font-size: 13.5px; font-weight: 600; color: var(--bmm-text-primary); overflow-wrap: anywhere; }
+.mpw-missing { color: color-mix(in srgb, var(--bmm-danger) 65%, var(--bmm-text-primary)); }
+.mpw-refs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.mpw-ref { padding: 8px 2px; min-width: 0; }
+.mpw-ref + .mpw-ref { border-top: 1px solid var(--bmm-s08); }
+.mpw-ref-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.mpw-ref-txt { display: flex; flex-direction: column; gap: 1px; flex: 1 1 auto; min-width: 0; }
+.mpw-ref-txt b { font-size: 13px; color: var(--bmm-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mpw-ref-txt span { font-size: 11.5px; color: var(--bmm-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-danger { color: var(--bmm-text-secondary); }
+.mp-danger:hover { color: color-mix(in srgb, var(--bmm-danger) 70%, var(--bmm-text-primary)); background: var(--bmm-danger-dim); }
+.mp-mi-more { margin: 4px 0 0 58px; min-width: 0; }
+.mp-mi-more-h {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    list-style: none;
+    cursor: pointer;
+    user-select: none;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--bmm-text-secondary);
+    padding: 2px 0;
+}
+.mp-mi-more-h::-webkit-details-marker { display: none; }
+.mp-mi-more-h:hover { color: var(--bmm-text-primary); }
+.mp-mi-more-h svg { transition: transform var(--bmm-transition-fast); }
+.mp-mi-more[open] > .mp-mi-more-h svg { transform: rotate(90deg); }
+.mp-mi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 8px 0; }
+.mp-mi-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 18px; padding-bottom: 4px; }
+.mp-mi-check { font-size: 12.5px; color: var(--bmm-text-primary); align-items: center; }
+.mp-mi-sel { display: flex; align-items: center; gap: 8px; }
+.mp-mi-sel .form-input { width: auto; }
+@media (max-width: 640px) { .mp-mi-more { margin-left: 0; } }
+
+/* Building the refs (hashing the picked mods). */
+.mpw-building { display: flex; flex-direction: column; gap: 12px; padding: 48px 8px; }
+.mpw-building-t { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; color: var(--bmm-text-secondary); min-width: 0; }
+.mpw-building-t > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── 3. Import, export & share, delete, repair ──────────────────────────────────────────── */
+
+/* A pack as one line: cover, name, meta. */
+.mp-line { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.mp-line-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mp-line-txt b { font-size: 14px; color: var(--bmm-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-line-txt span { font-size: 12px; color: var(--bmm-text-secondary); }
+
+/* The ways to import: each is the thing you pick, so each keeps a light frame. */
+.mpx-choices { display: flex; flex-direction: column; gap: 8px; }
+.mpx-choice {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-width: 0;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-s02);
+    color: var(--bmm-text-primary);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color var(--bmm-transition-fast), background-color var(--bmm-transition-fast);
+}
+.mpx-choice:hover, .mpx-choice.is-open { border-color: var(--bmm-border-accent); background: var(--bmm-s04); }
+.mpx-choice-ic {
+    width: 36px;
+    height: 36px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    background: var(--bmm-accent-dim);
+    color: var(--bms-accent-ink);
+}
+.mpx-choice-txt { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.mpx-choice-txt b { font-size: 13.5px; }
+.mpx-choice-txt span { font-size: 12px; color: var(--bmm-text-secondary); }
+.mpx-choice-go { flex: none; color: var(--bmm-text-secondary); }
+.mpx-link { display: flex; flex-direction: column; gap: 6px; padding: 0 2px 4px; }
+.mpx-link[hidden], .mpx-err[hidden] { display: none; }
+.mpx-err { color: color-mix(in srgb, var(--bmm-danger) 70%, var(--bmm-text-primary)); }
+.mpx-ids { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Repair: the mods to fix as rows, then the progress. */
+.mp-rep-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.mp-rep-row { display: flex; align-items: center; gap: 12px; padding: 8px 2px; min-width: 0; }
+.mp-rep-row + .mp-rep-row { border-top: 1px solid var(--bmm-s08); }
+.mp-rep-txt { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.mp-rep-txt b { font-size: 13px; color: var(--bmm-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-rep-txt span { font-size: 11.5px; color: var(--bmm-text-secondary); }
+.mp-rep-row .bms-chip { flex: none; }
+.mp-rep-progress { display: flex; flex-direction: column; gap: 8px; }
+.mp-rep-progress[hidden] { display: none; }
+.mp-rep-status { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--bmm-text-secondary); min-width: 0; }
+.mp-rep-status > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+#repair-status-pct { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--bmm-text-primary); }
+#repair-status-text.is-err { color: color-mix(in srgb, var(--bmm-danger) 70%, var(--bmm-text-primary)); }
+#repair-status-text.is-muted { color: var(--bmm-text-muted); }
+.mp-rep .modal-footer[hidden] { display: none; }

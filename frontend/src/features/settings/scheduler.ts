@@ -1,0 +1,14581 @@
+// Scheduler / automation engine (frontend).
+//
+// The engine runs while BMM is open: a timer wakes every ~20s, finds due tasks,
+// and executes their workflow. A workflow is a tree of steps — actions, delays,
+// and if/else condition blocks — so the user can build genuinely free automations
+// (activate a profile, enable a modpack, run a custom command, branch on state…).
+//
+// Persistence + custom-command execution live in the Rust backend
+// (commands/scheduler.rs); everything else (timing, conditions, action dispatch)
+// is here so it can reuse every existing invoke() action.
+
+import { sourceAccessHtml, wireSourceAccess } from '../../core/source-access.js';
+import { copyIdButtons, wireCopyIds } from '../../core/copy-id.js';
+import { invoke, pickFiles, apiBase, apiRunning } from '../../core/api.js';
+import { expectedRepoSignature } from '../repo/repo-pin.js';
+import { t, getLang } from '../../core/i18n.js';
+import { parseLabels, takeAiStep, chargeAiTime, taint, untaint, taintProblem, condTaintProblem, propagateTaint, readSharedTaint, writeSharedTaint, aiLabelHolds, aiErrorParts } from './sched-ai.js';
+import {
+    eventMatches, scoresName, scoresOf, aiScoreHolds, aiAbstainedHolds, modClassOf, topTag, rememberModTags, modAiTagHolds,
+    libraryOf, libraryCountHolds, crashItemsOf, crashLines, crashSummary, rememberCrashes, crashCauseHolds, crashSince,
+    triageOf, stateOf, statusHolds, LIBRARY_KINDS, STATUS_WHATS,
+} from './sched-laya.js';
+import { announceCrashLabels } from '../ai/laya-crash-events.js';
+import { CAUSE_FAMILY, CRASH_CAUSES, CRASH_FAMILIES, REPORT_KINDS, APP_AREAS } from '../ai/laya-assist-model.js';
+import { causeWord, familyWord } from '../ai/laya-words.js';
+import { escHtml, escAttr } from '../../core/utils.js';
+import { toast as appToast } from '../../ui/app.js';
+import { openKeyManager } from '../../core/settings-link.js';
+import { renderUpkeepForm } from './sched-forms.js';
+import { scriptEngine } from '../../core/script-engine.js';
+import { toScriptActions } from './sched-script.js';
+// Everything the scheduler says is grouped under it in the notification centre, and Settings
+// decides how that group is delivered (in the app, as a system notification, or not at all).
+const toast = (message: string, type = 'info', duration = 3000, icon = '', source = 'Tasks') => appToast(message, type, duration, icon, source);
+import { calendarDue, nextCalendarDue } from './sched-time.js';
+import { substituteVars, VAR_NAME_RE, BLOCK_NAME_RE, parseList, readNum, readVar, renderVar, type RunCtx } from './sched-vars.js';
+import { parseHeaderLines, readJsonPath, statusIsFailure } from './http-action.js';
+import { inspectBmmpa } from './bmmpa-inspect.js';
+import { BMMS_INDEX, type BmmsEntry } from '../../docs/bmms-reference.gen.js';
+import { outlineOf, offsetOfLine, renderOutline, explain, wordBoxAtPoint, type OutlineRow } from './bmms-editor-aids.js';
+import { BMM_EVENTS, fireEvent, noteTaskRunning } from '../../core/bmm-events.js';
+import { startActivity, type ActivityHandle } from '../../core/activity.js';
+import { treeOf, foldersOf, renderTree } from './block-tree.js';
+import { showConfirm } from '../../ui/confirm.js';
+import { reasonNotRunning, gameHoldsTasks, listNextRun } from './sched-why.js';
+import { condSubject, condChildCount, scriptFirstLine } from './sched-summary.js';
+import { planOf, previewAgainst } from './sched-preview.js';
+import {
+    debugging, gate, startDebug, endDebug, failDebug, DebugStopped, setDebugHost, subscribeDebug, subscribeBreakpoints,
+    toggleBreakpoint, breakpointPaths, lastDebugEvent, debugStep, debugContinue, debugStop, debugActive, type DebugEvent,
+} from './sched-debug.js';
+import { newRun, startStep, endStep, finishRun, type RunRecord } from './sched-runlog.js';
+import { parsePresetFeed, looksLikePresetFeed, readPresetCatalogs, writePresetCatalogs } from './preset-catalog.js';
+import { mountCompletions } from './bmms-complete.js';
+import { attachHighlight } from '../../ui/code-editor.js';
+import { registerBmmsLanguage } from './bmms-prism.js';
+import { raiseAboveAll } from '../../ui/layer.js';
+import { safeFileStem, presetRow } from './task-catalog.js';
+import type { EntryChoice } from '../../core/catalog-publish.js';
+import {
+    originLabel, originOf, forgetOrigin, isDisabled, setDisabled, recordHistory,
+    hasSource, looksLikeIndex, catalogLooksLike, importIndexForType,
+} from '../catalogs/catalog-index.js';
+import { writeSources } from '../catalogs/catalog-sources.js';
+import { getLinks } from '../../core/links-config.js';
+import { confirmAction } from '../../ui/verify.js';
+import { fetchSourceText } from '../../core/source-fetch.js';
+import { trustedLinkDispatcher } from '../../core/link-dispatch.js';
+import { actionPaths, pruneLayout, paletteStep, walkSteps, resolve as resolvePath, findPath, buildGraph, type FlowLayout } from './sched-flow-model.js';
+import {
+    mountFlow, unmountFlow, flowDebugPaint, flowRefresh, flowReveal, flowSelectedPath, type FlowHost, type StepTestResult,
+} from './sched-flow.js';
+import { readMode, writeMode, needsModePrompt, MODE_CHOICES, isMode } from './sched-modes.js';
+import { debugTargetFor, pathForLine, type LineRow } from './sched-debug-map.js';
+import { testNeedsConfirm, testOutcome } from './sched-test.js';
+import { learnMore, LEARN_MORE_EVENT } from '../../core/learn-more.js';
+import { installFocusTrap } from '../../ui/focus-trap.js';
+import { flowKeyActive, bindScopeKeys } from './sched-flow-keys.js';
+import { newFeedItems, feedEventData, parseHeaderBlock, hostOf, webhookUrlProblem, discordBody, slackBody, webhookBody, jsonTemplate, type FeedItem } from './sched-feed.js';
+import { regexWithBudget } from './regex-budget.js';
+import type { TaskPkg, PkgEnv } from './sched-pkg.js';
+import { buildJoinGate, gateWords } from './sched-dcs-gate.js';
+import { normalizeUi, pruneReroutes, edgeKey, byFolder, allTags, matches as taskMatches, type FlowUi } from './sched-flow-ui.js';
+import { fieldProblem } from './sched-feed.js';
+import { variablesOf, insertVar, type KnownVar } from './sched-debug-map.js';
+import { uiIcon, type IconName } from '../../ui/icons.js';
+
+/**
+ * A 16px line icon, drawn the way every other icon in this panel is drawn: one stroked
+ * path inheriting `currentColor`, so it takes the theme's text colour and stays legible
+ * on a light background. Emoji do not — they carry their own colours, they render as a
+ * different typeface on every OS, and several of them are simply a coloured square in the
+ * webview. The preset chips were the last place in the scheduler still using them.
+ */
+const SVG16 = (name: IconName): string => uiIcon(name, 16);
+
+// ── Types ───────────────────────────────────────────────────────────────────
+type Trigger =
+    | { type: 'once'; at: string }                                  // ISO local datetime
+    | { type: 'interval'; everyMinutes: number }                    // every N minutes
+    | { type: 'hourly'; everyHours: number }                        // every N hours
+    | { type: 'dailyAt'; time: string }                             // "HH:MM"
+    | { type: 'weeklyAt'; time: string; days: number[] }            // 0=Sun..6=Sat
+    | { type: 'monthlyAt'; day: number; time: string }              // day-of-month 1..31
+    | { type: 'appStart' }                                          // once per app launch
+    // Fires when a FILE changes — the only way one process learns that another did
+    // something. A game does not announce anything; it writes. This is what turns "DCS
+    // just joined a server" into something an automation can hang off, and it is not
+    // DCS-specific: point it at any log, any save, any file a program touches.
+    | { type: 'watchFile'; path: string }
+    /**
+     * Fires when BMM itself does something.
+     *
+     * The other triggers all watch the OUTSIDE: a clock, a file somebody else wrote. This one
+     * watches BMM — a mod that turned out to be missing while a modpack was being applied, a
+     * sync that failed, an error somebody saw.
+     *
+     * Those moments were previously observable only by the person sitting there. A task that
+     * repairs a broken install is useless if it can only find out on a timer, because by then
+     * the person has already given up and fixed it by hand.
+     *
+     * Built on the same hook ring as `wait.hook` and `bmm://hook`: BMM rings a hook named
+     * `bmm.<something>`, and this polls it. One mechanism, so an event and a webhook are the
+     * same kind of thing and everything that works for one works for the other.
+     */
+    | { type: 'onEvent'; event: string; where?: string }
+    /**
+     * Fires when ANOTHER task finishes.
+     *
+     * Built on the same ring as everything else: a finished run brings up `bmm.task.done`
+     * carrying which task, whether it worked and how long it took, and this reads that. So a
+     * chain is not a new mechanism — it is one automation listening to another the way it
+     * already listens to a webhook.
+     *
+     * `outcome` is the half that makes it useful. "After the nightly sync" and "after the
+     * nightly sync FAILED" are different automations, and without the filter the second one
+     * has to start by re-deriving what the first already knew.
+     *
+     * A chain has a depth limit, because two tasks each waiting for the other is a loop that
+     * nothing else here would stop. See CHAIN_MAX.
+     */
+    | { type: 'afterTask'; taskId: string; outcome?: 'any' | 'ok' | 'fail' }
+    /**
+     * Fires when a script you wrote says so — exit 0 means run.
+     *
+     * The free trigger. Every other one answers a question BMM already knows the answer to;
+     * this one asks a question BMM has never heard of. "When the server I play on has more
+     * than twenty people", "when my NAS finished its backup", "when the mod author pushed a
+     * tag" — all of them are three lines of Python and none of them could be a trigger.
+     *
+     * It runs code on a timer, so it needs the `script` grant, checked before it runs and not
+     * only when the task does. Without that check a task whose STEPS ask for nothing would
+     * still execute its author's code every few minutes.
+     */
+    | { type: 'script'; engine: string; code: string; everyMinutes: number }
+    /**
+     * Fires when one of the scheduler's own CONDITIONS becomes true.
+     *
+     * The other free trigger, in BMM's vocabulary instead of a shell's: all thirty-four
+     * conditions, the same ones an `if` step uses, now usable as a "when". "When free space
+     * drops below 10 GB", "when this app is not running", "when that file changed hash".
+     *
+     * Edge-triggered, and that is the whole design. A level-triggered version fires on every
+     * poll for as long as the condition holds — low disk space would start a hundred cleanups
+     * before the first one had finished making room.
+     */
+    | { type: 'condition'; condition: Condition }
+    /**
+     * Fires when a feed (RSS or Atom) has an item it did not have before.
+     *
+     * The first read only LEARNS what is there, so arming a task on a feed with fifty items
+     * does not run it fifty times. What was seen is kept across launches (per task and per
+     * address), so an item published while BMM was closed still fires once at the next check;
+     * the newest new item reaches the steps as {event.title}, {event.link}, {event.id},
+     * {event.published}, and how many there were as {event.count}. Needs `network`.
+     */
+    | { type: 'rss'; url: string; everyMinutes: number; allowLan?: boolean }
+    | { type: 'manual' };                                           // only via Run button / deeplink
+
+interface Action { type: string; params: Record<string, any>; }
+
+
+/** The things a task must be granted one at a time.
+ *  Four of them reach OUTSIDE the automation — everything else a step can do is a BMM
+ *  action the user could perform by hand. The fifth, `delete`, is the opposite: it is
+ *  something the buttons do too, but they do it with somebody watching. Each is granted
+ *  on its own rather than bundled behind one "allow unsafe" box that says nothing about
+ *  what it unlocks. */
+interface TaskPerms {
+    /** Spawn an external program with arguments. */
+    command?: boolean;
+    /** Run a user-authored script through PowerShell / CMD / Bash / Python. */
+    script?: boolean;
+    /** Fire a bmm:// deeplink. This was ungated: a deeplink can reach anything the
+     *  app exposes, including actions that have no step of their own, so it was the
+     *  widest capability in the scheduler and the only one nobody had to ask for. */
+    deeplink?: boolean;
+    /** Terminate a process. Separate from `command` because the risk is different in
+     *  kind: launching a program is something the user could undo, while killing one
+     *  can lose unsaved work with no warning and nothing to undo. Defaults off for
+     *  every existing task — the capability did not exist when their consent was
+     *  given, which is the same reason `script` is not inherited either. */
+    stopProcess?: boolean;
+    /** Change how hard BMM works: the resource preset (for the task or for good), manual game
+     *  mode, pausing the queue (A3). Not destructive, but a task that sets "Max" at 3 am and
+     *  forgets is a task that made the whole PC slow, so it is granted like the others and
+     *  taken away on import. */
+    resources?: boolean;
+    /** Delete a profile, a modpack, or a mod's files.
+     *
+     *  Not covered by any of the four above: every one of those is about reaching OUTSIDE
+     *  BMM, and this is the opposite — it destroys the user's own data from the inside,
+     *  where no external gate ever sees it. Off for every existing task, because a task
+     *  written before these actions existed was consented to on the understanding that
+     *  nothing it did could lose a mod folder. */
+    delete?: boolean;
+    /** Run, start or arm ANOTHER task by id (`task.run`, `task.spawn`, `task.setEnabled`).
+     *
+     *  Its own key because running another task is acting with THAT task's grants: without
+     *  it a task granted nothing could run, or arm on its trigger, one of the user's own
+     *  privileged tasks (pentest R13, owner card 9). Not folded into `deeplink`, which would
+     *  make "may call my sub-task" cost "may fire any bmm:// link". A legacy task (no `perms`)
+     *  keeps it, like `deeplink`: it could always do this, and `schedule/run` is a deep link. */
+    tasks?: boolean;
+    /** Send to, or read from, the network: the webhook, Discord and Slack steps and the feed
+     *  trigger. Narrower than `command` — it cannot start a program — and bounded on the Rust
+     *  side (commands/sched_net.rs): http(s) only, never a private address unless the STEP
+     *  allows the local network, a timeout and a size cap on every request. Off for every
+     *  existing task: none of them could do this when its consent was given. */
+    network?: boolean;
+    /** Ask Laya: every `ai.*` step (sort a text, a mod's tags, the library check, crash labels,
+     *  report triage, Laya's state, a crash explanation…) and the `aiAvailable` condition.
+     *  Its own key because a model run costs CPU and reads text the task hands it; what comes
+     *  back is DATA (sched-ai.ts marks the free text untrusted). Off for every existing task
+     *  and reset on import, like the others. */
+    ai?: boolean;
+    /** Open an allow-listed dialog or click an allow-listed control on BMM's screens
+     *  (`nav.modal`, `nav.click` — sched-nav-model.ts). The other navigation steps only SHOW
+     *  (a page, a card, a highlight, a message) and ask for nothing. Its own key because a click
+     *  acts as the person would, and a task from a plugin must not press buttons on their
+     *  behalf until they said so. Off for every existing task and reset on import. */
+    navigate?: boolean;
+    /** Place the files an automation package carries outside BMM: into the DCS Saved Games
+     *  folders, the active profile's game or mods folder (`pkg.install`), and write the
+     *  join-gate report there (`gate.report`). Its own key because it writes into a GAME — a
+     *  hook script runs inside DCS — and that is neither running a program nor touching BMM's
+     *  own data. Path-confined in Rust (commands/sched_pkg.rs), each placement asked once in a
+     *  BMM dialog with a receipt. Off for every existing task and reset on import. */
+    files?: boolean;
+}
+
+/** A task's effective permissions. An old task has no `perms`, only the single
+ *  allowCustomCommands flag — that flag meant "may run external programs", so it
+ *  maps to `command`, and to `deeplink` because deeplinks used to need nothing at
+ *  all and revoking them on upgrade would break working automations. It does NOT
+ *  map to `script`: that capability did not exist when consent was given, and
+ *  granting it retroactively would be inventing consent. */
+function taskPerms(task: Task): TaskPerms {
+    if (task.perms) return task.perms;
+    return { command: task.allowCustomCommands === true, deeplink: true, script: false, tasks: true };
+}
+
+/** A grant is the boolean `true` and nothing else (owner card 6, pentest R13). A truthy
+ *  "yes", 1 or {} in a hand-edited or generated schedules.json is not consent; the compiler
+ *  emits booleans and imports reset every grant to `false`, so this refuses no honest task. */
+function hasPerm(task: Task, key: keyof TaskPerms): boolean {
+    return taskPerms(task)[key] === true;
+}
+
+function requirePerm(task: Task, key: keyof TaskPerms, label: string): void {
+    if (!hasPerm(task, key)) {
+        throw new Error((t('sched.permDenied') || 'This task is not permitted to {what}. Grant it in the task’s permissions.').replace('{what}', label));
+    }
+}
+interface Condition { type: string; params: Record<string, any>; negate?: boolean; }
+type Step = (
+    | { kind: 'action'; action: Action }
+    | { kind: 'delay'; seconds: number }
+    | { kind: 'waitFor'; condition: Condition; timeoutSec: number; pollSec?: number; onTimeout?: 'abort' | 'continue' }
+    | { kind: 'if'; condition: Condition; then: Step[]; else: Step[] }
+    // Loop: run `steps` repeatedly — while/until a condition, or a fixed number of
+    // times — with a hard max-iterations safety cap and an optional pause between.
+    | { kind: 'repeat'; mode: 'while' | 'until' | 'times' | 'doWhile'; condition?: Condition; times?: number; maxIters: number; everySec: number; steps: Step[] }
+    // For-each: run `steps` once per item of a live collection. Inside the body,
+    // every string action param may reference the item as {item.id} / {item.name}.
+    | { kind: 'forEach'; source: 'mods' | 'enabledMods' | 'disabledMods' | 'profiles' | 'modpacks' | 'themes' | 'list' | 'mapKeys'; listName?: string; maxIters: number; everySec: number; steps: Step[] }
+    // Switch: evaluate cases in order, run the FIRST whose condition holds, else default.
+    | { kind: 'switch'; cases: { condition: Condition; steps: Step[] }[]; default: Step[] }
+    // Try/catch: run `steps`; if anything in them fails, run `onError` INSTEAD of
+    // aborting the whole task. Without it, one unreachable path or one missing file
+    // killed an eight-step automation on step two.
+    | { kind: 'try'; steps: Step[]; onError: Step[] }
+    /**
+     * Make this true, and only do the work when it is not.
+     *
+     * For a task whose job is a STATE rather than a script: it fires on its schedule, finds
+     * everything already as it should be, and does nothing. When something drifts, it fixes
+     * it — and then CHECKS. That last part is why this is not `if not <condition>`: an `if`
+     * runs its block and never looks back, so a fix that failed looks exactly like one that
+     * worked, and a task running hourly is the worst place for that to be invisible.
+     */
+    | { kind: 'ensure'; condition: Condition; steps: Step[]; onFail?: 'abort' | 'continue' }
+    /**
+     * Run it again when it fails.
+     *
+     * People were building this out of two tasks that call each other — which is why the
+     * export walker carries a `seen` set. That works, and it costs two tasks, a shared counter
+     * and a reader who has to hold both in their head to see one loop.
+     *
+     * The case is a repo that is briefly unreachable, or a file another program still has
+     * open: not an error to handle, an attempt to make again.
+     */
+    | { kind: 'retry'; times: number; everySec: number; steps: Step[]; onFail?: 'abort' | 'continue' }
+    // Run every branch AT THE SAME TIME and carry on when all have settled. For the case a
+    // sequence gets wrong: three independent downloads, or a sync and a benchmark that have
+    // nothing to say to each other, where doing them in order only costs time.
+    //
+    // `mode` is what happens when one branch throws. 'all' aborts the step (the default,
+    // and what a sequence would have done); 'settle' lets the others finish and reports the
+    // failures afterwards — the honest choice for "do these five, tell me which failed".
+    | { kind: 'parallel'; mode?: 'all' | 'settle'; branches: Step[][] }
+    // Loop signals, and a clean end for the whole task. These are what make forEach
+    // usable in practice: "for each mod, try to verify; on error notify and continue".
+    // Run a named block of steps defined once and shared by every task. It carries no `steps`
+    // of its own — the body lives in the block store — which is why the tree walkers do not
+    // need a case for it: there is nothing inline to walk.
+    | { kind: 'call'; block: string }
+    | { kind: 'break' }
+    | { kind: 'continue' }
+    | { kind: 'stop' }
+    // Editor-only flags shared by every kind: collapsed (folded in the editor) and
+    // disabled (kept in the workflow but skipped at run time — like commenting out).
+) & { collapsed?: boolean; disabled?: boolean };
+
+interface Task {
+    id: string;
+    name: string;
+    description?: string;
+    enabled: boolean;
+    trigger: Trigger;
+    steps: Step[];
+    /** Legacy single opt-in. Kept as the MIGRATION SOURCE, never as the gate:
+     *  tasks saved before permissions were split still carry only this, and
+     *  dropping it would silently revoke what the user had already granted. */
+    allowCustomCommands: boolean;
+    /** What this task is permitted to do beyond changing BMM's own state.
+     *  Absent on an old task — taskPerms() derives it from allowCustomCommands. */
+    perms?: TaskPerms;
+    osSchedule?: boolean;   // also register a Windows Scheduled Task (runs when BMM is closed)
+    /**
+     * Where this task writes when it is given a RELATIVE path.
+     *
+     * Empty means `appdata:TaskOutput/<task id>`, which is the answer for almost everybody:
+     * somewhere that exists, is per-task, and is not the game folder. An absolute path or a
+     * place name (`mods:`, `plugin:x/bundle`) is honoured as written.
+     *
+     * The point is that `do file.write(path: "run.log", …)` has an obvious meaning and cannot
+     * land somewhere surprising. A task writing to a bare filename with no rule about where
+     * would write next to the executable, which is both wrong and hard to find.
+     */
+    outputDir?: string;
+    /** When the task started existing. It is the CATCH-UP BASELINE: without it, a daily
+     *  task created at 22:00 would consider today's 21:00 window missed and fire the
+     *  moment you saved it. Backfilled on load for tasks written before this existed. */
+    createdAt?: number;
+    /** Run a calendar window that elapsed while BMM was closed, at the next launch.
+     *  Default ON — a daily backup that silently does nothing because the app was shut
+     *  at 03:00 is worse than one that runs late. At most ONE run is owed, however long
+     *  BMM was away. */
+    catchUp?: boolean;
+    /** Run the whole task again after a failure: `times` more attempts (0-5), `backoffSec`
+     *  seconds apart (5-3600). A stop or a cancel is never retried; each attempt is logged. */
+    retry?: { times: number; backoffSec: number };
+    /** Where the flow editor's nodes were moved by hand (sched-flow-model.ts). Presentation
+     *  only: the executor never reads it, the code mode never prints it, and a task nobody
+     *  arranged has no such field at all. */
+    layout?: FlowLayout;
+    /** The files this task carries (sched-pkg.ts): set by « attach files » or by the package
+     *  importer after it verified the package, never by a file. */
+    pkg?: TaskPkg;
+    /** Presentation only, versioned (sched-flow-ui.ts): the flow editor's frames and reroute
+     *  points, the list's folder and tags. The executor never reads it. */
+    ui?: FlowUi;
+    lastRun?: number;       // epoch ms
+    lastResult?: string;    // 'ok' | 'error: ...'
+    history?: { at: number; ok: boolean; ms: number; err?: string }[];  // last runs (capped)
+}
+
+// ── State ───────────────────────────────────────────────────────────────────
+let _tasks: Task[] = [];
+let _timer: number | null = null;
+const _appStartFired = new Set<string>();
+const _onceFired = new Set<string>();
+
+// Picker caches (filled when the modal opens)
+let _profiles: any[] = [];
+let _mods: any[] = [];
+let _modpacks: any[] = [];
+let _themes: any[] = [];
+let _apps: any[] = [];
+let _disks: any[] = [];
+
+// ── Persistence ──────────────────────────────────────────────────────────────
+/** Fill in the arrays every block kind assumes it has.
+ *
+ *  Steps used to be built only by _makeStep(), which guarantees them. Now MCP and
+ *  the CLI can author a task (bmm_create_schedule), and they validate only the top
+ *  level — a switch without `default`, or a forEach without `steps`, saved and
+ *  listed fine but threw the moment the user opened it in the editor. Which is
+ *  exactly what the "created disabled, go inspect it" contract asks them to do. */
+function normalizeSteps(steps: any[]): Step[] {
+    if (!Array.isArray(steps)) return [];
+    for (const st of steps) {
+        if (!st || typeof st !== 'object') continue;
+        if (st.kind === 'if') { st.then = normalizeSteps(st.then); st.else = normalizeSteps(st.else); }
+        else if (st.kind === 'repeat' || st.kind === 'forEach') { st.steps = normalizeSteps(st.steps); }
+        else if (st.kind === 'try') { st.steps = normalizeSteps(st.steps); st.onError = normalizeSteps(st.onError); }
+        else if (st.kind === 'ensure') { st.steps = normalizeSteps(st.steps); }
+        else if (st.kind === 'retry') { st.steps = normalizeSteps(st.steps); }
+        else if (st.kind === 'switch') {
+            st.cases = Array.isArray(st.cases) ? st.cases : [];
+            for (const c of st.cases) {
+                if (!c.condition) c.condition = { type: 'always', params: {} };
+                c.steps = normalizeSteps(c.steps);
+            }
+            st.default = normalizeSteps(st.default);
+        }
+    }
+    return steps as Step[];
+}
+
+async function loadTasks(): Promise<void> {
+    try {
+        const raw = await invoke('get_schedules');
+        _tasks = Array.isArray(raw) ? raw : [];
+        let backfilled = false;
+        for (const t of _tasks) {
+            t.steps = normalizeSteps(t.steps);
+            // Backfill the catch-up baseline for tasks written before it existed. Its
+            // last run is the honest answer; a task that has never run gets "now", so
+            // adopting catch-up can never make an old task fire for a window that
+            // elapsed before the feature was there.
+            if (!t.createdAt) { t.createdAt = t.lastRun || Date.now(); backfilled = true; }
+        }
+        if (backfilled) await saveTasks();
+    } catch { _tasks = []; }
+}
+async function saveTasks(): Promise<void> {
+    try { await invoke('save_schedules', { tasks: _tasks }); }
+    catch (e) { toast(`${t('common.error') || 'Error'}: ${e}`, 'error'); }
+}
+
+// Build a real, ready-to-use "simple loop" automation for the user (used by the
+// "Load example" button and the interactive tutorial). Created disabled so it never
+// fires unexpectedly — the user inspects it, then flips the toggle to enable it.
+export async function createExampleAutomation(): Promise<void> {
+    const id = (globalThis.crypto?.randomUUID?.() || `ex-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+    const task: Task = {
+        id,
+        name: t('sched.example.name') || 'Example — simple loop',
+        description: t('sched.example.desc') || 'Every hour, loop 3× and show a notification each time.',
+        enabled: false,
+        trigger: { type: 'hourly', everyHours: 1 },
+        steps: [
+            { kind: 'repeat', mode: 'times', times: 3, maxIters: 3, everySec: 2, steps: [
+                { kind: 'action', action: { type: 'notify', params: { message: t('sched.example.msg') || 'Hello from your automation!' } } },
+            ] },
+        ],
+        allowCustomCommands: false,
+    };
+    _tasks.push(task);
+    await saveTasks();
+    renderScheduleList();
+    openTaskModal(task);
+    toast(t('sched.example.created') || 'Example automation created — a simple loop. Toggle it on when ready.', 'success');
+}
+
+// ── Engine ───────────────────────────────────────────────────────────────────
+
+// One delegated listener for every Files… menu entry, registered ONCE for the module.
+//
+// It has to be delegated at all because showGlobalDropdown CLONES the menu into the portal
+// and cloneNode(true) does not copy event listeners — a handler bound to an entry would be
+// lost on the copy the user actually clicks. The data attribute survives the clone; a
+// listener does not.
+//
+// It has to be registered once because renderScheduleList() runs again on every language
+// change and every task add/delete. Registering inside that loop stacked one listener PER
+// TASK PER RENDER, none of them ever removed, each holding its own copy of the action map —
+// so a single click eventually ran the same action many times over.
+const _schedActions = new Map<string, () => void>();
+let _schedDelegated = false;
+function _wireSchedMenuDelegation(): void {
+    if (_schedDelegated) return;
+    _schedDelegated = true;
+    document.addEventListener('click', (ev: any) => {
+        const hit = ev.target?.closest?.('[data-sched-act]');
+        if (!hit) return;
+        const fn = _schedActions.get(hit.dataset.schedAct);
+        if (!fn) return;
+        (window as any).closeGlobalDropdown?.(true);
+        fn();
+    });
+}
+
+export async function initScheduler(): Promise<void> {
+    await loadTasks();
+    renderScheduleList();
+
+    // The API can arm and disarm a task, and the file it writes is not what the running
+    // scheduler is using — that was loaded at startup. Without this the change sits on disk
+    // while a task that shows as disabled keeps firing, which is a lie with consequences.
+    if (!(window as any).__bmmSchedWatch) {
+        (window as any).__bmmSchedWatch = true;
+        const { listen } = await import('../../core/api.js');
+        void listen('bmm://schedules-changed', () => {
+            void loadTasks().then(() => renderScheduleList());
+        });
+    }
+    // Tasks registered with Windows BEFORE the OS-schedule key existed carry a command line
+    // with no `k=`, so the deep link would stop and ask — at the hour the task fires, with
+    // nobody there. That is the exact failure the key was added to prevent, arriving to the
+    // people who already had the feature working.
+    //
+    // Re-registered once. Guarded by a flag rather than done every launch, because each one
+    // spawns PowerShell and a machine with a dozen tasks would pay for it at every start.
+    if (localStorage.getItem('bmm_os_sched_keyed') !== '1') {
+        const stale = _tasks.filter((t) => t.osSchedule && t.enabled);
+        for (const task of stale) await syncOsSchedule(task);
+        localStorage.setItem('bmm_os_sched_keyed', '1');
+        if (stale.length) console.log(`[SCHED] re-registered ${stale.length} OS task(s) with the schedule key`);
+    }
+
+    wireCreateRow();
+    // Settings keeps a card that points here, so a habit (or a tutorial) still finds its way.
+    const go = document.getElementById('btn-open-automations');
+    if (go && !go.dataset.wired) {
+        go.dataset.wired = '1';
+        go.addEventListener('click', () => { void openAutomations(); });
+    }
+    (window as any).bmmOpenAutomations = openAutomations;
+    // Let the interactive tutorial build a real automation for the user.
+    (window as any).bmmCreateExampleAutomation = createExampleAutomation;
+    if (!_langWired) {
+        _langWired = true;
+        document.addEventListener('langChanged', () => renderScheduleList());
+    }
+    startEngine();
+}
+let _langWired = false;
+
+/**
+ * « New automation » and the Files… menu beside it, wired once per drawn button. The list moved
+ * from Settings to Plugins & API → Automations, which is redrawn on every visit, so this runs
+ * each time the tab is drawn (the old button carried `data-wired` for the same reason).
+ */
+function wireCreateRow(): void {
+    const btn = document.getElementById('btn-create-schedule');
+    if (btn && !btn.dataset.wired) {
+        btn.dataset.wired = '1';
+        btn.addEventListener('click', () => openTaskModal(null));
+        // Add Export / Import .BMMPA buttons next to "New task".
+        const row = btn.parentElement;
+        if (row && !document.getElementById('sched-export-btn')) {
+            // ONE button, and a menu behind it.
+            //
+            // There were four of these in a row beside "New task" — Export, Import, Inspect,
+            // Load example — and three of them are things somebody does once. Four buttons of
+            // equal weight say four equally likely things, and the row pushed the one that
+            // matters off to the left.
+            //
+            // The menu is built from a list rather than four near-identical blocks, so adding
+            // a fifth entry cannot come with a fifth copy of the wiring.
+            const ITEMS: Array<[string, string, string, () => void]> = [
+                ['sched-export-btn', t('sched.exportBmmpa') || 'Export .BMMPA', '', () => exportTasksFile()],
+                ['sched-import-btn', t('sched.importBmmpa') || 'Import .BMMPA', '', () => importTasksFile()],
+                // Deliberately next to Import: the moment somebody is about to import a file
+                // they were sent is the moment this is useful, and one they find afterwards is
+                // one they find too late.
+                ['sched-inspect-btn', t('sched.inspectBmmpa') || 'Inspect a .BMMPA',
+                    t('sched.inspectBmmpa.d') || 'See what a shared automation would do — permissions, scripts and everything it touches — without importing it.',
+                    () => inspectTasksFile()],
+                ['sched-example-btn', t('sched.loadExample') || 'Load example',
+                    t('sched.loadExample.d') || 'Create a ready-made simple-loop automation you can inspect and enable.',
+                    () => createExampleAutomation()],
+                // Following and publishing live behind the same button as the rest of the
+                // file work, because that is what they are — and until now the only way to
+                // reach either was a button inside a panel you had to already know about.
+                ['sched-catalog-btn', t('sched.pc.open'), t('sched.pc.open.d'),
+                    () => { void browsePresetCatalogs(); }],
+                ['sched-publish-btn', t('sched.tcb.open'), t('sched.tcb.tip'),
+                    () => { void openTaskCatalogBuilder(); }],
+            ];
+
+            const wrap = document.createElement('div');
+            wrap.style.cssText = 'position:relative;display:inline-block';
+            const more = document.createElement('button');
+            more.id = 'sched-more-btn';
+            more.className = 'btn btn-ghost btn-sm';
+            more.style.gap = '6px';
+            more.textContent = t('sched.more') || 'Files…';
+            // Built to the portal's contract, which is not obvious and which the first
+            // version of this got wrong twice:
+            //
+            //   1. showGlobalDropdown CLONES the node. An inline `display:none` rides along
+            //      on the clone, and no class can override an inline style — so the menu was
+            //      moved to the portal, positioned, and stayed invisible. The button appeared
+            //      to do nothing at all.
+            //   2. cloneNode(true) does NOT copy event listeners. Per-item addEventListener
+            //      calls are lost, so even once visible every entry would have been inert.
+            //
+            // So: the template is never inserted in the page (nothing to hide), and the
+            // entries carry a data attribute that one delegated listener dispatches on.
+            const menu = document.createElement('div');
+            // is-template: hidden where it sits, visible on the CLONE the portal makes
+            // (which gains .open). A CLASS, not an inline style — an inline display:none
+            // travels with the clone and nothing can override it, which is exactly how this
+            // menu came to open into an invisible node.
+            menu.className = 'bmm-tag-menu is-template';
+            menu.style.minWidth = '210px';
+            for (const [id, label, hint, run] of ITEMS) {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.id = id;                       // kept: the command palette and the tutorial address these
+                b.className = 'bmm-tag-menu-row';
+                b.dataset.schedAct = id;         // survives cloneNode; a listener does not
+                b.textContent = label;
+                if (hint) b.title = hint;
+                menu.appendChild(b);
+                _schedActions.set(id, run);
+            }
+            // Handed to the global dropdown portal rather than shown in place.
+            //
+            // A menu positioned inside this card is clipped by it: the settings sections
+            // establish their own painting context, so the last entries were cut off at the
+            // section's bottom edge and the one below it painted over them. The portal moves
+            // the menu to a fixed container on <body> (z-index 999999) and positions it under
+            // the button, which is what every other menu in the app already does.
+            _wireSchedMenuDelegation();
+            more.addEventListener('click', (e) => {
+                e.stopPropagation();
+                // The portal owns opening, closing, click-outside and viewport clamping. It is
+                // defined in modals.ts, which loads at boot, so there is no meaningful case
+                // where it is absent — and the previous "fallback" hid a real failure behind a
+                // path that could not work either.
+                (window as any).showGlobalDropdown?.(more, menu);
+            });
+            wrap.appendChild(more);
+            // Kept IN the document, hidden by .is-template. It has to be reachable by id:
+            // the tutorial spotlights sched-example-btn, and getElementById does not see a
+            // detached node.
+            wrap.appendChild(menu);
+            row.appendChild(wrap);
+        }
+    }
+}
+
+/**
+ * Plugins & API → Automations: every scheduled task, the one builder that writes them (as a
+ * task in BMM, or exported as a .bmmscript, a .bmmpa or a script), the templates, the files and
+ * the catalogues. It used to be a card in Settings; the card now points here.
+ */
+export async function mountAutomations(host: HTMLElement): Promise<void> {
+    ensureSchedCss();
+    if (!_tasks.length) await loadTasks().catch(() => {});
+    host.innerHTML = `
+        <div class="plug-section-card auto-root">
+            <div class="auto-head">
+                <div class="auto-head-text">
+                    <h3 class="plug-section-title">${uiIcon('clock', 16)} ${escHtml(t('auto.title'))}</h3>
+                    <p class="plug-section-lead">${escHtml(t('auto.lead'))}</p>
+                </div>
+                <div class="auto-head-actions">
+                    <button type="button" class="btn btn-sm btn-secondary" id="auto-templates">${uiIcon('grid', 14)}<span>${escHtml(t('auto.templates'))}</span></button>
+                </div>
+            </div>
+            <div id="scheduler-running" class="sched-run-panel" style="display:none"></div>
+            <div id="scheduler-list-container" class="auto-list"></div>
+            <div class="auto-foot">
+                <button type="button" class="btn btn-primary btn-sm" id="btn-create-schedule">${uiIcon('add', 14)}<span>${escHtml(t('auto.create'))}</span></button>
+            </div>
+        </div>`;
+    wireCreateRow();
+    host.querySelector('#auto-templates')?.addEventListener('click', () => { void openTemplates(); });
+    renderScheduleList();
+    renderRunningPanel();
+}
+
+/** The template gallery, over a new task in the editor: picking one fills the editor. */
+export async function openTemplates(): Promise<void> {
+    await openTaskModal(null);
+    const modal = document.getElementById('modal-scheduler');
+    if (modal) await openPresetGallery(modal);
+}
+
+/** Take the person to Plugins & API → Automations (the old Settings card, the palette, a tour). */
+export async function openAutomations(): Promise<void> {
+    const { openPage } = await import('./sched-nav.js');
+    await openPage('plugins', 'automations');
+}
+// Kept across re-renders but NOT persisted: a filter is about the next few seconds, and one
+// that survived a restart would hide tasks from somebody who had forgotten they set it.
+let _taskFilter = '';
+/** The tag picked above the list (one at a time), '' for none. Not persisted, like the filter. */
+let _taskTag = '';
+
+function startEngine(): void {
+    if (_timer !== null) return;
+    // Fire appStart tasks once shortly after launch.
+    setTimeout(() => tick().catch(() => {}), 4000);
+    _timer = window.setInterval(() => { tick().catch(() => {}); }, 20000);
+    // Keep the "in 4 min" chips honest. Only while the list is actually on screen —
+    // `offsetParent` is null for a hidden section, so a user who never opens the
+    // scheduler pays nothing for a countdown nobody is reading.
+    window.setInterval(() => {
+        const c = document.getElementById('scheduler-list-container');
+        if (c && c.offsetParent !== null) renderScheduleList();
+    }, 30000);
+}
+
+/**
+ * A condition in one line, WITH the thing it is about.
+ *
+ * `t('sched.cond.fileExists')` alone reads "File exists" — true of the type and useless
+ * about the task, which is watching one particular file. Every summary in this file that
+ * named only the type was answering a question nobody asked.
+ *
+ * The label is translated here; picking WHICH parameter identifies the condition is in
+ * sched-summary.ts, where it has no i18n and can be tested.
+ */
+function condSummary(cond: Condition | undefined): string {
+    if (!cond?.type) return '';
+    const label = t('sched.cond.' + cond.type) || cond.type;
+    const kids = condChildCount(cond);
+    if (kids >= 0) return kids ? `${label} (${kids})` : label;
+    const subject = condSubject(cond);
+    if (subject) return `${label} \u2014 ${subject}`;
+    return cond.negate ? `${label} (${t('sched.condNot') || 'not'})` : label;
+}
+
+function nextLocalMidnightOffset(time: string): { h: number; m: number } {
+    const [h, m] = time.split(':').map(n => parseInt(n, 10) || 0);
+    return { h, m };
+}
+
+// ── When a calendar trigger fires ─────────────────────────────────────────────
+//
+// The arithmetic lives in ./sched-time.ts, which imports nothing and is unit-tested.
+// This file cannot be: it talks to Tauri, the DOM and i18n from its first line, which
+// is precisely why a timing bug could sit here unnoticed for as long as it did.
+
+/** When this task next runs, as epoch ms — or null if nothing is scheduled (manual,
+ *  a spent `once`, a disabled task). Shown in the list; not used for firing. */
+export function nextDue(task: Task, from: Date = new Date()): number | null {
+    if (!task.enabled) return null;
+    const tr = task.trigger;
+    const last = task.lastRun || 0;
+    const nowMs = from.getTime();
+    switch (tr.type) {
+        case 'manual': return null;
+        case 'appStart': return _appStartFired.has(task.id) ? null : nowMs;
+        case 'once': {
+            if (_onceFired.has(task.id) || task.lastRun) return null;
+            const at = new Date(tr.at).getTime();
+            return isNaN(at) ? null : at;
+        }
+        case 'interval': return (last || nowMs) + Math.max(1, tr.everyMinutes) * 60000;
+        case 'hourly': return (last || nowMs) + Math.max(1, tr.everyHours) * 3600000;
+        case 'dailyAt':
+        case 'weeklyAt':
+        case 'monthlyAt':
+            return nextCalendarDue(tr, from);
+    }
+    return null;
+}
+
+function isDue(task: Task, now: Date): boolean {
+    const tr = task.trigger;
+    const last = task.lastRun || 0;
+    const nowMs = now.getTime();
+    switch (tr.type) {
+        case 'appStart':
+            if (_appStartFired.has(task.id)) return false;
+            return true;
+        case 'once': {
+            if (_onceFired.has(task.id) || task.lastRun) return false;
+            const at = new Date(tr.at).getTime();
+            return !isNaN(at) && nowMs >= at;
+        }
+        case 'manual':
+            return false; // only runs via the Run button or bmm://schedule/run
+        case 'interval': {
+            const gap = Math.max(1, tr.everyMinutes) * 60000;
+            return nowMs - last >= gap;
+        }
+        case 'hourly': {
+            const gap = Math.max(1, tr.everyHours) * 3600000;
+            return nowMs - last >= gap;
+        }
+        case 'monthlyAt':
+        case 'dailyAt':
+        case 'weeklyAt':
+            // The baseline is whichever is later: the last run, or the moment the task
+            // was created. Without the creation half, saving a daily 21:00 task at 22:00
+            // would count today's window as missed and fire the instant you pressed Save.
+            return calendarDue(tr, now, Math.max(last, task.createdAt || 0), task.catchUp !== false);
+    }
+    return false;
+}
+
+/**
+ * Why this task has not run, in a sentence.
+ *
+ * The deciding is in sched-why.ts, which knows nothing about the app and can therefore be
+ * tested. This half supplies the sets the running scheduler keeps, the next due time, and the
+ * two lookups only this side can do — because those are the parts that only exist here.
+ */
+export function whyNotRunning(task: Task, now: Date = new Date()): { key: string; v?: string } {
+    if (task.enabled && _owed.has(task.id)) return { key: 'sched.why.heldGame' };
+    return reasonNotRunning(
+        task as any,
+        {
+            watch: _watchSeen as any, event: _eventSeen as any,
+            appStart: _appStartFired, once: _onceFired,
+            after: _afterSeen as any, cond: _condWas as any, probe: _probeNext as any,
+            rss: _rssNext as any,
+        },
+        task.enabled && task.trigger.type !== 'manual' ? nextDue(task, now) : null,
+        {
+            nameOf: (id) => _tasks.find((x) => x.id === id)?.name || null,
+            mayRunScripts: hasPerm(task, 'script'),
+            mayUseNetwork: hasPerm(task, 'network'),
+        },
+    );
+}
+
+/**
+ * The last stamp seen for each watched file, per task.
+ *
+ * In memory, not on the task. Persisting it would mean a change made while BMM was closed
+ * fires on the next start — which for "you joined a server" means acting on a session that
+ * ended hours ago. The first poll after a start therefore RECORDS and does not fire, which
+ * is also what stops every watch task running once at every launch.
+ */
+const _watchSeen = new Map<string, string>();
+
+async function watchFired(task: Task): Promise<boolean> {
+    const tr = task.trigger as { type: 'watchFile'; path: string };
+    const path = String(tr.path || '').trim();
+    if (!path) return false;
+    const stamp = String(await invoke('file_stamp', { path }).catch(() => ''));
+    // No file is not a change. A game that has never run has no log, and firing on its
+    // appearance later is right — firing on its absence now is not.
+    if (!stamp) { _watchSeen.set(task.id, ''); return false; }
+    const seen = _watchSeen.get(task.id);
+    _watchSeen.set(task.id, stamp);
+    if (seen === undefined) return false;   // first sighting: learn it, do not act on it
+    return seen !== stamp;
+}
+
+/**
+ * The last event each task has already acted on.
+ *
+ * Per task rather than per event name: two tasks watching `bmm.mod.missing` must both see it,
+ * and a shared marker would give it to whichever polled first.
+ *
+ * Seeded on the first poll, like the file watch: a task enabled at 10:00 should not run for
+ * everything that happened at 09:00, which is what somebody arming a task means by arming it.
+ */
+const _eventSeen = new Map<string, number>();
+
+/** The event data of the hit that fired the current run, handed to the task as variables. */
+const _eventData = new Map<string, Record<string, unknown>>();
+
+async function eventFired(task: Task): Promise<boolean> {
+    const tr = task.trigger as { type: 'onEvent'; event: string; where?: string };
+    const name = String(tr.event || '').trim();
+    if (!name) return false;
+    const since = _eventSeen.get(task.id);
+    const now = Date.now();
+    if (since === undefined) { _eventSeen.set(task.id, now); return false; }
+    const all = await (invoke('hook_poll', { name, since: since + 1 }) as Promise<any[]>).catch(() => []);
+    if (!all.length) return false;
+    // Considered, matched or not: a hit the filter refused is not read again next tick.
+    _eventSeen.set(task.id, Number(all[all.length - 1]?.at) || now);
+    // « Only when » (sched-laya.ts): `family=disk` keeps the crashes of that family, and the
+    // others are simply not this task's business.
+    const hits = all.filter((h) => eventMatches(tr.where, h?.data));
+    if (!hits.length) return false;
+    // The LAST one. A burst of five missing mods in one modpack should run the repair task
+    // once with the most recent, not five times racing each other over the same folder.
+    const last = hits[hits.length - 1];
+    _eventData.set(task.id, (last && typeof last.data === 'object' && last.data) || {});
+    return true;
+}
+
+/**
+ * How many after-a-task hops led to this run, and the point past which it stops.
+ *
+ * Two tasks each waiting for the other is a loop, and nothing else here would end it: every
+ * individual step behaves correctly, the ring is doing its job, and the app runs the pair
+ * forever. A depth carried on the event and refused past eight lets a real chain of four
+ * work while a cycle dies with a message that names it.
+ */
+const _chain = new Map<string, number>();
+const CHAIN_MAX = 8;
+
+/** The last `bmm.task.done` ring each after-a-task trigger has already considered. */
+const _afterSeen = new Map<string, number>();
+
+async function afterTaskFired(task: Task): Promise<boolean> {
+    const tr = task.trigger as { type: 'afterTask'; taskId: string; outcome?: string };
+    const watched = String(tr.taskId || '').trim();
+    if (!watched) return false;
+    // A task waiting for ITSELF re-arms the instant it finishes, at whatever speed the loop
+    // runs. Refused here and not only in the editor, because a .bmmpa arrives with whatever
+    // trigger its author saved.
+    if (watched === task.id) return false;
+    const since = _afterSeen.get(task.id);
+    const now = Date.now();
+    if (since === undefined) { _afterSeen.set(task.id, now); return false; }
+    const hits = await (invoke('hook_poll', { name: 'bmm.task.done', since: since + 1 }) as Promise<any[]>).catch(() => []);
+    if (!hits.length) return false;
+    // Advanced past every hit, including the ones for other tasks: they have been considered
+    // and rejected, and re-reading them next tick would only reject them again.
+    _afterSeen.set(task.id, Number(hits[hits.length - 1]?.at) || now);
+    const want = String(tr.outcome || 'any');
+    const mine = hits.filter((h) => String(h?.data?.id) === watched
+        && (want === 'any' || (want === 'ok') === (h?.data?.ok === true)));
+    if (!mine.length) return false;
+    const last = mine[mine.length - 1];
+    const depth = (Number(last?.data?.chain) || 0) + 1;
+    if (depth > CHAIN_MAX) {
+        toast((t('sched.chainLoop') || 'Chain stopped after {n} tasks — “{name}” is waiting on something that waits on it.')
+            .replace('{n}', String(CHAIN_MAX)).replace('{name}', task.name), 'error', 12000);
+        return false;
+    }
+    _chain.set(task.id, depth);
+    _eventData.set(task.id, (last?.data as Record<string, unknown>) || {});
+    return true;
+}
+
+/** When each script trigger may next run its probe, and which are running one now. */
+const _probeNext = new Map<string, number>();
+const _probeBusy = new Set<string>();
+
+async function scriptFired(task: Task): Promise<boolean> {
+    const tr = task.trigger as {
+        type: 'script'; engine: string; code: string; everyMinutes: number;
+        source?: string; path?: string; fireOn?: string; exitCode?: number;
+        match?: string; timeoutSecs?: number;
+    };
+    // From a file, the file is re-read on every probe on purpose: that is the difference
+    // between "from a file" and the Load button, which takes a copy. Somebody who points at
+    // a script expects editing the script to change what BMM does.
+    let code = String(tr.code || '').trim();
+    if (String(tr.source || 'inline') === 'file') {
+        const path = String(tr.path || '').trim();
+        if (!path) return false;
+        // A missing or unreadable file is NOT a fire. It is also not a crash: a probe that
+        // threw here would take the whole scheduler tick with it.
+        try { code = String(await invoke('read_file_text', { path })).trim(); }
+        catch { return false; }
+    }
+    if (!code) return false;
+    // The grant is checked BEFORE the probe runs, not when the task does. Otherwise a task
+    // whose steps ask for nothing would still run its author's code every few minutes.
+    if (!hasPerm(task, 'script')) return false;
+    const now = Date.now();
+    const every = Math.max(1, Number(tr.everyMinutes) || 5) * 60000;
+    const due = _probeNext.get(task.id);
+    // The first poll after a start only arms the clock. A probe that ran the moment BMM
+    // opened would fire every task with this trigger at every launch.
+    if (due === undefined) { _probeNext.set(task.id, now + every); return false; }
+    if (now < due) return false;
+    // A probe slower than its own interval must not stack up behind itself.
+    if (_probeBusy.has(task.id)) return false;
+    _probeBusy.add(task.id);
+    try {
+        const r = await invoke('run_scheduled_script_full', {
+            engine: tr.engine || 'powershell',
+            code,
+            workingDir: null,
+            allow: true,
+            timeoutSecs: Math.min(900, Math.max(1, Number(tr.timeoutSecs) || 60)),
+        }) as { code: number; stdout: string; stderr: string; ok: boolean };
+        const out = String(r.stdout || '').trim();
+        // What "it said so" MEANS, chosen on the trigger's own screen. It used to be `r.ok`
+        // — exit code 0 — decided here and stated nowhere, so a probe that prints its answer
+        // and exits 0 either way fired every interval, and a probe that signals by exiting 1
+        // never fired at all. Both read as a broken trigger.
+        //
+        // `exit0` is the default and is what every task saved before this meant.
+        let fired: boolean;
+        switch (String(tr.fireOn || 'exit0')) {
+            case 'exitIs': fired = Number(r.code) === Number(tr.exitCode ?? 0); break;
+            case 'printsAny': fired = out.length > 0; break;
+            case 'printsMatch': {
+                const needle = String(tr.match || '').trim();
+                // An empty needle matches everything, which would turn this into printsAny
+                // silently. Nothing to look for is nothing found.
+                fired = needle.length > 0 && out.toLowerCase().includes(needle.toLowerCase());
+                break;
+            }
+            default: fired = !!r.ok;
+        }
+        if (!fired) return false;
+        // Whatever it printed reaches the task as {event.stdout}, so a probe can say WHICH
+        // thing it noticed rather than only that it noticed something. The exit code travels
+        // too — a probe firing on a code has no other way to say which one it was.
+        _eventData.set(task.id, { stdout: out.slice(0, 400), exitCode: String(r.code) });
+        return true;
+    } catch {
+        return false;
+    } finally {
+        // In a finally, and measured from NOW rather than from `due`: a probe that took two
+        // minutes must not immediately be due again.
+        _probeNext.set(task.id, Date.now() + every);
+        _probeBusy.delete(task.id);
+    }
+}
+
+/** When each feed trigger may next read its feed, and which are reading one now. */
+const _rssNext = new Map<string, number>();
+const _rssBusy = new Set<string>();
+const RSS_SEEN_KEY = 'bmm.sched.rssSeen';
+
+/** What each feed trigger has already seen, per task AND address: a new address re-learns. */
+function readRssSeen(): Record<string, string[]> {
+    try {
+        const v = JSON.parse(localStorage.getItem(RSS_SEEN_KEY) || '{}');
+        return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+    } catch { return {}; }
+}
+function writeRssSeen(all: Record<string, string[]>): void {
+    // Only tasks that still exist: a deleted task's history is not worth keeping.
+    const live = new Set(_tasks.map((x) => x.id));
+    const kept = Object.fromEntries(Object.entries(all).filter(([k]) => live.has(k.split('|')[0])));
+    try { localStorage.setItem(RSS_SEEN_KEY, JSON.stringify(kept)); } catch { /* quota: re-learned next time */ }
+}
+
+async function rssFired(task: Task): Promise<boolean> {
+    const tr = task.trigger as { type: 'rss'; url: string; everyMinutes: number; allowLan?: boolean };
+    const url = String(tr.url || '').trim();
+    if (!url) return false;
+    // The grant before the request, like the script probe: a task whose steps ask for
+    // nothing must not reach the network on a timer without it.
+    if (!hasPerm(task, 'network')) return false;
+    const now = Date.now();
+    const every = Math.max(5, Number(tr.everyMinutes) || 15) * 60000;
+    const due = _rssNext.get(task.id);
+    if (due !== undefined && now < due) return false;
+    if (_rssBusy.has(task.id)) return false;
+    _rssBusy.add(task.id);
+    try {
+        const items = await invoke('sched_feed_fetch', { url, allowLan: tr.allowLan === true, timeoutMs: 20000 }) as FeedItem[];
+        const all = readRssSeen();
+        const key = `${task.id}|${url}`;
+        const r = newFeedItems(all[key], Array.isArray(items) ? items : []);
+        all[key] = r.seen;
+        writeRssSeen(all);
+        if (r.baseline || !r.fresh.length) return false;
+        _eventData.set(task.id, feedEventData(r.fresh, url));
+        return true;
+    } catch {
+        // A feed that is down is not a fire, and not a reason to stop polling the others.
+        return false;
+    } finally {
+        _rssNext.set(task.id, Date.now() + every);
+        _rssBusy.delete(task.id);
+    }
+}
+
+/** What each condition trigger saw last time, so it can fire on the CHANGE. */
+const _condWas = new Map<string, boolean>();
+
+async function conditionFired(task: Task): Promise<boolean> {
+    const tr = task.trigger as { type: 'condition'; condition: Condition };
+    if (!tr.condition?.type) return false;
+    let hit = false;
+    try {
+        hit = await evalCondition(tr.condition, { nums: {}, text: {}, shared: readSharedVars() }, task);
+    } catch {
+        // A condition that needs a permission the task does not hold throws. Swallowed
+        // rather than allowed to end the tick, because one misconfigured task must not stop
+        // every other task in the list from being polled. The editor says so instead.
+        return false;
+    }
+    const was = _condWas.get(task.id);
+    _condWas.set(task.id, hit);
+    // The EDGE, not the state — see the type. `was === undefined` is the first poll after a
+    // start, which arms and does not fire.
+    return was === false && hit;
+}
+
+/**
+ * Runs owed because game mode held them (GameOptions.hold_scheduler). A task that fell due
+ * while a game ran is remembered here and run once, when game mode ends — its trigger has
+ * already fired (a file changed, a feed had a new item), so waiting for it to fire again would
+ * lose the run. A task run by hand (Run now, a deeplink, another task) is never held.
+ */
+const _owed = new Set<string>();
+
+async function tick(): Promise<void> {
+    const now = new Date();
+    const held = gameHoldsTasks(await (invoke('resources_status') as Promise<any>).catch(() => null));
+    if (!held && _owed.size) {
+        for (const id of [..._owed]) {
+            _owed.delete(id);
+            const task = _tasks.find((x) => x.id === id);
+            if (task?.enabled) await runTask(task);
+        }
+    }
+    for (const task of _tasks) {
+        if (!task.enabled) continue;
+        if (_owed.has(task.id)) continue;
+        if (task.trigger.type === 'watchFile') {
+            if (!(await watchFired(task))) continue;
+        } else if (task.trigger.type === 'onEvent') {
+            if (!(await eventFired(task))) continue;
+        } else if (task.trigger.type === 'afterTask') {
+            if (!(await afterTaskFired(task))) continue;
+        } else if (task.trigger.type === 'script') {
+            if (!(await scriptFired(task))) continue;
+        } else if (task.trigger.type === 'condition') {
+            if (!(await conditionFired(task))) continue;
+        } else if (task.trigger.type === 'rss') {
+            if (!(await rssFired(task))) continue;
+        } else if (!isDue(task, now)) continue;
+        if (task.trigger.type === 'appStart') _appStartFired.add(task.id);
+        if (task.trigger.type === 'once') _onceFired.add(task.id);
+        if (held) { _owed.add(task.id); renderScheduleList(); continue; }
+        await runTask(task);
+    }
+}
+
+/** The saved scheduler tasks (loaded if needed) — used to populate the script
+ *  generator's "Run scheduled task" dropdown. */
+export async function getTasks(): Promise<Task[]> {
+    if (!_tasks.length) await loadTasks();
+    return _tasks;
+}
+
+/** Runs one task by id — used by the bmm://schedule/run deeplink (Windows Task Scheduler). */
+/**
+ * Run a task object that is NOT in the store — a `.bmmscript` somebody opened.
+ *
+ * It gets a temporary id so the running panel can show and cancel it, and `osSchedule` is
+ * forced off: a file that is being run once must not register a Windows scheduled task on
+ * the way past.
+ */
+export async function runTaskOnce(task: Partial<Task>): Promise<void> {
+    const one = {
+        ...task,
+        id: `bmms-${Date.now()}`,
+        enabled: true,
+        osSchedule: false,
+        steps: Array.isArray(task.steps) ? task.steps : [],
+    } as Task;
+    await runTask(one);
+}
+
+/** Add a task object to the store — the same path importTasksFile uses for one task. */
+/**
+ * A task arriving from a FILE, made safe to sit in the list.
+ *
+ * A `.bmmpa` is somebody else's automation, and it carries its own `enabled`, its own
+ * `perms` and its own trigger. Importing one used to keep all three: only `osSchedule` was
+ * cleared. So a shared file could arrive enabled, granted `command` and `script`, on a
+ * one-minute interval — and start running programs a minute later with nothing asked and
+ * nothing shown.
+ *
+ * That is the exact thing the `.bmmscript` review screen exists to prevent, and the .bmmpa
+ * path went around it. It matters more since automations can be published as a CATALOGUE:
+ * these files are meant to travel between strangers now.
+ *
+ * The duplicate button already reasoned this way about a copy of your OWN task — "created
+ * DISABLED so saving the copy can't double-fire anything". A file from a stranger deserves at
+ * least that.
+ *
+ * Three things are taken away, and the person is told which:
+ *   · **enabled** — nothing from a file runs before somebody looks at it;
+ *   · **perms / allowCustomCommands** — every capability that has to be granted is
+ *     granted by the person who will live with it, never by the file's author;
+ *   · **osSchedule** — registering a Windows scheduled task is not a file's decision.
+ *
+ * Everything else is kept, so the automation is intact and one toggle away from working.
+ * Returns what it removed, so the toast can say so rather than leaving somebody wondering
+ * why the imported task does nothing.
+ */
+export function sanitiseImportedTask(task: any): { task: any; strippedPerms: string[]; wasEnabled: boolean } {
+    const RISKY = ['command', 'script', 'deeplink', 'stopProcess', 'delete', 'resources', 'tasks', 'network', 'ai', 'navigate', 'files'] as const;
+    const asked: string[] = [];
+    for (const k of RISKY) if (task?.perms?.[k] === true) asked.push(k);
+    // The legacy single flag means command + deeplink; a file written by an older BMM carries
+    // only that, and reading `perms` alone would report it as asking for nothing.
+    if (task?.allowCustomCommands === true) for (const k of ['command', 'deeplink']) if (!asked.includes(k)) asked.push(k);
+
+    const wasEnabled = task?.enabled === true;
+    return {
+        task: {
+            ...task,
+            enabled: false,
+            osSchedule: false,
+            allowCustomCommands: false,
+            // A package link is set by the package importer AFTER it verified the package. A
+            // plain .bmmpa naming one would point at somebody else's files in the store.
+            pkg: undefined,
+            perms: { command: false, script: false, deeplink: false, stopProcess: false, delete: false, resources: false, tasks: false, network: false, ai: false, navigate: false, files: false },
+        },
+        strippedPerms: asked,
+        wasEnabled,
+    };
+}
+
+export async function importTaskObject(task: Partial<Task>): Promise<string> {
+    const { task: safe, strippedPerms } = sanitiseImportedTask(task);
+    safe.id = newTaskId();
+    _tasks.push(safe as Task);
+    await saveTasks();
+    renderScheduleList();
+    if (strippedPerms.length) {
+        toast((t('sched.importStripped') || 'Imported disabled. It asked for: {p} — grant what you want in its permissions.')
+            .replace('{p}', strippedPerms.join(', ')), 'warning', 8000);
+    }
+    return safe.id;
+}
+
+/**
+ * An id no other task has.
+ *
+ * `sched-${Date.now()}` alone is a millisecond stamp, and importing a file with three tasks in
+ * it does all three inside the same millisecond — so they came out sharing an id. Everything
+ * that finds a task by id then finds the FIRST one: running the second runs the first, deleting
+ * the third deletes the first, and nothing anywhere says why.
+ *
+ * Found while making a plugin able to ship several automations, which is the case that turns a
+ * rare collision into the ordinary one.
+ */
+function newTaskId(): string {
+    let id = `sched-${Date.now()}`;
+    if (!_tasks.some((t) => t.id === id)) return id;
+    // A suffix rather than a wait: sleeping a millisecond to make a timestamp unique is a
+    // clock dependency in the middle of an import.
+    for (let n = 2; ; n++) {
+        id = `sched-${Date.now()}-${n}`;
+        if (!_tasks.some((t) => t.id === id)) return id;
+    }
+}
+
+/** One saved task, by id, for a caller that has to SHOW what it is about to do. */
+export async function findTask(id: string): Promise<Task | null> {
+    if (!_tasks.length) await loadTasks();
+    return _tasks.find((t) => t.id === id) || null;
+}
+
+/** Arm or disarm one task. Returns false when there is no task with that id. */
+export async function setTaskEnabled(id: string, on: boolean): Promise<boolean> {
+    if (!_tasks.length) await loadTasks();
+    const task = _tasks.find((t) => t.id === id);
+    if (!task) return false;
+    task.enabled = on;
+    await saveTasks();
+    // The OS mirror follows, or a disabled task keeps firing from the Windows scheduler,
+    // which is the worst version of this: the app says off and the machine says on.
+    await syncOsSchedule(task);
+    renderScheduleList();
+    return true;
+}
+
+export async function runTaskById(id: string): Promise<void> {
+    if (!_tasks.length) await loadTasks();
+    const task = _tasks.find(t => t.id === id);
+    if (task) await runTask(task);
+}
+
+/** (Re)registers or removes the Windows Scheduled Task mirror for a task. */
+async function syncOsSchedule(task: Task): Promise<void> {
+    try {
+        if (task.osSchedule && task.enabled) {
+            await invoke('register_os_schedule', { taskId: task.id, trigger: task.trigger });
+        } else {
+            await invoke('unregister_os_schedule', { taskId: task.id });
+        }
+    } catch (e) { toast(`${t('sched.osFail') || 'OS schedule error'}: ${e}`, 'error'); }
+}
+
+/** The detailed run log of a task, newest first (sched_runs_list). Text only, escaped. */
+export async function openRunLog(taskId: string): Promise<void> {
+    let runs: any[] = [];
+    try { runs = await invoke('sched_runs_list', { taskId }) as any[]; } catch (e) { toast(String(e), 'error'); return; }
+    const ms = (n: number) => n >= 1000 ? (n / 1000).toFixed(1) + 's' : n + 'ms';
+    const body = runs.length ? runs.map((r) => `<details style="border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin-bottom:8px"${r === runs[0] ? ' open' : ''}>
+        <summary><span class="sched-hist-dot ${r.ok ? 'ok' : 'err'}"></span> ${escHtml(new Date(r.at).toLocaleString())} · ${escHtml(ms(r.ms || 0))} · ${escHtml(r.ok ? (t('sched.runlog.ok') || 'finished') : String(r.result || ''))}</summary>
+        <ol style="margin:8px 0 0;padding-inline-start:20px;font-size:12px;line-height:1.6">${(r.steps || []).map((st: any) => `<li class="${st.status === 'ok' ? 'ok' : 'err'}" style="margin-inline-start:${Math.min(8, st.depth || 0) * 14}px">
+            <b>${escHtml(st.label || '')}</b> <span>${escHtml(ms(st.ms || 0))}</span>${st.status !== 'ok' ? ` <em>${escHtml(st.status)}</em>` : ''}${st.error ? `<div style="color:var(--danger);font-size:11px;word-break:break-word">${escHtml(st.error)}</div>` : ''}</li>`).join('') || `<li>${escHtml(t('sched.runlog.noSteps') || 'No action ran.')}</li>`}</ol>
+    </details>`).join('') : `<p>${escHtml(t('sched.runlog.empty') || 'No run recorded yet.')}</p>`;
+    const ov = document.createElement('div');
+    ov.className = 'modal-overlay open';
+    ov.innerHTML = `<div class="modal glass cm-modal modal--lg">
+        <div class="modal-header"><h3 class="modal-title">${escHtml(t('sched.runlog.title') || 'Run log')}</h3>
+            <button class="modal-close" type="button" data-x aria-label="${escAttr(t('common.close'))}">${uiIcon('close', 16)}</button></div>
+        <div class="modal-body"><p style="font-size:12px;color:var(--text-muted)">${escHtml(t('sched.runlog.lede') || 'The last 50 runs, each action with its duration and, when it failed, why. Secrets are removed before anything is written.')}</p>${body}</div>
+        <div class="modal-footer"><button class="btn btn-sm btn-ghost" data-clear>${escHtml(t('sched.runlog.clear') || 'Clear the log')}</button><button class="btn btn-sm" data-x>${escHtml(t('common.close'))}</button></div>
+    </div>`;
+    ov.querySelectorAll('[data-x]').forEach((b) => b.addEventListener('click', () => ov.remove()));
+    ov.addEventListener('click', (e) => { if (e.target === ov) ov.remove(); });
+    ov.querySelector('[data-clear]')?.addEventListener('click', async () => {
+        if (!(await showConfirm(t('sched.runlog.clear') || 'Clear the log', t('sched.runlog.clearQ') || 'Clear this task\u2019s run log?'))) return;
+        try { await invoke('sched_runs_clear', { taskId }); ov.remove(); } catch (e) { toast(String(e), 'error'); }
+    });
+    (document.getElementById('app-window-outer') || document.body).appendChild(ov);
+    raiseAboveAll(ov);
+}
+document.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement)?.closest?.('[data-sched-runlog]') as HTMLElement | null;
+    if (b?.dataset.schedRunlog) openRunLog(b.dataset.schedRunlog);
+});
+
+/** The run record being written for each task that is running (sched-runlog.ts, A1). */
+const _runLogs = new Map<string, RunRecord>();
+
+/** Each action of a running task → its path in the tree, so the record can say WHICH step it
+ *  was and the flow view can mark it. A tag read by recordedAction, never a decision. */
+const _actionPath = new WeakMap<object, string>();
+/** Every STEP of a running task → its path: the debugger's position, in all three editors. */
+const _stepPath = new WeakMap<object, string>();
+function notePaths(steps: Step[]): void {
+    for (const [a, p] of actionPaths(steps as any)) _actionPath.set(a, p);
+    walkSteps(steps as any, (st, p) => { _stepPath.set(st, p); });
+}
+/** A for-each body runs as a substituted COPY; its steps take the paths of the originals. */
+function inheritPaths(orig: Step[], copy: Step[]): Step[] {
+    const a = actionPaths(orig as any);
+    const b = actionPaths(copy as any);
+    if (a.length === b.length) a.forEach(([o], i) => { const p = _actionPath.get(o); if (p) _actionPath.set(b[i][0], p); });
+    const sa: object[] = [];
+    const sb: object[] = [];
+    walkSteps(orig as any, (st) => { sa.push(st); });
+    walkSteps(copy as any, (st) => { sb.push(st); });
+    if (sa.length === sb.length) sa.forEach((o, i) => { const p = _stepPath.get(o); if (p) _stepPath.set(sb[i], p); });
+    return copy;
+}
+
+/** Task id → the token of the resource preset it set for its own duration (A3). */
+const _taskPresetTokens = new Map<string, number>();
+
+/** The only settings `storage.flag` may touch. It used to toggle ANY boolean setting by name,
+ *  which made one step a way to switch off whatever safety a setting stood for. */
+export const STORAGE_FLAGS = ['auto_io_calibration', 'smart_io_enabled', 'storage_alert_enabled', 'enable_lazy_sha_calculation'] as const;
+
+/** What every run knows about itself: `{task.name}` and `{task.id}`, for a message to say
+ *  WHICH task it comes from. Under a dotted name, which no user variable can have. */
+function taskVars(task: { name?: string; id?: string }): Record<string, string> {
+    return { 'task.name': String(task.name || ''), 'task.id': String(task.id || '') };
+}
+
+async function runTask(task: Task): Promise<void> {
+    const t0 = Date.now();
+    // One record per run, with a step per action, sent to the task's log when it ends.
+    _runLogs.set(task.id, newRun(task.id, String((task as any).trigger?.type || 'manual'), t0));
+    notePaths(task.steps || []);
+    noteTaskRunning(1);
+    // Registered BEFORE the first step, so a task that fails immediately still appears in
+    // the panel long enough to be seen, and a task started twice is visible as such.
+    _running.set(task.id, {
+        id: task.id, name: task.name, startedAt: t0,
+        step: t('sched.run.starting') || 'starting…', depth: 0,
+        done: 0, total: (task.steps || []).filter((s) => !s.disabled).length, cancel: false,
+    });
+    renderRunningPanel();
+    ensureRunTicker();
+    try {
+        // Per-run variable store: actions (e.g. a benchmark) write measured values
+        // here, and `value` conditions read them → "if disk speed > X then Apply".
+        //
+        // Seeded with the shared variables, read at the START of the run and not again.
+        // A snapshot rather than a live view on purpose: a task that read a value another
+        // task rewrote halfway through would behave differently depending on scheduling,
+        // which is the least debuggable kind of difference. A var.set inside THIS run
+        // updates the snapshot as well as the store, so a later step sees its own write.
+        const ctx: RunCtx = { nums: {}, text: taskVars(task), shared: readSharedVars() };
+        // What the event carried, as `{event.<key>}`.
+        //
+        // Prefixed rather than merged: an event describing a mod as `id` must not quietly
+        // become whatever the task's own `id` variable means two steps later. The whole value
+        // of an event trigger is knowing WHICH mod, so it has to arrive under a name that
+        // cannot be shadowed by accident.
+        const evd = _eventData.get(task.id);
+        if (evd) {
+            for (const [k, v] of Object.entries(evd)) {
+                if (v === null || typeof v === 'object') continue;
+                ctx.text[`event.${k}`] = String(v);
+                if (typeof v === 'number') ctx.nums[`event.${k}`] = v;
+            }
+            _eventData.delete(task.id);
+        }
+        // Task-level retry (A2): a failed run is run again from the start, `times` more times,
+        // `backoffSec` apart, with fresh variables each time (a half-finished run's values are
+        // not a starting point). A stop or a cancel is a decision, never retried.
+        const times = Math.max(0, Math.min(5, Math.floor(Number(task.retry?.times) || 0)));
+        const backoffMs = Math.max(5, Math.min(3600, Math.floor(Number(task.retry?.backoffSec) || 30))) * 1000;
+        for (let attempt = 0; ; attempt++) {
+            try {
+                if (attempt > 0) {
+                    // What the triggering event carried ({event.*}) is kept: it is the same event.
+                    const keep = <T,>(o: Record<string, T>) => Object.fromEntries(Object.entries(o).filter(([k]) => k.startsWith('event.') || k.startsWith('task.'))) as Record<string, T>;
+                    ctx.nums = keep(ctx.nums); ctx.text = keep(ctx.text); ctx.shared = readSharedVars();
+                    ctx.nums['retry.task_attempt'] = attempt + 1;
+                }
+                await runSteps(task.steps, task, ctx);
+                break;
+            } catch (e) {
+                if (e instanceof _StopTask || e instanceof _CancelledTask || attempt >= times) throw e;
+                const log = _runLogs.get(task.id);
+                if (log) endStep(startStep(log, `${t('sched.retry.attempt') || 'Attempt'} ${attempt + 1} / ${times + 1}`, 0), 'error', e);
+                toast(`${task.name}: ${t('sched.retry.againIn', { s: String(Math.round(backoffMs / 1000)) })}`, 'warning');
+                await interruptibleSleep(backoffMs, _running.get(task.id));
+            }
+        }
+        task.lastResult = 'ok';
+        toast(`${t('sched.ran') || 'Ran'}: ${task.name}`, 'success');
+    } catch (e) {
+        if (e instanceof _StopTask) {
+            // Guard clause / "Stop task" — a clean, intentional early exit.
+            task.lastResult = 'ok';
+            toast(`${task.name} — ${t('sched.stopped') || 'stopped'}${e.reason ? `: ${e.reason}` : ''}`, 'info');
+        } else if (e instanceof _CancelledTask) {
+            // Recorded as its own outcome, not as 'ok'. A person ending a run and a task
+            // deciding to end are different events, and a history that shows both as a
+            // clean finish cannot answer "did this actually do its work last night".
+            task.lastResult = `cancelled${e.at ? ` at ${e.at}` : ''}`;
+            toast(`${task.name} — ${t('sched.run.cancelled') || 'stopped by you'}`, 'info');
+        } else {
+            task.lastResult = `error: ${e}`;
+            toast(`${task.name} — ${e}`, 'error');
+        }
+    } finally {
+        // Paired with the increment above, in the finally for the same reason the panel entry
+        // is: a task that threw must not leave the app thinking it is still running, or every
+        // error toast after it would be swallowed as "that task's failure" forever.
+        noteTaskRunning(-1);
+        // A preset this task set "for the task" ends with the task, whatever happened to it
+        // (A3). The Rust side also expires it after at most 2 h, for a task that never gets here.
+        const presetToken = _taskPresetTokens.get(task.id);
+        if (presetToken != null) {
+            _taskPresetTokens.delete(task.id);
+            invoke('resources_clear_task_preset', { token: presetToken }).catch(() => {});
+        }
+        // In a finally: a task that threw must not stay in the panel as "running" forever,
+        // which is the state that makes a Stop button appear broken.
+        const act = _acts.get(task.id);
+        _acts.delete(task.id);
+        const res = String(task.lastResult || '');
+        if (act) { if (res.startsWith('cancelled')) act.cancelled(); else if (res.startsWith('error')) act.fail(res.replace(/^error:\s*/, '')); else act.done(); }
+        _running.delete(task.id);
+        renderRunningPanel();
+    }
+    task.lastRun = Date.now();
+    // Run history (last 20): timestamp, outcome, duration — shown in the editor.
+    const ok = task.lastResult === 'ok';
+    (task.history = task.history || []).push({ at: t0, ok, ms: Date.now() - t0, err: ok ? undefined : task.lastResult });
+    // The detailed record (every action, its duration, its redacted error) goes to the log;
+    // a failure to write it must never fail the task.
+    const runLog = _runLogs.get(task.id);
+    _runLogs.delete(task.id);
+    if (runLog) invoke('sched_run_append', { taskId: task.id, record: finishRun(runLog, String(task.lastResult || '')) }).catch(() => {});
+    // Rung after the history entry, so whatever reacts to it sees a finished record rather
+    // than a run that is still being written down. The same ring `wait.hook` and `onEvent`
+    // use: a task finishing is an event like any other, which is what lets "after task X" be
+    // a trigger instead of a special case bolted to the side of the loop.
+    //
+    // `chain` is the hop count this run arrived with, passed on so a cycle can be counted.
+    const hops = _chain.get(task.id) || 0;
+    _chain.delete(task.id);
+    fireEvent('bmm.task.done', {
+        id: task.id, name: task.name, ok, ms: Date.now() - t0,
+        result: String(task.lastResult || ''), chain: hops,
+    });
+    if (task.history.length > 20) task.history = task.history.slice(-20);
+    await saveTasks();
+    renderScheduleList();
+    await flushDirty();
+}
+
+/** Non-local control flow. Thrown, because a step can sit at any depth and the
+ *  loop that must react to it is an unknown number of frames up. Never surfaces
+ *  as an error: every construct that can consume one does, and the task runner
+ *  treats a stray one as a clean end. */
+class FlowSignal {
+    constructor(public kind: 'break' | 'continue') {}
+}
+
+/** Run a loop body, translating break/continue into the loop's own control flow.
+ *  Returns false when the loop must end. */
+async function runLoopBody(steps: Step[], task: Task, ctx: RunCtx): Promise<boolean> {
+    try {
+        await runSteps(steps, task, ctx);
+    } catch (e) {
+        if (e instanceof FlowSignal) {
+            if (e.kind === 'break') return false;
+            if (e.kind === 'continue') return true;
+        }
+        throw e;                       // a real failure, or a `stop` for the runner
+    }
+    return true;
+}
+
+/**
+ * A sleep that notices Stop.
+ *
+ * Polled in short slices rather than one long timer. A five-minute pause that ignored the
+ * flag would make the button appear broken in precisely the situation people press it —
+ * waiting is when you change your mind. 250 ms is below the threshold where a click feels
+ * ignored, and costs nothing at this frequency.
+ */
+async function interruptibleSleep(ms: number, state?: RunState): Promise<void> {
+    const until = Date.now() + ms;
+    while (Date.now() < until) {
+        if (state?.cancel) throw new _CancelledTask(state.step);
+        await new Promise((r) => setTimeout(r, Math.min(250, until - Date.now())));
+    }
+}
+
+async function runSteps(steps: Step[], task: Task, ctx: RunCtx, depth = 0): Promise<void> {
+    const state = _running.get(task.id);
+    for (const step of steps || []) {
+        if (step.disabled) continue;   // switched off in the editor — skipped, not deleted
+        // Between steps, never inside one. A step already in flight finishes: an HTTP
+        // request is not abandoned half-sent and a launched script is not orphaned, because
+        // stopping those leaves the world in a state nothing here can describe. Delay and
+        // wait-until poll the same flag, so the case people actually wait on ends promptly.
+        if (state?.cancel) throw new _CancelledTask(state.step);
+        if (state) {
+            state.step = stepLabel(step);
+            state.depth = depth;
+            // Progress counts TOP-LEVEL steps only. Counting every nested step would make
+            // "3 of 4" jump to "17 of 4" the moment a loop starts, which is worse than
+            // coarse.
+            if (depth === 0) state.done++;
+            renderRunningPanel();
+        }
+        // Before the step, never inside one. Same rule as the cancel check above, for the same
+        // reason: a step already in flight has changed something, and pausing half-way through
+        // one leaves the world in a state nothing here can describe.
+        if (debugging(task.id)) await gate(task.id, stepLabel(step), ctx, _stepPath.get(step));
+        if (step.kind === 'action') {
+            await recordedAction(step.action, task, ctx, depth);
+        } else if (step.kind === 'delay') {
+            await interruptibleSleep(Math.max(0, step.seconds) * 1000, state);
+        } else if (step.kind === 'waitFor') {
+            await waitForCondition(step.condition, step.timeoutSec, ctx, step.pollSec, step.onTimeout, state, task);
+        } else if (step.kind === 'if') {
+            const ok = await evalCondition(step.condition, ctx, task);
+            await runSteps(ok ? step.then : step.else, task, ctx, depth + 1);
+        } else if (step.kind === 'repeat') {
+            // One loop for all four modes. They differ in exactly two decisions —
+            // is the condition checked BEFORE the body or after, and does a true
+            // condition mean "keep going" or "stop" — so writing them as three
+            // hand-rolled loops meant the same edit three times, and they had
+            // already drifted (a missing condition defaulted to `true` in one mode
+            // and `false` in another, undocumented).
+            const max = Math.max(1, Math.min(step.maxIters || 100, 100000));
+            const gap = Math.max(0, step.everySec || 0) * 1000;
+            const times = step.mode === 'times'
+                ? Math.min(Math.max(0, step.times || 1), max)
+                : max;
+            // `times` has no condition; `doWhile` checks after the body; the rest before.
+            const checkBefore = step.mode === 'while' || step.mode === 'until';
+            const checkAfter = step.mode === 'doWhile';
+            // `until` runs while the condition is FALSE; every other mode while TRUE.
+            const keepGoing = async (): Promise<boolean> => {
+                if (!step.condition) return step.mode !== 'doWhile';   // preserved default
+                const ok = await evalCondition(step.condition, ctx, task);
+                return step.mode === 'until' ? !ok : ok;
+            };
+            for (let n = 0; n < times; n++) {
+                if (checkBefore && !await keepGoing()) break;
+                if (!await runLoopBody(step.steps, task, ctx)) break;
+                if (checkAfter && !await keepGoing()) break;
+                if (gap) await new Promise(r => setTimeout(r, gap));
+            }
+        } else if (step.kind === 'forEach') {
+            // A list the task built itself, rather than one of the six live collections.
+            // Resolved HERE and not in forEachItems, which fetches from the app and has no
+            // access to the run context.
+            const items = step.source === 'list'
+                ? (ctx.lists?.[String(step.listName || 'list')] || [])
+                // A map iterates its KEYS, so {item.id} and {item.name} are both the key and
+                // `map.get` inside the body is what reaches the value. Iterating pairs would
+                // need an item shape no other source produces.
+                : step.source === 'mapKeys'
+                    ? Object.keys(ctx.maps?.[String(step.listName || 'map')] || {})
+                    : await forEachItems(step.source);
+            const max = Math.max(1, Math.min(step.maxIters || 100, 100000));
+            const gap = Math.max(0, step.everySec || 0) * 1000;
+            for (const item of items.slice(0, max)) {
+                // The body runs on a per-item COPY with {item.*} placeholders resolved —
+                // actions stay ordinary actions, they just receive concrete values.
+                if (!await runLoopBody(inheritPaths(step.steps, substituteItem(step.steps, item)), task, ctx)) break;
+                if (gap) await new Promise(r => setTimeout(r, gap));
+            }
+        } else if (step.kind === 'retry') {
+            const attempts = Math.max(1, Math.floor(step.times || 3));
+            const gap = Math.max(0, Number(step.everySec ?? 5)) * 1000;
+            let lastErr: unknown = null;
+            for (let attempt = 1; attempt <= attempts; attempt++) {
+                try {
+                    await runSteps(step.steps, task, ctx, depth + 1);
+                    ctx.nums['retry.attempts'] = attempt;
+                    lastErr = null;
+                    break;
+                } catch (e) {
+                    // NEVER retried: a stop, a cancel, a debug stop, or a break/continue on
+                    // its way out. Those are somebody's decision or somebody's finger on a
+                    // button, and running the block again is the opposite of what they asked
+                    // for — a cancelled task that retries three times is a task that ignores
+                    // Stop.
+                    if (e instanceof FlowSignal || e instanceof _StopTask
+                        || e instanceof _CancelledTask || e instanceof DebugStopped) throw e;
+                    lastErr = e;
+                    ctx.nums['retry.attempts'] = attempt;
+                    if (attempt >= attempts) break;
+                    if (state) {
+                        state.step = t('sched.retry.again')
+                            .replace('{n}', String(attempt + 1))
+                            .replace('{t}', String(attempts));
+                        renderRunningPanel();
+                    }
+                    // Interruptible, so Stop works during the wait. A retry that ignores the
+                    // button for thirty seconds at a time is the wait people most want to
+                    // abandon.
+                    await interruptibleSleep(gap, state);
+                }
+            }
+            if (lastErr && step.onFail !== 'continue') throw lastErr;
+            if (lastErr) {
+                ctx.text['retry.error'] = String(lastErr);
+            }
+        } else if (step.kind === 'ensure') {
+            const already = await evalCondition(step.condition, ctx, task);
+            if (already) {
+                // The ordinary outcome, and it is said rather than skipped in silence: a task
+                // that reports nothing on the ninety-nine runs where all was well is a task
+                // nobody can tell from one that stopped running.
+                if (state) { state.step = t('sched.ensure.already'); renderRunningPanel(); }
+            } else {
+                await runSteps(step.steps, task, ctx, depth + 1);
+                // The re-check. Cheap, and the only thing separating this from an `if`.
+                const fixed = await evalCondition(step.condition, ctx, task);
+                if (state) { state.step = fixed ? t('sched.ensure.fixed') : t('sched.ensure.stillFalse'); renderRunningPanel(); }
+                if (!fixed && step.onFail !== 'continue') {
+                    throw new Error(t('sched.ensure.stillFalse'));
+                }
+            }
+        } else if (step.kind === 'try') {
+            try {
+                await runSteps(step.steps, task, ctx, depth + 1);
+            } catch (e) {
+                if (e instanceof FlowSignal) throw e;      // signals pass through
+                await runSteps(step.onError, task, ctx, depth + 1);
+            }
+        } else if (step.kind === 'parallel') {
+            // Each branch is its own runSteps, started together. They share `ctx`, which is
+            // deliberate and worth knowing: two branches writing the same variable race and
+            // the last write wins. Branches are for INDEPENDENT work; anything that has to
+            // agree about a value belongs in a sequence.
+            const branches = (step.branches || []).filter((b) => Array.isArray(b) && b.length);
+            if (branches.length) {
+                const runs = branches.map((b) => runSteps(b, task, ctx, depth + 1));
+                if (step.mode === 'settle') {
+                    const results = await Promise.allSettled(runs);
+                    const failed = results.filter((r) => r.status === 'rejected');
+                    // A cancel or a `stop` is not "one branch failed", it is the task ending.
+                    // Swallowing those here would let a cancelled task keep running.
+                    const fatal = failed.find((r) => r.reason instanceof _CancelledTask || r.reason instanceof _StopTask);
+                    if (fatal) throw fatal.reason;
+                    if (failed.length) {
+                        toast((t('sched.par.some') || '{n} of {m} parallel branch(es) failed')
+                            .replace('{n}', String(failed.length)).replace('{m}', String(branches.length)), 'warning');
+                    }
+                } else {
+                    // Promise.all rejects on the FIRST failure, but the others are already
+                    // running and cannot be un-started. Settling them before rethrowing keeps
+                    // the step from returning while work is still in flight — an unhandled
+                    // rejection from a branch nobody awaits is the usual bug here.
+                    try {
+                        await Promise.all(runs);
+                    } catch (e) {
+                        await Promise.allSettled(runs);
+                        throw e;
+                    }
+                }
+            }
+        } else if (step.kind === 'call') {
+            // A named block of steps, written once and run from anywhere.
+            //
+            // It runs INSIDE this task: same ctx, same `task`, so every permission check in
+            // runAction reads the CALLER's permissions. That is the decision the whole feature
+            // hangs on — permissions attached to a block would be granted in one place and
+            // spent in another, and importing a block would become a way to run actions the
+            // calling task was refused.
+            const blocks = readBlocks();
+            const body = blocks[String(step.block || '')];
+            // A missing block ABORTS rather than skipping. A call that silently does nothing
+            // is a task that reports success while half of it never happened.
+            if (!body) {
+                throw new Error((t('sched.call.missing') || 'No block named “{n}”.').replace('{n}', String(step.block || '')));
+            }
+            // Depth, not a visited-set: a block calling itself twice in sequence is legitimate,
+            // a block calling itself forever is not, and only the nesting tells them apart.
+            // runSteps already carries `depth` for the loop guards; this rides on it.
+            if (depth >= 20) {
+                throw new Error(t('sched.call.deep') || 'Blocks are nested too deeply — a block is probably calling itself.');
+            }
+            await runSteps(body, task, ctx, depth + 1);
+        } else if (step.kind === 'break') {
+            throw new FlowSignal('break');
+        } else if (step.kind === 'continue') {
+            throw new FlowSignal('continue');
+        } else if (step.kind === 'stop') {
+            // Reuse the runner's existing clean-exit path (_StopTask) instead of a
+            // second stop mechanism — it already reports the task as successful.
+            throw new _StopTask(t('sched.stopHint') || 'stopped by a Stop step');
+        } else if (step.kind === 'switch') {
+            let ran = false;
+            for (const c of step.cases || []) {
+                if (await evalCondition(c.condition, ctx, task)) { await runSteps(c.steps, task, ctx, depth + 1); ran = true; break; }
+            }
+            if (!ran) await runSteps(step.default || [], task, ctx, depth + 1);
+        }
+    }
+}
+
+/** The live collection a for-each iterates. Fetched at run time, never cached. */
+async function forEachItems(source: string): Promise<any[]> {
+    try {
+        if (source === 'profiles') return (await invoke('get_profiles')) as any[] || [];
+        // The command names matter: `get_modpacks`/`get_builtin_themes` do not exist,
+        // and the rejection was swallowed by the catch below — the loop ran ZERO times
+        // and the task still reported success. The real ones are load_modpacks and
+        // list_builtin_themes / list_installed_themes (both, or "each theme" would
+        // silently skip everything the user actually installed).
+        if (source === 'modpacks') return (await invoke('load_modpacks')) as any[] || [];
+        if (source === 'themes') {
+            const parse = (v: any) => { try { return (Array.isArray(v) ? v : JSON.parse(v)) || []; } catch { return []; } };
+            const builtin = parse(await invoke('list_builtin_themes').catch(() => '[]'));
+            const installed = parse(await invoke('list_installed_themes').catch(() => '[]'));
+            return [...builtin, ...installed];
+        }
+        const mods = (await invoke('get_mods')) as any[] || [];
+        if (source === 'enabledMods') return mods.filter((m: any) => m.enabled);
+        if (source === 'disabledMods') return mods.filter((m: any) => !m.enabled);
+        return mods;
+    } catch { return []; }
+}
+
+/** Deep-copy steps with every "{item.xxx}" in string params replaced by the item's
+ *  value — but NEVER inside a nested forEach's own body.
+ *
+ *  The outer loop used to rewrite the entire subtree, so an inner forEach found its
+ *  own {item.*} placeholders already replaced by the OUTER item before it ever ran:
+ *  "for each profile, for each mod, notify {item.name}" printed the profile's name
+ *  once per mod, silently. Each loop now substitutes only what belongs to it and
+ *  leaves an inner loop's body untouched for that loop to resolve itself. */
+function substituteItem(steps: Step[], item: any): Step[] {
+    // A `list` or `mapKeys` loop walks plain strings: {item.id} and {item.name} are the string
+    // itself. Without this they read `'x'['id']` and became empty, so « for each id in the list,
+    // tag that mod » ran every step on no mod at all.
+    const src = typeof item === 'string' ? { id: item, name: item } : (item?.mod_entry ?? item ?? {});
+    const rep = (v: any): any => {
+        if (typeof v === 'string') {
+            return v.replace(/\{item\.([a-zA-Z_][a-zA-Z0-9_]*)\}/g, (_m, k) => {
+                const val = src?.[k];
+                return val === undefined || val === null ? '' : String(val);
+            });
+        }
+        if (Array.isArray(v)) return v.map(rep);
+        if (v && typeof v === 'object') { const o: any = {}; for (const k of Object.keys(v)) o[k] = rep(v[k]); return o; }
+        return v;
+    };
+    // rep() already rebuilds every array and object it walks (primitives are
+    // immutable), so it IS the deep copy — the JSON round-trip on top of it copied
+    // the whole subtree a second time, per item, per lap, for nothing.
+    // A nested forEach owns its body: copy the block, substitute everything EXCEPT
+    // `steps`, and hand that subtree back untouched. The inner loop resolves it
+    // against its own item when it runs.
+    const walk = (list: Step[]): Step[] => (list || []).map((st: any) => {
+        if (st && st.kind === 'forEach') {
+            const { steps: inner, ...rest } = st;
+            return { ...rep(rest), steps: JSON.parse(JSON.stringify(inner || [])) };
+        }
+        if (st && st.kind === 'if') return { ...rep({ ...st, then: [], else: [] }), then: walk(st.then), else: walk(st.else) };
+        if (st && st.kind === 'retry') {
+            const copy: any = rep({ ...st, steps: [] });
+            copy.steps = walk(st.steps);
+            return copy;
+        }
+        if (st && st.kind === 'ensure') {
+            const copy: any = rep({ ...st, steps: [] });
+            copy.steps = walk(st.steps);
+            return copy;
+        }
+        if (st && (st.kind === 'repeat' || st.kind === 'try')) {
+            const copy: any = rep({ ...st, steps: [], onError: [] });
+            if (st.steps) copy.steps = walk(st.steps);
+            if (st.onError) copy.onError = walk(st.onError);
+            return copy;
+        }
+        if (st && st.kind === 'parallel') {
+            // Every branch, or {item.x} silently stops resolving inside a parallel nested in
+            // a for-each — the exact bug this walk exists to prevent, for one kind only.
+            return { ...rep({ ...st, branches: [] }), branches: (st.branches || []).map((b: any) => walk(b)) };
+        }
+        if (st && st.kind === 'switch') {
+            return {
+                ...rep({ ...st, cases: [], default: [] }),
+                cases: (st.cases || []).map((c: any) => ({ ...rep({ ...c, steps: [] }), steps: walk(c.steps) })),
+                default: walk(st.default),
+            };
+        }
+        return rep(st);
+    });
+    return walk(steps || []);
+}
+
+// Polls a condition until it becomes true or the timeout elapses (then throws,
+// aborting the rest of the workflow). This is what makes "wait until all mods are
+// active, then launch X" possible.
+async function waitForCondition(cond: Condition, timeoutSec: number, ctx: RunCtx, pollSec = 2, onTimeout: 'abort' | 'continue' = 'abort', state?: RunState, task?: Task): Promise<void> {
+    const deadline = Date.now() + Math.max(1, timeoutSec || 60) * 1000;
+    const pollMs = Math.max(250, (pollSec || 2) * 1000);
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+        if (await evalCondition(cond, ctx, task)) return;
+        if (Date.now() >= deadline) {
+            // Either abort the whole task (default) or just stop waiting and carry on.
+            if (onTimeout === 'continue') return;
+            throw new Error(t('sched.waitTimeout') || 'Timed out waiting for condition');
+        }
+        // Interruptible, like the delay. A wait-until whose condition never comes true is
+        // THE case people reach for Stop — a task waiting for a file that will never appear
+        // is the definition of stuck, and it was the one that ignored the button.
+        await interruptibleSleep(pollMs, state);
+    }
+}
+
+// ── Action dispatch ───────────────────────────────────────────────────────────
+// Size preset → run_app_benchmark `scale` string.
+const BENCH_SCALE: Record<string, string> = { S: 'small', M: 'medium', L: 'large', XL: 'xlarge' };
+
+/** What a task changed that the OPEN screens are now wrong about.
+ *
+ *  The runner never refreshed anything. A scheduled task could enable forty mods,
+ *  switch the profile or pull a repo, and the library went on showing what it had
+ *  read before the task started — stale until you navigated away and back, with no
+ *  sign it was stale. The task itself reported success, so nothing looked broken.
+ *
+ *  Refreshing after every action would be the other mistake: a For-Each over forty
+ *  mods would re-read and re-render the library forty times, forty-nine fiftieths of
+ *  it thrown away. So actions only NOTE what they invalidated, and the flush happens
+ *  once, when the task is over.
+ *
+ *  Actions that change nothing on screen — notify, delay, a benchmark — note nothing
+ *  and cost nothing. That is the "only what needs an update gets one" rule, applied
+ *  per action rather than per task. */
+type DirtyArea = 'mods' | 'profiles';
+let _dirty = new Set<DirtyArea>();
+
+/** Which screens each action invalidates. An action absent from this map is one that
+ *  leaves the visible state alone; adding a new action means deciding, once, whether
+ *  it belongs here — which is easier to get right than remembering to call a
+ *  refresh at forty call sites. */
+const DIRTIES: Record<string, DirtyArea[]> = {
+    'mod.enable': ['mods'],
+    'mod.disable': ['mods'],
+    'mods.enableAll': ['mods'],
+    'mods.disableAll': ['mods'],
+    'mods.scan': ['mods'],
+    'mods.order': ['mods'],
+    'modpack.enable': ['mods'],
+    'modpack.disable': ['mods'],
+    // A profile switch swaps what is deployed, so BOTH lists are wrong afterwards.
+    'profile.activate': ['profiles', 'mods'],
+    // Repo work rewrites mod files on disk; the library is reading the old ones.
+    'repo.sync': ['mods'],
+    'repo.connect': ['mods'],
+    'repo.update': ['mods'],
+    'mods.checkUpdates': ['mods'],
+    'mods.autoImportOmm': ['mods'],
+    'mod.add': ['mods'],
+    'modlist.import': ['mods'],
+    'modpack.create': ['mods'],
+    // theme.set repaints through the theme engine's own path, so it is deliberately
+    // absent rather than forgotten.
+};
+
+/** Re-read whatever the task invalidated, once, after it has finished.
+ *
+ *  Dynamically imported so the scheduler does not drag the mod and profile views
+ *  onto its own load path, and each failure is swallowed on its own: a refresh is a
+ *  courtesy after the work is already done, and a task that succeeded must not be
+ *  reported as failed because a screen would not redraw. */
+async function flushDirty(): Promise<void> {
+    const areas = _dirty;
+    _dirty = new Set();
+    if (!areas.size) return;
+    if (areas.has('mods')) {
+        try { (await import('../mods/mods.js')).refreshMods(false, true); } catch { /* view may not be loaded */ }
+    }
+    if (areas.has('profiles')) {
+        try { (await import('../profiles/profiles.js')).renderProfiles(); } catch { /* view may not be loaded */ }
+    }
+}
+
+/** Make a command's or script's output usable by the REST of the task.
+ *
+ *  Without this, running code was a dead end: it could change the world but could
+ *  not tell the automation around it what it found, so "if the script says yes,
+ *  then..." was unexpressible and the only signal was pass/fail. The trimmed first
+ *  line goes into ctx under the user's chosen name, where the existing {var}
+ *  substitution and the numeric conditions already look. */
+/**
+ * Variables that outlive a run, shared by every task.
+ *
+ * localStorage, like the rest of the scheduler's state, and read fresh on each access
+ * rather than cached in a module variable: two tasks can be mid-run at once, and a cached
+ * copy would let the second overwrite what the first just wrote.
+ *
+ * These are NOT a secret store. A task will hold an API token here because that is the
+ * obvious thing to do with it, and localStorage is readable by anything running in the
+ * webview — which the UI says next to the field rather than leaving people to assume.
+ */
+const SHARED_VARS_KEY = 'bmm.sched.vars';
+
+export function readSharedVars(): Record<string, string> {
+    try {
+        const raw = JSON.parse(localStorage.getItem(SHARED_VARS_KEY) || '{}');
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+        const out: Record<string, string> = {};
+        // Filtered on the way OUT as well as in. A hand-edited store, or one written by an
+        // older build, must not hand back a name that substituteVars cannot match — that
+        // is a variable which appears in the list and never resolves.
+        for (const [k, v] of Object.entries(raw)) if (VAR_NAME_RE.test(k)) out[k] = String(v ?? '');
+        return out;
+    } catch { return {}; }
+}
+
+/**
+ * Declared enums: a name, and the set of values it may hold.
+ *
+ * The point is not the values — a condition could always compare free text. It is that a
+ * SWITCH whose cases all test the same enum can be told which members it has not handled,
+ * which is the one thing `switch` could never do and the only reason `match` was ever wanted
+ * (see .Assets/.md/SCHEDULER_TYPES_DESIGN.md).
+ *
+ * Stored like the shared variables, and for the same reason: an enum outlives a run and is
+ * shared by every task, so it cannot live in RunCtx. Read fresh on every access rather than
+ * cached, because two tasks can be mid-run at once.
+ */
+/**
+ * Reusable blocks: a name, and the steps it runs.
+ *
+ * Stored beside the shared variables and the enums, for the same reason — a block outlives a
+ * run and belongs to every task, so it cannot live in a task's own definition. Read fresh on
+ * each access; two tasks can be mid-run at once.
+ *
+ * The block carries NO permissions of its own. It runs inside whichever task called it, so
+ * every check reads the caller's grants — see the `call` step in runSteps for why that is the
+ * whole point rather than an implementation detail.
+ */
+const BLOCKS_KEY = 'bmm.sched.blocks';
+
+export function readBlocks(): Record<string, Step[]> {
+    try {
+        const raw = JSON.parse(localStorage.getItem(BLOCKS_KEY) || '{}');
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+        const out: Record<string, Step[]> = {};
+        for (const [k, v] of Object.entries(raw)) {
+            // Same filter-on-the-way-out rule as the other two stores: a name no step could
+            // reference would sit in the list and never run.
+            if (!BLOCK_NAME_RE.test(k) || !Array.isArray(v)) continue;
+            // normalizeSteps because a stored block is JSON somebody may have hand-edited or an
+            // older build wrote — the runner expects the same shape it gives a task's steps.
+            out[k] = normalizeSteps(v as Step[]);
+        }
+        return out;
+    } catch { return {}; }
+}
+
+export function writeBlocks(all: Record<string, Step[]>): void {
+    try { localStorage.setItem(BLOCKS_KEY, JSON.stringify(all)); } catch { /* quota or private mode */ }
+}
+
+const ENUMS_KEY = 'bmm.sched.enums';
+
+export function readEnums(): Record<string, string[]> {
+    try {
+        const raw = JSON.parse(localStorage.getItem(ENUMS_KEY) || '{}');
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+        const out: Record<string, string[]> = {};
+        for (const [k, v] of Object.entries(raw)) {
+            // Same filter-on-the-way-out rule as the shared variables: a name a condition
+            // could never reference would show in the list and never work.
+            if (!VAR_NAME_RE.test(k) || !Array.isArray(v)) continue;
+            // Members are de-duplicated. Two identical members make the exhaustiveness count
+            // wrong in the one direction that matters — it would report a member as unhandled
+            // while a case already covers it.
+            const seen = new Set<string>();
+            for (const m of v) {
+                const str = String(m ?? '').trim();
+                if (str && !seen.has(str)) seen.add(str);
+            }
+            if (seen.size) out[k] = [...seen];
+        }
+        return out;
+    } catch { return {}; }
+}
+
+export function writeEnums(all: Record<string, string[]>): void {
+    try { localStorage.setItem(ENUMS_KEY, JSON.stringify(all)); } catch { /* quota or private mode */ }
+}
+
+export function writeSharedVars(vars: Record<string, string>): void {
+    try { localStorage.setItem(SHARED_VARS_KEY, JSON.stringify(vars)); } catch { /* quota */ }
+}
+
+/**
+ * Offer the programs that are running right now.
+ *
+ * The field was a bare text box, so naming a program meant knowing its executable name or
+ * walking a file picker to it. The scheduler already asks the backend for the process list
+ * — it is how the PID-based actions work — and the same answer is the better half of this
+ * field.
+ *
+ * Full path first where there is one, because that is what will actually be launched: two
+ * different `java.exe` on one machine is normal, and a bare name picks whichever the PATH
+ * happens to find. The bare name is offered too, for the case where PATH resolution is the
+ * intent.
+ *
+ * Failure is silent and leaves an ordinary text box. This is a convenience over a field
+ * that already worked; an error toast because a suggestion list could not be built would
+ * be reporting a problem the person does not have.
+ */
+async function fillProgramSuggestions(host: HTMLElement): Promise<void> {
+    const list = host.querySelector('#sched-prog-list');
+    if (!list) return;
+    try {
+        const procs: any[] = await invoke('list_running_processes') as any[];
+        const seen = new Set<string>();
+        const opts: string[] = [];
+        for (const pr of procs) {
+            for (const v of [pr?.exe, pr?.name]) {
+                const s = String(v || '').trim();
+                if (!s || seen.has(s)) continue;
+                seen.add(s);
+                // 60 is past the point where the dropdown stops being scannable, and the
+                // list arrives heaviest-first so the useful ones are already at the top.
+                if (opts.length < 60) opts.push(`<option value="${escAttr(s)}">`);
+            }
+        }
+        list.innerHTML = opts.join('');
+    } catch { /* a text box with no suggestions is the field as it was */ }
+}
+
+/**
+ * How long this script step may take, in seconds.
+ *
+ * Undefined means "the default", decided in Rust — not here. Two defaults for one rule is how
+ * they drift, and the one that matters is the one the process actually gets.
+ *
+ * A step written before this existed carries nothing and gets the default, which is the point:
+ * the change is a limit where there was none, not a setting people have to go and turn on.
+ */
+function scriptLimit(p: Record<string, any>): number | null {
+    const n = parseInt(String(p.timeoutSecs ?? ''), 10);
+    return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function _captureOutput(p: Record<string, any>, out: any, ctx: RunCtx): void {
+    // {last.out}: whatever the action produced, named or not (A2). Capped: a script that
+    // prints megabytes must not turn every later substitution into megabytes.
+    ctx.text['last.out'] = String(out ?? '').trim().slice(0, 64 * 1024);
+    const name = String(p.into || '').trim();
+    if (!name) return;
+    const whole = String(out ?? '').trim();
+    const first = String(out ?? '').split(/\r?\n/).find(l => l.trim())?.trim() || '';
+    const num = parseFloat(first);
+    // The number, for conditions. A non-numeric line still becomes its length rather than
+    // NaN — NaN would make every comparison silently false, which reads as "the condition
+    // did not hold" instead of "there was no number here".
+    ctx.nums[name] = Number.isFinite(num) ? num : first.length;
+    // And the text, which is what a script usually actually returns. This is the half that
+    // was missing: without it a script that printed a path or a name was reduced to the
+    // length of that string and there was no way to get the string itself back.
+    //
+    // The WHOLE output, not just the first line — a script listing three files is a normal
+    // thing to want, and first-line-only was a limit inherited from needing one number.
+    ctx.text[name] = whole;
+}
+
+
+/**
+ * Which engine runs a shipped script, from its extension.
+ *
+ * The action has a field for it, and leaving that field blank has to do the right thing:
+ * nobody ships `setup.ps1` and means "run this with Python". PowerShell is the fallback
+ * because this is a Windows app and it is what `custom.script` already defaults to.
+ */
+function engineFor(path: string): string {
+    const ext = (path.split('.').pop() || '').toLowerCase();
+    return ({ ps1: 'powershell', bat: 'cmd', cmd: 'cmd', sh: 'bash', py: 'python' } as Record<string, string>)[ext]
+        || 'powershell';
+}
+
+/**
+ * Add the automations from a `.bmmpa` to the scheduler, DISABLED.
+ *
+ * Disabled is the whole point, and it is the same rule a repo's carried automation follows:
+ * an automation can run commands, its author is whoever sent the file, and importing is not
+ * the same act as agreeing to run it. Permissions are stripped for the same reason — they
+ * are granted by the person who reads the task, not carried in by the file that asks.
+ *
+ * An id already present is left alone rather than replaced, so an import cannot rewrite a
+ * task somebody already trusts by naming it the same thing.
+ *
+ * `includes` are restored FIRST. A `.bmmpa` carries the reusable blocks, modpacks and launch
+ * packs its tasks call, and dropping them would import a task whose `Run a block` step points
+ * at a name that does not exist here — which stops the task rather than skipping, by design.
+ * Written and then found by reading the export side: the exporter has always carried them.
+ */
+export async function importTasksFromPath(path: string): Promise<number> {
+    const raw = String(await invoke('read_file_text', { path }));
+    const doc = JSON.parse(raw);
+    await restoreIncludes(doc?.includes).catch(() => ({ count: 0, remap: {} }));
+    const incoming: any[] = Array.isArray(doc?.tasks) ? doc.tasks : (Array.isArray(doc) ? doc : [doc]);
+    // Typed, because the catch arm's [] would otherwise infer never[] and the push below
+    // becomes an error that reads as if the DATA were wrong rather than the annotation.
+    const current: any[] = await (invoke('get_schedules') as Promise<any[]>).catch(() => [] as any[]);
+    const have = new Set((current || []).map((x: any) => String(x?.id || '')));
+    // A .bmmpa version 2 with its files beside it (a catalogue bundle, extracted): the files
+    // are checked against the document's hashes and kept in the store. A link to a package is
+    // only ever set HERE, from what was verified — never taken from the file.
+    let pkg: TaskPkg | undefined;
+    if (Array.isArray(doc?.package?.files) && doc.package.files.length) {
+        try {
+            const pi = await invoke('automation_package_adopt', { path }) as { id: string; name: string; signature: string };
+            pkg = { id: pi.id, name: pi.name, signature: pi.signature };
+        } catch (e) {
+            toast(`${t('sched.pkg.adoptFailed')}: ${(await import('./sched-pkg.js')).pkgError(e)}`, 'warning', 10000);
+        }
+    }
+    let added = 0;
+    for (const raw of incoming) {
+        if (!raw || typeof raw !== 'object' || !raw.id) continue;
+        if (have.has(String(raw.id))) continue;
+        current.push({ ...raw, enabled: false, perms: {}, osSchedule: false, pkg });
+        have.add(String(raw.id));
+        added += 1;
+    }
+    if (added) await invoke('save_schedules', { tasks: current });
+    if (added) await loadTasks();
+    return added;
+}
+
+/** Records the action in the run log around the real work (runAction). Not called runActionX:
+ * gen-bmms-reference, check-action-registry and sched-export-privacy read the switch inside
+ * the runner's switch by its exact function name, and a longer name that starts the same way
+ * (or this comment, if it spelled the declaration out) would be found first. */
+async function recordedAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Promise<void> {
+    const log = _runLogs.get(task.id);
+    const step = log ? startStep(log, stepLabel({ kind: 'action', action } as Step), depth) : null;
+    const where = _actionPath.get(action);
+    if (step && where) step.path = where;
+    const t0 = Date.now();
+    try {
+        // AI text never reaches a step that runs, opens or fetches something (sched-ai.ts).
+        // Checked on the RAW parameters: the reference is refused, whatever the text says.
+        const sharedAi = readSharedTaint();
+        const leak = taintProblem(action.type, action.params || {}, ctx, sharedAi);
+        if (leak) throw new Error((t('sched.ai.tainted') || 'Laya’s answer cannot be used in «{f}» of this step. Branch on a label instead.').replace('{f}', leak));
+        await runAction(action, task, ctx, depth);
+        if (!action.type.startsWith('ai.')) {
+            const outs = propagateTaint(action.params || {}, ctx, sharedAi);
+            if (action.type === 'var.set' && action.params?.scope === 'shared') {
+                const name = String(action.params?.name || '').trim();
+                writeSharedTaint(outs.includes(name) ? [...sharedAi, name] : sharedAi.filter((n) => n !== name));
+            }
+        }
+        endStep(step, 'ok');
+        // What the previous action did, for the next step (A2): {last.ok}, {last.ms} and, for
+        // actions that produce output, {last.out} (set in _captureOutput).
+        ctx.nums['last.ok'] = 1;
+        ctx.nums['last.ms'] = Date.now() - t0;
+    } catch (e) {
+        endStep(step, e instanceof _StopTask ? 'stopped' : e instanceof _CancelledTask ? 'cancelled' : 'error', e);
+        // Also on failure: a Try / On error around it can read that it failed and how long it took.
+        ctx.nums['last.ok'] = 0;
+        ctx.nums['last.ms'] = Date.now() - t0;
+        throw e;
+    }
+}
+
+/**
+ * What a sort (`ai.classify`, `ai.run_task`) leaves: the label and its probability, whether Laya
+ * abstained, and every label's score as a map (`ai.scores`, or `<into>.scores`) for `aiScore`.
+ * The label is one the TASK gave, or `none` (ai_ops.rs `constrain`): not tainted, and a variable
+ * it overwrites is clean again.
+ */
+function keepSort(ctx: RunCtx, res: any, into: string, allowed?: string[]): void {
+    const label = String(res?.label || 'none');
+    const pr = Number(res?.p) || 0;
+    const abst = res?.abstained === true || label === 'none' ? 1 : 0;
+    ctx.text['ai.label'] = label; ctx.nums['ai.p'] = pr; ctx.text['ai.p'] = String(pr);
+    ctx.nums['ai.abstained'] = abst;
+    ctx.maps = ctx.maps || {};
+    const scores = scoresOf(res?.ranked, allowed);
+    ctx.maps[scoresName('')] = scores;
+    if (into) {
+        untaint(ctx, into);
+        ctx.text[into] = label; ctx.nums[into] = pr;
+        ctx.text[`${into}.p`] = String(pr); ctx.nums[`${into}.p`] = pr;
+        ctx.nums[`${into}.abstained`] = abst;
+        ctx.maps[scoresName(into)] = scores;
+    }
+    ctx.text['last.out'] = label;
+}
+
+/** Where each task's `ai.crash_label` stopped (the newest report it labelled, in seconds). */
+const CRASH_MARKERS_KEY = 'bmm.sched.ai.crashSeen';
+function readCrashMarkers(): Record<string, unknown> {
+    try {
+        const v = JSON.parse(localStorage.getItem(CRASH_MARKERS_KEY) || '{}');
+        return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+    } catch { return {}; }
+}
+function writeCrashMarker(taskId: string, secs: number): void {
+    try {
+        const all = readCrashMarkers();
+        all[taskId] = Math.floor(secs);
+        // Tasks that no longer exist are forgotten, so the map does not grow with every deleted task.
+        for (const k of Object.keys(all)) if (k !== taskId && !_tasks.some((x) => x.id === k)) delete all[k];
+        localStorage.setItem(CRASH_MARKERS_KEY, JSON.stringify(all));
+    } catch { /* private mode: the next run looks back 7 days again */ }
+}
+
+/**
+ * One AI step: the run's budget first (sched-ai.ts), then the call, its time charged whatever
+ * happened. Errors come back as codes (`ai.task.blocked|game_mode`) and leave in words.
+ */
+async function aiCall<T>(ctx: RunCtx, run: () => Promise<T>): Promise<T> {
+    const over = takeAiStep(ctx);
+    if (over) throw new Error(t('sched.ai.budget.' + over) || 'This run used its Laya budget.');
+    const t0 = Date.now();
+    try {
+        return await run();
+    } catch (e) {
+        const [key, why] = aiErrorParts(e);
+        const words = key.startsWith('ai.task.') ? t(key) : '';
+        if (!words || words === key) throw e instanceof Error ? e : new Error(String(e));
+        const reason = why ? t('ai.task.why.' + why) : '';
+        throw new Error(words.replace('{why}', reason && reason !== 'ai.task.why.' + why ? reason : why));
+    } finally {
+        chargeAiTime(ctx, Date.now() - t0);
+    }
+}
+
+/** A whole number in [lo, hi]; the default for anything that is not one. */
+function clampInt(v: unknown, lo: number, hi: number, dflt: number): number {
+    const n = parseInt(String(v ?? ''), 10);
+    return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : dflt;
+}
+
+/** What `{name}` would be replaced by in a step, or undefined when it names nothing. */
+function varText(ctx: RunCtx, name: string): string | undefined {
+    const probe = `{${name}}`;
+    const out = substituteVars({ v: probe }, ctx).v;
+    return out === probe ? undefined : String(out);
+}
+
+/** A refusal reason, in words. */
+function netWhy(code: string): string {
+    return t('sched.net.why.' + code) || code;
+}
+
+/**
+ * A network error from the Rust side, in words. Those are codes (`sched.net.refused|private`)
+ * so they can be translated here — and so they never carry the address, which for Discord and
+ * Slack is the credential.
+ */
+function netErrorText(e: unknown): string {
+    const raw = String(e instanceof Error ? e.message : e ?? '');
+    const [key, arg = ''] = raw.split('|');
+    if (!/^(sched\.net|sched\.feed|sched\.dl|task\.feed|task\.out)\./.test(key)) return raw;
+    const words = t(key);
+    if (!words || words === key) return raw;
+    const why = arg ? (t('sched.net.why.' + arg) !== 'sched.net.why.' + arg ? t('sched.net.why.' + arg) : arg) : '';
+    return words.replace('{why}', why).replace('{s}', arg);
+}
+
+/**
+ * One call to the network through `sched_webhook`, and what it leaves behind: {http.status}
+ * as a number and as text, the answer's first lines as {http.body} (and {last.out} / `into`).
+ * A failing status throws unless the step accepts any status — the same rule as http.request.
+ */
+async function sendNet(ctx: RunCtx, p: Record<string, any>, req: Record<string, any>): Promise<void> {
+    let res: { status: number; ok: boolean; attempts: number; ms: number; excerpt: string; truncated: boolean };
+    try {
+        res = await invoke('sched_webhook', { req }) as any;
+    } catch (e) {
+        throw new Error(netErrorText(e));
+    }
+    const status = Number(res?.status) || 0;
+    ctx.nums['http.status'] = status;
+    ctx.text['http.status'] = String(status);
+    ctx.text['http.body'] = String(res?.excerpt ?? '');
+    _captureOutput(p, String(res?.excerpt ?? ''), ctx);
+    if (!res?.ok && !p.allowAnyStatus) {
+        throw new Error((t('sched.http.status') || 'HTTP {s} from {u}').replace('{s}', String(status)).replace('{u}', hostOf(String(req.url || ''))));
+    }
+}
+
+async function runAction(action: Action, task: Task, ctx: RunCtx, depth = 0): Promise<void> {
+    // Substituted once, here, so every action sees resolved parameters without each case
+    // having to remember to ask. `action.params` itself is left alone — it is the saved
+    // task, and rewriting it would bake one run's values into the stored definition.
+    const p = substituteVars(action.params || {}, ctx);
+    // A parameter may NAME a place instead of saying where it is: `plugin:my-tools/bundle`,
+    // `mods:`, `app:obs`. Resolved here, once, for the same reason substitution is — every
+    // case would otherwise have to remember to ask, and the one that forgets fails at 3am
+    // with a message about a folder nobody recognises.
+    await resolvePathSpecs(p);
+    // Noted BEFORE the action runs, not after: a step that throws half-way through
+    // has still changed something, and the screens are wrong either way. Try/On error
+    // can swallow that throw and let the task continue, so recording it only on
+    // success would lose exactly the case where a stale view is most confusing.
+    for (const area of DIRTIES[action.type] || []) _dirty.add(area);
+    // Fire a bmm:// deeplink through the app's canonical handler (covers every
+    // script-generator action that maps to a deeplink), via runDeepLink.
+    const dl = (path: string, qp: Record<string, any> = {}) => {
+        // Asked HERE, once, for every action that fires a link — not at the twenty call
+        // sites, where `catalog.follow` remembered and `data.exportAuto` did not.
+        //
+        // The permission box says "may open a bmm:// link", and these open one. They also
+        // open it as `scheduler`, which the deep-link gate TRUSTS: no dialog, and the
+        // path limits that refuse a network location from a web page do not apply. So
+        // `data.exportAuto` with `dir=\\host\share` wrote the UNREDACTED data file —
+        // API token, repo passwords, GitHub token — to somebody else's machine.
+        //
+        // That is what made it a hole rather than an inconsistency: `sanitiseImportedTask`
+        // clears `perms` precisely so a .bmmpa from a stranger arrives with nothing
+        // granted, and tells the person what it asked for. An action that never checked
+        // the grant was never in that list, so the import toast said it asked for
+        // nothing and the task kept the capability anyway.
+        //
+        // A task that predates `perms` still has `deeplink` (taskPerms derives it), so
+        // nothing anybody already relies on stops working: only a box somebody ticked off
+        // now means what it says.
+        requirePerm(task, 'deeplink', t('sched.permDeeplink') || 'fire deeplinks');
+        const qs = Object.entries(qp)
+            .filter(([, v]) => v !== undefined && v !== null && v !== '')
+            .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&');
+        const url = `bmm://${path}${qs ? '?' + qs : ''}`;
+        // 'scheduler': a task the user saved. Trusted by the deep-link gate (no dialog at 3am),
+        // but the hard limits in deeplink-guard.ts still apply. Through link-dispatch.ts and not
+        // `window.__bmmDeeplink`, which refuses to carry a trusted origin (anything can call it).
+        // runDeepLink is that dispatch; it throws when the handler is missing rather than
+        // falling back to an event nothing listens to.
+        return runDeepLink(url);
+    };
+    const b = (v: any) => (v ? 1 : 0);
+    switch (action.type) {
+        case 'profile.activate':
+            await invoke('set_active_profile', { profileId: p.id }); break;
+        case 'mod.enable':
+            await invoke('enable_mod', { modId: p.id, bypassSha: true }); break;
+        case 'mod.disable':
+            await invoke('disable_mod', { modId: p.id }); break;
+        case 'modpack.enable':
+            // `placement`: where the pack's mods go in the activation order (top | bottom |
+            // keep); empty = the pack's own choice, then the setting.
+            ctx.nums['order.moved'] = await applyModpack(p.id, true, p.placement); break;
+        case 'modpack.disable':
+            await applyModpack(p.id, false); break;
+        case 'mods.enableAll':
+            // Only the mods this turns on are placed, by `placement` (empty = the setting).
+            await invoke('toggle_all_mods', { enable: true, bypassSha: true, orderMode: placementOf(p.placement) }); break;
+        case 'mods.disableAll':
+            await invoke('toggle_all_mods', { enable: false, bypassSha: false }); break;
+        case 'mods.scan':
+            await invoke('scan_mods_folder'); break;
+        case 'data.validate': {
+            const r = await invoke('bmm_validate', {
+                path: p.path || null, text: p.text || null,
+            }) as { format: string; ok: boolean; problems: string[]; count: number };
+            ctx.text['valid.format'] = r.format;
+            ctx.text['valid.problems'] = r.problems.map((k) => t(k)).join('; ');
+            ctx.nums['valid.ok'] = r.ok ? 1 : 0;
+            ctx.nums['valid.count'] = r.count;
+            // An expected format that did not arrive fails the step out loud when asked to.
+            // Silently carrying on is what turns "the download was a login page" into a
+            // problem three steps later, about something unrelated.
+            const want = String(p.expect || '').trim();
+            const matched = !want || want === r.format;
+            ctx.nums['valid.matched'] = matched ? 1 : 0;
+            if (want && !matched && p.strict !== false) {
+                throw new Error(t('sched.valid.wrongFormat')
+                    .replace('{want}', want)
+                    .replace('{got}', r.format || t('sched.valid.nothing')));
+            }
+            break;
+        }
+        case 'log.print': {
+            const line = String(p.message ?? p.text ?? '');
+            // Two places, on purpose. The running panel is what somebody watching sees; the
+            // log file is what they read afterwards, which is the case `print` exists for —
+            // a task that failed at 3am and the question is what it was holding at the time.
+            // runAction has no `state` of its own — runSteps holds it. Looked up by id, which
+            // is the same map and one call.
+            const rs = _running.get(task.id);
+            if (rs) { rs.step = line.slice(0, 200); renderRunningPanel(); }
+            ctx.text['log.last'] = line;
+            if (task.outputDir !== '-') {
+                try {
+                    await invoke('task_write_file', {
+                        taskId: task.id, outputDir: task.outputDir || null,
+                        path: 'run.log', text: `${new Date().toISOString()}  ${line}\n`, append: true,
+                    });
+                } catch { /* printing must never be the thing that fails a task */ }
+            }
+            break;
+        }
+        case 'file.write': {
+            const where = await invoke('task_write_file', {
+                taskId: task.id, outputDir: task.outputDir || null,
+                path: String(p.path || 'output.txt'), text: String(p.text ?? ''),
+                append: p.append === true || p.append === 'true',
+            }) as string;
+            ctx.text['file.written'] = where;
+            break;
+        }
+        case 'mods.order': {
+            // Two shapes, because there are two questions. "Make this one win" is what
+            // somebody has when they are looking at a conflict; "here is the order" is what a
+            // task restoring a known-good setup has.
+            const [current] = await invoke('mod_order_get', { profileId: null }) as [{ id: string }[], unknown];
+            const ids = (current || []).map((m) => m.id);
+            let next: string[];
+            if (p.order) {
+                // An explicit list. Anything active but not named keeps its relative place at
+                // the FRONT, so a partial list means "these last, in this order" rather than
+                // "drop everything else" — which the backend would refuse anyway, loudly.
+                const named = String(p.order).split(/[;,\n]/).map((x) => x.trim()).filter(Boolean);
+                const known = named.filter((id) => ids.includes(id));
+                next = [...ids.filter((id) => !known.includes(id)), ...known];
+            } else {
+                const id = String(p.id || '');
+                if (!ids.includes(id)) throw new Error(t('sched.order.notActive').replace('{m}', id));
+                next = p.mode === 'first'
+                    ? [id, ...ids.filter((x) => x !== id)]
+                    : [...ids.filter((x) => x !== id), id];
+            }
+            const moved = await invoke('mod_order_set', { profileId: null, order: next }) as number;
+            ctx.nums['order.moved'] = moved;
+            break;
+        }
+        case 'theme.set':
+            await invoke('set_active_theme', { themeId: p.id }); break;
+        case 'app.launch':
+            await invoke('launch_app', { appId: p.id, exePath: p.exePath || '' }); break;
+        case 'app.stop': {
+            requirePerm(task, 'stopProcess', t('sched.permStopProcess') || 'stop running programs');
+            const stopped = await invoke('stop_process', {
+                name: p.name || '', pid: p.pid || null, allow: true,
+            });
+            // Captured like any other step result, so a later step can branch on how many
+            // were actually stopped rather than only on whether the step threw.
+            _captureOutput(p, String(stopped), ctx);
+            break;
+        }
+        case 'notify':
+            toast(p.message || task.name, 'info'); break;
+        case 'custom.command': {
+            requirePerm(task, 'command', t('sched.permRunCommand') || 'run external programs');
+            const args = (p.args || '').trim() ? String(p.args).split(/\s+/) : [];
+            const out = await invoke('run_scheduled_command', {
+                program: p.program, args, workingDir: p.workingDir || null, allow: true,
+            });
+            _captureOutput(p, out, ctx);
+            break;
+        }
+        case 'code.run': {
+            // Compiled at RUN time, not stored as steps. The source is the truth: storing the
+            // compiled tree would mean a snippet silently kept running an old compilation
+            // after somebody edited the text, which is the worst kind of stale.
+            const src = String(p.code || '').trim();
+            if (!src) break;
+            const r: any = await invoke('bmms_compile_steps', { source: src });
+            if (!r?.ok) {
+                const e = (r?.errors || [])[0];
+                // The position, in the message. A task that fails at 03:00 leaves only this
+                // line in the log, and "syntax error" with no line is not something anybody
+                // can act on the next morning.
+                throw new Error(e
+                    ? `${t('sched.bmms.line') || 'Line'} ${e.line}:${e.col} — ${e.message}`
+                    : (t('sched.bmms.badcode') || 'This BMMScript did not compile.'));
+            }
+            // INSIDE this task: same ctx, same `task`, so every permission check in runAction
+            // reads the caller's permissions. Same decision as `call` — permissions attached
+            // to a snippet would be granted in one place and spent in another.
+            // Bounded like `call`: a snippet whose code.run runs another snippet is
+            // legitimate once and a stack overflow forever, and only the nesting tells them
+            // apart. runSteps already carries `depth` for the loop guards; this rides on it.
+            if (depth >= 20) throw new Error(t('sched.bmms.deep') || 'BMMScript is nested too deeply — a snippet is probably running itself.');
+            await runSteps((r.steps || []) as Step[], task, ctx, depth + 1);
+            break;
+        }
+        case 'catalog.create': {
+            const dir = String(p.dir || '').trim();
+            if (!dir) throw new Error(t('sched.catNeedDir') || 'This step needs a destination folder.');
+            const kind = String(p.kind || 'tutorial');
+            const title = String(p.name || '').trim() || 'My catalogue';
+            // Trailing slash stripped once, here, so neither branch has to think about it.
+            const base = String(p.base || '').trim().replace(/\/+$/, '');
+            const wrote = await buildCatalogueInto(kind, dir, title, base);
+            ctx.nums['catalog.entries'] = wrote;
+            // Nothing written is not a success. A catalogue with no entries is a file that
+            // looks published and installs nothing, and on a schedule nobody is watching the
+            // count go by.
+            if (!wrote) {
+                toast(`${task.name}: ${t('sched.catEmpty').replace('{k}', kind)}`, 'warning', 12000);
+                break;
+            }
+            let msg = (t('sched.catDone') || 'Published {n} entry(ies).').replace('{n}', String(wrote));
+            if (p.bundle) {
+                // A .bmmbundle is the catalogue AND its files in one archive, which is what
+                // somebody hands over when there is no server to put a folder on. Packed
+                // from the folder just written, so the two can never describe different
+                // things.
+                const out = String(p.bundleOut || '').trim() || `${dir}/${(title || 'catalogue').replace(/[^A-Za-z0-9._-]/g, '_')}.bmmbundle`;
+                const packed: any = await invoke('catalog_bundle_pack', { dir, out });
+                ctx.text['catalog.bundle'] = String(packed?.path || out);
+                msg += ` ${t('sched.catBundled').replace('{f}', String(out).replace(/^.*[/\\]/, ''))}`;
+            }
+            toast(`${task.name}: ${msg}`, 'success', 9000);
+            break;
+        }
+        case 'folder.create': {
+            // No permission gate on purpose. A task can already make folders through
+            // custom.script, but only once it has been trusted with "run scripts" —
+            // which is the whole machine. This is confined to BMM's own app-data
+            // directory by the backend, so it grants nothing a task could not do to
+            // its own data anyway.
+            const made = await invoke('create_bmm_folder', { relative: p.path || '' });
+            _captureOutput(p, made, ctx);
+            break;
+        }
+        case 'custom.script': {
+            requirePerm(task, 'script', t('sched.permRunScript') || 'run scripts');
+            // A non-zero exit used to fail the whole STEP, so a script could not report a
+            // state — "exited 2 because there was nothing to do" and "could not start" were
+            // the same outcome. With this ticked the exit code lands in a variable and the
+            // task decides what it means.
+            if (p.keepGoing) {
+                const r = await invoke('run_scheduled_script_full', {
+                    engine: p.engine || 'powershell',
+                    code: String(p.code || ''),
+                    workingDir: p.workingDir || null,
+                    allow: true,
+                    timeoutSecs: scriptLimit(p),
+                }) as { code: number; stdout: string; stderr: string; ok: boolean };
+                ctx.nums['script.code'] = Number(r.code);
+                ctx.nums['script.ok'] = r.ok ? 1 : 0;
+                ctx.text['script.stdout'] = String(r.stdout || '');
+                ctx.text['script.stderr'] = String(r.stderr || '');
+                _captureOutput(p, r.stdout, ctx);
+                break;
+            }
+            // The body goes through the same {item.*} / {var} substitution as every
+            // other string param, so a script inside a For-Each can act on the item
+            // it was handed instead of re-deriving it.
+            const out = await invoke('run_scheduled_script', {
+                engine: p.engine || 'powershell',
+                code: String(p.code || ''),
+                workingDir: p.workingDir || null,
+                allow: true,
+                timeoutSecs: scriptLimit(p),
+            });
+            _captureOutput(p, out, ctx);
+            break;
+        }
+        // The generic "Run bmm:// deeplink" step, REMOVED (security summary §9 #15).
+        //
+        // It dispatched a window event and a Tauri event that nothing listened to, so it never
+        // did anything — and a raw link is the one step whose reach nobody could read off the
+        // task. The typed actions cover what it was used for. A task saved with it still loads
+        // (the editor shows the step as removed, with its old link) and still runs: this step
+        // is skipped with a warning instead of failing, because it never had an effect and
+        // failing it now would stop the steps after it, which did.
+        // @retired-action deeplink
+        case 'deeplink':
+            console.warn('[scheduler] removed step skipped: deeplink', task.id);
+            toast(`${task.name}: ${t('sched.removedStepSkipped') || 'a removed step (Run bmm:// deeplink) was skipped — it never did anything. Replace it with a typed action.'}`, 'warning', 9000);
+            break;
+
+        // ── Variables ────────────────────────────────────────────────────────
+        case 'var.set': {
+            const name = String(p.name || '').trim();
+            // Refused rather than skipped. A variable named `my var` can never be read
+            // back — substituteVars will not match it — so accepting the write would
+            // create something that looks stored and is permanently unreadable.
+            if (!VAR_NAME_RE.test(name)) {
+                throw new Error((t('sched.var.badName') || 'Not a usable variable name: {n}').replace('{n}', name || '(empty)'));
+            }
+            const value = String(p.value ?? '');
+            if (p.scope === 'shared') {
+                const all = readSharedVars();
+                all[name] = value;
+                writeSharedVars(all);
+                // The run context sees it immediately too, so a later step in THIS task
+                // does not have to wait for the next run to read what was just written.
+                ctx.shared = { ...(ctx.shared || {}), [name]: value };
+            } else {
+                ctx.text[name] = value;
+                const n = parseFloat(value);
+                ctx.nums[name] = Number.isFinite(n) ? n : value.length;
+            }
+            break;
+        }
+        case 'var.clear': {
+            const name = String(p.name || '').trim();
+            const all = readSharedVars();
+            if (name) delete all[name]; else for (const k of Object.keys(all)) delete all[k];
+            writeSharedVars(all);
+            if (ctx.shared) { if (name) delete ctx.shared[name]; else ctx.shared = {}; }
+            break;
+        }
+
+        // ── Laya (AI) ─────────────────────────────────────────────────────────
+        //
+        // commands/ai_ops.rs holds what no step can lift: AI on, no --no-ai, no game running,
+        // one call at a time, 30 a minute for all tasks, a timeout. sched-ai.ts holds this
+        // run's budget and marks free-text answers untrusted. Nothing here is ever applied.
+        case 'ai.classify': {
+            requirePerm(task, 'ai', t('sched.permAi') || 'ask Laya');
+            // A saved « tâche perso » (Settings, Laya answers) brings its own labels, wording and
+            // settings; otherwise the step's labels, under the « Tâches et scripts » settings.
+            const taskId = String(p.task || '').trim();
+            const labels = parseLabels(p.labels);
+            if (!taskId && labels.length < 2) throw new Error(t('sched.ai.fewLabels') || 'Give at least two labels.');
+            const res: any = await aiCall(ctx, () => invoke('ai_task_classify', {
+                text: p.text ? String(p.text) : null, path: p.path ? String(p.path) : null, labels: taskId ? null : labels, task: taskId || null,
+            }));
+            keepSort(ctx, res, String(p.into || '').trim(), taskId ? undefined : labels.map((l) => l.id));
+            break;
+        }
+        // The same sort, by one of the user's saved Laya tasks (« Tâches perso »): its labels, its
+        // wording, its answer settings. `ai.classify` with a task id does this too; this step is
+        // the one that says so, and offers the tasks in a list.
+        case 'ai.run_task': {
+            requirePerm(task, 'ai', t('sched.permAi') || 'ask Laya');
+            const lt = String(p.task || '').trim();
+            if (!lt) throw new Error(t('sched.ai.noTask') || 'Pick one of your Laya tasks.');
+            const res: any = await aiCall(ctx, () => invoke('ai_task_classify', {
+                text: p.text ? String(p.text) : null, path: p.path ? String(p.path) : null, labels: null, task: lt,
+            }));
+            keepSort(ctx, res, String(p.into || '').trim());
+            break;
+        }
+        // A mod's tags (from the user's own tags) and the adult-content hint, read from its files
+        // by local Laya. `apply` writes only what « apply without asking » would (ai_ops.rs).
+        case 'ai.classify_mod': {
+            requirePerm(task, 'ai', t('sched.permAi') || 'ask Laya');
+            const id = String(p.id || '').trim();
+            if (!id) throw new Error(t('sched.ai.noMod') || 'Pick a mod.');
+            const res: any = await aiCall(ctx, () => invoke('ai_task_classify_mod', { modId: id, apply: p.apply === true }));
+            const c = modClassOf(res);
+            const names = c.tags.map((x) => x.name);
+            ctx.text['ai.mod.tags'] = names.join(', ');
+            ctx.text['ai.mod.category'] = topTag(c);
+            ctx.nums['ai.mod.tagCount'] = names.length;
+            ctx.nums['ai.mod.adult'] = c.adult ? 1 : 0;
+            ctx.nums['ai.mod.adultP'] = c.adultP;
+            ctx.nums['ai.mod.applied'] = c.applied.length;
+            ctx.nums['ai.mod.abstained'] = c.abstained ? 1 : 0;
+            ctx.lists = ctx.lists || {};
+            ctx.lists['ai.mod.tags'] = names;
+            const into = String(p.into || '').trim();
+            if (into) {
+                untaint(ctx, into);
+                ctx.text[`${into}.tags`] = names.join(', ');
+                ctx.text[`${into}.category`] = topTag(c);
+                ctx.nums[`${into}.tagCount`] = names.length;
+                ctx.nums[`${into}.adult`] = c.adult ? 1 : 0;
+                ctx.nums[`${into}.abstained`] = c.abstained ? 1 : 0;
+            }
+            rememberModTags(ctx, id, c);
+            ctx.text['last.out'] = names.join(', ');
+            break;
+        }
+        // « Vérifier la bibliothèque »: untagged mods, likely duplicates, mods overwriting each
+        // other now (read from the library), and Laya's tags for a few untagged ones. Writes nothing.
+        case 'ai.library_check': {
+            requirePerm(task, 'ai', t('sched.permAi') || 'ask Laya');
+            const suggest = clampInt(p.suggest, 0, 10, 5);
+            const res: any = await aiCall(ctx, () => invoke('ai_task_library_check', { suggest }));
+            const v = libraryOf(res, {
+                untagged: t('sched.ai.lib.wUntagged'), duplicate: t('sched.ai.lib.wDuplicate'),
+                conflict: t('sched.ai.lib.wConflict'), suggest: t('sched.ai.lib.wSuggest'),
+            });
+            ctx.nums['ai.lib.total'] = v.counts.total;
+            ctx.nums['ai.lib.untagged'] = v.counts.untagged;
+            ctx.nums['ai.lib.duplicates'] = v.counts.duplicates;
+            ctx.nums['ai.lib.conflicts'] = v.counts.conflicts;
+            ctx.nums['ai.lib.suggested'] = v.counts.suggested;
+            ctx.nums['ai.lib.findings'] = v.counts.findings;
+            const into = String(p.into || '').trim() || 'ai.library';
+            ctx.lists = ctx.lists || {};
+            ctx.lists[into] = v.lines;
+            ctx.lists['ai.library.untagged'] = v.untaggedIds;
+            ctx.lists['ai.library.duplicates'] = v.duplicateIds;
+            ctx.nums[`list.${into}.length`] = v.lines.length;
+            ctx.text['last.out'] = v.lines.slice(0, 30).join('\n');
+            break;
+        }
+        // « Trouver les causes » on the crash reports that arrived since this step last ran (the
+        // last 7 days the first time), or on the latest ones. Rings `bmm.ai.crashLabelled` and
+        // `bmm.ai.crashGroup` (laya-crash-events.ts) for other tasks to react to.
+        case 'ai.crash_label': {
+            requirePerm(task, 'ai', t('sched.permAi') || 'ask Laya');
+            const recent = p.scope === 'recent';
+            const since = recent ? 0 : crashSince(readCrashMarkers(), task.id, Date.now() / 1000);
+            const limit = clampInt(p.limit, 1, 12, 12);
+            const res: any = await aiCall(ctx, () => invoke('ai_task_crash_label', { since, limit, newestFirst: recent }));
+            const items = crashItemsOf(res, CAUSE_FAMILY);
+            const sum = crashSummary(items);
+            const groups = announceCrashLabels(items);
+            if (!recent) writeCrashMarker(task.id, Math.max(since, Number(res?.newest) || 0));
+            ctx.nums['ai.crash.count'] = sum.count;
+            ctx.nums['ai.crash.unknown'] = sum.unknown;
+            ctx.nums['ai.crash.groups'] = groups;
+            ctx.nums['ai.crash.pending'] = Math.max(0, Number(res?.pending) || 0);
+            ctx.text['ai.crash.family'] = sum.latest?.family || 'none';
+            ctx.text['ai.crash.cause'] = sum.latest?.cause || 'none';
+            ctx.nums['ai.crash.p'] = sum.latest?.p || 0;
+            ctx.text['ai.crash.report'] = sum.latest?.report || '';
+            const into = String(p.into || '').trim() || 'ai.crashes';
+            const lines = crashLines(items);
+            ctx.lists = ctx.lists || {};
+            ctx.lists[into] = lines;
+            ctx.nums[`list.${into}.length`] = lines.length;
+            rememberCrashes(ctx, items);
+            ctx.text['last.out'] = lines.join('\n');
+            break;
+        }
+        // The feedback dialog's assist on a text or a file: suggestion / bug / crash, and which
+        // part of the app. Masked before Laya reads it; the answer is one word of two fixed lists.
+        case 'ai.triage_report': {
+            requirePerm(task, 'ai', t('sched.permAi') || 'ask Laya');
+            if (!String(p.text || '').trim() && !String(p.path || '').trim()) throw new Error(t('sched.ai.noReport') || 'There is no text to read.');
+            const res: any = await aiCall(ctx, () => invoke('ai_task_triage', { text: p.text ? String(p.text) : null, path: p.path ? String(p.path) : null }));
+            const tri = triageOf(res, REPORT_KINDS, APP_AREAS);
+            ctx.text['ai.report.kind'] = tri.kind.label;
+            ctx.nums['ai.report.kindP'] = tri.kind.p;
+            ctx.text['ai.report.area'] = tri.area.label;
+            ctx.nums['ai.report.areaP'] = tri.area.p;
+            ctx.nums['ai.report.abstained'] = tri.kind.abstained ? 1 : 0;
+            const into = String(p.into || '').trim();
+            if (into) {
+                untaint(ctx, into);
+                ctx.text[`${into}.kind`] = tri.kind.label;
+                ctx.text[`${into}.area`] = tri.area.label;
+                ctx.nums[`${into}.abstained`] = tri.kind.abstained ? 1 : 0;
+            }
+            ctx.text['last.out'] = `${tri.kind.label}/${tri.area.label}`;
+            break;
+        }
+        // Laya's state: switch, model on disk and in memory, provider, a writing model. Runs no
+        // model (no budget), and answers with AI off — that is what it is for.
+        case 'ai.status': {
+            requirePerm(task, 'ai', t('sched.permAi') || 'ask Laya');
+            const st = stateOf(await invoke('ai_task_status'));
+            ctx.nums['ai.enabled'] = st.enabled ? 1 : 0;
+            ctx.nums['ai.available'] = st.available ? 1 : 0;
+            ctx.nums['ai.installed'] = st.installed ? 1 : 0;
+            ctx.nums['ai.loaded'] = st.loaded ? 1 : 0;
+            ctx.nums['ai.writer'] = st.writer ? 1 : 0;
+            ctx.text['ai.provider'] = st.provider;
+            ctx.text['last.out'] = st.available ? 'available' : 'unavailable';
+            break;
+        }
+        // « Expliquer »: a written explanation of one crash — only with a writing model, a remote
+        // one only when the step allows it (and the task may reach the network). FREE TEXT: tainted.
+        case 'ai.explain_crash': {
+            requirePerm(task, 'ai', t('sched.permAi') || 'ask Laya');
+            const allowRemote = p.allowRemote === true;
+            if (allowRemote) requirePerm(task, 'network', t('sched.permNetwork') || 'reach the network');
+            const report = String(p.report || '').trim();
+            const res: any = await aiCall(ctx, () => invoke('ai_task_explain_crash', { report: report || null, allowRemote }));
+            const text = String(res?.text ?? '');
+            ctx.text['ai.explanation'] = text;
+            ctx.nums['ai.explain.remote'] = res?.remote ? 1 : 0;
+            _captureOutput(p, text, ctx);
+            taint(ctx, 'ai.explanation', 'last.out', String(p.into || '').trim());
+            break;
+        }
+        case 'ai.ask': {
+            requirePerm(task, 'ai', t('sched.permAi') || 'ask Laya');
+            const question = String(p.question || '').trim();
+            if (!question) throw new Error(t('sched.ai.noQuestion') || 'There is no question to ask.');
+            const res: any = await aiCall(ctx, () => invoke('ai_task_ask', { question, lang: getLang() === 'fr' ? 'fr' : 'en' }));
+            const text = String(res?.text ?? '');
+            ctx.text['ai.answer'] = text;
+            _captureOutput(p, text, ctx);
+            taint(ctx, 'ai.answer', 'last.out', String(p.into || '').trim());
+            break;
+        }
+        case 'ai.suggest_mod_metadata': {
+            requirePerm(task, 'ai', t('sched.permAi') || 'ask Laya');
+            const id = String(p.id || '').trim();
+            const res: any = await aiCall(ctx, () => invoke('ai_task_suggest', { modId: id }));
+            const list: any[] = Array.isArray(res?.suggestions) ? res.suggestions : [];
+            const text = list.map((s) => `${s.field}: ${s.value} (${Math.round((Number(s.confidence) || 0) * 100)}%)`).join('\n');
+            ctx.text['ai.suggestions'] = text;
+            ctx.nums['ai.suggestions'] = list.length;
+            _captureOutput(p, text, ctx);
+            taint(ctx, 'ai.suggestions', 'last.out', String(p.into || '').trim());
+            break;
+        }
+
+        // ── Talking to something else ────────────────────────────────────────
+        case 'http.request': {
+            // Under the SAME permission as running a program. An HTTP call can post the
+            // contents of a captured variable anywhere, and a task that can do that
+            // without asking would make the other permissions decorative.
+            requirePerm(task, 'command', t('sched.permHttp') || 'reach external services');
+            const url = String(p.url || '').trim();
+            if (!/^https?:\/\//i.test(url)) {
+                throw new Error((t('sched.http.badUrl') || 'Not an http(s) address: {u}').replace('{u}', url || '(empty)'));
+            }
+            const headers = parseHeaderLines(String(p.headers || ''));
+            const res: any = await invoke('http_request', {
+                url,
+                method: String(p.method || 'GET').toUpperCase(),
+                headers,
+                body: p.body ? String(p.body) : null,
+                timeoutMs: Math.min(120_000, Math.max(1_000, parseInt(p.timeoutMs, 10) || 15_000)),
+            });
+            const status = Number(res?.status) || 0;
+            const text = String(res?.body ?? '');
+            // Status is always available for a condition, under a name that cannot collide
+            // with a user's own: dots are not allowed in a variable name.
+            ctx.nums['http.status'] = status;
+            ctx.text['http.status'] = String(status);
+            // A JSON pointer, when asked for. Anything else would need a script step just
+            // to pull one field out of a response, which is the common case.
+            let captured = text;
+            if (p.jsonPath) {
+                try { captured = readJsonPath(text, String(p.jsonPath)); }
+                catch { throw new Error(t('sched.http.badJson') || 'The response was not JSON, so no field could be read from it.'); }
+            }
+            // A failing status throws rather than capturing the error page as if it were
+            // the answer — otherwise a 500 whose body is HTML becomes the value of a
+            // variable a later step trusts.
+            if (statusIsFailure(status, !!p.allowAnyStatus)) {
+                throw new Error((t('sched.http.status') || 'HTTP {s} from {u}').replace('{s}', String(status)).replace('{u}', url));
+            }
+            _captureOutput(p, captured, ctx);
+            break;
+        }
+
+        // ── Notifications ─────────────────────────────────────────────────────
+        //
+        // Sent by the Rust side (sched_net.rs), which holds the rules no step can lift:
+        // http(s) only, no private address unless `allowLan`, pinned DNS, a timeout, a size
+        // cap, and errors that never quote the address (a Discord or Slack URL IS the token).
+        case 'webhook.send': {
+            requirePerm(task, 'network', t('sched.permNetwork') || 'reach the network');
+            const url = String(p.url || '').trim();
+            const bad = webhookUrlProblem(url, 'webhook');
+            if (bad) throw new Error(netWhy(bad));
+            const format = p.format === 'text' ? 'text' : 'json';
+            // A JSON body is substituted from the RAW template as JSON string content, so a
+            // value holding a quote or a newline (a feed title, a log line) cannot break it.
+            const raw = String((action.params || {}).body ?? '');
+            const text = format === 'json' ? jsonTemplate(raw, (n) => varText(ctx, n)) : String(p.body ?? '');
+            const { body, error } = webhookBody(text, format);
+            if (error) throw new Error((t('sched.wh.badJson') || 'The body is not valid JSON: {e}').replace('{e}', error));
+            const plain = parseHeaderBlock(String(p.headers || ''));
+            const secret = parseHeaderBlock(String(p.secretHeaders || ''));
+            const badNames = [...plain.bad, ...secret.bad];
+            if (badNames.length) throw new Error((t('sched.wh.badHeader') || 'Not a header line: {h}').replace('{h}', badNames[0]));
+            await sendNet(ctx, p, {
+                url, method: String(p.method || 'POST').toUpperCase(), headers: plain.headers,
+                secretHeaders: secret.headers, body: body || null,
+                timeoutMs: clampInt(p.timeoutMs, 1000, 60000, 15000), allowLan: p.allowLan === true,
+                retries: clampInt(p.retries, 0, 4, 2),
+            });
+            break;
+        }
+        case 'discord.send':
+        case 'slack.send': {
+            requirePerm(task, 'network', t('sched.permNetwork') || 'reach the network');
+            const kind = action.type === 'discord.send' ? 'discord' : 'slack';
+            const url = String(p.url || '').trim();
+            const bad = webhookUrlProblem(url, kind);
+            if (bad) throw new Error(netWhy(bad));
+            const message = String(p.message ?? '').trim();
+            if (!message) throw new Error(t('sched.wh.noMessage') || 'There is no message to send.');
+            await sendNet(ctx, p, {
+                url, method: 'POST', headers: {}, secretHeaders: {}, kind,
+                body: kind === 'discord' ? discordBody(message, String(p.username || '')) : slackBody(message),
+                timeoutMs: 15000, allowLan: false, retries: clampInt(p.retries, 0, 4, 2),
+            });
+            break;
+        }
+        case 'feed.publish': {
+            // A local Atom file: no network, no permission — the same rule as file.write.
+            const where = await (invoke('task_feed_append', {
+                taskId: task.id, outputDir: task.outputDir || null,
+                path: String(p.path || 'feed.xml'), feedTitle: String(p.feedTitle || task.name || ''),
+                title: String(p.title || ''), body: String(p.body ?? ''), link: String(p.link || ''),
+                maxEntries: clampInt(p.max, 1, 500, 50),
+            }) as Promise<string>).catch((e) => { throw new Error(netErrorText(e)); });
+            ctx.text['feed.file'] = where;
+            break;
+        }
+
+        // ── Benchmarks ────────────────────────────────────────────────────────
+        case 'benchmark.run': {
+            const dataset = p.dataset === 'real' ? 'real' : 'sandbox';
+            const size = String(p.size || 'M').toUpperCase();
+            const scale = size === 'CUSTOM'
+                ? `custom:${Math.max(1, parseInt(p.customMb, 10) || 256)}`
+                : (BENCH_SCALE[size] || 'medium');
+            const sources: string[] = dataset === 'real'
+                ? (Array.isArray(p.sources) ? p.sources : (p.sources ? [p.sources] : []))
+                : [];
+            const report: any = await invoke('run_app_benchmark', { mode: dataset, realSources: sources, scale });
+            const totalMs = Number(report?.total_ms) || 0;
+            const bytes = Number(report?.env?.dataset_bytes ?? report?.dataset_bytes) || 0;
+            ctx.nums['benchmark.total_ms'] = totalMs;
+            if (bytes > 0 && totalMs > 0) ctx.nums['benchmark.mbps'] = Math.round((bytes / 1048576) / (totalMs / 1000) * 10) / 10;
+            toast(`${task.name}: benchmark ${Math.round(totalMs)} ms${ctx.nums['benchmark.mbps'] ? ` · ${ctx.nums['benchmark.mbps']} MB/s` : ''}`, 'info');
+            break;
+        }
+
+        // ── Storage Manager ──────────────────────────────────────────────────
+        case 'storage.calibration':
+            await setSettingFlag('auto_io_calibration', !!p.enabled); break;
+        case 'storage.smartIo':
+            await setSettingFlag('smart_io_enabled', !!p.enabled); break;
+        case 'storage.flag': {                     // one of STORAGE_FLAGS, nothing else
+            const key = String(p.key || '').trim();
+            if (!key) break;
+            if (!(STORAGE_FLAGS as readonly string[]).includes(key)) {
+                throw new Error((t('sched.flag.denied') || '“{k}” is not a storage setting a task may change. Allowed: {list}.')
+                    .replace('{k}', key).replace('{list}', STORAGE_FLAGS.join(', ')));
+            }
+            await setSettingFlag(key, !!p.enabled);
+            break;
+        }
+
+        // ── Resources (A3): how hard BMM works ─────────────────────────────────
+        case 'resources.preset': {
+            requirePerm(task, 'resources', t('sched.permResources') || 'change how hard BMM works');
+            const name = String(p.name || 'balanced');
+            if (p.scope === 'persistent') {
+                await invoke('resources_set_preset', { name, scope: 'persistent', ttlSecs: null, overridesGame: null });
+            } else {
+                // A second preset step in the same task replaces the first: clear ours before.
+                const old = _taskPresetTokens.get(task.id);
+                if (old != null) await invoke('resources_clear_task_preset', { token: old }).catch(() => {});
+                const token = await invoke('resources_set_preset', { name, scope: 'task', ttlSecs: null, overridesGame: !!p.overridesGame });
+                if (token != null) _taskPresetTokens.set(task.id, Number(token));
+            }
+            break;
+        }
+        case 'resources.gameMode':
+            requirePerm(task, 'resources', t('sched.permResources') || 'change how hard BMM works');
+            await invoke('resources_game_mode', { mode: ['on', 'off'].includes(p.mode) ? p.mode : 'auto' });
+            break;
+        case 'resources.queue':
+            requirePerm(task, 'resources', t('sched.permResources') || 'change how hard BMM works');
+            // `by` names the task on the dashboard's "everything is paused" line; any `by` but
+            // the dashboard's 'user' makes the pause end by itself after 30 min (owner card 2).
+            await invoke('resources_queue', { action: p.action === 'resume_all' ? 'resume_all' : 'pause_all', id: null, by: `task:${String(task.name || task.id || '').slice(0, 60)}` });
+            break;
+        case 'storage.diskBenchmark': {
+            const mount = p.mountPoint || (await firstDiskMount());
+            if (!mount) throw new Error('No disk to benchmark');
+            const r: any = await invoke('benchmark_disk', { mountPoint: mount });
+            ctx.nums['disk.read_mbps'] = Number(r?.read_mb_s) || 0;
+            ctx.nums['disk.write_mbps'] = Number(r?.write_mb_s) || 0;
+            ctx.nums['disk.suggested_limit'] = Number(r?.suggested_limit) || 0;
+            toast(`${task.name}: ${mount} ${ctx.nums['disk.read_mbps']}↓ / ${ctx.nums['disk.write_mbps']}↑ MB/s`, 'info');
+            break;
+        }
+        case 'storage.applyLimit': {
+            const mount = p.mountPoint || (await firstDiskMount());
+            if (!mount) throw new Error('No disk selected');
+            const limit = p.limitMbS != null && p.limitMbS !== ''
+                ? Math.max(1, parseInt(p.limitMbS, 10) || 0)
+                : Math.round(ctx.nums['disk.suggested_limit'] || 0);
+            await invoke('set_disk_limit', { mountPoint: mount, limitMbS: limit > 0 ? limit : null });
+            toast(`${task.name}: ${mount} limit → ${limit > 0 ? limit + ' MB/s' : 'unlimited'}`, 'success');
+            break;
+        }
+
+        // ── Logic & math ──────────────────────────────────────────────────────
+        case 'math.set': {                         // target = <expression over ctx>
+            const target = String(p.target || 'result');
+            try { ctx.nums[target] = evalExpr(String(p.expr || '0'), ctx); }
+            catch (e) { throw new Error(`${t('sched.mathErr') || 'Math error'}: ${e}`); }
+            break;
+        }
+        case 'var.ternary': {                      // target = cond ? ifTrue : ifFalse
+            const ok = p.condition ? await evalCondition(p.condition, ctx, task) : false;
+            ctx.nums[String(p.target || 'result')] = Number(ok ? p.ifTrue : p.ifFalse) || 0;
+            break;
+        }
+        case 'rule.table': {                       // first matching rule sets target
+            const src = readNum(ctx, String(p.source || '')) ?? NaN;
+            const target = String(p.target || 'result');
+            for (const r of (Array.isArray(p.rows) ? p.rows : [])) {
+                if (cmpNum(src, r.op, Number(r.value))) { ctx.nums[target] = Number(r.result) || 0; break; }
+            }
+            break;
+        }
+        // ── Games: notice, then act ─────────────────────────────────────
+
+        // Pull one value out of a file or a variable and keep it.
+        //
+        // This is the whole of "which server am I on" for every game that is not DCS. A game
+        // writes a log; the log has a line naming what it just did; a regex takes the part
+        // that matters and puts it in a variable the next steps can branch on. Nothing about
+        // it is game-specific, which is why it is not called anything game-specific.
+        case 'text.extract': {
+            const target = String(p.target || 'value').trim() || 'value';
+            let hay = '';
+            if (p.path) {
+                // The TAIL, not the file. A game log is appended to for the whole session
+                // and can be hundreds of megabytes; what just happened is at the end of it.
+                hay = String(await invoke('read_text_tail', {
+                    path: String(p.path), kb: Number(p.tailKb) || 64,
+                }).catch(() => ''));
+            } else if (p.source) {
+                hay = String(ctx.text[String(p.source)] ?? '');
+            }
+            let value = '';
+            const pattern = String(p.regex || '').trim();
+            if (pattern) {
+                // LAST match, not first. In a log the most recent line is the one that
+                // describes now; the first is whatever happened when the game started.
+                //
+                // In a worker with a time budget: a pattern like (a+)+$ against a long log
+                // backtracks for minutes, and on the UI thread that is a frozen BMM — from a
+                // task somebody imported from a catalogue.
+                const r = await regexWithBudget({ op: 'last', pattern, flags: 'g', hay, group: Number(p.group) || 1 });
+                if (r.ok) value = r.value;
+                else if (r.error === 'timeout') {
+                    toast(`${task.name}: ${t('sched.regex.timeout')}`, 'warning', 10000);
+                } else {
+                    // A regex somebody typed. A bad one is a mistake in the task, not a
+                    // reason to abandon the run half-way through.
+                    toast(`${task.name}: ${t('sched.textExtract.badRegex')}`, 'warning', 8000);
+                }
+            } else {
+                value = hay.trim();
+            }
+            ctx.text[target] = value;
+            // Also as a number when it is one, so `value >` conditions work on it without a
+            // second action to convert it.
+            const n = Number(value);
+            if (value !== '' && Number.isFinite(n)) ctx.nums[target] = n;
+            break;
+        }
+
+        // Put a mod list on: install what is missing, then enable exactly what it names.
+        //
+        // The unattended half of the import screen. Everything it does, a person can do by
+        // hand in Mods → Import — which is the rule for a scheduler action.
+        case 'modlist.apply': {
+            const { applyModList } = await import('../mods/modlist.js');
+            const r = await applyModList({
+                path: p.path ? String(p.path) : undefined,
+                url: p.url ? String(p.url) : undefined,
+                install: p.install !== false,
+                exact: !!p.exact,
+                passphrase: p.passphrase ? String(p.passphrase) : undefined,
+                orderMode: placementOf(p.placement) || undefined,
+            });
+            toast(`${task.name}: ${t('sched.listApply.done')
+                .replace('{on}', String(r.enabled))
+                .replace('{new}', String(r.installed))}`, 'success', 8000);
+            if (r.missing.length) {
+                // Named, and a warning rather than a failure. A list that names a mod
+                // nothing can supply is still worth applying for the rest of it — but
+                // "applied" with three mods silently absent is the report that gets somebody
+                // kicked off a strict server without knowing why.
+                toast(`${task.name}: ${t('sched.listApply.missing')
+                    .replace('{n}', String(r.missing.length))} — ${r.missing.slice(0, 6).join(', ')}`,
+                    'warning', 12000);
+            }
+            break;
+        }
+
+        // One of a plugin's shipped files: read it, copy it out, or run it.
+        //
+        // `run` is the only mode that is gated, and it is gated by the TASK's own script
+        // permission rather than by anything about the plugin. A shipped script is a program
+        // somebody else wrote; whether this automation may run programs is a question the
+        // user answered once, in writing, on the task — and that answer governs here too.
+        case 'plugin.asset': {
+            const pluginId = String(p.pluginId || '');
+            const assetPath = String(p.path || '');
+            if (!pluginId || !assetPath) { toast(`${task.name}: ${t('sched.pa.nothing')}`, 'warning', 8000); break; }
+            const mode = String(p.mode || 'read');
+
+            if (mode === 'read') {
+                const target = String(p.target || 'asset').trim() || 'asset';
+                const text = String(await invoke('plugin_asset_read', { pluginId, path: assetPath }));
+                ctx.text[target] = text;
+                const n = Number(text.trim());
+                if (text.trim() !== '' && Number.isFinite(n)) ctx.nums[target] = n;
+                break;
+            }
+
+            if (mode === 'copy') {
+                const dir = String(p.dir || '');
+                if (!dir) { toast(`${task.name}: ${t('sched.pa.noDir')}`, 'warning', 8000); break; }
+                const where = await invoke('plugin_asset_export', { pluginId, path: assetPath, destDir: dir }) as string;
+                toast(`${task.name}: ${t('sched.pa.copied').replace('{f}', String(where).replace(/^.*[/\\]/, ''))}`, 'success', 7000);
+                break;
+            }
+
+            if (mode === 'run') {
+                // The task's OWN script permission, through the same helper `custom.script`
+                // uses — so this refuses in the same words, and there is one place that
+                // decides whether an automation may run programs.
+                requirePerm(task, 'script', t('sched.permRunScript') || 'run scripts');
+                // Read and handed to the engine as code, exactly as a typed script is. The
+                // alternative — launching the file by path — would mean the OS choosing what
+                // runs a .ps1, which is a different decision made by a different party.
+                const code = String(await invoke('plugin_asset_read', { pluginId, path: assetPath }));
+                const out = await invoke('run_scheduled_script', {
+                    engine: String(p.engine || engineFor(assetPath)),
+                    code,
+                    workingDir: p.workingDir || null,
+                    allow: true,
+                    timeoutSecs: scriptLimit(p),
+                });
+                _captureOutput(p, out, ctx);
+                toast(`${task.name}: ${t('sched.pa.ran').replace('{f}', assetPath)}`, 'success', 7000);
+                break;
+            }
+
+            // `open` — the folder, not the file. Handing a .ps1 to the shell is `run`, and
+            // the difference between the two must not be which button somebody clicked.
+            const full = await invoke('plugin_asset_path', { pluginId, path: assetPath }) as string;
+            await invoke('open_folder', { path: full.replace(/[/\\][^/\\]*$/, '') });
+            break;
+        }
+
+        // Bring a file in.
+        //
+        // The kind is worked out from the extension unless the task names one. Everything
+        // else is shared: a URL is fetched with the source's credentials first, and the
+        // passphrase is handed to whichever reader needs it.
+        case 'import.file': {
+            let path = String(p.path || '').trim();
+            const url = String(p.url || '').trim();
+            if (!path && !url) { toast(`${task.name}: ${t('sched.imp.nothing')}`, 'warning', 8000); break; }
+            if (!path) {
+                await applyCredsFor(url, p);
+                path = await invoke('fetch_to_app_data', {
+                    url, folder: 'imports', password: p.password || null, defaultExt: null,
+                }) as string;
+            }
+            const ext = (path.split('.').pop() || '').toLowerCase();
+            const kind = String(p.kind || 'auto') === 'auto'
+                ? ({ mm: 'modlist', mmlist: 'modlist', bmmplug: 'plugin', bmmtheme: 'theme',
+                     bmmpa: 'automation', databmm: 'backup', bmmbundle: 'bundle' } as Record<string, string>)[ext] || 'modlist'
+                : String(p.kind);
+            const pass = p.passphrase ? String(p.passphrase) : null;
+
+            if (kind === 'modlist') {
+                const { applyModList } = await import('../mods/modlist.js');
+                // Installing is a separate question from importing: a task that only wants
+                // the list read into BMM should not start downloading mods because the
+                // action's name has "import" in it.
+                if (p.apply) {
+                    const r = await applyModList({ path, install: p.install !== false, exact: !!p.exact, passphrase: pass || undefined });
+                    toast(`${task.name}: ${t('sched.listApply.done').replace('{on}', String(r.enabled)).replace('{new}', String(r.installed))}`, 'success', 8000);
+                } else {
+                    const list: any = await invoke('import_modlist', { path, passphrase: pass });
+                    ctx.nums['import.count'] = Array.isArray(list?.mods) ? list.mods.length : 0;
+                    ctx.text['import.name'] = String(list?.name || '');
+                    toast(`${task.name}: ${t('sched.imp.read').replace('{n}', String(ctx.nums['import.count']))}`, 'success', 7000);
+                }
+            } else if (kind === 'plugin') {
+                const r: any = await invoke('install_plugin_from_file', { filePath: path });
+                ctx.text['import.name'] = String(r?.manifest?.name || '');
+                toast(`${task.name}: ${t('sched.imp.plugin').replace('{p}', ctx.text['import.name'])}`, 'success', 8000);
+            } else if (kind === 'theme') {
+                await invoke('import_theme', { path });
+                toast(`${task.name}: ${t('sched.imp.theme')}`, 'success', 6000);
+            } else if (kind === 'automation') {
+                const n = await importTasksFromPath(path);
+                ctx.nums['import.count'] = n;
+                toast(`${task.name}: ${t('sched.imp.tasks').replace('{n}', String(n))}`, 'success', 9000);
+            } else if (kind === 'bundle') {
+                // A .bmmbundle is a catalogue in a zip. It is FOLLOWED, not unpacked — what
+                // it holds changes when its author republishes it.
+                requirePerm(task, 'deeplink', t('sched.permDeeplink') || 'fire deeplinks');
+                await runDeepLink(`bmm://catalog/follow?type=${encodeURIComponent(String(p.catType || 'plugin'))}`
+                    + `&url=${encodeURIComponent('bundle:' + path)}`);
+            } else if (kind === 'backup') {
+                // Restoring OVERWRITES what is here. Unattended, that is the most
+                // destructive thing in the scheduler, so it is not what the action does
+                // unless the task says so in its own words — and by default it INSPECTS,
+                // which is the useful half anyway ("did last night's backup come out right").
+                const info: any = await invoke('inspect_data_bundle', { path, passphrase: pass });
+                ctx.nums['import.count'] = Number(info?.sections?.length || 0);
+                ctx.text['import.name'] = String(info?.created_at || '');
+                if (!p.restore) {
+                    toast(`${task.name}: ${t('sched.imp.checked').replace('{n}', String(ctx.nums['import.count']))}`, 'success', 8000);
+                } else {
+                    const r: any = await invoke('restore_data_bundle', {
+                        args: { path, passphrase: pass, sections: Array.isArray(p.sections) ? p.sections : [] },
+                    });
+                    toast(`${task.name}: ${t('sched.imp.restored').replace('{n}', String((r?.restored || []).length))}`, 'warning', 14000);
+                }
+            } else {
+                toast(`${task.name}: ${t('sched.imp.unknownKind').replace('{k}', kind)}`, 'warning', 8000);
+            }
+            break;
+        }
+
+        // Make an identity key.
+        //
+        // The name is what makes this safe to run on a schedule: an existing name is
+        // REFUSED by the backend rather than overwritten, so a task that fires every week
+        // makes one key and then does nothing, instead of quietly replacing the key you
+        // prove with — which would lock you out of every source that has your public line.
+        case 'key.create': {
+            const name = String(p.name || '').trim();
+            if (!name) { toast(`${task.name}: ${t('sched.key.noName')}`, 'warning', 8000); break; }
+            try {
+                const r = await invoke('key_auth_generate', { name, kind: p.kind || 'ed25519' }) as any;
+                ctx.text['key.public'] = String(r?.public || '');
+                ctx.text['key.path'] = String(r?.path || '');
+                // Bound to a host straight away when the task named one, which is the whole
+                // reason to make a key unattended: the sync that needs it is the next step.
+                if (p.bindUrl) {
+                    await invoke('key_auth_set_for_url', { url: String(p.bindUrl), name }).catch(() => undefined);
+                }
+                toast(`${task.name}: ${t('sched.key.made').replace('{k}', name)}`, 'success', 9000);
+            } catch (e) {
+                // errNameTaken is the ordinary outcome of a repeating task, not a failure.
+                if (String(e).includes('errNameTaken')) {
+                    toast(`${task.name}: ${t('sched.key.exists').replace('{k}', name)}`, 'info', 6000);
+                } else { throw e; }
+            }
+            break;
+        }
+
+        // Follow a catalogue, or stop.
+        //
+        // Through the deeplink the interface's own screens use, so the source lands in the
+        // following list with an origin and can be removed by the button that removes the
+        // others — rather than being written straight into a store nothing else knows about.
+        case 'catalog.follow': {
+            const type = String(p.catType || 'plugin');
+            const url = String(p.url || '').trim();
+            if (!url) { toast(`${task.name}: ${t('sched.cat.noUrl')}`, 'warning', 8000); break; }
+            requirePerm(task, 'deeplink', t('sched.permDeeplink') || 'fire deeplinks');
+            // Before the deeplink, not after: on a protected catalogue the document itself is
+            // behind the gate, so binding the key afterwards binds it for the request that
+            // already failed.
+            await applyCredsFor(url, p);
+            await runDeepLink(`bmm://catalog/${p.unfollow ? 'unfollow' : 'follow'}`
+                + `?type=${encodeURIComponent(type)}&url=${encodeURIComponent(url)}`
+                // Only when there is one, so an unprotected catalogue's link stays the short
+                // readable thing it has always been.
+                + (p.password ? `&password=${encodeURIComponent(String(p.password))}` : ''));
+            break;
+        }
+
+        // Follow whatever is at an address, without being told its kind. The deciding
+        // happens once, in the deeplink handler, so a scheduled import and a clicked link
+        // cannot disagree about what a document is.
+        case 'catalog.import': {
+            const url = String(p.url || '').trim();
+            if (!url) { toast(`${task.name}: ${t('sched.cat.noUrl')}`, 'warning', 8000); break; }
+            requirePerm(task, 'deeplink', t('sched.permDeeplink') || 'fire deeplinks');
+            await applyCredsFor(url, p);
+            await runDeepLink('bmm://catalog/import'
+                + `?url=${encodeURIComponent(url)}`
+                + (p.catType ? `&type=${encodeURIComponent(String(p.catType))}` : '')
+                + (p.password ? `&password=${encodeURIComponent(String(p.password))}` : ''));
+            break;
+        }
+
+        // One entry of a catalogue this machine AUTHORS — not one it follows.
+        case 'catalog.entry': {
+            const mode = String(p.mode || 'add');
+            const kind = String(p.catType || 'app');
+            const id = String(p.id || '').trim();
+            if (!id) { toast(`${task.name}: ${t('sched.cat.noId')}`, 'warning', 8000); break; }
+            requirePerm(task, 'deeplink', t('sched.permDeeplink') || 'fire deeplinks');
+            let body: any = {};
+            if (mode !== 'remove') {
+                // Parsed HERE so a bad field list fails the step with a message, rather than
+                // travelling as text and writing an entry whose fields are the string "{…}".
+                try { body = p.json ? JSON.parse(String(p.json)) : {}; }
+                catch { throw new Error(t('sched.cat.badJson') || 'The fields are not valid JSON.'); }
+            }
+            await runDeepLink('bmm://catalog/entry'
+                + `?mode=${encodeURIComponent(mode)}&type=${encodeURIComponent(kind)}&id=${encodeURIComponent(id)}`
+                + (mode === 'remove' ? '' : `&fields=${encodeURIComponent(JSON.stringify(body))}`));
+            break;
+        }
+
+        // The whole authored catalogue of one kind. Under `delete`, like every other step
+        // that destroys something of yours.
+        case 'catalog.delete': {
+            const kind = String(p.catType || 'app');
+            requirePerm(task, 'delete', t('sched.permDelete') || 'delete things');
+            await runDeepLink(`bmm://catalog/delete?type=${encodeURIComponent(kind)}`);
+            break;
+        }
+
+        // Set a game up to be watched.
+        //
+        // For DCS that means installing the hook, because DCS can be ASKED. For everything
+        // else it means resolving which file to watch and putting it where the next steps
+        // can read it — there is nothing to install, and pretending otherwise would be an
+        // action that reports success for doing nothing.
+        // Tasks saved before this existed still say `dcs.hook`. Falling through to the
+        // default would make them silently do nothing, which for a watcher means the whole
+        // automation stops firing with no error anywhere.
+        //
+        // @retired-action dcs.hook
+        case 'dcs.hook':
+        case 'game.watch': {
+            const game = String(p.game || (action.type === 'dcs.hook' ? 'dcs' : 'custom'));
+            if (String(p.mode || 'setup') === 'remove') {
+                if (game !== 'dcs') { toast(`${task.name}: ${t('sched.gw.nothingToRemove')}`, 'info', 6000); break; }
+                const n = Number(await invoke('dcs_remove_hook', { dir: p.dir || null }).catch(() => 0));
+                toast(`${task.name}: ${t('sched.dcsHookOff').replace('{n}', String(n))}`, 'info', 6000);
+                break;
+            }
+            let watch = String(p.path || '');
+            if (game === 'dcs') {
+                const r: any = await invoke('dcs_install_hook', { dir: p.dir || null });
+                watch = watch || String((r?.watch || [])[0] || '');
+                toast(`${task.name}: ${t('sched.dcsHookOk')
+                    .replace('{n}', String((r?.installed || []).length))}`, 'success', 8000);
+            }
+            if (!watch) {
+                // Named, and a warning. A "set up" step that quietly resolved to nothing is
+                // the reason the task never fires, and it is the hardest thing to find later.
+                toast(`${task.name}: ${t('sched.gw.noFile')}`, 'warning', 10000);
+                break;
+            }
+            // Handed to the next steps rather than only reported: the point of this action is
+            // that `text.extract` and the watch trigger use what it found.
+            ctx.text['game.watchFile'] = watch;
+            if (game !== 'dcs') toast(`${task.name}: ${t('sched.gw.ready').replace('{f}', watch.replace(/^.*[/\\]/, ''))}`, 'success', 7000);
+            break;
+        }
+
+        // Poll an address until it answers, or give up.
+        //
+        // The point is the giving up. A wait with no ceiling is a task that hangs forever
+        // and a scheduler that never runs the next one — and "still waiting" looks exactly
+        // like "working" from outside.
+        case 'wait.http': {
+            const url = String(p.url || '').trim();
+            if (!url) { toast(`${task.name}: ${t('sched.wait.noUrl')}`, 'warning', 8000); break; }
+            const everyMs = Math.max(1000, Number(p.everySeconds || 5) * 1000);
+            const untilMs = Date.now() + Math.max(everyMs, Number(p.timeoutSeconds || 300) * 1000);
+            const wantStatus = Number(p.status || 0);
+            const wantBody = String(p.bodyContains || '').trim();
+            let tries = 0;
+            let ok = false;
+            let lastStatus = 0;
+            let lastBody = '';
+            while (Date.now() < untilMs) {
+                tries += 1;
+                try {
+                    // Same command the http.request action uses. It resolves any status
+                    // rather than throwing on a 4xx/5xx, which is what makes "wait until it
+                    // stops answering 503" expressible at all.
+                    const r = await invoke('http_request', {
+                        url, method: 'GET', headers: {}, body: null,
+                        timeoutMs: Math.min(everyMs, 15000),
+                    }) as any;
+                    lastStatus = Number(r?.status || 0);
+                    lastBody = String(r?.body ?? '');
+                    // Any 2xx by default; an exact code when the task named one — a service
+                    // that answers 503 while starting is the case this exists for.
+                    ok = wantStatus ? lastStatus === wantStatus : (lastStatus >= 200 && lastStatus < 300);
+                    // And the BODY, when the task named something to look for. The common
+                    // shape is an endpoint that answers 200 throughout and says which state
+                    // it is in — on status alone that wait ends on the first poll, and the
+                    // steps after it run against a job that has not finished.
+                    if (ok && wantBody) ok = lastBody.toLowerCase().includes(wantBody.toLowerCase());
+                } catch { ok = false; }
+                if (ok) break;
+                if (Date.now() + everyMs >= untilMs) break;
+                await new Promise((r) => setTimeout(r, everyMs));
+            }
+            ctx.nums['wait.tries'] = tries;
+            ctx.nums['wait.ok'] = ok ? 1 : 0;
+            ctx.nums['http.status'] = lastStatus;
+            // What it finally answered. Waiting for a job to report "done" and then not being
+            // able to read WHICH id it finished is half an answer.
+            ctx.text['http.body'] = lastBody;
+            if (!ok) {
+                // Said out loud, with the last status. A silent give-up leaves the steps
+                // after this running against something that never came up.
+                toast(`${task.name}: ${t('sched.wait.gaveUp')
+                    .replace('{n}', String(tries)).replace('{s}', String(lastStatus || '—'))}`, 'warning', 12000);
+                if (p.stopOnTimeout !== false) throw new _StopTask(t('sched.wait.stopped'));
+            }
+            break;
+        }
+
+        // Wait for something to ring a named doorbell.
+        //
+        // `POST /api/hook` with that name wakes this up. Only rings from AFTER the wait
+        // began count, so a task that runs hourly does not fire instantly on last hour's
+        // signal.
+        case 'wait.hook': {
+            const name = String(p.name || '').trim();
+            if (!name) { toast(`${task.name}: ${t('sched.wait.noName')}`, 'warning', 8000); break; }
+            const since = Date.now();
+            const everyMs = Math.max(500, Number(p.everySeconds || 2) * 1000);
+            const untilMs = since + Math.max(everyMs, Number(p.timeoutSeconds || 300) * 1000);
+            let hits: any[] = [];
+            while (Date.now() < untilMs) {
+                hits = await (invoke('hook_poll', { name, since }) as Promise<any[]>).catch(() => []);
+                if (hits.length) break;
+                if (Date.now() + everyMs >= untilMs) break;
+                await new Promise((r) => setTimeout(r, everyMs));
+            }
+            ctx.nums['wait.ok'] = hits.length ? 1 : 0;
+            if (hits.length) {
+                // Whatever the caller sent, as text, so the next steps can read it. A
+                // doorbell that could only say "somebody rang" would need a second channel
+                // for the thing it rang about.
+                const last = hits[hits.length - 1];
+                ctx.text['hook.data'] = typeof last?.data === 'string' ? last.data : JSON.stringify(last?.data ?? null);
+            } else {
+                toast(`${task.name}: ${t('sched.wait.noSignal').replace('{h}', name)}`, 'warning', 12000);
+                if (p.stopOnTimeout !== false) throw new _StopTask(t('sched.wait.stopped'));
+            }
+            break;
+        }
+
+        case 'task.setEnabled': {
+            const id = String(p.taskId || '').trim();
+            if (!id) { toast(`${task.name}: ${t('sched.dl.noId')}`, 'warning', 7000); break; }
+            // A task cannot arm or disarm ITSELF. Disarming yourself mid-run leaves a task
+            // that is off and still running, and arming yourself is a no-op that reads as
+            // one — both are states nobody can reason about from the list.
+            if (id === task.id) { toast(`${task.name}: ${t('sched.arm.notSelf')}`, 'warning', 8000); break; }
+            requirePerm(task, 'tasks', t('sched.permTasks') || 'run or switch on other tasks');
+            const on = p.armOn !== false && p.armOn !== 0 && p.armOn !== '0';
+            const ok = await setTaskEnabled(id, on);
+            toast(`${task.name}: ${(ok ? t('sched.arm.done') : t('sched.arm.gone'))
+                .replace('{n}', id).replace('{s}', on ? t('sched.arm.on') : t('sched.arm.off'))}`,
+                ok ? 'success' : 'warning', 7000);
+            break;
+        }
+        case 'task.stop':                          // guard clause / early exit (clean)
+            throw new _StopTask(String(p.reason || ''));
+
+        // ── New script-generator actions (executed via bmm:// deeplinks) ────────
+        case 'modpack.create':   dl('modpack/create', { name: p.name, profile: p.profile }); break;
+        case 'mod.add':          dl('install', { url: p.url, name: p.name }); break;
+        // A path, or the dialog. Without one these opened a file picker — fine for a
+        // person, and on a schedule a task that waits forever for a window nobody sees.
+        case 'modlist.export':   dl('api', { method: 'POST', path: '/api/modlists/export', body: p.path ? JSON.stringify({ path: p.path }) : '' }); break;
+        case 'modlist.import':   dl('api', { method: 'POST', path: '/api/modlists/import', body: p.path ? JSON.stringify({ path: p.path }) : '' }); break;
+        case 'plugin.apply':     dl('plugin/activate', { id: p.id }); break;
+        case 'plugin.compare':   dl('plugin/compare', { id: p.id }); break;
+        case 'plugin.delete':    if (p.id) await invoke('uninstall_plugin', { pluginId: p.id }); break;
+        case 'mods.checkUpdates': dl('mod/check-updates'); break;
+        case 'mods.autoImportOmm': {
+            const n: any = await invoke('auto_import_omm');
+            toast(`${task.name}: ${t('sched.ommImported') || 'imported'} ${n} OMM mod(s)`, 'success');
+            break;
+        }
+        case 'mods.clearHistory':
+            await invoke('clear_activity_history', { profileId: p.id }); break;
+        case 'mods.exportModpack':
+            if (p.id) await invoke('export_modpack', { id: p.id, destDir: p.dir || null }); break;
+        case 'file.open':        if (p.path) await invoke('open_file', { path: p.path }); break;
+        case 'folder.open':      if (p.path) await invoke('open_folder', { path: p.path }); break;
+        // The password travels with the link. Dropping it here is what made a protected
+        // repo unreachable from a task however carefully the form was filled in.
+        // Written into the run's variables rather than printed, so the next step can
+        // compare it. Printing it would answer the question for a human reading a log and
+        // for nobody else.
+        // Same shape as app.buildInfo, and the same reason for the prefix: two of these in
+        // one task, before and after an import, is how you measure what the import brought.
+        case 'library.counts': {
+            const at = String(p.into || 'lib').trim() || 'lib';
+            const [mods, profiles, packs, plugins] = await Promise.all([
+                invoke('get_all_mods').catch(() => []) as Promise<any[]>,
+                invoke('get_profiles').catch(() => []) as Promise<any[]>,
+                invoke('load_modpacks').catch(() => []) as Promise<any[]>,
+                invoke('get_installed_plugins').catch(() => []) as Promise<any[]>,
+            ]);
+            const enabled = mods.filter((m) => m?.enabled).length;
+            ctx.nums[`${at}.mods`] = mods.length;
+            ctx.nums[`${at}.enabled`] = enabled;
+            ctx.nums[`${at}.disabled`] = mods.length - enabled;
+            ctx.nums[`${at}.profiles`] = profiles.length;
+            ctx.nums[`${at}.modpacks`] = packs.length;
+            ctx.nums[`${at}.plugins`] = plugins.length;
+            break;
+        }
+        case 'app.buildInfo': {
+            const info = await invoke('app_build_info') as Record<string, unknown>;
+            const at = String(p.into || 'bmm').trim() || 'bmm';
+            for (const [k, v] of Object.entries(info)) {
+                if (typeof v === 'boolean') ctx.nums[`${at}.${k}`] = v ? 1 : 0;
+                else ctx.text[`${at}.${k}`] = String(v);
+            }
+            break;
+        }
+        case 'repo.connect':     dl('repo/connect', { url: p.url, name: p.name, password: p.password }); break;
+        case 'repo.sync':        dl('repo/sync', { url: p.url, profile: p.profile, password: p.password }); break;
+        case 'repo.syncNow': {
+            // A REAL sync, not a deeplink. Every other repo action here only opens the
+            // UI prefilled, which is useless at 3am with nobody to press the button.
+            //
+            // The three directories are explicit parameters rather than resolved from
+            // the active profile, and that is deliberate. The sync dialog does not
+            // resolve them either — the user types or browses them — so there is no
+            // existing, tested resolution to reuse, and inventing one here would put a
+            // guess in front of `deleteExtra`. Same values, chosen by the same human,
+            // once, when the task is written.
+            if (!p.url || !p.gameDir || !p.modsDir) {
+                throw new Error(t('sched.syncMissing') || 'This sync step needs a repo URL, a destination folder and a mods folder.');
+            }
+
+            // Bind the identity key this task names to this host, BEFORE the fetch — the
+            // manifest itself is behind the gate on a protected repo, so binding after it
+            // would be binding after the request that needed it.
+            await applyCredsFor(String(p.url), p);
+
+            // Resolve which profile INSIDE the repo to install. Fetching first also
+            // answers the "repo with no repo.json" case with a real message instead of
+            // a sync that runs against nothing.
+            let info: any;
+            try {
+                info = await invoke('fetch_repo_info', {
+                    url: p.url,
+                    creatorId: await invoke('get_creator_id').catch(() => null),
+                    password: p.password || null,
+                });
+            } catch (e) {
+                throw new Error((t('sched.syncNoManifest') || 'Could not read that repo (no repo.json, or it is unreachable): {e}').replace('{e}', String(e)));
+            }
+            const repoProfiles: any[] = info?.profiles || [];
+            const wanted = String(p.repoProfile || '').trim().toLowerCase();
+            const chosen = wanted
+                ? repoProfiles.find(rp => String(rp.id).toLowerCase() === wanted || String(rp.name || '').toLowerCase() === wanted)
+                : (repoProfiles.length === 1 ? repoProfiles[0] : null);
+            if (!chosen) {
+                // Never guess which profile to install. Picking one from several would
+                // install somebody's whole mod set into a folder on a timer.
+                throw new Error((t('sched.syncPickProfile') || 'Name which repo profile to sync. Available: {list}')
+                    .replace('{list}', repoProfiles.map(rp => rp.name || rp.id).join(', ') || '—'));
+            }
+
+            // Where it installs. A task can name an existing profile, or ask for one to be
+            // made — and "made" happens exactly once: the new id replaces `newProfile` in
+            // the saved task, so the second run installs into the profile the first run
+            // created rather than beside it.
+            let targetProfileId = String(p.targetProfile || '');
+            if (!targetProfileId && p.newProfile) {
+                const wanted = String(p.newProfile).trim() || 'Repo';
+                // An existing profile of that name wins over making another. Two profiles
+                // with one name is the state nobody can undo by looking at a list.
+                const existing = (_profiles as any[]).find(
+                    (pr) => String(pr.name || '').toLowerCase() === wanted.toLowerCase());
+                if (existing) {
+                    targetProfileId = String(existing.id);
+                } else {
+                    const made = await invoke('create_profile', { payload: {
+                        name: wanted,
+                        gameName: '',
+                        gamePath: p.gameDir || '',
+                        modsPath: p.modsDir || '',
+                        backupPath: p.backupDir || '',
+                        color: '#3b82f6',
+                        icon: 'star',
+                    } }) as { id: string };
+                    targetProfileId = String(made.id);
+                    toast(`${task.name}: ${(t('sched.syncMadeProfile') || 'Created the profile \u201c{n}\u201d').replace('{n}', wanted)}`, 'success', 7000);
+                }
+                // Written back so this only ever happens once. Both fields: leaving
+                // `newProfile` set would make a renamed profile spawn a second one.
+                p.targetProfile = targetProfileId;
+                delete p.newProfile;
+                await saveTasks();
+                if ((window as any)._refreshProfilesFn) await (window as any)._refreshProfilesFn();
+            }
+
+            const summary = await invoke('sync_server_repo', { args: {
+                url: p.url,
+                creatorId: await invoke('get_creator_id').catch(() => null),
+                password: p.password || null,
+                expectedSignature: expectedRepoSignature(p.url),
+                gameDir: p.gameDir,
+                modsDir: p.modsDir,
+                backupDir: p.backupDir || '',
+                choices: [{
+                    repoProfileId: chosen.id,
+                    // An existing local profile, never null. Null WOULD mean "create new"
+                    // inside the sync, which on a schedule mints a fresh profile every
+                    // single run — so a profile the task is meant to create is created
+                    // ONCE, above, and its id written back into the task.
+                    targetLocalProfileId: targetProfileId || null,
+                    selectedModIds: null,
+                }],
+                // BOTH default OFF and stay off unless the task says otherwise. These
+                // two are what turn a sync into data loss, and a scheduled task runs
+                // when nobody is watching to stop it.
+                overwriteAll: !!p.overwriteAll,
+                deleteExtra: !!p.deleteExtra,
+                downloadLimit: parseInt(p.downloadLimit, 10) || 0,
+                unzipArchives: p.keepZipped ? false : true,
+                addRepoAsUpdateSource: true,
+            } });
+            _captureOutput(p, (summary as any)?.installed ?? '', ctx);
+            break;
+        }
+        // Rewrite repo.json for a folder that is already hosted.
+        //
+        // Real, not a deeplink: it reads the directory, writes one file and returns the diff,
+        // which is exactly what a nightly "the folder changed, refresh the index" wants — and
+        // it pairs with `repo.publishSsh` as the next step.
+        case 'repo.manifest': {
+            const dir = String(p.dir || '').trim();
+            if (!dir) { toast(`${task.name}: ${t('sched.rm.noDir')}`, 'warning', 8000); break; }
+            // The field names are the Rust struct's — `author`, not `author_name`, which is
+            // what I wrote first. serde would have dropped the unknown key silently and the
+            // manifest would have been published with no author on it.
+            const report = await invoke('generate_repo_manifest', {
+                args: {
+                    mods_dir: dir,
+                    name: String(p.name || '') || null,
+                    author: String(p.author || '') || null,
+                },
+            }) as { mods: number; added: string[]; removed: string[]; changed: string[] };
+            ctx.nums['manifest.mods'] = report.mods;
+            ctx.nums['manifest.added'] = report.added.length;
+            ctx.nums['manifest.removed'] = report.removed.length;
+            ctx.nums['manifest.changed'] = report.changed.length;
+            // `removed` is the one worth reading. A mistyped path and a deliberate removal
+            // both write a perfectly valid manifest — one of them describing an empty server.
+            toast(`${task.name}: ${t('sched.rm.done')
+                .replace('{n}', String(report.mods))
+                .replace('{a}', String(report.added.length))
+                .replace('{r}', String(report.removed.length))
+                .replace('{c}', String(report.changed.length))}`,
+                report.removed.length ? 'warning' : 'success', report.removed.length ? 12000 : 8000);
+            break;
+        }
+        case 'view.open': {
+            // `place` is `view:<id>` or `dl:<deeplink>`. A task saved before windows existed
+            // has only `id`, and still works.
+            const place = String(p.place || (p.id ? `view:${p.id}` : '')).trim();
+            if (!place) { toast(`${task.name}: ${t('sched.view.noId')}`, 'warning', 6000); break; }
+            if (place.startsWith('dl:')) {
+                const name = place.slice(3);
+                // Only the windows the picker offers. `dl:` took ANY path, query string
+                // included, and fired it as `scheduler` (trusted, no dialog) — so a task file
+                // saying `dl:api?method=POST&path=…` was the removed generic deeplink step
+                // under another name (security summary §9 #15).
+                if (!VIEW_WINDOWS.some(([w]) => w === name)) {
+                    throw new Error((t('sched.view.badWindow') || 'Not a window this step can open: {n}').replace('{n}', name));
+                }
+                dl(name, name === 'docs/open' ? { article: p.arg } : {});
+            } else {
+                dl('view/open', { id: place.replace(/^view:/, '') });
+            }
+            break;
+        }
+        // Creating one is the only of these that is not destructive, and the only one
+        // that asks for no permission. An existing profile of the same name is REUSED
+        // rather than joined by a second: two profiles with one name is a state nobody
+        // untangles from a dropdown, and a weekly task would mint one every week.
+        case 'profile.create': {
+            const name = String(p.name || '').trim();
+            if (!name) throw new Error(t('sched.prof.errNoName') || 'Name the profile to create.');
+            const existing = _profiles.find(
+                (pr) => String(pr.name || '').toLowerCase() === name.toLowerCase());
+            const into = String(p.into || 'profile');
+            if (existing) {
+                ctx.text[`${into}.id`] = String(existing.id);
+                toast(`${task.name}: ${(t('sched.prof.reused') || 'Profile “{n}” already exists — reused').replace('{n}', name)}`, 'info', 7000);
+                break;
+            }
+            const made = await invoke('create_profile', { payload: {
+                name, gameName: '', gamePath: p.gameDir || '', modsPath: p.modsDir || '',
+                backupPath: p.backupDir || '', color: '#3b82f6', icon: 'star',
+            } }) as { id: string };
+            // Left behind under a name the next step can reference. Without it a task that
+            // creates a profile has no way to say "and now activate the one you just made".
+            ctx.text[`${into}.id`] = String(made.id);
+            if ((window as any)._refreshProfilesFn) await (window as any)._refreshProfilesFn();
+            toast(`${task.name}: ${(t('sched.prof.made') || 'Created “{n}”').replace('{n}', name)}`, 'success', 7000);
+            break;
+        }
+        case 'profile.rename': {
+            const id = String(p.id || '').trim();
+            const name = String(p.name || '').trim();
+            if (!id || !name) throw new Error(t('sched.prof.errRename') || 'Say which profile, and what to call it.');
+            const cur = _profiles.find((pr) => String(pr.id) === id);
+            if (!cur) throw new Error((t('sched.prof.errGone') || 'No profile with the id {n}').replace('{n}', id));
+            // Everything else about the profile is carried through unchanged. update_profile
+            // takes a WHOLE payload, so sending only the new name would blank the three
+            // folder paths — and the profile reads snake_case while the payload is written
+            // camelCase, which is the same round-trip that has bitten this file before.
+            await invoke('update_profile', { profileId: id, payload: {
+                name, gameName: cur.game_name || '', gamePath: cur.game_path || '',
+                modsPath: cur.mods_path || '', backupPath: cur.backup_path || '',
+                color: cur.color || '#3b82f6', icon: cur.icon || 'star',
+            } });
+            if ((window as any)._refreshProfilesFn) await (window as any)._refreshProfilesFn();
+            break;
+        }
+        case 'profile.delete': {
+            const id = String(p.id || '').trim();
+            if (!id) throw new Error(t('sched.prof.errNoId') || 'Say which profile to delete.');
+            requirePerm(task, 'delete', t('sched.permDelete') || 'delete things');
+            // Deleting the ACTIVE profile does not break anything — the command falls back
+            // to the first profile left. That fallback is the problem: every later step, and
+            // every task after this one, quietly starts working on a profile nobody chose.
+            // Allowed, but only when the task says out loud that it means to.
+            const active = await invoke('get_active_profile_id').catch(() => null);
+            if (active && String(active) === id && p.evenIfActive !== true) {
+                throw new Error(t('sched.prof.errActive') || 'That is the active profile. Deleting it silently moves BMM to another one — tick “even if it is the active profile” if that is what you want.');
+            }
+            await invoke('delete_profile', { profileId: id });
+            if ((window as any)._refreshProfilesFn) await (window as any)._refreshProfilesFn();
+            break;
+        }
+        case 'mod.remove': {
+            const id = String(p.id || '').trim();
+            if (!id) throw new Error(t('sched.mod.errNoId') || 'Say which mod to remove.');
+            requirePerm(task, 'delete', t('sched.permDelete') || 'delete things');
+            // remove_mod refuses a mod that is still enabled. A person reads that message and
+            // clicks disable; an unattended task at 3am just fails, so it does the disabling
+            // itself unless told not to. Disabling is reversible, which is why this one
+            // defaults ON while deleting the files defaults OFF.
+            if (p.disableFirst !== false) {
+                const m = _mods.find((x) => String(x.id) === id);
+                if (m && m.enabled) await invoke('disable_mod', { modId: id });
+            }
+            await invoke('remove_mod', { modId: id, deleteFiles: p.deleteFiles === true });
+            break;
+        }
+        case 'modpack.delete': {
+            const id = String(p.id || '').trim();
+            if (!id) throw new Error(t('sched.mp.errNoId') || 'Say which modpack to delete.');
+            requirePerm(task, 'delete', t('sched.permDelete') || 'delete things');
+            await invoke('delete_modpack', { id });
+            break;
+        }
+        case 'repo.gen':         dl('repo/gen'); break;
+        // A REAL export. Everything the screen collects, from the task's own parameters —
+        // nothing is read from "whatever is on screen", because on a schedule there is no
+        // screen and a repo built from a stale form is worse than one not built at all.
+        case 'repo.genNow': {
+            const out = String(p.outputDir || '').trim();
+            const author = String(p.authorName || '').trim().slice(0, 25);
+            const ids: string[] = Array.isArray(p.profileIds) ? p.profileIds.map(String) : [];
+            if (!out) throw new Error(t('sched.gen.errNoOut') || 'Name the folder to write the repo into.');
+            if (!author) throw new Error(t('sched.gen.errNoAuthor') || 'A repo carries an author name.');
+            // Never "all of them" as a fallback. A task that quietly published every profile
+            // on the machine because a box was left unticked is the accident this refuses.
+            if (!ids.length) throw new Error(t('sched.gen.errNoProfiles') || 'Tick at least one profile to publish.');
+            const gone = ids.filter((id) => !(_profiles as any[]).some((pr) => String(pr.id) === id));
+            if (gone.length) {
+                // Named rather than skipped: a profile deleted since the task was written
+                // means the repo it publishes is not the repo somebody configured.
+                throw new Error((t('sched.gen.errGone') || 'Profile(s) no longer here: {n}').replace('{n}', gone.join(', ')));
+            }
+            await invoke('export_server_repo', {
+                profileIds: ids,
+                outputDir: out,
+                authorName: author,
+                seed: String(p.seed || '').trim() || null,
+                modpacksShareConfig: null,
+                zipOutput: p.zipOutput === true,
+                zipMods: p.zipMods === true,
+                // deflate / zstd / bzip2 / stored; the command refuses anything else before
+                // it copies a file, so a typo here fails the task rather than the repo.
+                compression: String(p.compression || '').trim() || null,
+                serverOptions: null,
+            });
+            // Whatever "Include in the repo\u2026" is holding goes in, the same as when a
+            // person generates one.
+            try {
+                const { applyPendingExtras } = await import('../repo/repo-pending.js');
+                const n = await applyPendingExtras(out, (m, k) => toast(m, k));
+                if (n) toast(`${task.name}: ${t('repo.extras.applied').replace('{n}', String(n))}`, 'success', 6000);
+            } catch { /* the repo is built; an extra must not undo that */ }
+            toast(`${task.name}: ${(t('sched.gen.done') || 'Repo written to {n}').replace('{n}', out)}`, 'success', 8000);
+            break;
+        }
+        case 'repo.update':      dl('repo/update', { dir: p.dir }); break;
+        case 'repo.host':        dl('repo/host', { dir: p.dir, port: p.port }); break;
+        case 'repo.publishSsh': {
+            const { publishStoredTarget } = await import('../repo/repo-ssh.js');
+            // WHICH server. BMM has held several named targets for a while and this action
+            // always used the first one, so somebody with a staging box and a live box could
+            // publish to exactly one of them from a task — and could not tell which.
+            const sent = await publishStoredTarget(String(p.dir || ''), String(p.target || '') || undefined);
+            ctx.nums['ssh.files'] = sent;
+            _captureOutput(p, String(sent), ctx);
+            break;
+        }
+        // The mirror of the above: keep a local folder in step with what the server serves.
+        // No confirmation here, unlike the button and the deeplink — a scheduled task IS the
+        // standing consent, and a prompt at 04:00 is a task that never finishes.
+        case 'repo.fetchSsh': {
+            const { pullStoredTarget } = await import('../repo/repo-ssh.js');
+            const got = await pullStoredTarget(String(p.dir || ''), String(p.target || '') || undefined);
+            ctx.nums['ssh.files'] = got;
+            _captureOutput(p, String(got), ctx);
+            break;
+        }
+        case 'app.install':      dl('app/install', { id: p.id, url: p.url, title: p.title }); break;
+        case 'launchpack.run':   await invoke('run_launch_pack', { id: p.id }); break;
+        case 'task.run':
+            // Runs the sub-task to completion (it awaits), then records whether it
+            // succeeded into ctx so a following IF / repeat can branch on the result
+            // ("if task responded / did X"): value source `lasttask.ok` = 1 | 0.
+            if (p.id) {
+                requirePerm(task, 'tasks', t('sched.permTasks') || 'run or switch on other tasks');
+                await runTaskById(String(p.id));
+                const sub = _tasks.find(tk => tk.id === p.id);
+                ctx.nums['lasttask.ok'] = sub && sub.lastResult === 'ok' ? 1 : 0;
+                if (sub) toast(`${t('sched.subTaskDone') || 'Sub-task finished'}: ${sub.name} → ${sub.lastResult}`, ctx.nums['lasttask.ok'] ? 'info' : 'warning');
+            }
+            break;
+        case 'task.spawn': {
+            // Starts the sub-task and moves on. `task.run` awaits, which is right when the
+            // next step depends on the result — and wrong for anything long you only wanted
+            // to set going.
+            //
+            // REFUSES a task that is already running, itself included. With `await`, a task
+            // that runs itself recurses and eventually blows the stack: bad, bounded, and
+            // visible. Without `await` it would spawn unbounded concurrent copies of itself
+            // instantly, and the only symptom would be the machine getting slower. That
+            // guard is what makes this action safe to offer at all.
+            const id = String(p.id || '');
+            if (!id) break;
+            requirePerm(task, 'tasks', t('sched.permTasks') || 'run or switch on other tasks');
+            if (_running.has(id)) {
+                toast(t('sched.spawnBusy') || 'That task is already running — not started again.', 'warning');
+                ctx.nums['lasttask.spawned'] = 0;
+                break;
+            }
+            // No await, and the rejection is handled here: an unhandled one from a detached
+            // promise surfaces as a console error with no task name attached to it.
+            void runTaskById(id).catch(() => { /* the sub-task records its own lastResult */ });
+            ctx.nums['lasttask.spawned'] = 1;
+            const spawned = _tasks.find(tk => tk.id === id);
+            toast(`${t('sched.spawned') || 'Started in the background'}: ${spawned?.name || id}`, 'info');
+            break;
+        }
+        case 'list.set': {
+            // Replaces the whole list. `list.push` is the one that appends — a "set" that
+            // quietly appended would make a task run twice produce a list twice as long.
+            const name = String(p.name || 'list');
+            ctx.lists = ctx.lists || {};
+            ctx.lists[name] = parseList(p.value, String(p.sep || ','));
+            // Two writes on purpose. The per-list name is for text substitution
+            // ({list.mods.length} in a toast); `list.length` is the LAST list touched and is
+            // the one a condition can pick, because VALUE_SOURCES is a fixed list and a
+            // template-literal key can never appear in it. Without the fixed one, this value
+            // is written and no condition can read it — and check-scheduler-vars cannot see a
+            // dynamic key to tell you so.
+            ctx.nums[`list.${name}.length`] = ctx.lists[name].length;
+            ctx.nums['list.length'] = ctx.lists[name].length;
+            break;
+        }
+        case 'list.push': {
+            const name = String(p.name || 'list');
+            ctx.lists = ctx.lists || {};
+            const v = String(p.value ?? '').trim();
+            if (v) (ctx.lists[name] = ctx.lists[name] || []).push(v);
+            ctx.nums[`list.${name}.length`] = (ctx.lists[name] || []).length;
+            ctx.nums['list.length'] = (ctx.lists[name] || []).length;
+            break;
+        }
+        case 'list.clear': {
+            const name = String(p.name || 'list');
+            ctx.lists = ctx.lists || {};
+            ctx.lists[name] = [];
+            ctx.nums[`list.${name}.length`] = 0;
+            ctx.nums['list.length'] = 0;
+            break;
+        }
+        case 'map.set': {
+            // Same two-writes trick as list.set, for the same reason: the per-name key is for
+            // substitution ({map.urls.size} in a toast), and the fixed `map.size` is the one a
+            // condition can pick, because VALUE_SOURCES is a literal list and a template key
+            // can never appear in it.
+            const name = String(p.name || 'map');
+            const key = String(p.key ?? '').trim();
+            ctx.maps = ctx.maps || {};
+            const m = (ctx.maps[name] = ctx.maps[name] || {});
+            // An empty key is refused rather than stored. `m[''] = v` is a real entry that no
+            // `map.get` can ever ask for, and it would inflate the size a condition compares.
+            if (!key) throw new Error(t('sched.map.noKey') || 'This step needs a key.');
+            m[key] = String(p.value ?? '');
+            ctx.nums[`map.${name}.size`] = Object.keys(m).length;
+            ctx.nums['map.size'] = Object.keys(m).length;
+            break;
+        }
+        case 'id.of': {
+            // What a thing IS, as a variable an automation can compare.
+            //
+            // The local id is already knowable — the task was written with it in hand. The
+            // content id is the one worth asking for: "is the pack on this machine the pack
+            // I published", asked without downloading anything or trusting a name.
+            const into = String(p.into || '').trim();
+            if (!VAR_NAME_RE.test(into)) {
+                throw new Error((t('sched.var.badName') || 'Not a usable variable name: {n}').replace('{n}', into || '(empty)'));
+            }
+            const kind = String(p.kind || '').trim();
+            const id = String(p.id || '').trim();
+            // Looked up by id in Rust, where each kind is defined once. Deliberately not
+            // computed here from whatever the frontend happens to be holding: two
+            // implementations of a content id is the failure the whole thing exists to
+            // avoid.
+            const cid = await invoke('content_id_of', { kind, id }) as string;
+            ctx.text[into] = cid;
+            break;
+        }
+        case 'map.get': {
+            const name = String(p.name || 'map');
+            const key = String(p.key ?? '').trim();
+            const into = String(p.into || '').trim();
+            if (!VAR_NAME_RE.test(into)) {
+                throw new Error((t('sched.var.badName') || 'Not a usable variable name: {n}').replace('{n}', into || '(empty)'));
+            }
+            const m = (ctx.maps && ctx.maps[name]) || {};
+            const hit = Object.prototype.hasOwnProperty.call(m, key);
+            // A missing key writes an EMPTY value rather than leaving the target untouched.
+            // Leaving it alone means a second read silently keeps the first read's answer, and
+            // the task carries on with a value that belongs to another key entirely — the
+            // hardest of the two to debug. `map.<name>.hit` says which happened, so a task
+            // that cares can branch on it instead of guessing from an empty string.
+            const value = hit ? m[key] : '';
+            ctx.text[into] = value;
+            const n = parseFloat(value);
+            ctx.nums[into] = Number.isFinite(n) ? n : value.length;
+            ctx.nums[`map.${name}.hit`] = hit ? 1 : 0;
+            ctx.nums['map.hit'] = hit ? 1 : 0;
+            break;
+        }
+        case 'map.clear': {
+            const name = String(p.name || 'map');
+            ctx.maps = ctx.maps || {};
+            ctx.maps[name] = {};
+            ctx.nums[`map.${name}.size`] = 0;
+            ctx.nums['map.size'] = 0;
+            break;
+        }
+        case 'telemetry.consent': dl('telemetry/consent', { enabled: b(p.enabled) }); break;
+        case 'telemetry.set':    dl('telemetry/set', { replay: b(p.replay), full: b(p.full), bench: b(p.bench) }); break;
+        case 'recorder.set':     dl('recorder/set', { on: b(p.on), full: b(p.full), rust: b(p.rust), js: b(p.js) }); break;
+        case 'replay.export':    dl('replay/export', { path: p.path }); break;
+        case 'replay.import':    dl('replay/import', { path: p.path, url: p.url }); break;
+        case 'discord.rpc':      dl('discord/rpc', { enabled: b(p.enabled) }); break;
+        case 'data.exportAuto':  dl('data/export-auto', { dir: p.dir, name: p.name, increment: p.increment }); break;
+
+        // The real backup: the same archive the Export data screen writes, with the same
+        // sections and the same lock.
+        case 'data.backup': {
+            const { writeBackup, backupDestPath, DEFAULT_SECTIONS } = await import('./data-backup.js');
+            const dir = String(p.dir || '');
+            if (!dir) { toast(`${task.name}: ${t('sched.bk.noDir')}`, 'warning', 8000); break; }
+            const sections = { ...DEFAULT_SECTIONS, ...(p.sections || {}) };
+            // Refused HERE as well as inside writeBackup, so the message names the task. A
+            // nightly job writing unlocked private keys to a synced folder would do it every
+            // night, and the first anybody would know is when it had.
+            if (sections.identityKeys && !p.passphrase) {
+                toast(`${task.name}: ${t('settings.exportKeysNeedPass')}`, 'warning', 12000);
+                break;
+            }
+            const dest = await backupDestPath(dir, p.name, p.increment, 'DATABMM');
+            const r = await writeBackup(dest, sections, p.passphrase || null);
+            const took = r.sections.filter((x) => x.files > 0).length;
+            ctx.nums['backup.bytes'] = r.bytes;
+            ctx.text['backup.path'] = r.path;
+            toast(`${task.name}: ${t('sched.bk.done')
+                .replace('{mb}', (r.bytes / 1048576).toFixed(1))
+                .replace('{n}', String(took))
+                .replace('{f}', String(r.path).replace(/^.*[/\\]/, ''))}`, 'success', 9000);
+            break;
+        }
+        case 'restart':          dl('restart'); break;
+        case 'app.checkUpdate': {
+            const info: any = await invoke('check_for_update', { includePrerelease: !!p.enabled });
+            ctx.nums['update.available'] = info?.has_update ? 1 : 0;
+            if (info?.has_update) toast(`${task.name}: ${t('sched.updateAvail') || 'update available'} — v${info.latest_version}`, 'info');
+            break;
+        }
+        case 'system.clearApiLog': await invoke('clear_api_log'); break;
+        case 'system.clearResourceRecords': await invoke('clear_resource_records'); break;
+        case 'perf.diskSpace': {
+            const mount = p.mountPoint || (await firstDiskMount());
+            if (!mount) throw new Error('No disk to check');
+            const r: any = await invoke('check_disk_space', { path: mount });
+            ctx.nums['disk.free_gb'] = Math.round((r?.available_bytes || 0) / 1073741824 * 10) / 10;
+            ctx.nums['disk.total_gb'] = Math.round((r?.total_bytes || 0) / 1073741824 * 10) / 10;
+            ctx.nums['disk.free_percent'] = Math.round((r?.free_percent || 0) * 10) / 10;
+            toast(`${task.name}: ${mount} — ${ctx.nums['disk.free_gb']} GB ${t('sched.free') || 'free'} (${ctx.nums['disk.free_percent']}%)`, 'info');
+            break;
+        }
+        // ── Upkeep (sched-maint.ts) ──────────────────────────────────────────────────────
+        //
+        // Each one answers in numbers a condition can read, and in a line (`*.summary`) the dry
+        // run shows. `dryRun` only measures: nothing is deleted, downloaded, installed, started.
+        case 'repos.checkFollowed': {
+            const mode = ['report', 'ask', 'auto'].includes(String(p.mode)) ? String(p.mode) : 'report';
+            const dry = p.dryRun === true;
+            const M = await import('./sched-maint.js');
+            const r = await M.checkFollowedRepos(dry ? 'report' : mode, parseList(p.only, '\n'), () => !!_running.get(task.id)?.cancel);
+            ctx.nums['repos.checked'] = r.checked;
+            ctx.nums['repos.updates'] = r.updates;
+            ctx.nums['repos.errors'] = r.errors;
+            ctx.text['repos.list'] = r.lines.join('\n');
+            const msg = t('sched.rf.done', { n: String(r.checked), u: String(r.updates), e: String(r.errors) });
+            ctx.text['repos.summary'] = r.applied ? `${msg} · ${t('sched.rf.applied')}` : msg;
+            if (dry) break;
+            if (mode === 'ask' && r.updates > 0) {
+                // Asked with the count in front of the person; « yes » takes them to the follow
+                // list, where each repo's own sync is one click — the task never installs here.
+                const go = await showConfirm(t('sched.rf.askTitle'), `${msg}\n\n${r.lines.join('\n')}\n\n${t('sched.rf.askBody')}`, false);
+                if (go) await navStep('nav.highlight', task, ctx, { page: 'repo', tab: 'sync', target: '#repo-follow-card', note: t('sched.rf.askHere'), seconds: 8 });
+            } else if (p.notify !== false && (r.updates > 0 || r.errors > 0 || mode === 'report')) {
+                toast(`${task.name}: ${ctx.text['repos.summary']}`, r.errors ? 'warning' : r.updates ? 'info' : 'success', 9000);
+            }
+            break;
+        }
+        case 'catalog.updates': {
+            const mode = ['check', 'download', 'install'].includes(String(p.mode)) ? String(p.mode) : 'check';
+            const dry = p.dryRun === true;
+            if (mode !== 'check' && !dry) requirePerm(task, 'network', t('sched.permNetwork'));
+            // Only what was ticked when the task was written. Nothing ticked is a task that was
+            // never set up, and it says so instead of quietly checking nothing.
+            const keys = parseList(p.items, '\n');
+            if (!keys.length) throw new Error(t('sched.cu.noneChosen'));
+            const M = await import('./sched-maint.js');
+            const all = await M.listSubscribed();
+            const items = all.filter((i) => keys.includes(i.key));
+            const gone = keys.filter((k) => !all.some((i) => i.key === k));
+            const { updates, errors } = await M.findCatalogUpdates(items);
+            ctx.nums['catalog.updates'] = updates.length;
+            const lines: string[] = [...errors, ...gone.map((k) => t('sched.cu.gone', { k }))];
+            const paths: string[] = [];
+            let done = 0;
+            let skipped = 0;
+            for (const u of updates) {
+                lines.push(`${u.item.name}: ${u.item.version || '?'} → ${u.version}`);
+                if (dry || mode === 'check') continue;
+                if (_running.get(task.id)?.cancel) break;
+                const cantFetch = M.unattendedProblem(u, false);
+                if (cantFetch) { skipped++; lines.push(`  ${cantFetch}`); continue; }
+                const cantInstall = mode === 'install' ? M.unattendedProblem(u, true) : 'download';
+                try {
+                    if (!cantInstall) {
+                        await M.installCatalogUpdate(u, task.id);
+                        lines.push(`  ${t('sched.cu.installed')}`);
+                    } else {
+                        const out = task.outputDir === '-' ? null : (task.outputDir || null);
+                        const path = await M.downloadCatalogUpdate(u, task.id, out);
+                        paths.push(path);
+                        lines.push(`  ${path}${cantInstall !== 'download' ? ` (${cantInstall})` : ''}`);
+                    }
+                    done++;
+                } catch (e) {
+                    skipped++;
+                    lines.push(`  ${netErrorText(e)}`);
+                }
+            }
+            ctx.nums['catalog.done'] = done;
+            ctx.nums['catalog.skipped'] = skipped;
+            ctx.text['catalog.updateList'] = lines.join('\n');
+            ctx.text['catalog.paths'] = paths.join('\n');
+            const msg = mode === 'check' || dry
+                ? t('sched.cu.found', { n: String(updates.length), of: String(items.length) })
+                : t('sched.cu.done', { n: String(updates.length), d: String(done), s: String(skipped) });
+            ctx.text['catalog.summary'] = msg;
+            if (!dry && p.notify !== false && (updates.length || errors.length || gone.length)) {
+                toast(`${task.name}: ${msg}`, skipped || errors.length || gone.length ? 'warning' : 'info', 10000);
+            }
+            break;
+        }
+        case 'repo.server': {
+            const want = p.state === 'stop' ? 'stop' : 'start';
+            const dry = p.dryRun === true;
+            const status = await invoke('get_repo_server_status').catch(() => null) as { url?: string } | null;
+            const running = !!status;
+            if (dry || (want === 'start') === running) {
+                ctx.nums['server.running'] = running ? 1 : 0;
+                ctx.text['server.summary'] = (want === 'start') === running
+                    ? t(running ? 'sched.srv.already' : 'sched.srv.alreadyOff')
+                    : t(want === 'start' ? 'sched.srv.wouldStart' : 'sched.srv.wouldStop', { d: String(p.dir || '') });
+                break;
+            }
+            if (want === 'stop') {
+                await invoke('stop_repo_server');
+            } else {
+                // Opening a port on this machine is reaching the network: granted, not assumed.
+                requirePerm(task, 'network', t('sched.permNetwork'));
+                const dir = String(p.dir || '').trim();
+                if (!dir) throw new Error(t('sched.srv.noDir'));
+                await invoke('start_repo_server', {
+                    path: dir, port: clampInt(p.port, 1, 65535, 8000), uploadLimit: clampInt(p.uploadLimit, 0, 1_000_000, 0),
+                    downloadPassword: String(p.password || '') || null, authorizedKeys: null,
+                });
+            }
+            // The Server Repo screen shows what runs; it has to hear about a change it did not make.
+            document.dispatchEvent(new CustomEvent('bmm:repo-server-changed'));
+            ctx.nums['server.running'] = want === 'start' ? 1 : 0;
+            ctx.text['server.summary'] = t(want === 'start' ? 'sched.srv.started' : 'sched.srv.stopped');
+            if (p.notify !== false) toast(`${task.name}: ${ctx.text['server.summary']}`, 'success', 6000);
+            break;
+        }
+        case 'mods.verifyIntegrity': {
+            const scope = p.scope === 'hashes' ? 'hashes' : 'game';
+            const M = await import('./sched-maint.js');
+            const r = await M.verifyIntegrity(scope, p.enabledOnly !== false, clampInt(p.max, 1, 5000, 500), () => !!_running.get(task.id)?.cancel);
+            ctx.nums['integrity.checked'] = r.checked;
+            ctx.nums['integrity.problems'] = r.problems;
+            ctx.text['integrity.list'] = r.lines.join('\n');
+            ctx.text['integrity.summary'] = scope === 'game'
+                ? t('sched.iv.gameDone', { n: String(r.problems) })
+                : t('sched.iv.hashDone', { c: String(r.checked), n: String(r.problems) });
+            if (p.dryRun !== true && p.notify !== false && (r.problems > 0 || p.notifyClean === true)) {
+                toast(`${task.name}: ${ctx.text['integrity.summary']}`, r.problems ? 'warning' : 'success', 10000);
+            }
+            break;
+        }
+        case 'cache.clean': {
+            const dry = p.dryRun === true;
+            if (!dry) requirePerm(task, 'delete', t('sched.permDelete'));
+            const M = await import('./sched-maint.js');
+            const targets = parseList(p.targets).length ? parseList(p.targets) : M.CACHE_DEFAULT;
+            const r = await M.cleanCaches(targets, Number(p.minMb) || 0, dry);
+            ctx.nums['cache.bytes'] = r.total;
+            ctx.nums['cache.freed'] = r.freed;
+            ctx.text['cache.list'] = [...r.lines, ...r.errors].join('\n');
+            ctx.text['cache.summary'] = dry || !r.freed
+                ? t('sched.cc.found', { size: M.humanBytes(r.total) })
+                : t('sched.cc.freed', { size: M.humanBytes(r.freed) });
+            if (!dry && p.notify !== false && (r.freed > 0 || r.errors.length)) {
+                toast(`${task.name}: ${ctx.text['cache.summary']}`, r.errors.length ? 'warning' : 'success', 8000);
+            }
+            break;
+        }
+        case 'logs.rotate': {
+            const dry = p.dryRun === true;
+            if (!dry) requirePerm(task, 'delete', t('sched.permDelete'));
+            const r = await invoke('sched_logs_rotate', {
+                keepDays: clampInt(p.keepDays, 1, 3650, 30), maxKb: clampInt(p.maxKb, 16, 1_048_576, 1024), dryRun: dry,
+            }) as { rotated: number; deleted: number; freedBytes: number; errors: string[]; items: { path: string; action: string }[] };
+            ctx.nums['logs.rotated'] = r.rotated;
+            ctx.nums['logs.deleted'] = r.deleted;
+            ctx.nums['logs.freed'] = r.freedBytes;
+            ctx.text['logs.list'] = r.items.map((i) => `${i.action}: ${i.path}`).concat(r.errors).join('\n');
+            const { humanBytes } = await import('./sched-maint.js');
+            ctx.text['logs.summary'] = t(dry ? 'sched.lr.would' : 'sched.lr.done', { r: String(r.rotated), d: String(r.deleted), size: humanBytes(r.freedBytes) });
+            if (!dry && p.notify === true) toast(`${task.name}: ${ctx.text['logs.summary']}`, r.errors.length ? 'warning' : 'success', 7000);
+            break;
+        }
+        case 'disk.report': {
+            const M = await import('./sched-maint.js');
+            const r = await M.diskReport(clampInt(p.top, 1, 100, 10));
+            ctx.nums['disk.used_gb'] = Math.round(r.total / 1073741824 * 10) / 10;
+            ctx.nums['disk.profiles'] = r.profiles;
+            ctx.text['disk.top'] = r.top.join('\n');
+            ctx.text['disk.summary'] = t('sched.du.done', { size: M.humanBytes(r.total), n: String(r.profiles) });
+            // The report is a file in the task's own folder, so last week's can be compared with
+            // this week's; `write: false` keeps only the variables.
+            if (p.dryRun !== true && p.write !== false && task.outputDir !== '-') {
+                const path = await invoke('task_write_file', {
+                    taskId: task.id, outputDir: task.outputDir || null,
+                    path: String(p.file || 'disk-usage.md'), text: r.markdown, append: false,
+                });
+                ctx.text['disk.reportPath'] = String(path);
+            }
+            if (p.dryRun !== true && p.notify !== false) toast(`${task.name}: ${ctx.text['disk.summary']}`, 'info', 8000);
+            break;
+        }
+        // ── The catalogue and the local API ─────────────────────────────────────────────
+        case 'catalog.install': {
+            // Installing downloads: granted, not assumed. The catalogue's own unattended rules
+            // (https, a published SHA-256, a plugin lands disabled, a theme is never applied)
+            // are applied by catalogInstall itself, for a task exactly as for a plugin.
+            requirePerm(task, 'network', t('sched.permNetwork'));
+            const kind = String(p.kind || 'app');
+            const id = String(p.id || '').trim();
+            const { catalogInstall } = await import('../catalogs/catalog-actions.js');
+            const r = await catalogInstall(kind as any, id, { source: 'task', taskId: task.id });
+            ctx.nums['catalog.installed'] = r.ok ? 1 : 0;
+            ctx.text['catalog.result'] = r.ok ? t('sched.ci.done', { id: String(r.installed || id) }) : `${t(r.reason || 'catalog.act.failed')}${r.detail ? ` (${r.detail})` : ''}`;
+            if (!r.ok && p.onFail !== 'continue') throw new Error(ctx.text['catalog.result']);
+            if (p.notify !== false) toast(`${task.name}: ${ctx.text['catalog.result']}`, r.ok ? 'success' : 'warning', 8000);
+            break;
+        }
+        case 'api.call': {
+            // A route of the local API reaches anything the app exposes, which is what the
+            // deeplink grant already means; the call goes through the API server, so the route's
+            // own validation and limits apply as for any client.
+            requirePerm(task, 'deeplink', t('sched.permDeeplink'));
+            const method = String(p.method || 'GET').toUpperCase();
+            const path = String(p.path || '').trim();
+            if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(method) || !/^\/api\/[\w\-./:?=&%]*$/.test(path)) {
+                throw new Error(t('sched.api.badRoute', { r: `${method} ${path}`.slice(0, 120) }));
+            }
+            if (!apiRunning()) throw new Error(t('sched.api.off'));
+            const body = method === 'GET' ? '' : String(p.body || '').trim();
+            if (body) { try { JSON.parse(body); } catch { throw new Error(t('sched.api.badJson')); } }
+            const token = String(await invoke('get_api_token').catch(() => ''));
+            const res = await fetch(apiBase() + path, {
+                method,
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: body || undefined,
+            });
+            const text = await res.text().catch(() => '');
+            ctx.nums['api.status'] = res.status;
+            ctx.nums['api.ok'] = res.ok ? 1 : 0;
+            ctx.text['api.body'] = text.slice(0, 4000);
+            if (!res.ok && p.anyStatus !== true) throw new Error(t('sched.api.failed', { s: String(res.status) }));
+            break;
+        }
+        // ── Navigation (sched-nav.ts) ────────────────────────────────────────────────────
+        //
+        // Showing needs nothing; opening a dialog and clicking need `navigate`. The allow-lists
+        // and the element guard are in sched-nav-model.ts and apply whoever runs the step.
+        case 'nav.page':
+            await navStep(action.type, task, ctx, { page: p.page, tab: p.tab, note: p.note, seconds: p.seconds });
+            break;
+        case 'nav.settingsCard':
+            await navStep(action.type, task, ctx, { card: p.card, note: p.note, seconds: p.seconds });
+            break;
+        case 'nav.item':
+            await navStep(action.type, task, ctx, { kind: p.kind, id: p.id, note: p.note, seconds: p.seconds, onMissing: p.onMissing });
+            break;
+        case 'nav.highlight':
+            await navStep(action.type, task, ctx, { target: p.target, page: p.page, tab: p.tab, note: p.note, seconds: p.seconds, waitSec: p.waitSec, onMissing: p.onMissing });
+            break;
+        case 'nav.waitFor':
+            await navStep(action.type, task, ctx, { target: p.target, timeoutSec: p.timeoutSec, onTimeout: p.onTimeout });
+            break;
+        case 'nav.message':
+            await navStep(action.type, task, ctx, { title: p.title, message: p.message, target: p.target, waitOk: p.waitOk, okLabel: p.okLabel, seconds: p.seconds });
+            break;
+        case 'nav.modal':
+            requirePerm(task, 'navigate', t('sched.permNavigate'));
+            await navStep(action.type, task, ctx, { modal: p.modal });
+            break;
+        case 'nav.click':
+            requirePerm(task, 'navigate', t('sched.permNavigate'));
+            await navStep(action.type, task, ctx, { control: p.control });
+            break;
+        case 'open.url': {
+            const u = String(p.url || '');
+            if (u) { try { await (window as any).__TAURI__?.shell?.open?.(u); } catch { window.open(u, '_blank'); } }
+            break;
+        }
+
+        // ── Packages and games (sched-pkg.ts). The permission is asked HERE, in the runner's own
+        //    words, before the module runs; the module asks the same rule again through `env`.
+        case 'pkg.install': {
+            requirePerm(task, 'files', t('sched.permFiles'));
+            if (p.dryRun === true) break;
+            await (await import('./sched-pkg.js')).runPkgInstall(p, pkgEnv(task, ctx));
+            break;
+        }
+        case 'pkg.verify':
+            await (await import('./sched-pkg.js')).runPkgVerify(p, pkgEnv(task, ctx));
+            break;
+        case 'modlist.verify':
+            await (await import('./sched-pkg.js')).runListVerify(p, pkgEnv(task, ctx));
+            break;
+        case 'gate.report': {
+            requirePerm(task, 'files', t('sched.permFiles'));
+            if (p.dryRun === true) break;
+            await (await import('./sched-pkg.js')).runGateReport(p, pkgEnv(task, ctx));
+            break;
+        }
+        case 'game.launch': {
+            requirePerm(task, 'command', t('sched.permRunCommand'));
+            if (p.dryRun === true) break;
+            await (await import('./sched-pkg.js')).runGameLaunch(p, pkgEnv(task, ctx));
+            break;
+        }
+        case 'ui.ask':
+            if (p.dryRun === true) break;
+            await (await import('./sched-pkg.js')).runAsk(p, pkgEnv(task, ctx));
+            break;
+
+        default:
+            throw new Error(`Unknown action: ${action.type}`);
+    }
+}
+
+/** What a package step (sched-pkg.ts) borrows from the runner: its permission rule and toasts. */
+function pkgEnv(task: Task, ctx: RunCtx): PkgEnv {
+    return {
+        task, ctx,
+        requirePerm: (key, label) => requirePerm(task, key, label),
+        toast: (msg, kind, ms) => toast(msg, kind as any, ms),
+    };
+}
+
+/**
+ * Run one navigation step for a task (sched-nav.ts). `canAct` is the task's own `navigate`
+ * grant; the two acting cases have already asked requirePerm, this passes the same answer down so
+ * the module refuses on its own too. What the step reached is left in {nav.ok} and {nav.note}.
+ */
+async function navStep(type: string, task: Task, ctx: RunCtx, p: Record<string, any>): Promise<void> {
+    const { runNav } = await import('./sched-nav.js');
+    const r = await runNav(type, p, {
+        preview: false,
+        canAct: hasPerm(task, 'navigate'),
+        cancelled: () => !!_running.get(task.id)?.cancel,
+    });
+    ctx.nums['nav.ok'] = r.ok ? 1 : 0;
+    ctx.text['nav.note'] = r.note;
+}
+
+/**
+ * Measure one step without its effect, for the dry run (sched-dryrun.ts).
+ *
+ * Only the steps listed in DRY_MEASURED come here, and each is run with `dryRun: true` — the
+ * same case as the real run, which reads that flag and stops before deleting, downloading,
+ * installing or starting anything. The line it leaves in `*.summary` is the answer. Toasts are
+ * the real run's business: every measured case is silent under `dryRun`.
+ */
+export async function dryRunAction(action: { type: string; params: Record<string, any> }, task: { id?: string; name?: string; outputDir?: string; perms?: Record<string, boolean>; pkg?: TaskPkg }): Promise<string> {
+    const ctx: RunCtx = { nums: {}, text: {} };
+    const t0: Task = {
+        id: task.id || 'dry-run', name: task.name || '', enabled: false, trigger: { type: 'manual' }, steps: [],
+        allowCustomCommands: false, perms: { ...(task.perms || {}) }, outputDir: task.outputDir, pkg: task.pkg,
+    };
+    await runAction({ type: action.type, params: { ...(action.params || {}), dryRun: true, notify: false } }, t0, ctx);
+    const key = Object.keys(ctx.text).find((k) => k.endsWith('.summary'));
+    if (key) return ctx.text[key];
+    if (action.type === 'perf.diskSpace') return `${ctx.nums['disk.free_gb']} GB (${ctx.nums['disk.free_percent']}%)`;
+    return Object.entries(ctx.nums).map(([k, v]) => `${k} = ${v}`).join(' · ');
+}
+
+/**
+ * What the dry run (sched-dryrun.ts) needs from the scheduler: its step names, its measuring
+ * call and its permission rule. `cover` is the dialog to hide while the navigation preview plays
+ * (the task editor, the template gallery), so the pages it opens are actually visible.
+ */
+export function dryHost(cover?: HTMLElement | null): {
+    stepLabel: (step: any) => string;
+    measure: (action: { type: string; params: Record<string, any> }, task: any) => Promise<string>;
+    hasPerm: (task: any, key: string) => boolean;
+    beforePlay: () => void;
+    afterPlay: () => void;
+} {
+    let wasOpen = false;
+    return {
+        stepLabel: (step) => stepLabel(step as Step),
+        measure: (action, task) => dryRunAction(action, task),
+        hasPerm: (task, key) => hasPerm(task as Task, key as keyof TaskPerms),
+        beforePlay: () => { wasOpen = !!cover?.classList.contains('open'); if (wasOpen) cover?.classList.remove('open'); },
+        afterPlay: () => { if (wasOpen) cover?.classList.add('open'); },
+    };
+}
+
+/** Open the dry run of a task the editor is not showing (the task builder, the task list). */
+export async function openTaskDryRun(task: Partial<Task>, cover?: HTMLElement | null): Promise<void> {
+    const { openDryRun } = await import('./sched-dryrun.js');
+    openDryRun({ steps: [], ...(task as any) }, dryHost(cover));
+}
+
+/**
+ * Export the task being edited: as a .bmmpa (to share or ship in a plugin), as .bmmscript text,
+ * or as a SCRIPT that runs outside BMM, written by Plugins & API's script engine
+ * (core/script-engine.ts). One builder, three outputs: the steps a script cannot carry (a
+ * condition, a navigation, an upkeep step) become comments that say so, listed before saving.
+ */
+async function openExportDialog(): Promise<void> {
+    const task = JSON.parse(JSON.stringify(_draft)) as Task;
+    const engine = scriptEngine();
+    const { openModal } = await import('../../ui/modal-shell.js');
+    const body = document.createElement('div');
+    const formats = engine?.formats || [];
+    body.innerHTML = `
+        <p class="sdr-lede">${escHtml(t('sched.ex.lede'))}</p>
+        <div class="spg-opts" role="radiogroup">
+            <label class="sched-opt"><input type="radio" name="sex-kind" value="bmmpa"${task.pkg ? '' : ' checked'}><div><b>${escHtml(t('sched.ex.bmmpa'))}</b><span>${escHtml(t('sched.ex.bmmpaD'))}</span></div></label>
+            <label class="sched-opt"><input type="radio" name="sex-kind" value="package"${task.pkg ? ' checked' : ''}><div><b>${escHtml(t('sched.ex.package'))}</b><span>${escHtml(task.pkg ? t('sched.ex.packageD') : t('sched.ex.packageNone'))}</span></div></label>
+            <label class="sched-opt"><input type="radio" name="sex-kind" value="bmmscript"><div><b>${escHtml(t('sched.ex.bmms'))}</b><span>${escHtml(t('sched.ex.bmmsD'))}</span></div></label>
+            <label class="sched-opt"><input type="radio" name="sex-kind" value="script"${engine ? '' : ' disabled'}><div><b>${escHtml(t('sched.ex.script'))}</b><span>${escHtml(engine ? t('sched.ex.scriptD') : t('sched.ex.noEngine'))}</span></div></label>
+        </div>
+        <div class="sex-format" hidden>
+            <label class="sched-cmd-label">${escHtml(t('sched.ex.format'))}</label>
+            <select class="input" id="sex-format" style="max-width:220px">${formats.map((x) => `<option value="${escAttr(x)}">.${escHtml(x)}</option>`).join('')}</select>
+        </div>
+        <div class="sex-skipped sched-cmd-hint"></div>
+        <pre class="sex-pre"></pre>
+        <p class="sched-cmd-hint">${escHtml(t('sched.ex.plugin'))}</p>`;
+    const footer = document.createElement('div');
+    footer.style.display = 'contents';
+    footer.innerHTML = `<button type="button" class="btn btn-sm btn-ghost" id="sex-cancel">${escHtml(t('common.cancel'))}</button>
+        <button type="button" class="btn btn-sm btn-primary" id="sex-save">${uiIcon('save', 14)}<span>${escHtml(t('sched.ex.save'))}</span></button>`;
+    const m = openModal({ title: t('sched.ex.title', { name: task.name || t('sched.untitled') }), icon: uiIcon('export', 18), size: 'lg', tall: true, className: 'sex-modal', body, footer });
+    const kindOf = () => (body.querySelector<HTMLInputElement>('input[name="sex-kind"]:checked')?.value || 'bmmpa');
+    const pre = body.querySelector('.sex-pre') as HTMLElement;
+    const skippedBox = body.querySelector('.sex-skipped') as HTMLElement;
+    let text = '';
+    const refresh = async () => {
+        const kind = kindOf();
+        (body.querySelector('.sex-format') as HTMLElement).hidden = kind !== 'script';
+        skippedBox.textContent = '';
+        if (kind === 'bmmpa') text = JSON.stringify({ magic: BMMPA_MAGIC, version: 1, tasks: [forExport(task)] }, null, 2);
+        else if (kind === 'package') text = JSON.stringify({ magic: BMMPA_MAGIC, version: 2, tasks: [forExport(task)] }, null, 2);
+        else if (kind === 'bmmscript') text = String(await invoke('bmms_decompile', { task: { name: task.name, description: task.description, trigger: task.trigger, steps: task.steps, perms: task.perms } }).catch((e) => String(e)));
+        else if (engine) {
+            const fmt = (body.querySelector('#sex-format') as HTMLSelectElement).value || formats[0];
+            const plan = toScriptActions(task.steps, fmt, apiBase(), (st) => stepLabel(st as Step));
+            if (plan.skipped.length) skippedBox.textContent = t('sched.ex.skipped', { n: String(plan.skipped.length), list: plan.skipped.map((x) => x.n).join(', ') });
+            text = (await engine.generate(fmt, plan.actions)) || '';
+        }
+        pre.textContent = text;
+    };
+    body.querySelectorAll('input[name="sex-kind"], #sex-format').forEach((el) => el.addEventListener('change', () => { void refresh(); }));
+    m.q('#sex-cancel')?.addEventListener('click', () => m.close());
+    m.q('#sex-save')?.addEventListener('click', async () => {
+        const kind = kindOf();
+        const stem = safeFileStem(task.name);
+        if (kind === 'bmmpa') { await writeBmmpa([task], `${stem}.bmmpa`); m.close(); return; }
+        if (kind === 'package') {
+            // The steps exactly as a .bmmpa carries them, plus the files, in one signed bundle.
+            const includes = await collectIncludes([task]);
+            const doc = { magic: BMMPA_MAGIC, version: 2, exported: new Date().toISOString(), tasks: [forExport(task)], ...(Object.keys(includes).length ? { includes } : {}) };
+            try {
+                if (await (await import('./sched-pkg.js')).exportPackage(task, doc, stem, (m2, k, ms) => toast(m2, k as any, ms))) m.close();
+            } catch (e) { toast(`${t('common.error')}: ${(await import('./sched-pkg.js')).pkgError(e)}`, 'error'); }
+            return;
+        }
+        const ext = kind === 'bmmscript' ? 'bmmscript' : ((body.querySelector('#sex-format') as HTMLSelectElement).value || 'txt');
+        const { saveFile } = await import('../../core/api.js');
+        const path = await saveFile({ defaultPath: `${stem}.${ext}`, filters: [{ name: ext, extensions: [ext] }] }).catch(() => null);
+        if (!path) return;
+        try {
+            await invoke('write_text_file', { path, content: text });
+            toast(t('sched.ex.saved'), 'success');
+            m.close();
+        } catch (e) { toast(`${t('common.error')}: ${e}`, 'error'); }
+    });
+    await refresh();
+}
+
+/** Whether a task (or a draft not yet saved) holds a permission, as the runner decides it. */
+export function taskHasPerm(task: { perms?: Record<string, boolean>; allowCustomCommands?: boolean }, key: string): boolean {
+    return hasPerm(task as Task, key as keyof TaskPerms);
+}
+
+/** Open the full task editor on a task built elsewhere (the task builder of Plugins & API). */
+export async function openTaskEditorWith(task: Partial<Task>): Promise<void> {
+    if (!_tasks.length) await loadTasks().catch(() => {});
+    const full: Task = {
+        id: newTaskId(), name: '', enabled: true, createdAt: Date.now(), catchUp: true,
+        trigger: { type: 'manual' }, steps: [], allowCustomCommands: false,
+        ...JSON.parse(JSON.stringify(task)),
+    };
+    await openTaskModal(full);
+}
+
+/** Flip one boolean field in AppSettings and persist (read-modify-write). */
+async function setSettingFlag(key: string, value: boolean): Promise<void> {
+    const settings: any = await invoke('get_settings');
+    settings[key] = value;
+    await invoke('update_settings', { settings });
+}
+async function firstDiskMount(): Promise<string> {
+    try {
+        const disks: any[] = await invoke('get_system_disks');
+        return disks?.[0]?.mount_point || '';
+    } catch { return ''; }
+}
+
+/** A placement word from a task (`top` | `bottom` | `keep`), or null = "the default". */
+function placementOf(v: unknown): string | null {
+    const s = String(v ?? '').trim().toLowerCase();
+    return s === 'top' || s === 'bottom' || s === 'keep' ? s : null;
+}
+
+/**
+ * Turn a modpack on or off. On: its mods are then placed in the activation order by
+ * `placement`, else the pack's own mode, else the setting (commands/order_share.rs), the same
+ * engine the Modpacks screen uses. Returns how many files changed hands.
+ */
+async function applyModpack(modpackId: string, enable: boolean, placement?: unknown): Promise<number> {
+    const packs: any[] = await invoke('load_modpacks').catch(() => []);
+    const pack = packs.find(m => m.id === modpackId);
+    if (!pack) throw new Error(`Modpack ${modpackId} not found`);
+    const ids: string[] = (pack.mods || []).map((m: any) => m.mod_id).filter(Boolean);
+    for (const id of ids) {
+        if (enable) await invoke('enable_mod', { modId: id, bypassSha: true }).catch(() => {});
+        else await invoke('disable_mod', { modId: id }).catch(() => {});
+    }
+    if (!enable || !ids.length) return 0;
+    const mode = placementOf(placement) || placementOf(pack.order_mode);
+    return Number(await invoke('mod_order_arrange', { profileId: null, ids, mode })) || 0;
+}
+
+/**
+ * Hand a link the scheduler BUILT to the deep-link handler, as `scheduler`.
+ *
+ * Every caller builds its URL from a fixed path and its own typed parameters; no step passes a
+ * link a task wrote. This used to dispatch a `bmm:deeplink` window event and a
+ * `scheme-request-received` Tauri event, and nothing listens to either — so the catalogue
+ * steps that called it (follow, import, entry, delete, a bundle import) did nothing at all,
+ * and said nothing. Now it goes where `dl()` goes, and a missing handler is an error the run
+ * log shows instead of a step that "succeeded".
+ */
+async function runDeepLink(url: string): Promise<void> {
+    if (!url || !/^bmm:\/\//i.test(url)) throw new Error('Invalid bmm:// URL');
+    const fn = trustedLinkDispatcher();
+    if (!fn) throw new Error(t('sched.linkHandlerMissing') || 'The bmm:// link handler is not ready, so this step could not run.');
+    await fn(url, 'scheduler');
+}
+
+// ── Condition evaluation ──────────────────────────────────────────────────────
+//
+// `task` is threaded through so a condition can ask what the task is PERMITTED to do.
+// It could not before, and the consequence was not theoretical: `commandSucceeds` passed
+// `allow: true` to run_scheduled_command, so a condition could spawn any program on the
+// machine while the ACTION that runs a program refused without the `command` permission. A
+// shared .bmmpa needed only to put its command in an `if` instead of a step.
+//
+// Optional, because `var.ternary` and the editor's preview evaluate conditions outside a run.
+// Absent means "no task vouched for this", which is treated as no permission — the safe
+// direction, and the one that makes forgetting to thread it fail closed.
+async function evalCondition(cond: Condition, ctx: RunCtx = { nums: {}, text: {} }, task?: Task): Promise<boolean> {
+    // AI text may be compared, never used as a path or an address a condition reaches (sched-ai.ts).
+    const leak = condTaintProblem(cond.type, cond.params || {}, ctx, readSharedTaint());
+    if (leak) throw new Error((t('sched.ai.tainted') || 'Laya’s answer cannot be used in «{f}» of this step. Branch on a label instead.').replace('{f}', leak));
+    let r = await evalConditionRaw(cond, ctx, task);
+    return cond.negate ? !r : r;
+}
+async function evalConditionRaw(cond: Condition, ctx: RunCtx, task?: Task): Promise<boolean> {
+    const p = cond.params || {};
+    const now = new Date();
+    /** Refuse unless the task granted this. No task = nobody granted anything. */
+    const needPerm = (key: keyof TaskPerms, what: string) => {
+        if (!task) {
+            throw new Error(t('sched.cond.noTask')
+                || 'This condition needs a permission, and it is being evaluated outside a task.');
+        }
+        requirePerm(task, key, what);
+    };
+    switch (cond.type) {
+        case 'always': return true;
+        // ── Boolean groups ───────────────────────────────────────────────────────────
+        //
+        // "Run this when the game is closed AND it is after 18:00 AND a backup exists" had
+        // to be written as three nested ifs, each with its own else — and the moment one
+        // needed an OR it became a switch whose cases repeated most of each other. Every
+        // condition in this file answers about ONE thing, which is right; what was missing
+        // was a way to say "these together".
+        //
+        // `all` and `any` hold a list of conditions in `params.of` and are themselves
+        // conditions, so they nest, and `negate` (which every condition already has) gives
+        // NOT. That is the whole of boolean algebra in two more types and no new concept.
+        //
+        // Short-circuiting is deliberate and not just for speed: a condition can run a
+        // command or reach the network, and "A AND B" must not run B when A already
+        // decided. An EMPTY group is `true` for `all` and `false` for `any` — the standard
+        // reading, and the one that makes a half-built group in the editor behave
+        // predictably rather than blocking the task.
+        case 'all': {
+            const of: Condition[] = Array.isArray(p.of) ? p.of : [];
+            for (const c of of) { if (!(await evalCondition(c, ctx, task))) return false; }
+            return true;
+        }
+        case 'any': {
+            const of: Condition[] = Array.isArray(p.of) ? p.of : [];
+            for (const c of of) { if (await evalCondition(c, ctx, task)) return true; }
+            return false;
+        }
+        case 'enumIs': {
+            // The typed subject a switch needs. Compares a VARIABLE against one declared
+            // member of one declared enum, so the editor can later look at a switch's cases
+            // and say which members are unhandled — which free-text comparison can never
+            // support, because nothing states what the branch is about.
+            const val = readVar(ctx, String(p.name || ''));
+            if (!val) return false;
+            // Compared as text on purpose. A member is a label, not a quantity: `>` on
+            // `failed` has no meaning, and coercing here would make `0` equal `` .
+            return renderVar(val) === String(p.member ?? '');
+        }
+        case 'value': {
+            // Compare a captured value (e.g. disk.write_mbps, benchmark.mbps) to a threshold.
+            // Live sources, read when asked rather than left stale in the run's variables.
+            if (p.source === 'queue.length') {
+                ctx.nums['queue.length'] = ((await (invoke('resources_status') as Promise<any>).catch(() => null))?.tickets || []).length;
+            }
+            const left = readNum(ctx, String(p.source)) ?? NaN;
+            const right = Number(p.value);
+            if (Number.isNaN(left)) return false;
+            switch (p.op) {
+                case '>': return left > right;
+                case '<': return left < right;
+                case '>=': return left >= right;
+                case '<=': return left <= right;
+                case '==': return left === right;
+                case '!=': return left !== right;
+                default: return false;
+            }
+        }
+        case 'profileActive': {
+            const id = await invoke('get_active_profile_id').catch(() => null);
+            return id === p.id;
+        }
+        case 'fileIsValid': {
+            const r = await invoke('bmm_validate', { path: p.path || null, text: null })
+                .catch(() => null) as { format: string; ok: boolean } | null;
+            if (!r) return false;
+            const want = String(p.expect || '').trim();
+            return r.ok && (!want || want === r.format);
+        }
+        case 'modWins': {
+            // True when this mod wins EVERY file it contests. Written for `ensure`:
+            //
+            //     ensure modWins(id: "big-map-pack") {
+            //         do mods.order(id: "big-map-pack", mode: "last")
+            //     }
+            //
+            // A mod that contests nothing wins vacuously, which is the right answer — there is
+            // nothing to be losing.
+            const [mods] = await invoke('mod_order_get', { profileId: null })
+                .catch(() => [[], []]) as [{ id: string; contested: number; winning: number }[], unknown];
+            const me = (mods || []).find((m) => m.id === p.id);
+            if (!me) return false;
+            return me.winning >= me.contested;
+        }
+        case 'modEnabled': {
+            const mods: any[] = await invoke('get_all_mods').catch(() => []);
+            return !!mods.find(m => m.id === p.id)?.enabled;
+        }
+        case 'modDisabled': {
+            const mods: any[] = await invoke('get_all_mods').catch(() => []);
+            const m = mods.find(x => x.id === p.id);
+            return !!m && !m.enabled;
+        }
+        // NOT the same question as either of the two above. Both of those answer false for
+        // a mod that is not installed at all, so a task could not tell "it is here and off"
+        // from "it was never here" — and those want opposite next steps.
+        case 'modInstalled': {
+            const want = String(p.id || '').trim();
+            if (!want) return false;
+            const mods: any[] = await invoke('get_all_mods').catch(() => []);
+            return mods.some((m) => m.id === want);
+        }
+        // A task can create, rename and delete profiles. Without this, "make this season's
+        // profile" is written as delete-then-create, which throws away the one that is
+        // already there and correct.
+        case 'profileExists': {
+            const want = String(p.id || '').trim();
+            if (!want) return false;
+            const list: any[] = await invoke('get_profiles').catch(() => []);
+            return list.some((x) => String(x?.id || '') === want);
+        }
+        // The other half of `theme.set`. The "night theme" preset applied a theme every
+        // evening whether or not it was already on, because asking was not possible.
+        case 'themeActive': {
+            const want = String(p.id || '').trim();
+            if (!want) return false;
+            const active = await invoke('get_active_theme').catch(() => null);
+            // A task written with an old built-in id (bmm-nord…) still matches its theme.
+            const { canonicalThemeId } = await import('../themes/theme-model.js');
+            return canonicalThemeId(active) === canonicalThemeId(want);
+        }
+        // Resources (A3): read from the governor's status, never from a cached copy.
+        case 'gameRunning':
+            return !!(await (invoke('resources_status') as Promise<any>).catch(() => null))?.game_active;
+        case 'resourcesPresetIs':
+            return String((await (invoke('resources_status') as Promise<any>).catch(() => null))?.effective || '') === String(p.id || '');
+        case 'queueIdle':
+            return ((await (invoke('resources_status') as Promise<any>).catch(() => null))?.tickets || [1]).length === 0;
+        case 'appRunning':
+            return await invoke('is_process_running', { name: p.name || '', pid: p.pid || null }).catch(() => false);
+        case 'appNotRunning':
+            return !(await invoke('is_process_running', { name: p.name || '', pid: p.pid || null }).catch(() => false));
+        case 'fileExists':
+            return await invoke('path_exists', { path: p.path || '' }).catch(() => false);
+        // Is this text in the end of that file?
+        //
+        // The tail, for the same reason text.extract reads the tail: what a game just did is
+        // at the end of its log, and "somewhere in 300 MB" is a different question with a
+        // different answer — usually yes, for every server you have ever joined.
+        case 'fileContains': {
+            const hay = String(await invoke('read_text_tail', {
+                path: String(p.path || ''), kb: Number(p.tailKb) || 64,
+            }).catch(() => ''));
+            if (!hay) return false;
+            const needle = String(p.text || '');
+            if (!needle) return false;
+            if (p.regex) {
+                // A time budget, in a worker: see text.extract. A pattern that runs out of time
+                // FAILS the step rather than reading as "not found", which would be a lie.
+                const r = await regexWithBudget({ op: 'test', pattern: needle, flags: 'i', hay });
+                if (!r.ok && r.error === 'timeout') throw new Error(t('sched.regex.timeout'));
+                return r.ok && r.hit;
+            }
+            return hay.toLowerCase().includes(needle.toLowerCase());
+        }
+        // Compare a TEXT variable. `value` only ever compared numbers, so a task that had
+        // just extracted a server name had no way to branch on it — the name became its
+        // length and every comparison was quietly false.
+        case 'textIs': {
+            const left = String(ctx.text[String(p.source || '')] ?? '');
+            const right = String(p.value ?? '');
+            switch (String(p.op || 'is')) {
+                case 'is': return left.toLowerCase() === right.toLowerCase();
+                case 'isNot': return left.toLowerCase() !== right.toLowerCase();
+                case 'contains': return left.toLowerCase().includes(right.toLowerCase());
+                case 'empty': return left.trim() === '';
+                case 'notEmpty': return left.trim() !== '';
+                case 'matches': {
+                    const r = await regexWithBudget({ op: 'test', pattern: right, flags: 'i', hay: left });
+                    if (!r.ok && r.error === 'timeout') throw new Error(t('sched.regex.timeout'));
+                    return r.ok && r.hit;
+                }
+                default: return false;
+            }
+        }
+        // What `ai.classify` left: its label, and Laya's probability for it. Reads variables
+        // only, so it needs no permission: the step that asked Laya already did.
+        case 'aiLabel':
+            return aiLabelHolds(ctx, p);
+        // The other Laya conditions read what this run's Laya steps left (sched-laya.ts): no
+        // model runs in a condition, so none of them costs budget or needs a permission…
+        case 'aiScore':
+            return aiScoreHolds(ctx, p);
+        case 'aiAbstained':
+            return aiAbstainedHolds(ctx, p);
+        case 'crashCause':
+            return crashCauseHolds(ctx, p);
+        case 'aiLibraryCount':
+            return libraryCountHolds(ctx, p);
+        case 'modAiTag':
+            return modAiTagHolds(ctx, p);
+        // …except this one, which asks the app about Laya's state: the task's `ai` grant, like a step.
+        case 'aiAvailable': {
+            needPerm('ai', t('sched.permAi') || 'ask Laya');
+            const st = stateOf(await invoke('ai_task_status').catch(() => null));
+            return statusHolds(st, p.what);
+        }
+        case 'online':
+            return navigator.onLine;
+        case 'timeReached': {
+            const [h, m] = String(p.time || '00:00').split(':').map((n: string) => parseInt(n, 10) || 0);
+            return now.getHours() > h || (now.getHours() === h && now.getMinutes() >= m);
+        }
+        // A task can install a plugin and could not ask whether one is installed — so
+        // "install it only if it is not there" had to be written as "install it every time",
+        // which re-downloads and re-applies on every run.
+        case 'pluginInstalled': {
+            const want = String(p.id || '').trim().toLowerCase();
+            if (!want) return false;
+            const list: any[] = await invoke('get_installed_plugins').catch(() => []);
+            return list.some((x) => String(x?.manifest?.id || x?.id || '').toLowerCase() === want);
+        }
+        // The other half of "arm or disarm another task". Without it a task could set another
+        // one's state and never branch on it, so "turn the nightly sync back on if it is off"
+        // meant turning it on unconditionally and hoping that was harmless.
+        case 'taskArmed': {
+            const want = String(p.id || '').trim();
+            if (!want) return false;
+            const other = await findTask(want);
+            return !!other && other.enabled !== false;
+        }
+        case 'modpackActive': {
+            const packs: any[] = await invoke('load_modpacks').catch(() => []);
+            const pack = packs.find(m => m.id === p.id);
+            if (!pack) return false;
+            const ids: string[] = (pack.mods || []).map((m: any) => m.mod_id).filter(Boolean);
+            if (!ids.length) return false;
+            const mods: any[] = await invoke('get_all_mods').catch(() => []);
+            const byId = new Map(mods.map(m => [m.id, m]));
+            return ids.every(id => byId.get(id)?.enabled);
+        }
+        case 'modpackInactive': {
+            const packs: any[] = await invoke('load_modpacks').catch(() => []);
+            const pack = packs.find(m => m.id === p.id);
+            if (!pack) return true;
+            const ids: string[] = (pack.mods || []).map((m: any) => m.mod_id).filter(Boolean);
+            const mods: any[] = await invoke('get_all_mods').catch(() => []);
+            const byId = new Map(mods.map(m => [m.id, m]));
+            return ids.every(id => !byId.get(id)?.enabled);
+        }
+        case 'allModsActive': {
+            const activeId = await invoke('get_active_profile_id').catch(() => null);
+            if (!activeId) return false;
+            const mods: any[] = await invoke('get_mods').catch(() => []);
+            return mods.length > 0 && mods.every(m => m.enabled);
+        }
+        case 'dayOfWeek':
+            return Array.isArray(p.days) && p.days.includes(now.getDay());
+        case 'timeRange': {
+            const toMin = (s: string) => { const [h, m] = s.split(':').map((n: string) => parseInt(n, 10) || 0); return h * 60 + m; };
+            const cur = now.getHours() * 60 + now.getMinutes();
+            const a = toMin(p.from || '00:00'), b = toMin(p.to || '23:59');
+            return a <= b ? (cur >= a && cur <= b) : (cur >= a || cur <= b);
+        }
+        case 'commandSucceeds': {
+            // Gated like the action that runs a program, which it is. `allow: true` was
+            // hardcoded here, so this condition ran arbitrary programs with no permission at
+            // all — the one hole that made the `command` permission optional in practice,
+            // since a command in an `if` was never asked about.
+            //
+            // The refusal is thrown, not swallowed into `false`: a task denied a permission
+            // has not evaluated to "no", it has failed, and reporting it as "no" would send
+            // somebody looking for why their program returned non-zero.
+            needPerm('command', t('sched.perm.command') || 'run a program');
+            const args = (p.args || '').trim() ? String(p.args).split(/\s+/) : [];
+            try { await invoke('run_scheduled_command', { program: p.program, args, workingDir: p.workingDir || null, allow: true }); return true; }
+            catch { return false; }
+        }
+        // ── File verification / comparison ─────────────────────────────────────
+        case 'fileHash': {
+            // True when the file's hash (blake3 default, or sha256) equals the
+            // expected value. Used for "loop until <file> sha == <value>".
+            try {
+                const h = await invoke('hash_file', { path: p.path || '', algo: p.algo || 'blake3' }) as string;
+                return (h || '').toLowerCase() === String(p.value || '').toLowerCase().replace(/^b3:/, '').trim();
+            } catch { return false; }
+        }
+        case 'fileSize': {
+            const m: any = await invoke('file_meta', { path: p.path || '' }).catch(() => null);
+            if (!m || !m.exists) return false;
+            return cmpNum(Number(m.size), p.op, Number(p.value));
+        }
+        case 'fileType': {
+            const m: any = await invoke('file_meta', { path: p.path || '' }).catch(() => null);
+            if (!m || !m.exists) return false;
+            return String(m.ext || '').toLowerCase() === String(p.ext || '').toLowerCase().replace(/^\./, '');
+        }
+        case 'fileName': {
+            const m: any = await invoke('file_meta', { path: p.path || '' }).catch(() => null);
+            if (!m || !m.exists) return false;
+            return String(m.name || '').toLowerCase().includes(String(p.value || '').toLowerCase());
+        }
+        case 'fileNewer': {
+            // True when the file was modified within the last N minutes.
+            const m: any = await invoke('file_meta', { path: p.path || '' }).catch(() => null);
+            if (!m || !m.exists || !m.modified_ms) return false;
+            const ageMin = (Date.now() - Number(m.modified_ms)) / 60000;
+            return ageMin <= Math.max(0, Number(p.minutes) || 0);
+        }
+        case 'pathIsDir': {
+            // `fileExists` is true for a folder too — Path::exists() does not distinguish —
+            // so "is this a file or a directory?" had no answer. file_meta already carries
+            // is_dir; nothing needed the backend, only asking.
+            const m: any = await invoke('file_meta', { path: p.path || '' }).catch(() => null);
+            if (!m || !m.exists) return false;
+            return p.want === 'file' ? !m.is_dir : !!m.is_dir;
+        }
+        case 'filesMatch': {
+            // Every file in a LIST still hashes to what a MAP says it should.
+            //
+            // fileHash answers for one file against one literal, which is no use for "did
+            // anything under this profile change?" — the question people actually have. The
+            // list holds the paths, the map holds path → hash, and both are ordinary
+            // scheduler variables, so a previous step can fill them.
+            //
+            // A path in the list with no entry in the map is a MISMATCH, not a skip: a
+            // manifest that silently ignores what it does not mention verifies nothing.
+            const paths = ctx.lists?.[String(p.list || '')] || [];
+            const want = ctx.maps?.[String(p.map || '')] || {};
+            if (!paths.length) return !!p.emptyIsTrue;
+            for (const path of paths) {
+                const expected = String(want[path] || '').toLowerCase().replace(/^b3:/, '').trim();
+                if (!expected) return false;
+                try {
+                    const h = await invoke('hash_file', { path, algo: p.algo || 'blake3' }) as string;
+                    if ((h || '').toLowerCase() !== expected) return false;
+                } catch { return false; }   // unreadable is not "unchanged"
+            }
+            return true;
+        }
+        // ── Reachability ───────────────────────────────────────────────────────
+        case 'catalogOk':
+        case 'repoOk': {
+            // Does this address answer, and is it the kind of document it claims to be?
+            //
+            // Gated on `command` for the same reason http.request is: a condition that
+            // fetches a URL can be pointed anywhere by whoever shared the .bmmpa, and a
+            // network read nobody granted would make the other permissions decorative.
+            needPerm('command', t('sched.perm.net') || 'reach the network');
+            // http_request, NOT fetch_remote_json: that one goes through catalog_get, which
+            // attaches the user's X-Creator-ID for first-party hosts. A URL out of a shared
+            // task must not be able to borrow the reader's identity.
+            const url = String(p.url || '').trim();
+            if (!/^https?:\/\//i.test(url)) return false;
+            const target = cond.type === 'repoOk' && !/\.json($|\?)/i.test(url)
+                ? `${url.replace(/\/+$/, '')}/repo.json`
+                : url;
+            try {
+                const rep: any = await invoke('http_request', {
+                    url: target, method: 'GET', headers: {}, body: null, timeoutMs: 15000,
+                });
+                if (!rep || rep.status < 200 || rep.status >= 300) return false;
+                if (p.shapeless) return true;   // "it answered 2xx" is sometimes the whole question
+                const doc = JSON.parse(rep.body || 'null');
+                if (cond.type === 'repoOk') {
+                    // A repo document, or a catalogue listing repos — both are "the repo
+                    // answered" for a caller that just wants to know before syncing.
+                    return !!doc && (Array.isArray(doc.mods) || Array.isArray(doc.repos) || typeof doc.name === 'string');
+                }
+                return catalogLooksLike(doc, String(p.kind || 'any'));
+            } catch { return false; }
+        }
+    }
+    return false;
+}
+
+/** Numeric comparison shared by value/size conditions. */
+function cmpNum(left: number, op: string, right: number): boolean {
+    if (Number.isNaN(left) || Number.isNaN(right)) return false;
+    switch (op) {
+        case '>': return left > right;
+        case '<': return left < right;
+        case '>=': return left >= right;
+        case '<=': return left <= right;
+        case '!=': return left !== right;
+        case '==': default: return left === right;
+    }
+}
+
+// Sentinel thrown by the "Stop task" action — a guard-clause early exit. Caught by
+// runTask and treated as a clean stop (NOT an error).
+class _StopTask { constructor(public reason = '') {} }
+
+/** Thrown when somebody presses Stop. Distinct from _StopTask so the history can tell a
+ *  guard clause ("this task decided to end early") from an interruption ("a person ended
+ *  it"). Recording both as a clean finish would hide the second one entirely. */
+class _CancelledTask { constructor(public at = '') {} }
+
+/**
+ * What is running, right now.
+ *
+ * There was no answer to that question. A task that takes four minutes showed nothing at
+ * all until it finished, so "is it stuck, or is it working?" could only be answered by
+ * waiting — and a task that WAS stuck, on a wait-until that would never come true, could
+ * not be ended without closing BMM.
+ *
+ * A module-level map rather than state on the Task: a task can legitimately be running
+ * while its saved definition is being edited, and the two must not share a field.
+ */
+export interface RunState {
+    id: string;
+    name: string;
+    startedAt: number;
+    /** Human label for the step being executed, e.g. "Call an HTTP API". */
+    step: string;
+    /** How deep in the tree — an action inside a loop inside an if reads as 3. */
+    depth: number;
+    /** Completed top-level steps, and how many there are. */
+    done: number;
+    total: number;
+    /** Set by requestStop. Checked between steps; see the note on cooperative stopping. */
+    cancel: boolean;
+}
+
+const _running = new Map<string, RunState>();
+/** Each run's row in the activity centre (core/activity.ts), kept in step by syncActivityRows. */
+const _acts = new Map<string, ActivityHandle>();
+
+/** A run is a row in the activity centre; its Stop is this panel's Stop. runTask ends its row
+ *  with the outcome; a run that left otherwise (a test run) ends as done here. */
+function syncActivityRows(): void {
+    for (const r of _running.values()) {
+        let a = _acts.get(r.id);
+        if (!a) { a = startActivity({ kind: 'schedule', title: r.name, cancel: () => requestStop(r.id), source: 'scheduler' }); _acts.set(r.id, a); }
+        a.update({ detail: r.step, progress: r.total ? Math.min(r.done, r.total) / r.total : null });
+    }
+    for (const [id, a] of _acts) if (!_running.has(id)) { a.done(); _acts.delete(id); }
+}
+
+export function listRunning(): RunState[] {
+    return [..._running.values()].sort((a, b) => a.startedAt - b.startedAt);
+}
+
+/**
+ * Ask a run to stop.
+ *
+ * Cooperative, and the UI says so. The flag is checked between steps, so a step already in
+ * flight finishes first — an HTTP request mid-flight is not abandoned, a script already
+ * launched is not killed. Interrupting those would leave the outside world in a state
+ * nothing here knows how to describe, which is worse than waiting a few seconds. Delays and
+ * wait-untils poll the flag, so the common "waiting five minutes" case ends promptly.
+ */
+export function requestStop(id: string): boolean {
+    const r = _running.get(id);
+    if (!r) return false;
+    r.cancel = true;
+    return true;
+}
+
+/** A step, in words, for the running panel. Falls back to the kind rather than to a blank —
+ *  "repeat" tells you where you are; an empty string does not. */
+function stepLabel(step: Step): string {
+    if (step.kind === 'action') {
+        const type = String((step as any).action?.type || '');
+        const def = ACTION_TYPES.find((a) => a.v === type);
+        const gone = removedAction(type);
+        if (!def && gone) return `${t('sched.removedStep') || 'Removed step'}: ${t(gone.labelKey) || gone.label}`;
+        return def ? (t('sched.act.' + def.v) || def.label) : (type || 'action');
+    }
+    const words: Record<string, string> = {
+        if: t('sched.addIf') || 'If/Else',
+        repeat: t('sched.addLoop') || 'Loop',
+        waitFor: t('sched.addWaitFor') || 'Wait until',
+        delay: t('sched.addDelay') || 'Pause',
+        ensure: t('sched.addEnsure'),
+        retry: t('sched.addRetry'),
+    };
+    return words[step.kind] || step.kind;
+}
+
+// ── Safe math expression evaluator (no eval) ─────────────────────────────────
+// Supports + - * / % ^, parentheses, ctx variables, and a few pure functions.
+// A tiny recursive-descent parser — never executes arbitrary code.
+const _MATH_FUNCS: Record<string, (...a: number[]) => number> = {
+    min: Math.min, max: Math.max, abs: Math.abs, round: Math.round, floor: Math.floor,
+    ceil: Math.ceil, sqrt: Math.sqrt, pow: Math.pow, sign: Math.sign,
+    clamp: (x, lo, hi) => Math.min(Math.max(x, lo), hi),
+};
+function evalExpr(expr: string, ctx: RunCtx): number {
+    const tokens = (String(expr).match(/\d+\.?\d*|[A-Za-z_][\w.]*|[-+*/%(),^]/g) || []);
+    let pos = 0;
+    const peek = () => tokens[pos];
+    const next = () => tokens[pos++];
+    const primary = (): number => {
+        const t = next();
+        if (t === '(') { const v = expr2(); if (next() !== ')') throw new Error(')'); return v; }
+        if (t === '-') return -primary();
+        if (t === '+') return primary();
+        if (/^\d/.test(t)) return parseFloat(t);
+        if (/^[A-Za-z_]/.test(t)) {
+            if (peek() === '(') {
+                next(); const args: number[] = [];
+                if (peek() !== ')') { args.push(expr2()); while (peek() === ',') { next(); args.push(expr2()); } }
+                if (next() !== ')') throw new Error(')');
+                const f = _MATH_FUNCS[t.toLowerCase()]; if (!f) throw new Error('fn ' + t);
+                return f(...args);
+            }
+            return readNum(ctx, t) ?? 0;
+        }
+        throw new Error('tok ' + t);
+    };
+    const powf = (): number => { let v = primary(); while (peek() === '^') { next(); v = Math.pow(v, primary()); } return v; };
+    const term = (): number => { let v = powf(); while (peek() === '*' || peek() === '/' || peek() === '%') { const o = next(); const r = powf(); v = o === '*' ? v * r : o === '/' ? v / r : v % r; } return v; };
+    function expr2(): number { let v = term(); while (peek() === '+' || peek() === '-') { const o = next(); const r = term(); v = o === '+' ? v + r : v - r; } return v; }
+    const r = expr2();
+    if (pos < tokens.length) throw new Error('trailing');
+    return Number.isFinite(r) ? r : 0;
+}
+
+// ── List rendering (glass-card) ───────────────────────────────────────────────
+/** Inline SVG icon for a trigger type (clock family / rocket / hand). */
+function triggerIcon(tr: Trigger): string {
+    const ICON: Record<Trigger['type'], IconName> = {
+        once: 'clock', interval: 'refresh', hourly: 'refresh', dailyAt: 'clock', weeklyAt: 'calendar', monthlyAt: 'calendar',
+        watchFile: 'file', onEvent: 'bell', appStart: 'launch', afterTask: 'link', script: 'terminal', condition: 'git-branch',
+        rss: 'activity', manual: 'play',
+    };
+    return uiIcon(ICON[tr.type] || 'clock', 16);
+}
+
+/**
+ * The "running now" strip, above the task list.
+ *
+ * Its own element and its own render, deliberately: it repaints on every step of every run,
+ * and repainting the whole task list at that rate would fight with anything the person is
+ * doing in it — a toggle mid-click, a tooltip mid-hover.
+ *
+ * Absent entirely when nothing is running. A permanent "0 running" row is a line of screen
+ * that is noise in the normal case, and the normal case is nothing running.
+ */
+export function renderRunningPanel(): void {
+    syncActivityRows();
+    const host = document.getElementById('scheduler-running');
+    if (!host) return;
+    const runs = listRunning();
+    if (!runs.length) { host.innerHTML = ''; host.style.display = 'none'; return; }
+    host.style.display = '';
+    const esc = (x: unknown) => escHtml(String(x ?? ''));
+    host.innerHTML = `
+        <div class="sched-run-head">${esc(t('sched.run.title') || 'Running now')}</div>
+        ${runs.map((r) => {
+            const secs = Math.max(0, Math.round((Date.now() - r.startedAt) / 1000));
+            // The step number is capped at the total: a loop re-entering top-level steps
+            // could otherwise print "5 of 4", which reads as a bug in the counter.
+            const pos = r.total ? `${Math.min(r.done, r.total)}/${r.total}` : '';
+            return `
+            <div class="sched-run-row${r.cancel ? ' is-stopping' : ''}">
+                <span class="sched-run-spin"></span>
+                <span class="sched-run-name">${esc(r.name)}</span>
+                <span class="sched-run-step">${esc(r.step)}${r.depth ? ` <span class="sched-run-depth">↳${r.depth}</span>` : ''}</span>
+                <span class="sched-run-pos">${esc(pos)}</span>
+                <span class="sched-run-age">${secs}s</span>
+                <button class="btn btn-xs btn-ghost sched-run-stop" data-stop="${escAttr(r.id)}" ${r.cancel ? 'disabled' : ''}
+                    data-tooltip="${escAttr(t('sched.run.stopTip') || 'Ends the run after the current step finishes — a request already sent is not abandoned.')}">
+                    ${r.cancel ? esc(t('sched.run.stopping') || 'stopping…') : esc(t('sched.run.stop') || 'Stop')}
+                </button>
+            </div>`;
+        }).join('')}`;
+    host.querySelectorAll<HTMLElement>('.sched-run-stop').forEach((b) => b.addEventListener('click', () => {
+        if (requestStop(String(b.dataset.stop))) renderRunningPanel();
+    }));
+}
+
+/**
+ * Keep the elapsed counter honest while a run is in flight.
+ *
+ * A run that sits on one long step would otherwise show a frozen age, which reads as a
+ * hung UI rather than a slow step. The timer only exists while something is running — a
+ * permanent interval for a panel that is empty most of the time is a permanent cost.
+ */
+let _runTick: number | null = null;
+export function ensureRunTicker(): void {
+    if (_runTick !== null) return;
+    _runTick = window.setInterval(() => {
+        if (!_running.size) { window.clearInterval(_runTick!); _runTick = null; }
+        renderRunningPanel();
+    }, 1000);
+}
+
+export function renderScheduleList(): void {
+    const container = document.getElementById('scheduler-list-container');
+    if (!container) return;
+    renderModePref();
+    renderRunningPanel();
+    if (!_tasks.length) {
+        // Modern empty state: icon tile + message + hint, instead of a bare line.
+        container.innerHTML = `
+            <div class="sched-empty">
+                <div class="sched-empty-icon">${uiIcon('clock', 20)}</div>
+                <strong>${t('sched.emptyTitle') || 'No scheduled tasks yet'}</strong>
+                <span>${t('sched.empty') || 'Create one to automate BMM — sync a repo at night, switch profile before a session, launch your tools in one click.'}</span>
+                <div class="sched-empty-actions">
+                    <button type="button" class="btn btn-sm btn-secondary" data-empty="templates">${uiIcon('grid', 14)}<span>${escHtml(t('auto.templates'))}</span></button>
+                </div>
+            </div>`;
+        container.querySelector('[data-empty="templates"]')?.addEventListener('click', () => { void openTemplates(); });
+        return;
+    }
+    container.innerHTML = '';
+
+    // A filter, but only once there are enough tasks to need one.
+    //
+    // Below the threshold it would be furniture: three rows are faster to read than to
+    // filter, and a search box above them is one more thing between you and the task you
+    // came for. Above it, scanning a wall of rows is the actual problem.
+    // Folders and tags (task.ui) make a long list sortable by what it is FOR; the search reads
+    // them too. Shown from a handful of tasks up, or as soon as any task is filed.
+    const NEEDS_FILTER_AT = 5;
+    let shown = _tasks;
+    const tags = allTags(_tasks);
+    if (_taskTag && !tags.includes(_taskTag)) _taskTag = '';
+    if (_tasks.length >= NEEDS_FILTER_AT || tags.length || _tasks.some((x) => x.ui?.folder)) {
+        const bar = document.createElement('div');
+        bar.className = 'sched-filter';
+        bar.innerHTML = `
+            <input type="text" class="input sched-filter-input" id="sched-filter-input"
+                placeholder="${escAttr(t('sched.filter') || 'Filter tasks…')}" value="${escAttr(_taskFilter)}">
+            <span class="sched-filter-count" id="sched-filter-count"></span>
+            ${tags.length ? `<div class="sched-tagbar" role="group" aria-label="${escAttr(t('sched.list.tags'))}">
+                ${tags.map((g) => `<button type="button" class="sched-tag${_taskTag === g ? ' is-on' : ''}" data-tag="${escAttr(g)}" aria-pressed="${_taskTag === g}">#${escHtml(g)}</button>`).join('')}
+            </div>` : ''}`;
+        container.appendChild(bar);
+        bar.querySelectorAll<HTMLButtonElement>('[data-tag]').forEach((b) => b.addEventListener('click', () => {
+            _taskTag = _taskTag === b.dataset.tag ? '' : (b.dataset.tag || '');
+            renderScheduleList();
+        }));
+        const inp = bar.querySelector('#sched-filter-input') as HTMLInputElement;
+        inp.addEventListener('input', () => {
+            _taskFilter = inp.value;
+            renderScheduleList();
+            // Re-rendering replaces the field, so focus and caret have to be put back or
+            // typing a second character lands nowhere.
+            const again = document.getElementById('sched-filter-input') as HTMLInputElement | null;
+            if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
+        });
+        const needle = _taskFilter.trim().toLowerCase();
+        if (needle || _taskTag) {
+            // Name, description, folder and tags: what somebody remembers about a task they
+            // wrote weeks ago.
+            shown = _tasks.filter((tk) => taskMatches(tk, needle, _taskTag));
+        }
+        const count = bar.querySelector('#sched-filter-count');
+        if (count) {
+            count.textContent = needle || _taskTag
+                ? (t('sched.filter.n') || '{n} of {total}').replace('{n}', String(shown.length)).replace('{total}', String(_tasks.length))
+                : (t('sched.filter.total') || '{total} tasks').replace('{total}', String(_tasks.length));
+        }
+        if (!shown.length) {
+            const none = document.createElement('div');
+            none.className = 'sched-filter-none';
+            none.textContent = t('sched.filter.none') || 'No task matches that.';
+            container.appendChild(none);
+            return;
+        }
+    }
+
+    const groups = byFolder(shown);
+    const heads = groups.some((g) => g.folder);
+    for (const grp of groups) {
+    if (heads) {
+        const folded = _foldedFolders.has(grp.folder);
+        const on = grp.tasks.filter((x) => x.enabled).length;
+        const head = document.createElement('button');
+        head.type = 'button';
+        head.className = `sched-folder-h${folded ? ' is-folded' : ''}`;
+        head.setAttribute('aria-expanded', folded ? 'false' : 'true');
+        head.innerHTML = `${uiIcon(folded ? 'chevron-right' : 'chevron-down', 12)}${uiIcon('folder', 14)}
+            <span class="sched-folder-name">${escHtml(grp.folder || t('sched.list.unfiled'))}</span>
+            <span class="sched-folder-n">${escHtml(t('sched.list.folderN', { n: String(grp.tasks.length), on: String(on) }))}</span>`;
+        head.addEventListener('click', () => {
+            if (_foldedFolders.has(grp.folder)) _foldedFolders.delete(grp.folder); else _foldedFolders.add(grp.folder);
+            writeFoldedFolders();
+            renderScheduleList();
+        });
+        container.appendChild(head);
+        if (folded) continue;
+    }
+    for (const task of grp.tasks) {
+        const row = document.createElement('div');
+        row.className = `sched-row ${task.enabled ? 'sched-on' : 'sched-off'}${heads ? ' in-folder' : ''}`;
+        row.innerHTML = `
+            <div class="sched-row-main">
+                <div class="sched-row-icon">${triggerIcon(task.trigger)}</div>
+                <div class="sched-row-text">
+                    <strong>${escHtml(task.name)}</strong>
+                    ${task.description ? `<span class="sched-row-desc">${escHtml(task.description)}</span>` : ''}
+                    <span class="sched-row-sub">
+                        <span class="sched-chip sched-chip-trigger">${escHtml(triggerLabel(task.trigger))}</span>
+                        ${nextRunChip(task)}
+                        <span class="sched-chip">${stepCount(task.steps)} ${t('sched.steps') || 'steps'}</span>
+                        ${task.lastRun ? `<span class="sched-chip sched-chip-dim" data-tooltip="${escAttr(new Date(task.lastRun).toLocaleString())}">${t('sched.last') || 'last'} ${escHtml(agoTime(task.lastRun))}</span>` : ''}
+                        ${task.lastResult ? `<span class="sched-chip ${task.lastResult === 'ok' ? 'sched-chip-ok' : 'sched-chip-err'}" data-tooltip="${escAttr(task.lastResult)}">${task.lastResult === 'ok' ? 'OK' : 'ERR'}</span>` : ''}
+                        ${runSparkline(task)}
+                        ${task.pkg ? `<span class="sched-chip sched-chip-pkg" data-tooltip="${escAttr(t('sched.pkg.from', { p: task.pkg.name }))}">${uiIcon('package', 12)}${escHtml(t('sched.pkg.chip'))}</span>` : ''}
+                        ${(task.ui?.tags || []).map((g) => `<span class="sched-chip sched-chip-tag">#${escHtml(g)}</span>`).join('')}
+                    </span>
+                </div>
+            </div>
+            <div class="sched-row-actions">
+                ${copyIdButtons('task', task.id)}
+                <label class="plug-toggle sched-toggle" data-tooltip="${escAttr(task.enabled ? (t('sched.enabled') || 'Enabled') : (t('sched.disabled') || 'Disabled'))}">
+                    <input type="checkbox" ${task.enabled ? 'checked' : ''} data-act="toggle">
+                    <span class="plug-toggle-slider"></span>
+                </label>
+                <button class="btn btn-xs btn-ghost sched-act" data-act="run" data-tooltip="${escAttr(t('sched.runNow') || 'Run now')}">${uiIcon('play', 14)}</button>
+                <button class="btn btn-xs btn-ghost sched-act" data-act="dup" data-tooltip="${escAttr(t('sched.dupTask') || 'Duplicate task')}">${uiIcon('copy', 14)}</button>
+                <button class="btn btn-xs btn-ghost sched-act" data-act="exp1" data-tooltip="${escAttr(t('sched.exportOne') || 'Export this automation')}">${uiIcon('export', 14)}</button>
+                <button class="btn btn-xs btn-ghost sched-act" data-act="edit" data-tooltip="${escAttr(t('common.edit') || 'Edit')}">${uiIcon('edit', 14)}</button>
+                <button class="btn btn-xs btn-ghost sched-act sched-act-del" data-act="del" data-tooltip="${escAttr(t('common.delete') || 'Delete')}">${uiIcon('delete', 14)}</button>
+            </div>`;
+        wireCopyIds(row, toast);
+        row.querySelector('[data-act="toggle"]')?.addEventListener('change', async (e) => {
+            task.enabled = (e.target as HTMLInputElement).checked; await saveTasks();
+            if (task.osSchedule) await syncOsSchedule(task);
+        });
+        row.querySelector('[data-act="run"]')?.addEventListener('click', () => runTask(task));
+        row.querySelector('[data-act="exp1"]')?.addEventListener('click', () => { void exportOneTask(task.id); });
+        // Duplicate: full deep clone under a new id. Deliberately created DISABLED
+        // and without the OS mirror so saving the copy can't double-fire anything.
+        row.querySelector('[data-act="dup"]')?.addEventListener('click', async () => {
+            const copy: Task = JSON.parse(JSON.stringify(task));
+            copy.id = `sched-${Date.now()}`;
+            copy.name = `${task.name} ${t('sched.copySuffix') || '(copy)'}`;
+            copy.enabled = false;
+            copy.osSchedule = false;
+            copy.lastRun = undefined; copy.lastResult = undefined; copy.history = [];
+            copy.createdAt = Date.now();   // a copy is a new task, not a replay of the old one
+            _tasks.push(copy);
+            await saveTasks();
+            renderScheduleList();
+            toast(`${t('sched.duplicated') || 'Duplicated'}: ${copy.name}`, 'success');
+        });
+        row.querySelector('[data-act="edit"]')?.addEventListener('click', () => openTaskModal(task));
+        row.querySelector('[data-act="del"]')?.addEventListener('click', async () => {
+            try {
+                // Not `confirmCustom!`. The non-null assertion silences the compiler about a
+                // value that is only there because another module ran first; if it ever is not,
+                // the call throws inside an async listener and the button appears inert.
+                const ask = window.confirmCustom;
+                // A BMM dialog either way, never window.confirm: the latter does not ask anything
+                // inside the Tauri webview, it returns immediately — which is precisely how this
+                // button came to do nothing at all.
+                const ok = typeof ask === 'function'
+                    ? await ask(t('sched.delTitle') || 'Delete task', `${task.name}?`, 'danger',
+                        { yesLabel: t('common.delete') || 'Delete', noLabel: t('common.cancel') || 'Cancel' })
+                    : await confirmAction({ title: t('sched.delTitle') || 'Delete task', message: `${task.name}?`, tone: 'danger', confirmLabel: t('common.delete'), cancelLabel: t('common.cancel') });
+                if (!ok) return;
+                if (task.osSchedule) {
+                    // An OS entry that will not unregister must not stop the task being
+                    // removed from BMM — it is reported and the deletion continues.
+                    try { await invoke('unregister_os_schedule', { taskId: task.id }); }
+                    catch (e) { toast(`${t('sched.osUnregFail') || 'Could not remove the Windows task'}: ${e}`, 'error'); }
+                }
+                _tasks = _tasks.filter(x => x.id !== task.id);
+                await saveTasks();
+                renderScheduleList();
+            } catch (e) {
+                // The point of this catch: a delete that fails now SAYS SO. Before it could
+                // only ever look like a button that does nothing.
+                toast(`${t('common.error') || 'Error'}: ${e}`, 'error');
+            }
+        });
+        container.appendChild(row);
+    }
+    }
+}
+
+/** The folders folded in the list, remembered on this machine (a view preference, not data). */
+const _foldedFolders: Set<string> = (() => {
+    try { const v = JSON.parse(localStorage.getItem('bmm.sched.foldedFolders') || '[]'); return new Set(Array.isArray(v) ? v.map(String) : []); }
+    catch { return new Set<string>(); }
+})();
+function writeFoldedFolders(): void {
+    try { localStorage.setItem('bmm.sched.foldedFolders', JSON.stringify([..._foldedFolders])); } catch { /* private mode */ }
+}
+
+/** "in 4 min" / "in 3 h" / "in 2 d" — a duration a human reads at a glance. The exact
+ *  timestamp goes in the tooltip, because the useful question is almost always "soon or
+ *  not", and only occasionally "at exactly what time". */
+function relTime(ms: number): string {
+    const d = Math.max(0, ms - Date.now());
+    const mins = Math.round(d / 60000);
+    if (mins < 1) return t('sched.inMoment') || 'in under a minute';
+    if (mins < 60) return `${t('sched.in') || 'in'} ${mins} min`;
+    const hrs = Math.round(mins / 60);
+    if (hrs < 48) return `${t('sched.in') || 'in'} ${hrs} h`;
+    return `${t('sched.in') || 'in'} ${Math.round(hrs / 24)} ${t('sched.days') || 'd'}`;
+}
+
+/** "3 min ago" / "2 h ago" — the mirror of relTime, for the last run. A full
+ *  locale timestamp took a third of the row to say "recently". */
+function agoTime(ms: number): string {
+    const d = Math.max(0, Date.now() - ms);
+    const mins = Math.round(d / 60000);
+    if (mins < 1) return t('sched.justNow') || 'just now';
+    if (mins < 60) return `${mins} min ${t('sched.ago') || 'ago'}`;
+    const hrs = Math.round(mins / 60);
+    if (hrs < 48) return `${hrs} h ${t('sched.ago') || 'ago'}`;
+    return `${Math.round(hrs / 24)} ${t('sched.days') || 'd'} ${t('sched.ago') || 'ago'}`;
+}
+
+/** The last few runs as bars: green ok, red failed, oldest on the left. A task that
+ *  fails every other night looks identical to a healthy one when all you keep is the
+ *  MOST RECENT result — the history was already being recorded and only the editor
+ *  ever showed it. */
+function runSparkline(task: Task): string {
+    const h = (task.history || []).slice(-8);
+    if (h.length < 2) return '';
+    const bars = h.map(r => `<i class="${r.ok ? 'ok' : 'err'}"${r.err ? ` data-tooltip="${escAttr(r.err)}"` : ''}></i>`).join('');
+    const bad = h.filter(r => !r.ok).length;
+    const label = bad
+        ? (t('sched.sparkFails') || '{n} of the last {m} runs failed').replace('{n}', String(bad)).replace('{m}', String(h.length))
+        : (t('sched.sparkOk') || 'last {m} runs all fine').replace('{m}', String(h.length));
+    return `<span class="sched-spark" data-tooltip="${escAttr(label)}">${bars}</span>`;
+}
+
+/**
+ * When this task runs next — or why it does not.
+ *
+ * It used to return nothing at all for a disabled task, a manual one, a file watch or an event
+ * trigger. That is four of the ways a task can be sitting in the list doing nothing, each shown
+ * as an empty space, and "why has this not run" is the most common question anybody asks a
+ * scheduler.
+ *
+ * A time is still a time. Everything else gets the reason, in the same slot.
+ */
+function nextRunChip(task: Task): string {
+    const at = listNextRun({ enabled: !!task.enabled, manual: task.trigger.type === 'manual', owed: _owed.has(task.id) }, () => nextDue(task));
+    if (at !== null) {
+        return `<span class="sched-chip sched-chip-next" data-tooltip="${escAttr(new Date(at).toLocaleString())}">${escHtml(relTime(at))}</span>`;
+    }
+    const why = whyNotRunning(task);
+    const said = t(why.key).replace('{v}', why.v || '');
+    // Muted, not coloured: none of these is an error. A manual task that says "only when you
+    // press Run" is working exactly as intended, and a red chip would say otherwise.
+    return `<span class="sched-chip sched-chip-why" data-tooltip="${escAttr(said)}">${escHtml(said)}</span>`;
+}
+
+function stepCount(steps: Step[]): number {
+    let n = 0;
+    for (const s of steps || []) {
+        n++;
+        if (s.kind === 'if') n += stepCount(s.then) + stepCount(s.else);
+        else if (s.kind === 'repeat' || s.kind === 'forEach') n += stepCount(s.steps);
+        else if (s.kind === 'switch') n += stepCount(s.default) + (s.cases || []).reduce((acc, c) => acc + stepCount(c.steps), 0);
+        else if (s.kind === 'try') n += stepCount(s.steps) + stepCount(s.onError);
+        else if (s.kind === 'ensure') n += stepCount(s.steps);
+        else if (s.kind === 'retry') n += stepCount(s.steps);
+        else if (s.kind === 'parallel') n += (s.branches || []).reduce((acc, b) => acc + stepCount(b), 0);
+    }
+    return n;
+}
+/** Short weekday names for the weekly chip, Sunday first to match Date.getDay(). */
+function dowNames(): string[] {
+    return [0, 1, 2, 3, 4, 5, 6].map((i) => t(`sched.dow${i}`) || ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][i]);
+}
+
+/** The trigger, as a sentence.
+ *
+ *  It used to reuse the trigger PICKER's button labels as sentence prefixes, so an hourly
+ *  task's chip read "Every N minutes 1 h" and a daily one "Daily at time 03:00" — the
+ *  literal placeholder text, with the real value appended. They are separate strings now
+ *  because they are separate jobs: one names a choice, the other describes a schedule.
+ *
+ *  Weekly also SAYS WHICH DAYS. It never did, so "Weekly 20:00" was the same chip whether
+ *  the task ran on Mondays or every day but Monday. */
+function triggerLabel(tr: Trigger): string {
+    switch (tr.type) {
+        case 'once': return `${t('sched.lblOnce') || 'Once on'} ${new Date(tr.at).toLocaleString()}`;
+        case 'interval': return `${t('sched.lblEvery') || 'Every'} ${tr.everyMinutes} min`;
+        case 'hourly': return `${t('sched.lblEvery') || 'Every'} ${tr.everyHours} h`;
+        case 'dailyAt': return `${t('sched.lblDaily') || 'Daily at'} ${tr.time}`;
+        case 'weeklyAt': {
+            const names = dowNames();
+            const days = [...(tr.days || [])].sort((a, b) => a - b).map((d) => names[d]).filter(Boolean);
+            // Every day selected is "daily", not a seven-item list.
+            const when = days.length === 7 ? (t('sched.lblEveryDay') || 'every day') : days.join(', ');
+            return when
+                ? `${when} ${t('sched.lblAt') || 'at'} ${tr.time}`
+                : `${t('sched.lblWeeklyNoDay') || 'Weekly — no day picked'}`;
+        }
+        case 'monthlyAt': return `${t('sched.lblMonthly') || 'Day'} ${tr.day} ${t('sched.lblAt') || 'at'} ${tr.time}`;
+        case 'appStart': return t('sched.trAppStart') || 'On BMM start';
+        case 'watchFile': {
+            const name = String(tr.path || '').replace(/^.*[\\/]/, '');
+            return name
+                ? `${t('sched.trWatch') || 'When a file changes'}: ${name}`
+                : (t('sched.trWatchNoPath') || 'When a file changes — no file picked');
+        }
+        case 'onEvent': {
+            const ev = String(tr.event || '').trim();
+            const where = String(tr.where || '').trim();
+            return ev ? `${t('sched.trEvent')}: ${ev}${where ? ` (${t('sched.trEventWhere')}: ${where})` : ''}` : t('sched.trEventNone');
+        }
+        case 'afterTask': {
+            const other = _tasks.find((x) => x.id === tr.taskId);
+            if (!other) return t('sched.trAfterNone');
+            const suffix = tr.outcome === 'ok' ? t('sched.trAfterOk')
+                : tr.outcome === 'fail' ? t('sched.trAfterFail') : '';
+            return `${t('sched.trAfter')}: ${other.name}${suffix}`;
+        }
+        case 'script': {
+            const eng = String(tr.engine || 'powershell');
+            if (!String(tr.code || '').trim()) return t('sched.trScriptNone');
+            const every = `${eng}, ${t('sched.lblEvery') || 'every'} ${Math.max(1, Number(tr.everyMinutes) || 5)} ${t('sched.unitMin') || 'min'}`;
+            // The first real line of the script, so two probes on the same engine and the
+            // same interval do not read as the same trigger in the list.
+            const head = scriptFirstLine(tr.code, eng);
+            return head
+                ? `${t('sched.trScript')} — ${head} (${every})`
+                : `${t('sched.trScript')} (${every})`;
+        }
+        case 'condition': {
+            return tr.condition?.type
+                ? `${t('sched.trCondition')}: ${condSummary(tr.condition)}`
+                : t('sched.trConditionNone');
+        }
+        case 'rss': {
+            const host = hostOf(tr.url);
+            return host
+                ? `${t('sched.trRss')}: ${host} (${t('sched.lblEvery') || 'every'} ${Math.max(5, Number(tr.everyMinutes) || 15)} ${t('sched.unitMin') || 'min'})`
+                : t('sched.trRssNone');
+        }
+        case 'manual': return t('sched.trManual') || 'Manual only';
+    }
+}
+
+// ── Modal builder ─────────────────────────────────────────────────────────────
+let _editing: Task | null = null;
+let _draft: Task;
+
+// ── Undo / redo (Ctrl+Z / Ctrl+Y) — JSON snapshots of the whole draft ─────────
+let _undo: string[] = [];
+let _redo: string[] = [];
+let _histAttached = false;
+/** Capture the current draft BEFORE a structural change (add/delete/type switch). */
+function _snapshot(): void {
+    try { _undo.push(JSON.stringify(_draft)); } catch { return; }
+    if (_undo.length > 80) _undo.shift();
+    _redo = [];
+}
+function _rerenderModal(): void {
+    const modal = document.getElementById('modal-scheduler');
+    if (modal) {
+        const body = modal.querySelector('.sched-body') as HTMLElement | null;
+        const top = body ? body.scrollTop : 0;
+        renderModal(modal);
+        const nb = modal.querySelector('.sched-body') as HTMLElement | null;
+        if (nb) nb.scrollTop = top;
+    }
+}
+function _undoAction(): void {
+    if (!_undo.length) return;
+    try { _redo.push(JSON.stringify(_draft)); } catch {}
+    _draft = JSON.parse(_undo.pop()!);
+    _rerenderModal();
+    try { (window as any).toast?.(t('sched.undone') || 'Undone', 'info'); } catch {}
+}
+function _redoAction(): void {
+    if (!_redo.length) return;
+    try { _undo.push(JSON.stringify(_draft)); } catch {}
+    _draft = JSON.parse(_redo.pop()!);
+    _rerenderModal();
+    try { (window as any).toast?.(t('sched.redone') || 'Redone', 'info'); } catch {}
+}
+/** Attach Ctrl+Z / Ctrl+Y once; only acts while the scheduler modal is open and
+ *  the focus isn't in a text field (so native text undo still works there). */
+function _ensureHistoryKeys(): void {
+    if (_histAttached) return;
+    _histAttached = true;
+    document.addEventListener('keydown', (e) => {
+        const modal = document.getElementById('modal-scheduler');
+        if (!modal || !modal.classList.contains('open')) return;
+        if (!(e.ctrlKey || e.metaKey)) return;
+        // The flow canvas's undo/redo are registry commands (sched-flow-keys.ts), rebindable
+        // like every other shortcut; answering here too would undo twice.
+        if (flowKeyActive('flow')) return;
+        const tag = (e.target as HTMLElement)?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        const k = e.key.toLowerCase();
+        if (k === 'z' && !e.shiftKey) { e.preventDefault(); _undoAction(); }
+        else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); _redoAction(); }
+    }, true);
+}
+
+/** True when deleting the step would also discard inner steps (if/repeat). */
+function _stepHasContent(step: Step): boolean {
+    if (step.kind === 'if') return ((step.then?.length || 0) + (step.else?.length || 0)) > 0;
+    if (step.kind === 'repeat' || step.kind === 'forEach') return (step.steps?.length || 0) > 0;
+    if (step.kind === 'switch') return ((step.default?.length || 0) + (step.cases || []).reduce((a, c) => a + (c.steps?.length || 0), 0)) > 0;
+    if (step.kind === 'try') return ((step.steps?.length || 0) + (step.onError?.length || 0)) > 0;
+    if (step.kind === 'ensure') return (step.steps?.length || 0) > 0;
+    if (step.kind === 'retry') return (step.steps?.length || 0) > 0;
+    if (step.kind === 'parallel') return (step.branches || []).some((b) => b.length > 0);
+    return false;
+}
+/** Delete a step — confirms first if it contains inner steps, snapshots for undo. */
+async function _deleteStep(step: Step, steps: Step[], i: number, rerender: () => void): Promise<void> {
+    if (_stepHasContent(step)) {
+        const ok = await (window as any).confirmCustom?.(
+            t('sched.delTitle') || 'Delete this block?',
+            t('sched.delConfirm') || 'This block has steps inside it. Delete it and everything in it?',
+            'danger', { yesLabel: t('common.delete') || 'Delete', noLabel: t('common.cancel') || 'Cancel' });
+        if (!ok) return;
+    }
+    _snapshot();
+    steps.splice(i, 1);
+    rerender();
+}
+
+async function loadPickers(): Promise<void> {
+    const [profiles, mods, modpacks, builtin, installed, appsState] = await Promise.all([
+        invoke('get_profiles').catch(() => []),
+        invoke('get_all_mods').catch(() => []),
+        invoke('load_modpacks').catch(() => []),
+        invoke('list_builtin_themes').catch(() => '[]'),
+        invoke('list_installed_themes').catch(() => '[]'),
+        invoke('get_apps_state').catch(() => ({ installed: {} })),
+    ]);
+    _disks = await invoke('get_system_disks').catch(() => []) as any[];
+    _profiles = profiles as any[];
+    _mods = mods as any[];
+    _modpacks = modpacks as any[];
+    // The theme commands return a JSON *string* — parse before merging.
+    const parse = (v: any): any[] => { try { return Array.isArray(v) ? v : JSON.parse(v || '[]'); } catch { return []; } };
+    _themes = [...parse(builtin), ...parse(installed)].map((th: any) => ({ id: th.id, name: th.name || th.id }));
+    // Installed apps for the "Launch app" picker.
+    const inst = (appsState as any)?.installed || {};
+    _apps = Object.entries(inst).map(([id, info]: any) => ({ id, name: info?.title || id, exe: info?.exe_path || '' }));
+}
+
+/**
+ * Ready-made tasks, offered when creating a new one.
+ *
+ * The scheduler can express a great deal and an empty editor shows none of it: the first
+ * screen is a name field and an "add step" button, which teaches nothing about what a
+ * task can be. Each preset is a real, complete task that does something worth doing on
+ * its own — not a demo — so it can be saved unchanged or used as a starting point.
+ *
+ * Every action type, parameter name, condition source and trigger shape below was read
+ * out of runAction/VALUE_SOURCES rather than remembered. A preset with an invented field
+ * would be worse than no preset: it is presented as the correct way to do the thing.
+ *
+ * Nothing here needs a permission. A preset that arrives already asking to run scripts or
+ * kill processes trains people to grant those without reading, which is the opposite of
+ * what splitting the permissions was for — the two that touch other programs are written
+ * so the user has to grant it deliberately, and say so in their description.
+ */
+/** What a preset is FOR. The picker groups by this, and the order below is the order the
+ *  groups appear in: what you came for first, the housekeeping after it. */
+type PresetCat = 'mods' | 'upkeep' | 'watch' | 'repo' | 'advanced' | 'nav';
+const PRESET_CATS: { cat: PresetCat; label: string; key: string }[] = [
+    { cat: 'mods', key: 'sched.presetCat.mods', label: 'Mods & profiles' },
+    { cat: 'upkeep', key: 'sched.presetCat.upkeep', label: 'Backups & upkeep' },
+    { cat: 'watch', key: 'sched.presetCat.watch', label: 'Watching something' },
+    { cat: 'repo', key: 'sched.presetCat.repo', label: 'Repos & syncing' },
+    { cat: 'advanced', key: 'sched.presetCat.advanced', label: 'Chains & variables' },
+    { cat: 'nav', key: 'sched.presetCat.nav', label: 'Guided tours & navigation' },
+];
+
+/** A choice a template asks for when it is used (« download only, or download and install »). */
+interface PresetOption { opt: string; choices: string[]; dflt: string }
+type PresetDef = { cat: PresetCat; key: string; icon: IconName; title: string; desc: string; options?: PresetOption[]; make: (opt?: Record<string, string>) => Partial<Task> };
+const PRESETS: PresetDef[] = [
+    {
+        // The flagship package template (sched-dcs-gate.ts): built from a guided form that asks
+        // only the server, the list, whether the server checks players, and where DCS is. What
+        // the gallery shows is the shape of it; « Use this template » opens the form.
+        cat: 'mods', key: 'dcsJoinGate',
+        icon: 'game',
+        title: 'DCS: server join gate',
+        desc: 'Checks your mod list is active and intact, installs the server hook if the server asks for it, then starts DCS; otherwise says what is missing and offers to fix it.',
+        make: () => ({
+            ...buildJoinGate({ server: '', whitelist: true, listPath: '', exact: true, dcsExe: '', grantFiles: false, grantCommand: false }, gateWords(t)),
+            name: t('sched.preset.dcsJoinGate'),
+            permissions: { files: true, command: true },
+        }),
+    },
+    {
+        // Two presets for the same idea: notice which server you are on, put the right mods
+        // on before the loading screen decides for you. This one is DCS because DCS can be
+        // ASKED — it has a supported hook API — so it does not have to guess from a log.
+        //
+        // Both arrive with the path and the list blank on purpose. A preset that filled them
+        // in with a guess would be a task that looks configured, runs, finds nothing, and
+        // reports success.
+        cat: 'mods', key: 'dcsServer',
+        icon: 'game',
+        title: 'DCS: the right mods for the server you joined',
+        desc: 'Sets up the DCS watcher, then applies the mod list for whichever server you join.',
+        make: () => ({
+            name: 'DCS — mods for this server',
+            // The file the DCS hook writes. Left blank so the trigger editor's "Set up DCS"
+            // button fills it in — it is the same click that installs the hook, and a path
+            // typed here without the hook installed watches a file nothing will ever write.
+            trigger: { type: 'watchFile', path: '' },
+            steps: [
+                // Which server. The hook writes JSON, so one pattern gets the name out of it.
+                {
+                    kind: 'action',
+                    action: {
+                        type: 'text.extract',
+                        params: { path: '', regex: '\"server\"\s*:\s*\"([^\"]*)\"', group: 1, target: 'server', tailKb: 4 },
+                    },
+                },
+                // Nothing to do when you left the server rather than joined one. Without
+                // this the task fires on disconnect too and re-applies a list for a session
+                // that has ended.
+                {
+                    kind: 'if',
+                    condition: { type: 'textIs', params: { source: 'server', op: 'notEmpty' } },
+                    then: [
+                        {
+                            kind: 'if',
+                            condition: { type: 'textIs', params: { source: 'server', op: 'contains', value: 'Blue Flag' } },
+                            // `exact` is on: a strict server means the list AND NOTHING ELSE,
+                            // and one extra mod is the same rejection as a missing one.
+                            then: [{ kind: 'action', action: { type: 'modlist.apply', params: { path: '', install: true, exact: true } } }],
+                            else: [{ kind: 'action', action: { type: 'notify', params: { message: 'No mod list set for {text.server}.' } } }],
+                        },
+                    ],
+                    else: [],
+                },
+            ],
+        }),
+    },
+    {
+        // The same thing for a game with no hook API: watch its log, read the server out of
+        // a line, branch. Every game that prints what it connected to can do this, and the
+        // only part that changes between them is the pattern.
+        cat: 'mods', key: 'gameServer',
+        icon: 'server',
+        title: 'Any game: mods for the server in the log',
+        desc: 'Watch a game log, read the server name out of a line, apply the matching mod list.',
+        make: () => ({
+            name: 'Server → mod list',
+            trigger: { type: 'watchFile', path: '' },
+            steps: [
+                {
+                    kind: 'action',
+                    action: {
+                        // The pattern is the one thing to change per game. It reads: find the
+                        // last line saying "connected to X" and keep X.
+                        type: 'text.extract',
+                        params: { path: '', regex: 'connect(?:ed|ing)? to[: ]+(.+)', group: 1, target: 'server', tailKb: 64 },
+                    },
+                },
+                {
+                    kind: 'if',
+                    condition: { type: 'textIs', params: { source: 'server', op: 'notEmpty' } },
+                    then: [
+                        { kind: 'action', action: { type: 'notify', params: { message: 'Joined {text.server} — applying its mod list.' } } },
+                        { kind: 'action', action: { type: 'modlist.apply', params: { url: '', install: true, exact: false } } },
+                    ],
+                    else: [],
+                },
+            ],
+        }),
+    },
+    {
+        cat: 'upkeep', key: 'backup', icon: 'save',
+        title: 'Weekly backup',
+        desc: 'Every Monday at 09:00, export your BMM data and say so.',
+        make: () => ({
+            name: 'Weekly backup',
+            trigger: { type: 'weeklyAt', time: '09:00', days: [1] },
+            steps: [
+                { kind: 'action', action: { type: 'data.exportAuto', params: { increment: true } } },
+                { kind: 'action', action: { type: 'notify', params: { message: 'Weekly backup done.' } } },
+            ],
+        }),
+    },
+    {
+        cat: 'upkeep', key: 'updates', icon: 'refresh',
+        title: 'Tell me about updates',
+        desc: 'Every morning, check for mod and BMM updates — and only notify if there is one.',
+        make: () => ({
+            name: 'Check for updates',
+            trigger: { type: 'dailyAt', time: '09:00' },
+            steps: [
+                { kind: 'action', action: { type: 'mods.checkUpdates', params: {} } },
+                { kind: 'action', action: { type: 'app.checkUpdate', params: {} } },
+                // The point of the `if`: a daily "no updates" toast is a notification people
+                // learn to dismiss without reading, which costs you the one that mattered.
+                {
+                    kind: 'if',
+                    condition: { type: 'value', params: { source: 'update.available', op: '==', value: 1 } },
+                    then: [{ kind: 'action', action: { type: 'notify', params: { message: 'A BMM update is available.' } } }],
+                    else: [],
+                },
+            ],
+        }),
+    },
+    {
+        cat: 'upkeep', key: 'disk', icon: 'hard-drive',
+        title: 'Warn me before the disk fills',
+        desc: 'Twice a day, check free space and warn under 20 GB. Silent otherwise.',
+        make: () => ({
+            name: 'Low disk space warning',
+            trigger: { type: 'interval', everyMinutes: 720 },
+            steps: [
+                { kind: 'action', action: { type: 'perf.diskSpace', params: {} } },
+                {
+                    kind: 'if',
+                    condition: { type: 'value', params: { source: 'disk.free_gb', op: '<', value: 20 } },
+                    then: [{ kind: 'action', action: { type: 'notify', params: { message: 'Less than 20 GB free — mods may fail to install.' } } }],
+                    else: [],
+                },
+            ],
+        }),
+    },
+    {
+        cat: 'mods', key: 'scan', icon: 'folder',
+        title: 'Rescan mods when BMM opens',
+        desc: 'Picks up anything you added to the mods folder outside BMM.',
+        make: () => ({
+            name: 'Rescan mods on start',
+            trigger: { type: 'appStart' },
+            steps: [{ kind: 'action', action: { type: 'mods.scan', params: {} } }],
+        }),
+    },
+    {
+        cat: 'mods', key: 'aftergame', icon: 'game',
+        title: 'Tidy up after the game closes',
+        desc: 'Waits for the game to exit, then stops its launcher and rescans your mods. Fill in the two names, and grant “Stop programs”.',
+        make: () => ({
+            name: 'Tidy up after playing',
+            trigger: { type: 'interval', everyMinutes: 5 },
+            steps: [
+                // Guard first: without it this task fires every five minutes forever, and
+                // "the game is not running" is true almost all day.
+                {
+                    kind: 'if',
+                    condition: { type: 'appRunning', params: { name: '' } },
+                    then: [],
+                    else: [{ kind: 'action', action: { type: 'task.stop', params: { reason: 'the game is not running' } } }],
+                },
+                {
+                    kind: 'waitFor',
+                    condition: { type: 'appNotRunning', params: { name: '' } },
+                    timeoutSec: 14400, pollSec: 30, onTimeout: 'abort',
+                },
+                { kind: 'action', action: { type: 'app.stop', params: { name: '' } } },
+                { kind: 'action', action: { type: 'mods.scan', params: {} } },
+            ],
+        }),
+    },
+    {
+        cat: 'upkeep', key: 'diskguard', icon: 'warning',
+        title: 'Stop early if the disk is nearly full',
+        desc: 'A guard for the TOP of another task: checks free space and stops cleanly under 10 GB, so the real work never starts on a full disk.',
+        make: () => ({
+            name: 'Disk guard',
+            trigger: { type: 'manual' },
+            steps: [
+                { kind: 'action', action: { type: 'perf.diskSpace', params: {} } },
+                {
+                    kind: 'if',
+                    condition: { type: 'value', params: { source: 'disk.free_gb', op: '<', value: 10 } },
+                    // Stopping is CLEAN, not an error: a guard that failed the task would
+                    // fill the history with red for the exact case it was written to handle.
+                    then: [{ kind: 'action', action: { type: 'task.stop', params: { reason: 'Less than 10 GB free — stopped before doing anything.' } } }],
+                    else: [],
+                },
+            ],
+        }),
+    },
+    {
+        cat: 'mods', key: 'rescan', icon: 'search',
+        title: 'Rescan the library every morning',
+        desc: 'Picks up mods added or removed outside BMM, before you sit down to play.',
+        make: () => ({
+            name: 'Morning rescan',
+            trigger: { type: 'dailyAt', time: '08:00' },
+            steps: [{ kind: 'action', action: { type: 'mods.scan', params: {} } }],
+        }),
+    },
+    {
+        cat: 'watch', key: 'watchsite', icon: 'clock',
+        title: 'Tell me when a server stops answering',
+        desc: 'Calls an address every 30 minutes and speaks up only when the answer is not 200. Put your own URL in the step — needs “Run external programs”.',
+        make: () => ({
+            name: 'Server watch',
+            trigger: { type: 'interval', everyMinutes: 30 },
+            steps: [
+                // allowAnyStatus on purpose: the point is to SEE a bad status and react to
+                // it, and the default would abort the task before reaching the check below.
+                { kind: 'action', action: { type: 'http.request', params: { url: 'https://example.com/health', method: 'GET', allowAnyStatus: true, timeoutMs: 10000 } } },
+                {
+                    kind: 'if',
+                    condition: { type: 'value', params: { source: 'http.status', op: '!=', value: 200 } },
+                    then: [{ kind: 'action', action: { type: 'notify', params: { message: 'The server did not answer 200.' } } }],
+                    else: [],
+                },
+            ],
+        }),
+    },
+    {
+        cat: 'advanced', key: 'sharedvar', icon: 'database',
+        title: 'Share a value with your other tasks',
+        desc: 'Writes one shared variable that every other task can read as {sharedNote}. A building block rather than a finished job.',
+        make: () => ({
+            name: 'Set a shared value',
+            trigger: { type: 'manual' },
+            steps: [
+                { kind: 'action', action: { type: 'var.set', params: { name: 'sharedNote', value: 'edit me', scope: 'shared' } } },
+                { kind: 'action', action: { type: 'notify', params: { message: 'Saved. Other tasks can now read {sharedNote}.' } } },
+            ],
+        }),
+    },
+    // ── the doors that open outward ──────────────────────────────────────────
+    //
+    // Everything above this line is BMM talking to itself. These three — a deeplink, an HTTP
+    // call, a plugin — are how a task reaches anything else, and they are the ones nobody
+    // starts from, because knowing they exist means having read the action list to the end.
+    {
+        cat: 'watch', key: 'apiPing', icon: 'network',
+        title: 'Watch a service and say when it breaks',
+        desc: 'Every 15 minutes, call an HTTP endpoint. Notify only when it stops answering.',
+        make: () => ({
+            name: 'Watch a service',
+            trigger: { type: 'interval', everyMinutes: 15 },
+            // `command` because an HTTP call can post a captured variable anywhere — the
+            // runner asks for that permission and refuses without it.
+            permissions: { command: true },
+            steps: [
+                { kind: 'action', action: { type: 'http.request', params: { url: 'https://example.com/health', method: 'GET', timeoutMs: 10000 } } },
+                // http.status is set by the call above under a name a variable cannot collide
+                // with, because dots are not allowed in one.
+                { kind: 'if', condition: { type: 'value', params: { source: 'http.status', op: '!=', value: 200 } },
+                  then: [{ kind: 'action', action: { type: 'notify', params: { message: 'The service answered {http.status}.' } } }],
+                  else: [] },
+            ],
+        }),
+    },
+    {
+        cat: 'advanced', key: 'deeplinkOpen', icon: 'link',
+        title: 'Open a BMM screen on a schedule',
+        desc: 'Open a screen or a window (the library, the docs, the theme editor) at a set time.',
+        make: () => ({
+            name: 'Open a screen',
+            trigger: { type: 'dailyAt', time: '18:00' },
+            permissions: { deeplink: true },
+            steps: [
+                // A typed step, not a raw bmm:// link: the generic deeplink step is removed
+                // (security summary §9 #15). view.open still fires its link through the
+                // handler, which is why the task asks for `deeplink`.
+                { kind: 'action', action: { type: 'view.open', params: { place: 'view:library', id: 'library' } } },
+            ],
+        }),
+    },
+    {
+        cat: 'advanced', key: 'pluginNight', icon: 'package',
+        title: 'Compare a plugin, then apply it',
+        desc: 'See what a plugin would change before it changes it — and only apply if it differs.',
+        make: () => ({
+            name: 'Apply a plugin modlist',
+            trigger: { type: 'weeklyAt', time: '20:00', days: [5] },
+            permissions: { deeplink: true },
+            steps: [
+                // Compare first. Applying blind is how a modlist that was edited upstream
+                // rearranges a profile somebody spent an evening on.
+                { kind: 'action', action: { type: 'plugin.compare', params: { id: '' } } },
+                { kind: 'delay', seconds: 5 },
+                { kind: 'action', action: { type: 'plugin.apply', params: { id: '' } } },
+                { kind: 'action', action: { type: 'notify', params: { message: 'Plugin applied.' } } },
+            ],
+        }),
+    },
+    {
+        cat: 'repo', key: 'sshNightly', icon: 'terminal',
+        title: 'Publish the repo over SSH, nightly',
+        desc: 'Export, then send it to the saved SSH target. Needs a key with no passphrase.',
+        make: () => ({
+            name: 'Nightly publish',
+            trigger: { type: 'dailyAt', time: '04:00' },
+            steps: [
+                { kind: 'action', action: { type: 'repo.gen', params: {} } },
+                { kind: 'action', action: { type: 'repo.publishSsh', params: { dir: '' } } },
+                { kind: 'action', action: { type: 'notify', params: { message: 'Repo published.' } } },
+            ],
+        }),
+    },
+    {
+        cat: 'repo', key: 'unattendedSync', icon: 'refresh',
+        title: 'Sync a repo while you sleep',
+        desc: 'A real sync, not a screen. Nothing to press at 3am.',
+        make: () => ({
+            name: 'Unattended sync',
+            trigger: { type: 'dailyAt', time: '03:00' },
+            steps: [
+                { kind: 'action', action: { type: 'repo.syncNow', params: {} } },
+                { kind: 'action', action: { type: 'notify', params: { message: 'Repo synced.' } } },
+            ],
+        }),
+    },
+    {
+        cat: 'upkeep', key: 'packBackup', icon: 'package',
+        title: 'Export your modpacks every week',
+        desc: 'A .bmp beside your data, so a broken profile is an import away from fixed.',
+        make: () => ({
+            name: 'Weekly modpack export',
+            trigger: { type: 'weeklyAt', time: '10:00', days: [0] },
+            steps: [
+                { kind: 'action', action: { type: 'mods.exportModpack', params: {} } },
+            ],
+        }),
+    },
+    {
+        // What a content id is FOR, as a task somebody can run.
+        //
+        // A local id says which entry on THIS machine; it says nothing about whether that
+        // entry still holds what it held when you wrote the automation down. Somebody edits
+        // the pack, the id does not change, and the task keeps applying a different thing
+        // under the same name. The content id is what notices.
+        //
+        // Both fields arrive blank on purpose. Filled in with a guess, this would be a task
+        // that looks configured, runs, matches nothing and reports success.
+        cat: 'advanced', key: 'packUnchanged', icon: 'check',
+        title: 'Apply a modpack only if it has not changed',
+        desc: 'Reads what the pack IS and compares it to the id you recorded, so an edited pack stops rather than applying quietly.',
+        make: () => ({
+            name: 'Apply the pack I meant',
+            trigger: { type: 'manual' },
+            steps: [
+                // Copy the pack's Content ID from its card into the value below, once.
+                { kind: 'action', action: { type: 'id.of', params: { kind: 'modpack', id: '', into: 'packNow' } } },
+                {
+                    kind: 'if',
+                    condition: { type: 'textIs', params: { source: 'packNow', op: 'is', value: '' } },
+                    then: [
+                        { kind: 'action', action: { type: 'modpack.enable', params: { id: '' } } },
+                    ],
+                    else: [
+                        { kind: 'action', action: { type: 'notify', params: { message: 'That modpack is not the one this task was written for \u2014 nothing applied.', level: 'warning' } } },
+                        { kind: 'action', action: { type: 'task.stop', params: { reason: 'the pack changed' } } },
+                    ],
+                },
+            ],
+        }),
+    },
+    {
+        cat: 'repo', key: 'diskThenSync', icon: 'hard-drive',
+        title: 'Only sync if there is room',
+        desc: 'Check free space first, and stop with a reason rather than filling the disk.',
+        make: () => ({
+            name: 'Sync if there is room',
+            trigger: { type: 'dailyAt', time: '02:00' },
+            steps: [
+                { kind: 'action', action: { type: 'perf.diskSpace', params: {} } },
+                // A guard clause, not an if/else: stopping says WHY in the run log, while an
+                // empty else branch looks like the task ran and did nothing.
+                { kind: 'if', condition: { type: 'value', params: { source: 'disk.free_gb', op: '<', value: 5 } },
+                  then: [{ kind: 'action', action: { type: 'task.stop', params: { reason: 'Less than 5 GB free — not syncing.' } } }],
+                  else: [] },
+                { kind: 'action', action: { type: 'repo.syncNow', params: {} } },
+            ],
+        }),
+    },
+    {
+        cat: 'advanced', key: 'apiChain', icon: 'workflow',
+        title: 'Read a value from an API and keep it',
+        desc: 'Pull one field out of a JSON response into a shared variable other tasks can read.',
+        make: () => ({
+            name: 'Read a value from an API',
+            trigger: { type: 'interval', everyMinutes: 60 },
+            permissions: { command: true },
+            steps: [
+                // jsonPath pulls ONE field out. Without it every task that reads an API needs
+                // a script step just to get at a value, which is the common case.
+                { kind: 'action', action: { type: 'http.request', params: { url: 'https://example.com/api/status.json', method: 'GET', jsonPath: 'version', into: 'apiVersion', timeoutMs: 10000 } } },
+                { kind: 'action', action: { type: 'notify', params: { message: 'Upstream is at {apiVersion}.' } } },
+            ],
+        }),
+    },
+    {
+        cat: 'mods', key: 'gameNight', icon: 'game',
+        title: 'Friday game night',
+        desc: 'Every Friday at 19:00, switch to the profile and the modpack you play with. Pick both in the steps.',
+        make: () => ({
+            name: 'Game night setup',
+            trigger: { type: 'weeklyAt', time: '19:00', days: [5] },
+            steps: [
+                { kind: 'action', action: { type: 'profile.activate', params: { id: '' } } },
+                { kind: 'action', action: { type: 'modpack.enable', params: { id: '' } } },
+                { kind: 'action', action: { type: 'notify', params: { message: 'Game night setup is on.' } } },
+            ],
+        }),
+    },
+    {
+        cat: 'mods', key: 'cleanSlate', icon: 'clear',
+        title: 'Start from a clean slate',
+        desc: 'Turn every mod off, then enable one modpack — the state you want, and nothing left over from last time.',
+        make: () => ({
+            name: 'Clean slate',
+            trigger: { type: 'manual' },
+            steps: [
+                { kind: 'action', action: { type: 'mods.disableAll', params: {} } },
+                { kind: 'action', action: { type: 'modpack.enable', params: { id: '' } } },
+                { kind: 'action', action: { type: 'notify', params: { message: 'Clean slate applied.' } } },
+            ],
+        }),
+    },
+    {
+        cat: 'upkeep', key: 'monthlyBackup', icon: 'calendar',
+        title: 'Full backup on the 1st',
+        desc: 'On the first of every month, a complete export of your data plus your modpacks — the one you restore from.',
+        make: () => ({
+            name: 'Monthly full backup',
+            trigger: { type: 'monthlyAt', day: 1, time: '07:00' },
+            steps: [
+                { kind: 'action', action: { type: 'data.exportAuto', params: { increment: false } } },
+                { kind: 'action', action: { type: 'mods.exportModpack', params: {} } },
+                { kind: 'action', action: { type: 'notify', params: { message: 'Monthly full backup done.' } } },
+            ],
+        }),
+    },
+    {
+        cat: 'upkeep', key: 'onlineUpdates', icon: 'cloud',
+        title: 'Check for updates only when online',
+        desc: 'The daily update check, skipped cleanly when there is no connection — so an offline morning never logs a failure.',
+        make: () => ({
+            name: 'Update check (online only)',
+            trigger: { type: 'dailyAt', time: '09:00' },
+            steps: [
+                {
+                    kind: 'if',
+                    condition: { type: 'online', params: {} },
+                    then: [
+                        { kind: 'action', action: { type: 'mods.checkUpdates', params: {} } },
+                        { kind: 'action', action: { type: 'app.checkUpdate', params: {} } },
+                        {
+                            kind: 'if',
+                            condition: { type: 'value', params: { source: 'update.available', op: '==', value: 1 } },
+                            then: [{ kind: 'action', action: { type: 'notify', params: { message: 'A BMM update is available.' } } }],
+                            else: [],
+                        },
+                    ],
+                    else: [{ kind: 'action', action: { type: 'task.stop', params: { reason: 'offline — skipped the update check' } } }],
+                },
+            ],
+        }),
+    },
+    {
+        cat: 'upkeep', key: 'startupChecklist', icon: 'clipboard-list',
+        title: 'Startup checklist',
+        desc: 'When BMM opens: rescan the library, then warn if the disk is under 15 GB. Silent when all is well.',
+        make: () => ({
+            name: 'Startup checklist',
+            trigger: { type: 'appStart' },
+            steps: [
+                { kind: 'action', action: { type: 'mods.scan', params: {} } },
+                { kind: 'action', action: { type: 'perf.diskSpace', params: {} } },
+                {
+                    kind: 'if',
+                    condition: { type: 'value', params: { source: 'disk.free_gb', op: '<', value: 15 } },
+                    then: [{ kind: 'action', action: { type: 'notify', params: { message: 'Under 15 GB free — time to make room.', level: 'warning' } } }],
+                    else: [],
+                },
+            ],
+        }),
+    },
+    {
+        cat: 'watch', key: 'fileArrived', icon: 'download',
+        title: 'React when a file changes',
+        desc: 'Watches one file you name — a launcher log, a download marker — and rescans the library the moment it changes.',
+        make: () => ({
+            name: 'File watcher',
+            trigger: { type: 'watchFile', path: '' },
+            steps: [
+                { kind: 'action', action: { type: 'mods.scan', params: {} } },
+                { kind: 'action', action: { type: 'notify', params: { message: 'The watched file changed — library rescanned.' } } },
+            ],
+        }),
+    },
+    {
+        cat: 'watch', key: 'gameProfile', icon: 'profile',
+        title: 'Switch profile when the game starts',
+        desc: 'Every 2 minutes: if the game is running and its profile is not active, activate it. Name the program and pick the profile.',
+        make: () => ({
+            name: 'Profile follows the game',
+            trigger: { type: 'interval', everyMinutes: 2 },
+            steps: [
+                {
+                    kind: 'if',
+                    condition: { type: 'appRunning', params: { name: '' } },
+                    then: [
+                        {
+                            kind: 'if',
+                            condition: { type: 'profileActive', params: { id: '' } },
+                            then: [],
+                            else: [
+                                { kind: 'action', action: { type: 'profile.activate', params: { id: '' } } },
+                                { kind: 'action', action: { type: 'notify', params: { message: 'Switched to the game profile.' } } },
+                            ],
+                        },
+                    ],
+                    else: [],
+                },
+            ],
+        }),
+    },
+    {
+        cat: 'repo', key: 'syncAfterTask', icon: 'link',
+        title: 'Sync once another task succeeds',
+        desc: 'A chain: runs right after the task you pick finishes WITHOUT error, and syncs the repo. Pick the task in the trigger.',
+        make: () => ({
+            name: 'Sync after…',
+            trigger: { type: 'afterTask', taskId: '', outcome: 'ok' },
+            steps: [
+                { kind: 'action', action: { type: 'repo.syncNow', params: {} } },
+                { kind: 'action', action: { type: 'notify', params: { message: 'Synced after the other task finished.' } } },
+            ],
+        }),
+    },
+    {
+        cat: 'advanced', key: 'pollThrice', icon: 'refresh',
+        title: 'Check three times, then stop',
+        desc: 'A repeat block: three checks ten minutes apart, warning under 10 GB — the shape of any wait-and-see task.',
+        make: () => ({
+            name: 'Three checks',
+            trigger: { type: 'manual' },
+            steps: [
+                {
+                    kind: 'repeat', mode: 'times', times: 3, maxIters: 3, everySec: 600,
+                    steps: [
+                        { kind: 'action', action: { type: 'perf.diskSpace', params: {} } },
+                        {
+                            kind: 'if',
+                            condition: { type: 'value', params: { source: 'disk.free_gb', op: '<', value: 10 } },
+                            then: [{ kind: 'action', action: { type: 'notify', params: { message: 'Under 10 GB free.', level: 'warning' } } }],
+                            else: [],
+                        },
+                    ],
+                },
+            ],
+        }),
+    },
+    {
+        cat: 'advanced', key: 'nightTheme', icon: 'palette',
+        title: 'Night theme in the evening',
+        desc: 'At 20:00 switch to a dark theme, unless it is already on. Duplicate it with a morning time and a light theme for the other half.',
+        make: () => ({
+            name: 'Night theme',
+            trigger: { type: 'dailyAt', time: '20:00' },
+            steps: [
+                // The guard is the point. Before `themeActive` existed this preset re-applied
+                // the theme every evening and said "Night theme on." every evening, whether
+                // or not anything changed — a notification that means nothing is one people
+                // learn to ignore, including the ones that matter.
+                {
+                    kind: 'if',
+                    condition: { type: 'themeActive', negate: true, params: { id: 'bmm-void' } },
+                    then: [
+                        { kind: 'action', action: { type: 'theme.set', params: { id: 'bmm-void' } } },
+                        { kind: 'action', action: { type: 'notify', params: { message: 'Night theme on.' } } },
+                    ],
+                    else: [],
+                },
+            ],
+        }),
+    },
+
+    // ── Asking before doing ────────────────────────────────────────────
+    //
+    // Each of these is a shape that could not be written before: the task could do the
+    // thing and could not ask about it first, so the only version that existed did it
+    // every time.
+    {
+        cat: 'mods', key: 'enableIfInstalled', icon: 'check',
+        title: 'Enable a mod, or say it is missing',
+        desc: 'Enables the mod you pick when it is installed, and tells you when it is not — instead of failing silently on a mod that was removed.',
+        make: () => ({
+            name: 'Enable if installed',
+            trigger: { type: 'manual' },
+            steps: [
+                {
+                    kind: 'if',
+                    condition: { type: 'modInstalled', params: { id: '' } },
+                    then: [ { kind: 'action', action: { type: 'mod.enable', params: { id: '' } } } ],
+                    else: [ { kind: 'action', action: { type: 'notify', params: { message: 'That mod is not installed on this machine.' } } } ],
+                },
+            ],
+        }),
+    },
+    {
+        cat: 'mods', key: 'profileOnce', icon: 'user',
+        title: 'Make a profile, once',
+        desc: 'Creates the profile only when it is not already there — so a monthly or seasonal task can run every time without replacing the one you have been using.',
+        make: () => ({
+            name: 'Profile, once',
+            trigger: { type: 'manual' },
+            steps: [
+                {
+                    kind: 'if',
+                    condition: { type: 'profileExists', negate: true, params: { id: '' } },
+                    then: [
+                        { kind: 'action', action: { type: 'profile.create', params: { name: 'New season' } } },
+                        { kind: 'action', action: { type: 'notify', params: { message: 'Created the profile.' } } },
+                    ],
+                    else: [],
+                },
+            ],
+        }),
+    },
+    {
+        cat: 'upkeep', key: 'librarySize', icon: 'activity',
+        title: 'Warn when the library gets big',
+        desc: 'Reads the counts and says something when this install passes 400 mods — the point where scanning and deploying start to be worth watching.',
+        make: () => ({
+            name: 'Library size',
+            trigger: { type: 'weeklyAt', days: [1], time: '09:00' },
+            steps: [
+                { kind: 'action', action: { type: 'library.counts', params: { into: 'lib' } } },
+                {
+                    kind: 'if',
+                    condition: { type: 'value', params: { source: 'lib.mods', op: '>', value: 400 } },
+                    then: [ { kind: 'action', action: { type: 'notify', params: { message: '{lib.mods} mods installed, {lib.enabled} of them on.' } } } ],
+                    else: [],
+                },
+            ],
+        }),
+    },
+    {
+        cat: 'advanced', key: 'countsAround', icon: 'scale',
+        title: 'Measure what a step changed',
+        desc: 'Counts the library before and after, then reports the difference. The shape for "did that import actually bring anything in?".',
+        make: () => ({
+            name: 'Before and after',
+            trigger: { type: 'manual' },
+            steps: [
+                { kind: 'action', action: { type: 'library.counts', params: { into: 'before' } } },
+                { kind: 'action', action: { type: 'mods.scan', params: {} } },
+                { kind: 'action', action: { type: 'library.counts', params: { into: 'after' } } },
+                { kind: 'action', action: { type: 'math.set', params: { name: 'GAINED', expr: '{after.mods} - {before.mods}' } } },
+                { kind: 'action', action: { type: 'notify', params: { message: 'The scan found {GAINED} more mod(s).' } } },
+            ],
+        }),
+    },
+    {
+        cat: 'watch', key: 'themeGuard', icon: 'contrast',
+        title: 'Put the theme back',
+        desc: 'Every hour, if the theme is not the one you chose, set it back. For a shared machine, or after trying something out and forgetting.',
+        make: () => ({
+            name: 'Theme guard',
+            trigger: { type: 'interval', everyMinutes: 60 },
+            steps: [
+                {
+                    kind: 'if',
+                    condition: { type: 'themeActive', negate: true, params: { id: '' } },
+                    then: [ { kind: 'action', action: { type: 'theme.set', params: { id: '' } } } ],
+                    else: [],
+                },
+            ],
+        }),
+    },
+    // ── Laya ──────────────────────────────────────────────────────────────────
+    //
+    // Each asks for the `ai` grant (listed, not granted: the user ticks it) and each starts with
+    // what Laya can do on THIS PC — a task that fires with AI off is refused at its first Laya
+    // step anyway, but saying « not available » is better than a failed run every night.
+    {
+        cat: 'mods', key: 'layaTagMods', icon: 'ai',
+        title: 'Tag new mods with Laya',
+        desc: 'Every night, finds the mods with no tag and lets Laya tag them from their own files. Tags are written only if « apply without asking » is on in Laya’s answer settings.',
+        make: () => ({
+            name: 'Laya — tag untagged mods',
+            trigger: { type: 'dailyAt', time: '03:00' },
+            permissions: { ai: true },
+            steps: [
+                { kind: 'action', action: { type: 'ai.status', params: {} } },
+                {
+                    kind: 'if',
+                    condition: { type: 'value', params: { source: 'ai.available', op: '==', value: 1 } },
+                    then: [
+                        // No Laya suggestions here: the loop below asks for each mod itself.
+                        { kind: 'action', action: { type: 'ai.library_check', params: { suggest: 0 } } },
+                        // Ten at most: each mod is one step of the run's Laya budget.
+                        { kind: 'forEach', source: 'list', listName: 'ai.library.untagged', maxIters: 10, everySec: 0, steps: [
+                            { kind: 'action', action: { type: 'ai.classify_mod', params: { id: '{item.id}', apply: true } } },
+                        ] },
+                    ],
+                    else: [],
+                },
+            ],
+        }),
+    },
+    {
+        cat: 'watch', key: 'layaCrashNotify', icon: 'ai',
+        title: 'Label new crashes and tell me',
+        desc: 'When BMM starts, Laya finds the probable cause of each crash report that arrived since last time, and you get one message with the latest.',
+        make: () => ({
+            name: 'Laya — label new crashes',
+            // A crash closes BMM: the report is there the next time it starts.
+            trigger: { type: 'appStart' },
+            permissions: { ai: true },
+            steps: [
+                { kind: 'action', action: { type: 'ai.crash_label', params: { scope: 'new', limit: 12 } } },
+                {
+                    kind: 'if',
+                    condition: { type: 'value', params: { source: 'ai.crash.count', op: '>', value: 0 } },
+                    then: [
+                        {
+                            kind: 'if',
+                            condition: { type: 'crashCause', params: { field: 'family', value: 'disk', min: 0.5, scope: 'latest' } },
+                            then: [ { kind: 'action', action: { type: 'notify', params: { message: 'Laya: the latest crash looks like a disk problem (space, access, a missing file).' } } } ],
+                            else: [ { kind: 'action', action: { type: 'notify', params: { message: 'Laya labelled {ai.crash.count} new crash report(s). Latest: {ai.crash.family} / {ai.crash.cause}.' } } } ],
+                        },
+                    ],
+                    else: [],
+                },
+            ],
+        }),
+    },
+    {
+        cat: 'upkeep', key: 'layaWeeklyCheck', icon: 'ai',
+        title: 'Weekly library check',
+        desc: 'Every Monday, lists likely duplicate mods, mods overwriting each other and mods with no tag — and Laya’s tags for a few of them. Nothing is changed.',
+        make: () => ({
+            name: 'Laya — weekly library check',
+            trigger: { type: 'weeklyAt', days: [1], time: '10:00' },
+            permissions: { ai: true },
+            steps: [
+                { kind: 'action', action: { type: 'ai.library_check', params: { suggest: 5 } } },
+                {
+                    kind: 'if',
+                    condition: { type: 'aiLibraryCount', params: { kind: 'findings', op: '>=', value: 1 } },
+                    then: [ { kind: 'action', action: { type: 'notify', params: { message: 'Library check: {ai.lib.duplicates} likely duplicate(s), {ai.lib.conflicts} overlap(s), {ai.lib.untagged} mod(s) with no tag.' } } } ],
+                    else: [],
+                },
+            ],
+        }),
+    },
+    {
+        cat: 'watch', key: 'layaNewCrashKind', icon: 'ai',
+        title: 'Tell me about a new kind of crash',
+        desc: 'Waits for Laya to see a crash unlike any before (from the crash page or another task) and tells you its probable cause. Needs no permission: it only reads the event.',
+        make: () => ({
+            name: 'Laya — new kind of crash',
+            trigger: { type: 'onEvent', event: 'bmm.ai.crashGroup' },
+            steps: [
+                { kind: 'action', action: { type: 'notify', params: { message: 'A new kind of crash: {event.family} / {event.cause} ({event.report}).' } } },
+            ],
+        }),
+    },
+    // ── Upkeep, on a schedule (sched-maint.ts) ─────────────────────────────────────────────
+    //
+    // Each one is complete as it stands and has a dry run worth reading before it is armed:
+    // the editor's « Dry run » measures what it would clean, check or download, and changes
+    // nothing. Anything that deletes or reaches the network declares it in `permissions`, which
+    // the gallery shows and the task does NOT get: it is ticked by the person, after reading.
+    {
+        cat: 'repo', key: 'followedRepos', icon: 'refresh',
+        title: 'Check the repos you follow',
+        desc: 'Every six hours: reads each followed repo. Choose whether it only tells you, asks you, or syncs as each repo is set to.',
+        options: [{ opt: 'mode', choices: ['ask', 'report', 'auto'], dflt: 'ask' }],
+        make: (opt) => ({
+            name: 'Followed repos',
+            trigger: { type: 'hourly', everyHours: 6 },
+            steps: [
+                { kind: 'action', action: { type: 'repos.checkFollowed', params: { mode: opt?.mode || 'ask' } } },
+            ],
+        }),
+    },
+    {
+        cat: 'upkeep', key: 'catalogUpdates', icon: 'download',
+        title: 'New versions of the catalogue items you pick',
+        desc: 'Each morning: looks for new versions of the apps and plugins you tick in the step, then only tells you, downloads them, or downloads and installs them. Verified by SHA-256.',
+        options: [{ opt: 'mode', choices: ['check', 'download', 'install'], dflt: 'check' }],
+        make: (opt) => ({
+            name: 'Catalogue updates',
+            trigger: { type: 'dailyAt', time: '09:00' },
+            // Nothing is ticked: a task that updates « everything installed » is one nobody chose.
+            steps: [
+                { kind: 'action', action: { type: 'catalog.updates', params: { mode: opt?.mode || 'check', items: [] } } },
+            ],
+            ...(opt?.mode && opt.mode !== 'check' ? { permissions: { network: true } } : {}),
+        }),
+    },
+    {
+        cat: 'upkeep', key: 'integrityWeekly', icon: 'shield-check',
+        title: 'Verify your mods every week',
+        desc: 'Sunday morning: checks the active profile\'s files in the game folder. When something changed, it opens the library and points at Verify integrity.',
+        make: () => ({
+            name: 'Weekly integrity check',
+            trigger: { type: 'weeklyAt', time: '10:00', days: [0] },
+            steps: [
+                { kind: 'action', action: { type: 'mods.verifyIntegrity', params: { scope: 'game' } } },
+                {
+                    kind: 'if',
+                    condition: { type: 'value', params: { source: 'integrity.problems', op: '>', value: 0 } },
+                    then: [
+                        { kind: 'action', action: { type: 'nav.highlight', params: { page: 'library', target: 'library.verify', note: '{integrity.summary}', seconds: 8 } } },
+                    ],
+                    else: [],
+                },
+            ],
+        }),
+    },
+    {
+        cat: 'upkeep', key: 'cacheMonthly', icon: 'clear',
+        title: 'Clean the caches every month',
+        desc: 'On the 1st: empties the catalogue cache, the mod cache and update leftovers once they weigh more than 500 MB. Crash archives are kept.',
+        make: () => ({
+            name: 'Monthly cache clean',
+            trigger: { type: 'monthlyAt', day: 1, time: '04:00' },
+            steps: [
+                { kind: 'action', action: { type: 'cache.clean', params: { minMb: 500 } } },
+            ],
+            permissions: { delete: true },
+        }),
+    },
+    {
+        cat: 'upkeep', key: 'logRotate', icon: 'file-text',
+        title: 'Keep task logs small',
+        desc: 'Every Monday: rotates task logs past 1 MB (one old copy kept) and drops rotated copies and session reports older than 30 days.',
+        make: () => ({
+            name: 'Rotate logs',
+            trigger: { type: 'weeklyAt', time: '05:00', days: [1] },
+            steps: [
+                { kind: 'action', action: { type: 'logs.rotate', params: { keepDays: 30, maxKb: 1024 } } },
+            ],
+            permissions: { delete: true },
+        }),
+    },
+    {
+        cat: 'upkeep', key: 'pendingUpdates', icon: 'bell',
+        title: 'Remind me about pending updates',
+        desc: 'When BMM starts: reads your followed repos and BMM\'s own update channel, and only when something waits shows it on screen with where to go.',
+        make: () => ({
+            name: 'Pending updates',
+            trigger: { type: 'appStart' },
+            steps: [
+                { kind: 'delay', seconds: 20 },
+                { kind: 'action', action: { type: 'repos.checkFollowed', params: { mode: 'report', notify: false } } },
+                { kind: 'action', action: { type: 'app.checkUpdate', params: {} } },
+                {
+                    kind: 'if',
+                    condition: { type: 'value', params: { source: 'repos.updates', op: '>', value: 0 } },
+                    then: [
+                        { kind: 'action', action: { type: 'nav.highlight', params: { page: 'repo', tab: 'sync', target: '#repo-follow-card', note: '{repos.summary}', seconds: 8 } } },
+                    ],
+                    else: [],
+                },
+            ],
+        }),
+    },
+    {
+        cat: 'upkeep', key: 'diskReport', icon: 'hard-drive',
+        title: 'A disk usage report every week',
+        desc: 'Monday morning: writes disk-usage.md in the task\'s folder — every profile, its backups and the ten heaviest mods — so this week can be compared with last week.',
+        make: () => ({
+            name: 'Disk usage report',
+            trigger: { type: 'weeklyAt', time: '09:00', days: [1] },
+            steps: [
+                { kind: 'action', action: { type: 'disk.report', params: { top: 10 } } },
+            ],
+        }),
+    },
+    {
+        cat: 'repo', key: 'serverHours', icon: 'server',
+        title: 'Serve your repo only in the evening',
+        desc: 'Every 15 minutes: the built-in repo server runs between 18:00 and 23:30 and is stopped outside those hours. Fill in the repo folder.',
+        make: () => ({
+            name: 'Repo server hours',
+            trigger: { type: 'interval', everyMinutes: 15 },
+            steps: [
+                {
+                    kind: 'if',
+                    condition: { type: 'timeRange', params: { from: '18:00', to: '23:30' } },
+                    then: [{ kind: 'action', action: { type: 'repo.server', params: { state: 'start', dir: '', port: 8000, notify: false } } }],
+                    else: [{ kind: 'action', action: { type: 'repo.server', params: { state: 'stop', notify: false } } }],
+                },
+            ],
+            permissions: { network: true },
+        }),
+    },
+    // ── Guided tours (sched-nav.ts) ─────────────────────────────────────────────────────────
+    //
+    // Navigation that SHOWS needs no permission, so these run as they arrive; the preview in
+    // the dry run plays them without the task even being saved.
+    {
+        cat: 'nav', key: 'tourUpdates', icon: 'map',
+        title: 'Show me where updates live',
+        desc: 'A tour you run by hand: installed apps, followed repos, the library\'s update check — each opened and pointed at, with a word on what it is for.',
+        make: () => ({
+            name: 'Tour: where updates live',
+            trigger: { type: 'manual' },
+            steps: [
+                { kind: 'action', action: { type: 'nav.page', params: { page: 'apps', tab: 'installed', note: 'Apps you installed from a catalogue: an update shows on its card.', seconds: 4 } } },
+                { kind: 'action', action: { type: 'nav.highlight', params: { page: 'repo', tab: 'sync', target: '#repo-follow-card', note: 'Repos you follow are checked here, on their own schedule.', seconds: 4 } } },
+                { kind: 'action', action: { type: 'nav.highlight', params: { page: 'library', target: 'library.checkUpdates', note: 'This checks your mods against their sources.', seconds: 4 } } },
+                { kind: 'action', action: { type: 'nav.message', params: { title: 'That is all', message: 'A task can check all three for you: see the « Catalogue updates » and « Followed repos » templates.', waitOk: true } } },
+            ],
+        }),
+    },
+    {
+        cat: 'nav', key: 'tourAutomation', icon: 'workflow',
+        title: 'Show me where automation lives',
+        desc: 'A tour you run by hand: Plugins & API, its Automations tab and the templates button.',
+        make: () => ({
+            name: 'Tour: automation',
+            trigger: { type: 'manual' },
+            steps: [
+                { kind: 'action', action: { type: 'nav.page', params: { page: 'plugins', tab: 'automations', note: 'Your automations: each one, its trigger, its last runs.', seconds: 5 } } },
+                { kind: 'action', action: { type: 'nav.highlight', params: { page: 'plugins', tab: 'automations', target: '#auto-templates', note: 'Start from a template: it opens in the builder, ready to change.', seconds: 5 } } },
+                { kind: 'action', action: { type: 'nav.highlight', params: { page: 'plugins', tab: 'automations', target: '#btn-create-schedule', note: 'Or build one step by step, and save it as a task or export it as a script.', seconds: 5 } } },
+            ],
+        }),
+    },
+    {
+        cat: 'nav', key: 'morningBrief', icon: 'home',
+        title: 'Start the day on the right screen',
+        desc: 'When BMM starts: opens the library and points at the profile you use, so the first click is the one you came for. Pick the profile in the step.',
+        make: () => ({
+            name: 'Morning start',
+            trigger: { type: 'appStart' },
+            steps: [
+                { kind: 'delay', seconds: 3 },
+                { kind: 'action', action: { type: 'nav.item', params: { kind: 'profile', id: '', onMissing: 'continue', seconds: 4 } } },
+                { kind: 'action', action: { type: 'nav.page', params: { page: 'library' } } },
+            ],
+        }),
+    },
+];
+
+/** Replace the draft with a preset — after a confirmation when there is work in it. */
+async function applyPreset(modal: HTMLElement, p: (typeof PRESETS)[number]): Promise<boolean> {
+    const has = (_draft.steps?.length || 0) + (_draft.name ? 1 : 0);
+    if (has) {
+        const ok = await showConfirm(
+            t('sched.presetReplaceTitle') || 'Replace this task?',
+            (t('sched.presetReplaceBody') || 'Starting from a preset throws away what is in this task — {n} step(s), and its name, trigger and permissions. Continue?')
+                .replace('{n}', String(_draft.steps?.length || 0)),
+            true,
+        );
+        if (!ok) return false;
+    }
+    _snapshot();                   // undo covers this like any other edit
+    _draft = taskFromPreset(p);
+    renderModal(modal);
+    const desc = modal.querySelector<HTMLElement>('#sched-preset-desc');
+    if (desc) desc.textContent = (t('sched.pg.applied') || 'Started from “{t}” — everything below is yours to change.').replace('{t}', t('sched.preset.' + p.key) || p.title);
+    return true;
+}
+
+/** What a template needs granted, as the permission keys the editor shows. */
+/** The options picked in the gallery, per template (« download only » vs « download and install »). */
+const _presetOpts: Record<string, Record<string, string>> = {};
+function presetOptions(p: (typeof PRESETS)[number]): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const o of p.options || []) out[o.opt] = _presetOpts[p.key]?.[o.opt] || o.dflt;
+    return out;
+}
+
+function presetPerms(p: (typeof PRESETS)[number]): string[] {
+    const task = p.make(presetOptions(p));
+    const pm: Record<string, unknown> = { ...((task as any).permissions || {}), ...((task as any).perms || {}) };
+    return Object.keys(pm).filter((k) => pm[k] === true);
+}
+function countSteps(steps: any[] | undefined): number {
+    let n = 0;
+    for (const st of steps || []) {
+        n++;
+        for (const key of ['then', 'else', 'steps', 'body', 'catch', 'finally']) if (Array.isArray(st?.[key])) n += countSteps(st[key]);
+        if (Array.isArray(st?.cases)) for (const c of st.cases) n += countSteps(c?.steps);
+    }
+    return n;
+}
+
+let _gallery: HTMLElement | null = null;
+/**
+ * The template gallery: a modal with a category rail, a search box, one card per template
+ * (icon, name, what it does, the trigger, the step count, the permissions it needs) and a
+ * detail pane that lists the trigger and the steps of the selected one — so the choice is
+ * made on what a template DOES, not on its name. "Use this template" hands it to
+ * applyPreset, which asks before replacing a draft that has work in it.
+ */
+async function openPresetGallery(modal: HTMLElement): Promise<void> {
+    if (!_gallery) {
+        _gallery = document.createElement('div');
+        _gallery.className = 'modal-overlay spg-overlay';
+        _gallery.id = 'modal-sched-presets';
+        // Into the app FRAME — see the same note on the feedback dialog. On <body> the overlay
+        // keeps `position: fixed; inset: 0` and spreads over the transparent 40px margin the
+        // window leaves for the mascot, so the gallery's dim and shadow sit on nothing.
+        (document.getElementById('app-window-outer') || document.body).appendChild(_gallery);
+        _gallery.addEventListener('click', (e) => { if (e.target === _gallery) closeGallery(); });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && _gallery?.classList.contains('open')) closeGallery(); });
+    }
+    const g = _gallery;
+    let cat: PresetCat | 'all' = 'all';
+    let q = '';
+    let selected: string | null = null;
+    const label = (p: (typeof PRESETS)[number]) => t('sched.preset.' + p.key) || p.title;
+    const descOf = (p: (typeof PRESETS)[number]) => t('sched.presetd.' + p.key) || p.desc;
+    const catLabel = (c: PresetCat) => { const row = PRESET_CATS.find((x) => x.cat === c); return row ? (t(row.key) || row.label) : c; };
+    const permLabel = (k: string) => t('sched.perm.' + k) || k;
+    const visible = () => PRESETS.filter((p) => (cat === 'all' || p.cat === cat))
+        .filter((p) => !q || (label(p) + ' ' + descOf(p) + ' ' + catLabel(p.cat)).toLowerCase().includes(q))
+        .sort((x, y) => label(x).localeCompare(label(y)));
+
+    const closeGallery = () => { g.classList.remove('open'); document.body.style.overflow = ''; };
+
+    const render = () => {
+        const list = visible();
+        const sel = selected ? PRESETS.find((p) => p.key === selected) || null : null;
+        const counts: Record<string, number> = { all: PRESETS.length };
+        for (const p of PRESETS) counts[p.cat] = (counts[p.cat] || 0) + 1;
+        const rail = [{ id: 'all', name: t('sched.pg.all') || 'All templates' }, ...PRESET_CATS.map((c) => ({ id: c.cat, name: t(c.key) || c.label }))]
+            .map((c) => `<button type="button" class="spg-cat${cat === c.id ? ' is-active' : ''}" data-cat="${escAttr(c.id)}"><span>${escHtml(c.name)}</span><span class="spg-cat-n">${counts[c.id] || 0}</span></button>`).join('');
+        const cards = list.map((p) => {
+            const task = p.make();
+            const perms = presetPerms(p);
+            const n = countSteps(task.steps as any[]);
+            return `<button type="button" class="spg-card${selected === p.key ? ' is-selected' : ''}" data-key="${escAttr(p.key)}">
+                <span class="spg-card-ico">${SVG16(p.icon)}</span>
+                <span class="spg-card-body">
+                    <span class="spg-card-title">${escHtml(label(p))}</span>
+                    <span class="spg-card-desc">${escHtml(descOf(p))}</span>
+                    <span class="spg-card-meta">
+                        <span class="spg-chip">${escHtml(task.trigger ? triggerLabel(task.trigger as Trigger) : (t('sched.trManual') || 'Manual'))}</span>
+                        <span class="spg-chip">${escHtml((t('sched.pg.steps') || '{n} step(s)').replace('{n}', String(n)))}</span>
+                        ${perms.length ? `<span class="spg-chip spg-chip-perm" title="${escAttr(t('sched.pg.permsTip') || 'Arrives with this permission unticked — grant it deliberately.')}">${escHtml(perms.map(permLabel).join(' · '))}</span>` : ''}
+                    </span>
+                </span>
+            </button>`;
+        }).join('');
+        let detail = `<div class="spg-detail-empty">${escHtml(t('sched.pg.pick') || 'Select a template to see exactly what it does.')}</div>`;
+        if (sel) {
+            const task = sel.make(presetOptions(sel));
+            const perms = presetPerms(sel);
+            const steps = (task.steps || []) as Step[];
+            const stepRows = steps.map((st) => {
+                const inner = countSteps([st]) - 1;
+                return `<li>${escHtml(stepLabel(st))}${inner ? ` <span class="spg-inner">${escHtml((t('sched.pg.inner') || '+{n} inside').replace('{n}', String(inner)))}</span>` : ''}</li>`;
+            }).join('');
+            detail = `
+                <div class="spg-detail-head"><span class="spg-card-ico">${SVG16(sel.icon)}</span><div><div class="spg-detail-title">${escHtml(label(sel))}</div><div class="spg-detail-cat">${escHtml(catLabel(sel.cat))}</div></div></div>
+                <p class="spg-detail-desc">${escHtml(descOf(sel))}</p>
+                <div class="spg-detail-sec">${escHtml(t('sched.pg.trigger') || 'Runs')}</div>
+                <div class="spg-detail-trigger">${escHtml(task.trigger ? triggerLabel(task.trigger as Trigger) : (t('sched.trManual') || 'Manual'))}</div>
+                <div class="spg-detail-sec">${escHtml(t('sched.pg.does') || 'Steps')}</div>
+                <ol class="spg-detail-steps">${stepRows || `<li class="spg-inner">${escHtml(t('sched.pg.nosteps') || 'No steps yet.')}</li>`}</ol>
+                <div class="spg-detail-sec">${escHtml(t('sched.pg.perms') || 'Permissions')}</div>
+                <div class="spg-detail-perms">${perms.length ? escHtml((t('sched.pg.permsNeed') || 'Needs {p} — left unticked, grant it after reading the steps.').replace('{p}', perms.map(permLabel).join(', '))) : escHtml(t('sched.pg.permsNone') || 'None — nothing here touches other programs.')}</div>
+                ${(sel.options || []).map((o) => `
+                <div class="spg-detail-sec">${escHtml(t('sched.pgo.' + sel.key + '.' + o.opt))}</div>
+                <div class="spg-opts" role="radiogroup">${o.choices.map((c) => `
+                    <label class="sched-opt"><input type="radio" name="spg-opt-${escAttr(o.opt)}" data-opt="${escAttr(o.opt)}" value="${escAttr(c)}"${presetOptions(sel)[o.opt] === c ? ' checked' : ''}>
+                        <div><b>${escHtml(t('sched.pgo.' + sel.key + '.' + o.opt + '.' + c))}</b></div></label>`).join('')}</div>`).join('')}
+                <div class="spg-detail-actions">
+                    <button type="button" class="btn btn-secondary" id="spg-dry">${SVG16('search')}<span>${escHtml(t('sched.dr.run'))}</span></button>
+                    <button type="button" class="btn btn-primary" id="spg-use">${SVG16('check')}<span>${escHtml(t('sched.pg.use') || 'Use this template')}</span></button>
+                    <span class="spg-detail-note">${escHtml(t('sched.pg.useNote') || 'Blanks in the steps are yours to fill.')}</span>
+                </div>`;
+        }
+        g.innerHTML = `
+            <div class="modal glass modal--xl spg" role="dialog" aria-modal="true" aria-labelledby="spg-title">
+                <div class="modal-header spg-head">
+                    <div class="spg-head-l">
+                        <div class="spg-head-ico">${SVG16('grid')}</div>
+                        <div><h2 class="modal-title" id="spg-title">${escHtml(t('sched.pg.title') || 'Automation templates')}</h2><p>${escHtml((t('sched.pg.sub') || '{n} ready-made tasks. Each one is complete and does something useful as is; pick one, read what it does, then make it yours.').replace('{n}', String(PRESETS.length)))}</p></div>
+                    </div>
+                    <div class="spg-search">${SVG16('search')}<input id="spg-q" type="search" placeholder="${escAttr(t('sched.pg.search') || 'Search templates…')}" value="${escAttr(q)}" autocomplete="off"></div>
+                    <button type="button" class="modal-close" id="spg-close" aria-label="${escAttr(t('common.close') || 'Close')}">${SVG16('close')}</button>
+                </div>
+                <div class="spg-body">
+                    <nav class="spg-rail">${rail}</nav>
+                    <div class="spg-grid">${cards || `<div class="spg-none">${escHtml(t('sched.pg.none') || 'Nothing matches — try another word.')}</div>`}</div>
+                    <aside class="spg-detail">${detail}</aside>
+                </div>
+            </div>`;
+        g.querySelector('#spg-close')?.addEventListener('click', closeGallery);
+        g.querySelectorAll<HTMLButtonElement>('.spg-cat').forEach((b) => b.addEventListener('click', () => { cat = b.dataset.cat as PresetCat | 'all'; render(); }));
+        g.querySelectorAll<HTMLButtonElement>('.spg-card').forEach((b) => {
+            b.addEventListener('click', () => { selected = b.dataset.key || null; render(); g.querySelector<HTMLElement>('.spg-detail')?.scrollTo({ top: 0 }); });
+            b.addEventListener('dblclick', () => { selected = b.dataset.key || null; void useSelected(); });
+        });
+        const qi = g.querySelector<HTMLInputElement>('#spg-q');
+        qi?.addEventListener('input', () => { q = qi.value.trim().toLowerCase(); const pos = qi.selectionStart; render(); const again = g.querySelector<HTMLInputElement>('#spg-q'); again?.focus(); try { again?.setSelectionRange(pos, pos); } catch { /* not focusable */ } });
+        g.querySelector('#spg-use')?.addEventListener('click', () => { void useSelected(); });
+        g.querySelectorAll<HTMLInputElement>('[data-opt]').forEach((r) => r.addEventListener('change', () => {
+            const p = selected ? PRESETS.find((x) => x.key === selected) : null;
+            if (!p || !r.checked) return;
+            _presetOpts[p.key] = { ...(_presetOpts[p.key] || {}), [r.dataset.opt || '']: r.value };
+            render();
+        }));
+        // What the template would do, measured and previewed, before it is even used.
+        g.querySelector('#spg-dry')?.addEventListener('click', () => {
+            const p = selected ? PRESETS.find((x) => x.key === selected) : null;
+            if (p) void openTaskDryRun(taskFromPreset(p), g);
+        });
+    };
+    const useSelected = async () => {
+        const p = selected ? PRESETS.find((x) => x.key === selected) : null;
+        if (!p) return;
+        if (p.key === 'dcsJoinGate') {
+            // Made from answers, not copied: the guided form, then the editor with the result.
+            closeGallery();
+            const { openJoinGateForm } = await import('./sched-dcs-form.js');
+            await openJoinGateForm({
+                apply: (task) => { _snapshot(); _draft = { ...taskFromPreset(p), ...(task as Partial<Task>) } as Task; renderModal(modal); },
+                dryRun: (task, cover) => openTaskDryRun(task as Partial<Task>, cover),
+            });
+            return;
+        }
+        if (await applyPreset(modal, p)) closeGallery();
+    };
+    render();
+    g.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    g.querySelector<HTMLInputElement>('#spg-q')?.focus();
+}
+
+/** Build a full task from a preset. The id and createdAt are minted here, never stored in
+ *  the preset itself — two tasks made from one preset must not share an id. */
+function taskFromPreset(p: (typeof PRESETS)[number]): Task {
+    return {
+        id: newTaskId(), enabled: true, createdAt: Date.now(), catchUp: true,
+        allowCustomCommands: false, name: '', trigger: { type: 'interval', everyMinutes: 60 }, steps: [],
+        ...p.make(presetOptions(p)),
+    } as Task;
+}
+
+/** The stylesheet of the task editor's newer parts, linked the first time the editor opens. */
+function ensureSchedCss(): void {
+    if (document.getElementById('sched-editor-css')) return;
+    const link = document.createElement('link');
+    link.id = 'sched-editor-css';
+    link.rel = 'stylesheet';
+    link.href = 'css/sched-editor.css';
+    document.head.appendChild(link);
+}
+
+/** The draft as it was when the editor opened or last saved — the "unsaved changes" baseline. */
+let _savedJson = '';
+let _bpTask = '';
+
+async function openTaskModal(task: Task | null): Promise<void> {
+    ensureSchedCss();
+    bindEditorKeys();
+    if (!task) {
+        let store: Storage | null = null;
+        try { store = localStorage; } catch { store = null; }
+        if (needsModePrompt(store, { isNew: true, taskCount: _tasks.length })) {
+            const m = await askEditorMode();
+            // Left for the docs from the question: the reader went to read, not to edit.
+            if (m === 'away') return;
+            if (m) writeEditorMode(m);
+        }
+    }
+    await loadPickers();
+    _editing = task;
+    _draft = task ? JSON.parse(JSON.stringify(task)) : {
+        id: `sched-${Date.now()}`, name: '', enabled: true, createdAt: Date.now(), catchUp: true,
+        trigger: { type: 'interval', everyMinutes: 60 }, steps: [], allowCustomCommands: false,
+    };
+    _undo = []; _redo = [];          // fresh undo history per open
+    _savedJson = JSON.stringify(_draft);
+    _ensureHistoryKeys();
+    // Breakpoints belong to the task they were set on.
+    if (_bpTask !== (_draft.id || '')) { _bpTask = _draft.id || ''; for (const p of [...breakpointPaths()]) toggleBreakpoint(p); }
+    let modal = document.getElementById('modal-scheduler');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'modal-scheduler';
+        modal.className = 'modal-generic-overlay';
+        // Append INSIDE the app window (position:relative, overflow:hidden) so the
+        // absolute 100%×100% overlay is bounded to the visible app, not the whole
+        // document (which extends past the rounded window → oversized backdrop).
+        (document.getElementById('app-window-outer') || document.body).appendChild(modal);
+        modal.addEventListener('click', (e) => { if (e.target === modal) modal!.classList.remove('open'); });
+    }
+    renderModal(modal);
+    modal.classList.add('open');
+}
+
+/** Show "unsaved changes" when the draft differs from what was opened or last saved. */
+function refreshDirty(modal: HTMLElement): void {
+    const el = modal.querySelector('#sched-dirty') as HTMLElement | null;
+    if (el) el.hidden = JSON.stringify(_draft) === _savedJson;
+}
+
+/**
+ * Save the draft. `close` is "Save and close" (the footer); the header's Save keeps the editor
+ * open, which is what somebody iterating on a task wants between two test runs.
+ */
+async function saveDraft(modal: HTMLElement, close: boolean): Promise<void> {
+    if (!(await flushCode())) return;
+    if (!_draft.name.trim()) {
+        toast(t('sched.needName') || 'Name required', 'warning');
+        (modal.querySelector('#sched-name') as HTMLInputElement | null)?.focus();
+        return;
+    }
+    // Only the hand-placed positions that still describe a step on their path are kept, and
+    // none at all leaves no `layout` field: a task never arranged in the flow saves exactly
+    // as the other two modes would have saved it.
+    {
+        const lay = pruneLayout(_draft.steps as any, _draft.layout);
+        if (lay) _draft.layout = lay; else delete _draft.layout;
+        // The presentation block, checked, and without the bends of wires that are gone. None
+        // left means no `ui` field, exactly as before it existed.
+        const keys = new Set(buildGraph(_draft.steps as any, _draft.layout).edges.map(edgeKey));
+        const ui = pruneReroutes(normalizeUi(_draft.ui), keys);
+        if (ui) _draft.ui = ui; else delete _draft.ui;
+    }
+    const idx = _tasks.findIndex(x => x.id === _draft.id);
+    // A copy goes into the list, so editing on after a Save-and-stay does not change the saved
+    // task behind the editor's back.
+    const saved = JSON.parse(JSON.stringify(_draft)) as Task;
+    if (idx >= 0) _tasks[idx] = saved; else _tasks.push(saved);
+    _editing = saved;
+    await saveTasks();
+    await syncOsSchedule(saved);
+    _savedJson = JSON.stringify(_draft);
+    refreshDirty(modal);
+    renderScheduleList();
+    if (close) modal.classList.remove('open');
+    else toast(t('sched.head.saved'), 'success', 1500);
+}
+
+/** Human one-liner for the header summary: "Daily at 08:00 · 3 steps · even when BMM is closed". */
+function draftSummary(): string {
+    const bits = [triggerLabel(_draft.trigger), `${stepCount(_draft.steps)} ${t('sched.steps') || 'steps'}`];
+    // The next run, in the editor as well as the list. "Weekly 20:00" does not tell you
+    // whether that means tonight or in six days, and that is the question you have while
+    // still deciding what the trigger should be.
+    {
+        const at = nextDue({ ..._draft, enabled: true } as Task);
+        if (at !== null) bits.push(`${t('sched.next') || 'next'} ${new Date(at).toLocaleString()}`);
+    }
+    if (_draft.osSchedule) bits.push(t('sched.sumOs') || 'even when BMM is closed');
+    {
+        const pm = taskPerms(_draft as Task);
+        const granted = [
+            pm.command === true && (t('sched.sumCmd') || 'can run commands'),
+            pm.script === true && (t('sched.sumScript') || 'can run scripts'),
+            pm.deeplink === true && (t('sched.sumDeeplink') || 'can fire deeplinks'),
+            pm.network === true && (t('sched.sumNetwork') || 'can reach the network'),
+        ].filter(Boolean) as string[];
+        if (granted.length) bits.push(granted.join(', '));
+    }
+    return bits.join(' · ');
+}
+/** « 2 of 9 granted » / « none granted »: the folded permission row of the task editor. */
+const PERM_KEYS = ['command', 'script', 'deeplink', 'stopProcess', 'delete', 'resources', 'tasks', 'network', 'ai', 'navigate', 'files'] as const;
+function permSummaryText(pm: TaskPerms): string {
+    const granted = PERM_KEYS.filter((k) => (pm as any)[k] === true).length;
+    return granted
+        ? (t('sched.permsN') || '{n} of {total} granted').replace('{n}', String(granted)).replace('{total}', String(PERM_KEYS.length))
+        : (t('sched.permsNone') || 'none granted (BMM only)');
+}
+
+function refreshSummary(modal: HTMLElement): void {
+    const el = modal.querySelector('#sched-summary');
+    if (el) el.textContent = draftSummary();
+}
+
+/**
+ * The shared variables, listed.
+ *
+ * `var.set` with scope `shared` has always persisted across runs and across tasks, and nothing
+ * ever showed you what was in there — `readSharedVars` had six callers, all of them the run
+ * context or var.set/var.clear, and not one of them rendered. So the only way to discover that
+ * a name was taken was to overwrite it, and the only way to discover a typo was a task reading
+ * a variable that silently substituted to itself.
+ *
+ * Appended to the sidebar after the modal's markup is built rather than woven into that
+ * template literal: this panel has to re-render on its own whenever a variable is deleted, and
+ * a section that owns its own DOM can do that without rebuilding — and without editing the
+ * whole task editor to add a list.
+ */
+function renderSharedVarsPanel(modal: HTMLElement): void {
+    const side = modal.querySelector('.sched-side');
+    if (!side) return;
+    const host = (side.querySelector('.sched-sv') as HTMLElement) || (() => {
+        const el = document.createElement('div');
+        el.className = 'sched-sv';
+        side.appendChild(el);
+        return el;
+    })();
+
+    const all = readSharedVars();
+    const names = Object.keys(all).sort();
+    // The value is shown, not hidden. These are the user's own automation variables, and a
+    // list of names with no values answers "is it set" but never "is it right" — which is the
+    // question you actually have when a task built the wrong path.
+    const rows = names.map((n) => `
+        <div class="sched-sv-row">
+            <code class="sched-sv-name">${escHtml(n)}</code>
+            <span class="sched-sv-val" data-tooltip="${escAttr(all[n])}">${escHtml(all[n].length > 40 ? all[n].slice(0, 40) + '…' : all[n])}</span>
+            <button type="button" class="btn btn-ghost btn-xs sched-sv-del" data-name="${escAttr(n)}"
+                data-tooltip="${escAttr(t('sched.sv.del') || 'Delete this shared variable')}">${SCHED_X}</button>
+        </div>`).join('');
+
+    host.innerHTML = `
+        <div class="sched-sv-title">${t('sched.sv.title') || 'Shared variables'}</div>
+        <div class="sched-sv-hint">${t('sched.sv.hint') || 'Kept between runs and readable by every task.'}</div>
+        ${names.length ? rows : `<div class="sched-sv-empty">${t('sched.sv.empty') || 'None yet — a “Set variable” step with scope “shared” puts one here.'}</div>`}`;
+
+    host.querySelectorAll('.sched-sv-del').forEach((btn) => btn.addEventListener('click', () => {
+        const name = (btn as HTMLElement).dataset.name || '';
+        const store = readSharedVars();
+        delete store[name];
+        writeSharedVars(store);
+        // Re-render this panel only. Rebuilding the modal here would throw away whatever the
+        // user has typed into the draft, to remove one row from a list.
+        renderSharedVarsPanel(modal);
+    }));
+}
+
+/**
+ * Declared enums, in the same sidebar as the shared variables.
+ *
+ * Declaring one is what lets a SWITCH be told which members it has not handled. Without a
+ * declaration a case is free text and nothing can know what the branch is about — that gap,
+ * not the syntax, is the whole reason `match` was on the wish list.
+ */
+/**
+ * The reusable blocks, and the one way to make one: save the steps you are looking at.
+ *
+ * A separate block EDITOR would be a second copy of the step editor, and the two would drift —
+ * this project has paid for that shape enough times today. Building the steps in a task and
+ * saving them is the same editor doing the same job.
+ */
+/** Which folders are expanded, and which block is selected. Outlives a repaint on purpose:
+ *  a tree that collapses itself every time you touch it is a tree nobody expands twice. */
+const _blOpen = new Set<string>();
+let _blCurrent = '';
+
+function renderBlocksPanel(modal: HTMLElement): void {
+    const side = modal.querySelector('.sched-side');
+    if (!side) return;
+    const host = (side.querySelector('.sched-bl') as HTMLElement) || (() => {
+        const el = document.createElement('div');
+        el.className = 'sched-sv sched-bl';
+        side.appendChild(el);
+        return el;
+    })();
+
+    const all = readBlocks();
+    const names = Object.keys(all).sort();
+
+    host.innerHTML = `
+        <div class="sched-sv-title">${t('sched.bl.title') || 'Reusable blocks'}</div>
+        <div class="sched-sv-hint">${t('sched.bl.hint') || 'Steps saved once and run from any task with “Run a block”. They use the calling task’s permissions.'}</div>
+        <div class="bt-tree" id="sched-bl-tree"></div>
+        <div class="sched-bl-picked" id="sched-bl-picked"></div>
+        <div class="sched-en-add">
+            <input class="input sched-bl-name" spellcheck="false" placeholder="${escAttr(t('sched.bl.namePh'))}">
+            <button type="button" class="btn btn-xs btn-secondary sched-bl-save">${t('sched.bl.save') || 'Save these steps'}</button>
+        </div>
+        <div class="sched-sv-hint">${escHtml(t('sched.tree.folderHint'))}</div>`;
+
+    // The tree, from the names. Nothing stores it: renaming a block moves it and deleting the
+    // last one in a folder removes the folder, with no second structure that can disagree.
+    const tree = modal.querySelector('#sched-bl-tree') as HTMLElement | null;
+    const picked = modal.querySelector('#sched-bl-picked') as HTMLElement | null;
+    if (tree && picked) {
+        const paint = () => {
+            renderTree(tree, treeOf(names), _blOpen, _blCurrent, (path) => {
+                _blCurrent = path;
+                paint();
+            }, (folder) => {
+                if (_blOpen.has(folder)) _blOpen.delete(folder); else _blOpen.add(folder);
+                paint();
+            });
+            const steps = all[_blCurrent];
+            picked.innerHTML = _blCurrent && steps
+                ? `<div class="sched-sv-row">
+                       <code class="sched-sv-name">${escHtml(_blCurrent)}</code>
+                       <span class="sched-sv-val">${steps.length} ${escHtml(t('sched.steps') || 'steps')}</span>
+                       <button type="button" class="btn btn-ghost btn-xs sched-bl-del" data-name="${escAttr(_blCurrent)}"
+                           data-tooltip="${escAttr(t('sched.bl.del') || 'Delete this block')}">${SCHED_X}</button>
+                   </div>`
+                : `<div class="sched-sv-empty">${escHtml(names.length ? t('sched.tree.pick') : (t('sched.bl.empty') || 'None yet.'))}</div>`;
+            wireDelete();
+        };
+        // Every folder starts open. A tree that hides what is in it on first sight is a tree
+        // whose whole content is one click away and invisible — which is what the flat list
+        // already was.
+        if (!_blOpen.size) for (const f of foldersOf(treeOf(names))) _blOpen.add(f);
+        paint();
+    }
+
+    function wireDelete(): void {
+
+    host.querySelectorAll('.sched-bl-del').forEach((btn) => btn.addEventListener('click', () => {
+        const name = (btn as HTMLElement).dataset.name || '';
+        // Refused while ANYTHING still calls it. A block that vanishes turns every caller into
+        // a task that fails at a step which no longer exists — at RUN time, which is the worst
+        // moment to find out.
+        //
+        // This used to check the OPEN task only, which is the one case where somebody already
+        // knows. Blocks are stored once for the whole app, so the caller that matters is
+        // usually a task nobody has open.
+        const used = blockCallers(name, _draft);
+        if (used.length) {
+            toast(`${t('sched.bl.inuseBy')} ${used.slice(0, 4).join(', ')}${used.length > 4 ? '…' : ''}`, 'warning', 9000);
+            return;
+        }
+        const store = readBlocks();
+        delete store[name];
+        writeBlocks(store);
+        _blCurrent = '';
+        renderBlocksPanel(modal);
+    }));
+    }
+
+    host.querySelector('.sched-bl-save')?.addEventListener('click', async () => {
+        const name = (host.querySelector('.sched-bl-name') as HTMLInputElement).value.trim();
+        if (!BLOCK_NAME_RE.test(name)) {
+            toast((t('sched.var.badName') || 'Not a usable variable name: {n}').replace('{n}', name || '(empty)'), 'warning');
+            return;
+        }
+        if (!_draft.steps.length) { toast(t('sched.bl.nosteps') || 'Add some steps first.', 'warning'); return; }
+        const store = readBlocks();
+        // Saving onto a name that exists REPLACES it, everywhere, for every task — blocks are
+        // stored once for the whole app. Silently was the old behaviour, and the way to meet it
+        // was for somebody else's automation to start doing your steps.
+        if (store[name]) {
+            const callers = blockCallers(name, _draft);
+            const ok = await showConfirm(
+                t('sched.bl.overwriteTitle').replace('{n}', name),
+                callers.length
+                    ? `${t('sched.bl.overwriteUsed').replace('{n}', String(callers.length))} — ${callers.slice(0, 8).join(' · ')}`
+                    : t('sched.bl.overwriteFree'),
+                true,
+            );
+            if (!ok) return;
+        }
+        // A deep copy, or editing the task afterwards would silently rewrite the block — the
+        // saved thing has to stop being the same object.
+        store[name] = JSON.parse(JSON.stringify(_draft.steps));
+        writeBlocks(store);
+        toast((t('sched.bl.saved') || 'Saved “{n}”.').replace('{n}', name), 'info');
+        renderBlocksPanel(modal);
+    });
+}
+
+function renderEnumsPanel(modal: HTMLElement): void {
+    const side = modal.querySelector('.sched-side');
+    if (!side) return;
+    const host = (side.querySelector('.sched-en') as HTMLElement) || (() => {
+        const el = document.createElement('div');
+        el.className = 'sched-sv sched-en';
+        side.appendChild(el);
+        return el;
+    })();
+
+    const all = readEnums();
+    const names = Object.keys(all).sort();
+    const rows = names.map((n) => `
+        <div class="sched-sv-row">
+            <code class="sched-sv-name">${escHtml(n)}</code>
+            <span class="sched-sv-val" data-tooltip="${escAttr(all[n].join(', '))}">${escHtml(all[n].join(', '))}</span>
+            <button type="button" class="btn btn-ghost btn-xs sched-en-del" data-name="${escAttr(n)}"
+                data-tooltip="${escAttr(t('sched.en.del') || 'Delete this enum')}">${SCHED_X}</button>
+        </div>`).join('');
+
+    host.innerHTML = `
+        <div class="sched-sv-title">${t('sched.en.title') || 'Enums'}</div>
+        <div class="sched-sv-hint">${t('sched.en.hint') || 'A named set of values, so a Switch can be told which ones it has not handled.'}</div>
+        ${names.length ? rows : `<div class="sched-sv-empty">${t('sched.en.empty') || 'None yet.'}</div>`}
+        <div class="sched-en-add">
+            <input class="input sched-en-name" spellcheck="false" placeholder="${escAttr(t('sched.en.namePh') || 'name')}">
+            <input class="input sched-en-members" spellcheck="false" placeholder="${escAttr(t('sched.en.membersPh') || 'ok, failed, skipped')}">
+            <button type="button" class="btn btn-xs btn-secondary sched-en-save">${t('sched.en.add') || 'Add'}</button>
+        </div>`;
+
+    host.querySelectorAll('.sched-en-del').forEach((btn) => btn.addEventListener('click', () => {
+        const store = readEnums();
+        delete store[(btn as HTMLElement).dataset.name || ''];
+        writeEnums(store);
+        renderEnumsPanel(modal);
+    }));
+    host.querySelector('.sched-en-save')?.addEventListener('click', () => {
+        const name = (host.querySelector('.sched-en-name') as HTMLInputElement).value.trim();
+        const raw = (host.querySelector('.sched-en-members') as HTMLInputElement).value;
+        // Refused rather than skipped, exactly as var.set does: a name no condition could
+        // reference would appear in this list and never work.
+        if (!VAR_NAME_RE.test(name)) {
+            toast((t('sched.var.badName') || 'Not a usable variable name: {n}').replace('{n}', name || '(empty)'), 'warning');
+            return;
+        }
+        const members = parseList(raw);
+        if (!members.length) {
+            toast(t('sched.en.noMembers') || 'An enum needs at least one value.', 'warning');
+            return;
+        }
+        const store = readEnums();
+        store[name] = members;
+        writeEnums(store);
+        renderEnumsPanel(modal);
+    });
+}
+
+/**
+ * The members a switch's cases do not cover — the one thing `switch` could never say, and the
+ * reason a separate `match` kind is not being built.
+ *
+ * Only speaks when EVERY case tests the same declared enum. A switch mixing an enum test with
+ * a file check is not incomplete, it is a different kind of switch, and warning about it would
+ * train people to ignore the warning.
+ *
+ * Advisory, never a save-blocker: handling three of five members and letting DEFAULT catch the
+ * rest is legitimate. A check that refuses the save becomes something to work around.
+ */
+function switchGaps(step: { cases?: { condition: Condition }[]; default?: Step[] }): { enum: string; missing: string[] } | null {
+    const cases = step.cases || [];
+    if (!cases.length) return null;
+    const first = cases[0]?.condition;
+    if (!first || first.type !== 'enumIs') return null;
+    const name = String(first.params?.enum || '');
+    if (!name) return null;
+    // Every case, or nothing. A negated case does not establish which member ran, so it also
+    // disqualifies the check rather than being counted as covering one.
+    for (const c of cases) {
+        if (c.condition?.type !== 'enumIs' || c.condition.negate) return null;
+        if (String(c.condition.params?.enum || '') !== name) return null;
+    }
+    const members = readEnums()[name];
+    if (!members) return null;
+    const covered = new Set(cases.map((c) => String(c.condition.params?.member ?? '')));
+    const missing = members.filter((m) => !covered.has(m));
+    return missing.length ? { enum: name, missing } : null;
+}
+
+function renderModal(modal: HTMLElement): void {
+    modal.innerHTML = `
+      <div class="modal glass bms modal--full sched-modal">
+        <div class="modal-header sched-head">
+            <div class="sched-head-main">
+                <div class="bms-icon" aria-hidden="true">${uiIcon('clock', 18)}</div>
+                <div class="bms-titles">
+                    <div class="sched-head-line">
+                        <h2 class="modal-title sched-head-name" id="sched-head-name">${escHtml(_draft.name.trim() || (_editing ? (t('sched.editTitle') || 'Edit task') : (t('sched.newTitle') || 'New scheduled task')))}</h2>
+                        <button type="button" class="sched-status ${_draft.enabled ? 'is-on' : 'is-off'}" id="sched-status" aria-pressed="${_draft.enabled ? 'true' : 'false'}"
+                            data-tooltip="${escAttr(t('sched.head.statusTip'))}">${escHtml(t(_draft.enabled ? 'sched.head.on' : 'sched.head.off'))}</button>
+                        <span class="sched-dirty" id="sched-dirty" hidden>${escHtml(t('sched.head.unsaved'))}</span>
+                    </div>
+                    <span class="bms-sub sched-head-summary" id="sched-summary">${escHtml(draftSummary())}</span>
+                </div>
+            </div>
+            <div class="bms-head-end sched-head-actions" role="toolbar" aria-label="${escAttr(t('sched.head.actions'))}">
+                <!-- Three views of ONE draft. There is no state where the code, the
+                     bricks and the flow disagree, because there is only ever one tree. -->
+                <span class="sched-mode-switch has-flow" id="sched-mode-switch" role="tablist" aria-label="${escAttr(t('sched.modeAria') || 'How to edit this task')}">
+                    <span class="sched-mode-glider" aria-hidden="true"></span>
+                    <button type="button" class="sched-mode-btn on" data-mode="bricks" role="tab" aria-selected="true"
+                            data-tooltip="${escAttr(t('sched.modeBricksTip') || 'Build this task by clicking. Everything the language has is here.')}">
+                        ${uiIcon('grid', 12)}
+                        <span>${t('sched.modeBricks') || 'Blocks'}</span>
+                    </button>
+                    <button type="button" class="sched-mode-btn" data-mode="code" role="tab" aria-selected="false"
+                            data-tooltip="${escAttr(t('sched.modeCodeTip') || 'Write this task as text. Anything you build here opens back up as blocks.')}">
+                        ${uiIcon('code', 12)}
+                        <span>${t('sched.modeCode') || 'Code'}</span>
+                    </button>
+                    <button type="button" class="sched-mode-btn" data-mode="flow" role="tab" aria-selected="false"
+                            data-tooltip="${escAttr(t('sched.modeFlowTip') || 'See this task as a graph of nodes. Same steps, same task.')}">
+                        ${uiIcon('workflow', 12)}
+                        <span>${t('sched.modeFlow') || 'Flow'}</span>
+                    </button>
+                </span>
+                <span class="sched-head-sep" aria-hidden="true"></span>
+                <button class="btn btn-sm btn-ghost sched-test" id="sched-preview" data-tooltip="${escAttr(t('sched.prev.hint'))}">
+                    ${uiIcon('eye', 12)}<span>${escHtml(t('sched.prev.run'))}</span></button>
+                <button class="btn btn-sm btn-ghost sched-test" id="sched-export" data-tooltip="${escAttr(t('sched.ex.hint'))}">
+                    ${uiIcon('export', 12)}<span>${escHtml(t('sched.ex.run'))}</span></button>
+                <button class="btn btn-sm btn-ghost sched-test" id="sched-dryrun" data-tooltip="${escAttr(t('sched.dr.hint'))}">
+                    ${uiIcon('search', 12)}<span>${escHtml(t('sched.dr.run'))}</span></button>
+                <button class="btn btn-sm btn-ghost sched-test" id="sched-debug" data-tooltip="${escAttr(t('sched.dbg.hint'))}">
+                    ${uiIcon('bug', 12)}<span>${escHtml(t('sched.dbg.run'))}</span></button>
+                <button class="btn btn-sm btn-secondary sched-test" id="sched-test" data-tooltip="${escAttr(t('sched.testHint') || 'Run the steps once right now, without saving')}">
+                    ${uiIcon('play', 12)}<span>${t('sched.testRun') || 'Test run'}</span></button>
+                <button class="btn btn-sm btn-primary" id="sched-save-stay" data-tooltip="${escAttr(t('sched.head.saveTip'))}">${escHtml(t('common.save') || 'Save')}</button>
+            </div>
+            <button class="modal-close" id="sched-close" aria-label="${escAttr(t('common.close'))}">${uiIcon('close', 16)}</button>
+        </div>
+        <div class="sched-layout">
+            <aside class="sched-side">
+                <!-- Five sections, each under its own header: Template · Name · Trigger ·
+                     Permissions (one summary row, opened on demand) · Options. They were
+                     one column of labels, boxes and a nine-row permission list in a row. -->
+                <section class="sched-side-sec">
+                ${(() => {
+                    // A picker plus a catalogue button, and the two are gated differently.
+                    //
+                    // Applying a preset REPLACES the draft, so it is offered only on a blank
+                    // new task — picking one by mistake then costs nothing, because there was
+                    // nothing to lose. Browsing a catalogue only ever opens a read-only
+                    // report, so that button stays available the whole time: wanting to look
+                    // at what other people published does not stop being reasonable the
+                    // moment you have typed a name.
+                    const browse = `<button type="button" class="sched-preset-tile sched-preset-browse" id="sched-preset-catalog"
+                            data-tooltip="${escAttr(t('sched.pc.tip') || 'Automations published by other people. Each one is inspected before anything is imported.')}">
+                            ${SVG16('download')}
+                            <span>${escHtml(t('sched.pc.browse') || 'From a catalogue…')}</span>
+                        </button>`;
+                    // ALWAYS on screen, including while editing.
+                    //
+                    // It used to disappear the moment the draft had a name or a step, because
+                    // applying a preset REPLACES the draft and hiding it made that impossible.
+                    // It also made the presets impossible to FIND: the one moment you want to
+                    // know whether the thing you are building already exists ready-made is
+                    // just after you started building it. So it stays, and the replacement is
+                    // confirmed rather than prevented — with the draft's own step count in the
+                    // question, so "replace" is not an abstraction.
+                    //
+                    // Grouped, and alphabetical inside a group. Nineteen presets in one flat
+                    // list, in the order somebody happened to write them, is a list you read
+                    // top to bottom every single time.
+                    // The gallery replaces the <select>: a grouped dropdown showed a name and
+                    // nothing else, and thirty-odd templates in optgroups is a list you scroll
+                    // blind. The modal shows every template as a card with what it does, lets
+                    // you search, and explains the trigger, the steps and the permissions
+                    // BEFORE anything replaces the draft.
+                    return `<h3 class="sched-side-h">${SVG16('grid')}<span>${t('sched.presetsTitle') || 'Start from a preset'}</span> <span class="sched-hint-inline">${t('sched.presetsHint') || '— or build your own below'}</span></h3>
+                    <div class="sched-preset-row">
+                        <button type="button" class="sched-preset-tile sched-preset-open" id="sched-preset-open"
+                            data-tooltip="${escAttr(t('sched.pg.tip') || 'Ready-made automations, with what each one does explained before it replaces the draft.')}">
+                            ${SVG16('grid')}
+                            <span>${escHtml(t('sched.pg.open') || 'Browse templates…')}</span>
+                            <span class="sched-preset-count">${PRESETS.length}</span>
+                        </button>
+                        ${browse}
+                    </div>
+                    <div class="sched-preset-desc" id="sched-preset-desc"></div>`;
+                })()}
+                </section>
+                <section class="sched-side-sec">
+                <h3 class="sched-side-h"><label for="sched-name">${t('sched.fName') || 'Name'}</label></h3>
+                <input class="input sched-name-input" id="sched-name" value="${escAttr(_draft.name)}" placeholder="${escAttr(t('sched.fNamePh') || 'e.g. Activate DCS profile every morning')}">
+                <textarea class="input sched-desc-input" id="sched-desc" rows="2" placeholder="${escAttr(t('sched.fDescriptionPh') || 'Description (optional)')}">${escHtml(_draft.description || '')}</textarea>
+                <div class="sched-filing">
+                    <label class="sched-cmd-label" for="sched-folder">${escHtml(t('sched.list.folder'))}</label>
+                    <input class="input" id="sched-folder" list="sched-folder-list" maxlength="60" value="${escAttr(_draft.ui?.folder || '')}" placeholder="${escAttr(t('sched.list.folderPh'))}">
+                    <datalist id="sched-folder-list">${[...new Set(_tasks.map((x) => x.ui?.folder || '').filter(Boolean))].map((f) => `<option value="${escAttr(f)}"></option>`).join('')}</datalist>
+                    <label class="sched-cmd-label" for="sched-tags">${escHtml(t('sched.list.tags'))}</label>
+                    <input class="input" id="sched-tags" maxlength="200" value="${escAttr((_draft.ui?.tags || []).join(', '))}" placeholder="${escAttr(t('sched.list.tagsPh'))}">
+                </div>
+                </section>
+
+                <section class="sched-side-sec">
+                <h3 class="sched-side-h">${SVG16('package')}<span>${escHtml(t('sched.pkg.sideTitle'))}</span></h3>
+                <div id="sched-pkg-side"></div>
+                </section>
+
+                <section class="sched-side-sec">
+                <h3 class="sched-side-h">${SVG16('clock')}<span>${t('sched.fTrigger') || 'Trigger'}</span> <span class="sched-hint-inline">${t('sched.fTriggerHint') || '— WHEN it runs'}</span></h3>
+                <div id="sched-trigger"></div>
+                </section>
+
+                <section class="sched-side-sec">
+                ${(() => {
+                    // One box called "allow custom commands" answered the wrong
+                    // question: it told you a permission was being granted but not
+                    // what it unlocked, and it silently covered deeplinks, which can
+                    // reach anything the app exposes. One box per real capability, so
+                    // consent is given to something legible.
+                    //
+                    // Ordered and split by WHAT IT COSTS, not by when it was added.
+                    // Five checkboxes in one flat list makes "may run PowerShell you wrote"
+                    // and "may open a bmm:// link" look like the same size of decision, and
+                    // the two groups are read by somebody asking two different questions:
+                    // can this reach my machine, and can this destroy my data.
+                    const pm = taskPerms(_draft as Task);
+                    const row = (key: string, on: boolean, title: string, desc: string) => `
+                        <label class="sched-opt sched-perm">
+                            <input type="checkbox" data-perm="${key}" ${on ? 'checked' : ''}>
+                            <div><b>${title}</b><span>${desc}</span></div>
+                        </label>`;
+                    // Folded to one row (« 2 of 9 granted · Edit »): the list is read when it is
+                    // changed, and nine descriptive rows open all the time pushed Options out of
+                    // the column. The count follows every tick (permSummaryText below).
+                    return `<details class="sched-perm-group" id="sched-perms">
+                        <summary class="sched-perm-sum">
+                            <span class="sched-perm-sum-ic">${SVG16('shield')}</span>
+                            <span class="sched-perm-sum-main">
+                                <b>${t('sched.permsTitle') || 'Permissions'}</b>
+                                <span class="sched-perm-count" id="sched-perm-count">${escHtml(permSummaryText(pm))}</span>
+                            </span>
+                            <span class="sched-perm-edit"><span class="sched-perm-edit-closed">${escHtml(t('sched.permsEdit'))}</span><span class="sched-perm-edit-open">${escHtml(t('sched.permsDone'))}</span></span>
+                        </summary>
+
+                        <div class="sched-perm-sub">${escHtml(t('sched.permsOutside') || 'Reaches outside BMM')}</div>
+                        ${row('command', pm.command === true, t('sched.allowCmdTitle') || 'Run external programs', t('sched.allowCmd') || 'This task may launch real programs on your PC.')}
+                        ${row('script', pm.script === true, t('sched.allowScriptTitle') || 'Run scripts', t('sched.allowScript') || 'This task may run PowerShell, CMD, Bash or Python code you write.')}
+                        ${row('deeplink', pm.deeplink === true, t('sched.allowDeeplinkTitle') || 'Fire deeplinks', t('sched.allowDeeplink') || 'This task may trigger bmm:// links, which can reach anything the app exposes.')}
+                        ${row('stopProcess', pm.stopProcess === true, t('sched.allowStopTitle') || 'Stop programs', t('sched.allowStop') || 'This task may terminate running programs. Unsaved work in them is lost, with no warning and nothing to undo.')}
+                        ${row('network', pm.network === true, t('sched.allowNetTitle') || 'Network', t('sched.allowNet') || 'This task may send webhooks and Discord or Slack messages, and read feeds. Never a private address unless a step allows the local network.')}
+                        ${row('files', pm.files === true, t('sched.allowFilesTitle'), t('sched.allowFiles'))}
+
+                        <div class="sched-perm-sub">${escHtml(t('sched.permsInside') || 'Destroys your own data')}</div>
+                        ${row('delete', pm.delete === true, t('sched.allowDeleteTitle') || 'Delete things', t('sched.allowDelete') || 'This task may delete profiles, modpacks and mod folders. Nothing here goes to the recycle bin.')}
+
+                        <div class="sched-perm-sub">${escHtml(t('sched.permsPerf') || 'Changes how hard BMM works')}</div>
+                        ${row('resources', pm.resources === true, t('sched.allowResTitle') || 'Resources', t('sched.allowRes') || 'This task may change the resource preset, app mode and the queue. A preset set for the task ends with it.')}
+                        ${row('ai', pm.ai === true, t('sched.allowAiTitle') || 'Laya (AI)', t('sched.allowAi') || 'This task may ask Laya on this PC. What Laya answers is kept as data, never run.')}
+
+                        <div class="sched-perm-sub">${escHtml(t('sched.permsOther') || 'Acts through your other tasks')}</div>
+                        ${row('tasks', pm.tasks === true, t('sched.allowTasksTitle') || 'Other tasks', t('sched.allowTasks') || 'This task may run, start or switch on your other tasks, which then do whatever THEY are permitted to do.')}
+
+                        <div class="sched-perm-sub">${escHtml(t('sched.permsScreens'))}</div>
+                        ${row('navigate', pm.navigate === true, t('sched.allowNavTitle'), t('sched.allowNav'))}
+                    </details>`;
+                })()}
+                </section>
+
+                <section class="sched-side-sec">
+                <h3 class="sched-side-h">${SVG16('sliders')}<span>${t('sched.secOptions') || 'Options'}</span></h3>
+                <label class="sched-opt">
+                    <input type="checkbox" id="sched-os" ${_draft.osSchedule ? 'checked' : ''}>
+                    <div><b>${t('sched.osScheduleTitle') || 'Run even when BMM is closed'}</b><span>${t('sched.osSchedule') || 'Registers a Windows Scheduled Task that launches BMM at the trigger time.'}</span></div>
+                </label>
+                ${['dailyAt', 'weeklyAt', 'monthlyAt'].includes(_draft.trigger.type) ? `
+                <label class="sched-opt">
+                    <input type="checkbox" id="sched-catchup" ${_draft.catchUp !== false ? 'checked' : ''}>
+                    <div><b>${t('sched.catchUpTitle') || 'Catch up a missed run'}</b><span>${t('sched.catchUp') || 'If BMM was closed at the scheduled time, run once at the next launch. At most one run is owed, however long BMM was away.'}</span></div>
+                </label>` : ''}
+                <label class="sched-opt">
+                    <div style="flex:1"><b>${t('sched.retry.title') || 'Try again after a failure'}</b><span>${t('sched.retry.desc') || 'Runs the whole task again, from the start. A stop or a cancel is never retried.'}</span>
+                        <div style="display:flex;gap:8px;margin-top:6px;align-items:center;flex-wrap:wrap">
+                            <input type="number" class="input" id="sched-retry-times" min="0" max="5" step="1" value="${Number(_draft.retry?.times) || 0}" style="width:70px" aria-label="${escAttr(t('sched.retry.times') || 'Extra attempts')}">
+                            <span style="font-size:12px">${t('sched.retry.times') || 'Extra attempts'}</span>
+                            <input type="number" class="input" id="sched-retry-backoff" min="5" max="3600" step="5" value="${Number(_draft.retry?.backoffSec) || 30}" style="width:80px" aria-label="${escAttr(t('sched.retry.backoff') || 'Seconds between attempts')}">
+                            <span style="font-size:12px">${t('sched.retry.backoff') || 'Seconds between attempts'}</span>
+                        </div>
+                    </div>
+                </label>
+                </section>
+                ${_editing && _draft.history?.length ? `
+                <h3 class="sched-side-h sched-side-h--plain">${t('sched.history') || 'Recent runs'}</h3>
+                <div class="sched-history">
+                    ${[..._draft.history].reverse().slice(0, 8).map(h => `
+                        <div class="sched-hist-row ${h.ok ? 'ok' : 'err'}"${h.err ? ` data-tooltip="${escAttr(h.err)}"` : ''}>
+                            <span class="sched-hist-dot"></span>
+                            <span class="sched-hist-when">${new Date(h.at).toLocaleString()}</span>
+                            <span class="sched-hist-ms">${h.ms >= 1000 ? (h.ms / 1000).toFixed(1) + 's' : h.ms + 'ms'}</span>
+                        </div>`).join('')}
+                </div>
+                <button type="button" class="btn btn-sm btn-ghost" data-sched-runlog="${escAttr(_draft.id || '')}" style="margin-top:6px">${escHtml(t('sched.runlog.open') || 'Detailed log')}</button>` : ''}
+            </aside>
+            <main class="modal-body sched-body sched-flow">
+                <div class="sched-flow-head">
+                    <span class="sched-flow-start">${t('sched.flowStart') || 'START'}</span>
+                    <span class="sched-flow-hint">${t('sched.fStepsHint') || 'WHAT it does, top to bottom'} · <span class="sched-flow-hint-drag">${t('sched.dragHint') || 'drag any block into an IF/LOOP branch to nest it'}</span></span>
+                    <!-- The legend must list what the language actually has. It still
+                         showed four blocks after For-Each, Switch, Try and the loop
+                         signals were added — a legend that omits half the vocabulary
+                         teaches the user the vocabulary is smaller than it is. -->
+                    <span class="sched-legend-mini">
+                        <b class="sched-step-tag sched-do" data-tooltip="${escAttr(t('sched.legendDo') || '')}">${t('sched.do') || 'DO'}</b>
+                        <b class="sched-step-tag sched-if" data-tooltip="${escAttr(t('sched.legendIf') || '')}">${t('sched.if') || 'IF'}</b>
+                        <b class="sched-step-tag sched-repeat" data-tooltip="${escAttr(t('sched.legendLoop') || '')}">${t('sched.repeat') || 'LOOP'}</b>
+                        <b class="sched-step-tag sched-repeat" data-tooltip="${escAttr(t('sched.legendForEach') || '')}">${t('sched.forEach') || 'FOR EACH'}</b>
+                        <b class="sched-step-tag sched-if" data-tooltip="${escAttr(t('sched.legendSwitch') || '')}">${t('sched.switch') || 'SWITCH'}</b>
+                        <b class="sched-step-tag sched-if" data-tooltip="${escAttr(t('sched.legendTry') || '')}">${t('sched.try') || 'TRY'}</b>
+                        <b class="sched-step-tag sched-wait" data-tooltip="${escAttr(t('sched.legendWait') || '')}">${t('sched.waitUntil') || 'WAIT'}</b>
+                        <b class="sched-step-tag sched-repeat" data-tooltip="${escAttr(t('sched.legendBreak') || '')}">${t('sched.break') || 'BREAK'}</b>
+                        <b class="sched-step-tag sched-repeat" data-tooltip="${escAttr(t('sched.legendStop') || '')}">${t('sched.stop') || 'STOP'}</b>
+                    </span>
+                </div>
+                <div class="sched-timeline">
+                    <div id="sched-steps" class="sched-steps"></div>
+                    <div class="sched-add-row" id="sched-root-add"></div>
+                </div>
+                <div class="sched-codepane" id="sched-codepane" hidden>
+                    <div class="sched-code-bar">
+                        <span class="sched-code-bar-hint">${escHtml(t('sched.bmms.barHint'))}</span>
+                        <button type="button" class="btn btn-xs btn-ghost" id="sched-code-outline" aria-pressed="false"
+                            data-tasky="sched.outline.tip" data-tasky-icon="list">
+                            ${uiIcon('list', 12)}
+                            ${escHtml(t('sched.outline.toggle'))}
+                        </button>
+                        <button type="button" class="btn btn-xs btn-ghost" id="sched-code-ref" aria-pressed="false"
+                            data-tasky="sched.ref.insertHint" data-tasky-icon="icon-info">
+                            ${uiIcon('search', 12)}
+                            ${escHtml(t('sched.ref.toggle'))}
+                        </button>
+
+                    </div>
+                    <!-- The box below holds the STEPS only: stripTaskWrapper removes the
+                         task "..." { on ... } header on the way in, because the live compile, the
+                         line numbers and the caret handling are all indexed on the body.
+                         The header used to be echoed above this box, read-only. It was noise —
+                         the trigger is chosen on the tab beside this one and shown there, so
+                         the strip repeated a value nobody was looking for and pushed the first
+                         line of real code down. Copy still takes both halves. -->
+                    <div class="sched-code-row">
+                        <aside class="sched-outline" id="sched-outline" hidden>
+                            <div class="bo-list" id="sched-outline-list"></div>
+                        </aside>
+                        <div class="sched-code-gutter" id="sched-code-gutter" role="button" tabindex="-1"
+                             aria-label="${escAttr(t('sched.bp.gutter'))}" data-tooltip="${escAttr(t('sched.bp.gutter'))}"></div>
+                        <textarea class="input sched-code" id="sched-code-ta" rows="20" spellcheck="false"></textarea>
+                        <div class="sched-code-hl" id="sched-code-hl" hidden aria-hidden="true"></div>
+                        <aside class="sched-ref" id="sched-ref" hidden>
+                            <input type="search" class="input sched-ref-q" id="sched-ref-q"
+                                   placeholder="${escAttr(t('sched.ref.search'))}" spellcheck="false">
+                            <div class="sched-ref-list" id="sched-ref-list"></div>
+                        </aside>
+                    </div>
+                    <div class="sched-code-status" id="sched-code-status"></div>
+                </div>
+                <!-- The flow view: built by sched-flow.ts over the same draft. -->
+                <div class="sflow-pane" id="sched-flowpane" hidden></div>
+            </main>
+        </div>
+        <div class="modal-footer sched-footer">
+            <span class="sched-foot-left">${learnMore('scheduler')}<span class="sched-foot-keys">${escHtml(t('sched.head.keys'))}</span></span>
+            <button class="btn btn-ghost" id="sched-cancel">${t('common.cancel') || 'Cancel'}</button>
+            <button class="btn btn-primary" id="sched-save">${escHtml(t('sched.head.saveClose'))}</button>
+        </div>
+      </div>`;
+
+    renderSharedVarsPanel(modal);
+    renderEnumsPanel(modal);
+    renderBlocksPanel(modal);
+    modal.querySelector('#sched-close')?.addEventListener('click', () => modal.classList.remove('open'));
+    modal.querySelector('#sched-cancel')?.addEventListener('click', () => modal.classList.remove('open'));
+    modal.querySelector('#sched-preset-catalog')?.addEventListener('click', () => { void browsePresetCatalogs(); });
+    modal.querySelector('#sched-preset-open')?.addEventListener('click', () => { void openPresetGallery(modal); });
+    modal.querySelector('#sched-name')?.addEventListener('input', (e) => {
+        _draft.name = (e.target as HTMLInputElement).value;
+        const h = modal.querySelector('#sched-head-name');
+        if (h) h.textContent = _draft.name.trim() || (_editing ? (t('sched.editTitle') || 'Edit task') : (t('sched.newTitle') || 'New scheduled task'));
+    });
+    // The list's folder and tags: presentation only (task.ui), never read by a run.
+    modal.querySelector('#sched-folder')?.addEventListener('input', (e) => {
+        _draft.ui = normalizeUi({ ...(_draft.ui || { v: 1 }), folder: (e.target as HTMLInputElement).value });
+        refreshDirty(modal);
+    });
+    modal.querySelector('#sched-tags')?.addEventListener('input', (e) => {
+        const tags = (e.target as HTMLInputElement).value.split(/[,;]/).map((x) => x.trim()).filter(Boolean);
+        _draft.ui = normalizeUi({ ...(_draft.ui || { v: 1 }), tags });
+        refreshDirty(modal);
+    });
+    {
+        const side = modal.querySelector('#sched-pkg-side') as HTMLElement | null;
+        if (side) void import('./sched-pkg.js').then((m) => m.renderPkgSection(side, _draft, () => refreshDirty(modal), (m2, k, ms) => toast(m2, k as any, ms)));
+    }
+    modal.querySelector('#sched-status')?.addEventListener('click', (e) => {
+        const b = e.currentTarget as HTMLElement;
+        _draft.enabled = !_draft.enabled;
+        b.className = `sched-status ${_draft.enabled ? 'is-on' : 'is-off'}`;
+        b.setAttribute('aria-pressed', _draft.enabled ? 'true' : 'false');
+        b.textContent = t(_draft.enabled ? 'sched.head.on' : 'sched.head.off');
+        refreshDirty(modal);
+    });
+    // "Unsaved changes": compared with the draft as it was opened or last saved, after anything
+    // that can change it. Cheap next to a keystroke; debounced anyway.
+    {
+        let dt: any = null;
+        const later = () => { clearTimeout(dt); dt = setTimeout(() => refreshDirty(modal), 250); };
+        modal.addEventListener('input', later);
+        modal.addEventListener('change', later);
+        modal.addEventListener('click', later);
+        refreshDirty(modal);
+    }
+    _unsubDebug?.();
+    _unsubDebug = subscribeDebug((ev) => paintDebug(ev));
+    _unsubBps?.();
+    _unsubBps = subscribeBreakpoints(() => paintBreakpoints());
+    modal.querySelector('#sched-desc')?.addEventListener('input', (e) => { _draft.description = (e.target as HTMLTextAreaElement).value; });
+    modal.querySelectorAll<HTMLInputElement>('[data-perm]').forEach(cb => {
+        cb.addEventListener('change', () => {
+            // Materialise the derived set on first edit, so a task saved from this
+            // modal always carries an explicit grant rather than one inferred from
+            // the legacy flag by whatever version happens to read it next.
+            const pm = { ...taskPerms(_draft as Task) };
+            (pm as any)[cb.dataset.perm!] = cb.checked;
+            _draft.perms = pm;
+            _draft.allowCustomCommands = !!pm.command;   // keep the legacy field truthful
+            const count = modal.querySelector('#sched-perm-count');
+            if (count) count.textContent = permSummaryText(pm);
+            refreshSummary(modal);
+            // The flow's "!" marks read the grants: redraw them now, not at the next edit.
+            if (_mode === 'flow') flowRefresh();
+        });
+    });
+    modal.querySelector('#sched-os')?.addEventListener('change', (e) => { _draft.osSchedule = (e.target as HTMLInputElement).checked; refreshSummary(modal); });
+    modal.querySelector('#sched-catchup')?.addEventListener('change', (e) => { _draft.catchUp = (e.target as HTMLInputElement).checked; refreshSummary(modal); });
+    const readRetry = () => {
+        const times = Math.max(0, Math.min(5, Math.floor(Number((modal.querySelector('#sched-retry-times') as HTMLInputElement)?.value) || 0)));
+        const backoffSec = Math.max(5, Math.min(3600, Math.floor(Number((modal.querySelector('#sched-retry-backoff') as HTMLInputElement)?.value) || 30)));
+        _draft.retry = times ? { times, backoffSec } : undefined;
+    };
+    modal.querySelector('#sched-retry-times')?.addEventListener('change', readRetry);
+    modal.querySelector('#sched-retry-backoff')?.addEventListener('change', readRetry);
+    // Test run: execute the CURRENT draft's steps once, without saving the task —
+    // instant feedback while building an automation instead of save→run→edit loops.
+    // Debug: the SAME run as a test, one step at a time. Not a second runner — a debugger
+    // that runs the task differently from how it really runs is a debugger that lies about
+    // the bug.
+    modal.querySelector('#sched-preview')?.addEventListener('click', () => { void openPreview(); });
+    // Dry run: every step with what it would do, the measurable ones measured, and the
+    // navigation played in preview (sched-dryrun.ts). The text is the task in code mode.
+    modal.querySelector('#sched-export')?.addEventListener('click', async () => {
+        if (!(await flushCode())) return;
+        await openExportDialog();
+    });
+    modal.querySelector('#sched-dryrun')?.addEventListener('click', async () => {
+        if (!(await flushCode())) return;
+        await openTaskDryRun(_draft, modal);
+    });
+
+    modal.querySelector('#sched-debug')?.addEventListener('click', async () => {
+        // In code mode the TEXT is the task: compiled first, so the run, the line map and the
+        // breakpoints all describe what is on screen.
+        if (!(await flushCode())) return;
+        if (!_draft.steps.length) { toast(t('sched.testNoSteps') || 'Add at least one step to test.', 'warning'); return; }
+        startDebug(_draft.id || 'draft', _draft.name || (t('sched.untitled') || 'Untitled'));
+        (modal.querySelector('#sched-test') as HTMLButtonElement | null)?.click();
+    });
+
+    modal.querySelector('#sched-test')?.addEventListener('click', async () => {
+        if (!(await flushCode())) return;
+        if (!_draft.steps.length) { toast(t('sched.testNoSteps') || 'Add at least one step to test.', 'warning'); return; }
+        const btn = modal.querySelector('#sched-test') as HTMLButtonElement;
+        btn.disabled = true;
+        toast(t('sched.testing') || 'Test run started…', 'info', 1500);
+        // A test run registers like any other, so it appears in the panel and can be
+        // stopped. Without this, the one run you are MOST likely to want to abandon — the
+        // one you started to see what a half-built task does — was the only one that could
+        // not be, and a five-minute Pause meant waiting it out or closing BMM.
+        //
+        // Under the draft's id, so a test and a scheduled run of the same task cannot both
+        // claim the row. `_draft.id` exists before the task is saved; a brand-new draft
+        // without one falls back to a constant, which is fine because only one editor is
+        // open at a time.
+        const testId = _draft.id || 'draft';
+        _running.set(testId, {
+            id: testId, name: `${_draft.name || (t('sched.untitled') || 'Untitled')} (${t('sched.testRun') || 'Test run'})`,
+            startedAt: Date.now(), step: t('sched.run.starting') || 'starting…', depth: 0,
+            done: 0, total: (_draft.steps || []).filter((s) => !s.disabled).length, cancel: false,
+        });
+        renderRunningPanel();
+        ensureRunTicker();
+        try {
+            // Paths noted first: the debugger reports where it stands by path, and a test run is
+            // the run it debugs.
+            notePaths(_draft.steps);
+            await runSteps(_draft.steps, { ..._draft, id: testId } as Task, { nums: {}, text: taskVars(_draft), shared: readSharedVars() });
+            toast(t('sched.testOk') || 'Test run finished.', 'success');
+        } catch (e) {
+            if (e instanceof DebugStopped) toast(t('sched.dbg.ended'), 'info');
+            else if (e instanceof _StopTask) toast(`${t('sched.stopped') || 'stopped'}${(e as any).reason ? `: ${(e as any).reason}` : ''}`, 'info');
+            else if (e instanceof _CancelledTask) toast(t('sched.run.cancelled') || 'stopped by you', 'info');
+            else {
+                // Before the `finally` below, which used to be the whole story: a failing
+                // task closed the debugger and left a toast, so the one moment somebody
+                // opens a debugger FOR — it broke, what was it holding — was the one moment
+                // the values were already gone. failDebug keeps the panel on that moment;
+                // endDebug then detaches the session so nothing can wait on it.
+                failDebug(e);
+                toast(`${t('sched.testFail') || 'Test run failed'} — ${e}`, 'error');
+            }
+        } finally {
+            // In the finally for the same reason runTask's is: a test that threw must not
+            // leave a row in the panel with a Stop button that does nothing.
+            _running.delete(testId);
+            renderRunningPanel();
+            btn.disabled = false;
+            // Whatever happened. A session left open holds the panel on screen with a Step
+            // button that resolves nothing — which looks exactly like a hung task.
+            endDebug();
+        }
+    });
+    modal.querySelector('#sched-save-stay')?.addEventListener('click', () => { void saveDraft(modal, false); });
+    modal.querySelector('#sched-save')?.addEventListener('click', async () => {
+        await saveDraft(modal, true);
+    });
+
+    renderTriggerEditor(modal.querySelector('#sched-trigger') as HTMLElement);
+    wireCodeMode(modal);
+    renderStepsEditor(modal.querySelector('#sched-steps') as HTMLElement, _draft.steps);
+    renderAddRow(modal.querySelector('#sched-root-add') as HTMLElement, _draft.steps);
+}
+
+/**
+ * Is the trigger picker open?
+ *
+ * Module state rather than per-render, because re-rendering is how this editor updates
+ * everything — picking a weekday redraws it — and a flag inside would reopen the grid on
+ * every keystroke.
+ *
+ * Closed once something is chosen. Eleven equal cards in a two-column sidebar is six rows
+ * before anything else is visible, and the parameters for the one you picked were BELOW all
+ * of them: choosing a trigger meant scrolling past the ten you did not choose to configure
+ * the one you did. Somebody who opens a saved task wants to see what it does, not the menu
+ * they used once.
+ */
+let _trPickerOpen = false;
+
+function renderTriggerEditor(host: HTMLElement): void {
+    const tr = _draft.trigger;
+    // Grouped, because the eleven answer two different questions: "on a clock" and "when
+    // something happens". Ungrouped they read as a list of eleven equally-likely things,
+    // and the two halves are chosen by people with completely different problems.
+    const GROUPS: Array<{ g: string; label: string; kinds: string[] }> = [
+        { g: 'clock', label: t('sched.trGrp.clock') || 'On a schedule',
+          kinds: ['interval', 'hourly', 'dailyAt', 'weeklyAt', 'monthlyAt', 'once'] },
+        { g: 'event', label: t('sched.trGrp.event') || 'When something happens',
+          kinds: ['appStart', 'watchFile', 'onEvent', 'afterTask', 'condition', 'script', 'rss'] },
+        { g: 'manual', label: t('sched.trGrp.manual') || 'Never on its own',
+          kinds: ['manual'] },
+    ];
+    const kinds: Array<[string, string]> = [
+        ['interval',  t('sched.trEvery')   || 'Every N minutes'],
+        ['hourly',    t('sched.trHourly')  || 'Every N hours'],
+        ['dailyAt',   t('sched.trDaily')   || 'Daily at time'],
+        ['weeklyAt',  t('sched.trWeekly')  || 'Weekly on days'],
+        ['monthlyAt', t('sched.trMonthly') || 'Monthly on a day'],
+        ['once',      t('sched.trOnce')    || 'Once at date/time'],
+        ['appStart',  t('sched.trAppStart')|| 'On BMM start'],
+        ['watchFile', t('sched.trWatch')   || 'When a file changes'],
+        ['onEvent',   t('sched.trEvent')],
+        ['afterTask', t('sched.trAfter')],
+        ['condition', t('sched.trCondition')],
+        ['script',    t('sched.trScript')],
+        ['rss',       t('sched.trRss')],
+        ['manual',    t('sched.trManual')  || 'Manual only'],
+    ];
+    const labelOf = (v: string) => (kinds.find(([k]) => k === v) || [v, v])[1];
+    // The chosen one, as a row, with what it is actually set to. Same sentence the task
+    // list shows, so the editor and the list cannot describe one trigger two ways.
+    const chosen = `
+        <button type="button" class="sched-tr-chosen" id="sched-tr-change">
+            <span class="sched-tr-card-icon">${triggerIcon(tr)}</span>
+            <span class="sched-tr-chosen-text">
+                <b>${escHtml(labelOf(tr.type))}</b>
+                <span>${escHtml(triggerLabel(tr))}</span>
+            </span>
+            <span class="sched-tr-change">${escHtml(t('sched.trChange') || 'Change')}</span>
+        </button>`;
+
+    const grid = GROUPS.map((grp) => `
+        <div class="sched-tr-group">
+            <span class="sched-tr-group-h">${escHtml(grp.label)}</span>
+            <div class="sched-tr-grid">
+                ${grp.kinds.map((v) => `
+                    <button type="button" class="sched-tr-card ${tr.type === v ? 'active' : ''}" data-tr="${v}">
+                        <span class="sched-tr-card-icon">${triggerIcon({ type: v } as Trigger)}</span>
+                        <span class="sched-tr-card-label">${escHtml(labelOf(v))}</span>
+                    </button>`).join('')}
+            </div>
+        </div>`).join('');
+
+    host.innerHTML = (_trPickerOpen ? grid : chosen)
+        + `<div id="sched-tr-params" class="sched-tr-params"></div>`;
+
+    host.querySelector('#sched-tr-change')?.addEventListener('click', () => {
+        _trPickerOpen = true;
+        renderTriggerEditor(host);
+    });
+    host.querySelectorAll('.sched-tr-card').forEach(card => card.addEventListener('click', () => {
+        const v = (card as HTMLElement).dataset.tr!;
+        if (v === 'interval') _draft.trigger = { type: 'interval', everyMinutes: 60 };
+        else if (v === 'hourly') _draft.trigger = { type: 'hourly', everyHours: 1 };
+        else if (v === 'dailyAt') _draft.trigger = { type: 'dailyAt', time: '08:00' };
+        else if (v === 'weeklyAt') _draft.trigger = { type: 'weeklyAt', time: '08:00', days: [1] };
+        else if (v === 'monthlyAt') _draft.trigger = { type: 'monthlyAt', day: 1, time: '08:00' };
+        else if (v === 'once') _draft.trigger = { type: 'once', at: new Date(Date.now() + 3600000).toISOString().slice(0, 16) };
+        else if (v === 'watchFile') _draft.trigger = { type: 'watchFile', path: '' };
+        else if (v === 'onEvent') _draft.trigger = { type: 'onEvent', event: 'bmm.mod.missing' };
+        else if (v === 'afterTask') _draft.trigger = { type: 'afterTask', taskId: '', outcome: 'any' };
+        else if (v === 'condition') _draft.trigger = { type: 'condition', condition: { type: 'fileExists', params: {} } };
+        else if (v === 'script') _draft.trigger = { type: 'script', engine: 'powershell', code: '', everyMinutes: 5 };
+        else if (v === 'manual') _draft.trigger = { type: 'manual' };
+        else if (v === 'rss') _draft.trigger = { type: 'rss', url: '', everyMinutes: 15 };
+        else _draft.trigger = { type: 'appStart' };
+        // Closed again: the answer replaces the menu, and the parameters for what was just
+        // chosen are the next thing on screen instead of being ten rows down.
+        _trPickerOpen = false;
+        renderTriggerEditor(host);
+        const m = document.getElementById('modal-scheduler'); if (m) refreshSummary(m);
+    }));
+    const ph = host.querySelector('#sched-tr-params') as HTMLElement;
+    // Any param change (time, minutes, day…) refreshes the header summary live.
+    ph.addEventListener('input', () => { const m = document.getElementById('modal-scheduler'); if (m) refreshSummary(m); });
+    if (tr.type === 'onEvent') {
+        ph.innerHTML = `
+            <select class="input" id="sched-tr-ev" data-csel-search="1" style="max-width:100%">
+                ${BMM_EVENTS.map((e) => `<option value="${escAttr(e)}"${tr.event === e ? ' selected' : ''}>${escAttr(e)} — ${escHtml(t('sched.ev.' + e))}</option>`).join('')}
+            </select>
+            <input class="input" id="sched-tr-ev-custom" spellcheck="false"
+                placeholder="${escAttr(t('sched.trEventCustomPh'))}" value="${escAttr(BMM_EVENTS.includes(tr.event) ? '' : (tr.event || ''))}">
+            <input class="input" id="sched-tr-ev-where" spellcheck="false" aria-label="${escAttr(t('sched.trEventWhere'))}"
+                placeholder="${escAttr(t('sched.trEventWherePh'))}" value="${escAttr(tr.where || '')}">
+            <p class="sched-hint">${escHtml(t('sched.trEventHint'))} ${escHtml(t('sched.trEventWhereHint'))}</p>`;
+        ph.querySelector('#sched-tr-ev')?.addEventListener('change', (e) => {
+            (_draft.trigger as any).event = (e.target as HTMLSelectElement).value;
+            const custom = ph.querySelector('#sched-tr-ev-custom') as HTMLInputElement | null;
+            if (custom) custom.value = '';
+        });
+        // A name typed here WINS over the dropdown, because somebody typing one is naming
+        // something the list does not have — which is the whole reason the field is there.
+        ph.querySelector('#sched-tr-ev-custom')?.addEventListener('input', (e) => {
+            const v = (e.target as HTMLInputElement).value.trim();
+            if (v) (_draft.trigger as any).event = v;
+        });
+        ph.querySelector('#sched-tr-ev-where')?.addEventListener('input', (e) => {
+            const v = (e.target as HTMLInputElement).value.trim();
+            if (v) (_draft.trigger as any).where = v; else delete (_draft.trigger as any).where;
+        });
+    }
+    if (tr.type === 'afterTask') {
+        // Only the OTHER tasks. A task offered itself would be offering a loop that runs at
+        // the speed of the poll, and the runtime refuses it anyway — better not to show it.
+        const others = _tasks.filter((x) => x.id !== (_editing?.id || ''));
+        const outcomes: [string, string][] = [
+            ['any', t('sched.trAfterAny')], ['ok', t('sched.trAfterOkOpt')], ['fail', t('sched.trAfterFailOpt')],
+        ];
+        ph.innerHTML = others.length ? `
+            <select class="input" id="sched-tr-after" style="max-width:100%">
+                <option value="">${escHtml(t('sched.trAfterPick'))}</option>
+                ${others.map((x) => `<option value="${escAttr(x.id)}"${tr.taskId === x.id ? ' selected' : ''}>${escHtml(x.name)}</option>`).join('')}
+            </select>
+            <select class="input" id="sched-tr-after-out" style="max-width:100%">
+                ${outcomes.map(([v, l]) => `<option value="${v}"${(tr.outcome || 'any') === v ? ' selected' : ''}>${escHtml(l)}</option>`).join('')}
+            </select>
+            <p class="sched-hint">${escHtml(t('sched.trAfterHint'))}</p>`
+            : `<p class="sched-hint">${escHtml(t('sched.trAfterEmpty'))}</p>`;
+        ph.querySelector('#sched-tr-after')?.addEventListener('change', (e) => {
+            (_draft.trigger as any).taskId = (e.target as HTMLSelectElement).value;
+        });
+        ph.querySelector('#sched-tr-after-out')?.addEventListener('change', (e) => {
+            (_draft.trigger as any).outcome = (e.target as HTMLSelectElement).value;
+        });
+    }
+    if (tr.type === 'condition') {
+        // The condition it currently holds, spelled out above its editor. The editor shows
+        // the same thing in dropdowns and fields, which is precise and takes reading; one
+        // sentence is what somebody scanning the task needs.
+        const now = condSummary((_draft.trigger as any).condition);
+        ph.innerHTML = `${now ? `<p class="sched-tr-now">${escHtml(t('sched.trCondNow'))} <b>${escHtml(now)}</b></p>` : ''}
+            <div class="sched-cond sched-tr-cond"></div><p class="sched-hint">${escHtml(t('sched.trConditionHint'))}</p>`;
+        // The very same editor an `if` step uses. All thirty-four conditions, for free, and
+        // one place to fix when a thirty-fifth arrives.
+        ph.querySelector('.sched-tr-cond')?.appendChild(conditionEditor((_draft.trigger as any).condition));
+    }
+    if (tr.type === 'script') {
+        const engines: [string, string][] = [
+            ['powershell', 'PowerShell'], ['cmd', 'CMD / Batch'], ['bash', 'Bash'],
+            ['python', 'Python'], ['node', 'JavaScript (Node)'], ['rust', 'Rust'],
+        ];
+        const granted = hasPerm(_draft as Task, 'script');
+        // Old tasks carry neither field and meant exit-0 on pasted text, which is what these
+        // defaults say. A saved task must keep firing exactly as it did.
+        const fireOn = String((tr as any).fireOn || 'exit0');
+        const fromFile = String((tr as any).source || 'inline') === 'file';
+        // Every rule in one list, so the runner and the screen cannot describe different
+        // ones — the label here IS what the hint below repeats.
+        const rules: [string, string][] = [
+            ['exit0', t('sched.trScr.exit0')], ['exitIs', t('sched.trScr.exitIs')],
+            ['printsAny', t('sched.trScr.printsAny')], ['printsMatch', t('sched.trScr.printsMatch')],
+        ];
+        ph.innerHTML = `
+            <div class="sched-tr-row">
+                <select class="input" id="sched-tr-eng" style="max-width:190px">
+                    ${engines.map(([v, l]) => `<option value="${v}"${(tr.engine || 'powershell') === v ? ' selected' : ''}>${escHtml(l)}</option>`).join('')}
+                </select>
+                <span class="sched-tr-lbl">${escHtml(t('sched.lblEvery') || 'every')}</span>
+                <input type="number" class="input" id="sched-tr-scr-min" min="1" style="max-width:90px"
+                    value="${Math.max(1, Number(tr.everyMinutes) || 5)}">
+                <span class="sched-tr-lbl">${escHtml(t('sched.unitMin') || 'min')}</span>
+                <span class="sched-tr-lbl">${escHtml(t('sched.trScr.upTo'))}</span>
+                <input type="number" class="input" id="sched-tr-scr-to" min="1" max="900" style="max-width:90px"
+                    value="${Math.max(1, Number((tr as any).timeoutSecs) || 60)}">
+                <span class="sched-tr-lbl">${escHtml(t('sched.unitSec'))}</span>
+            </div>
+
+            <div class="sched-tr-row">
+                <label class="sched-tr-lbl"><input type="radio" name="sched-tr-scr-src" value="inline"${fromFile ? '' : ' checked'}>
+                    ${escHtml(t('sched.trScr.here'))}</label>
+                <label class="sched-tr-lbl"><input type="radio" name="sched-tr-scr-src" value="file"${fromFile ? ' checked' : ''}>
+                    ${escHtml(t('sched.trScr.file'))}</label>
+            </div>
+
+            <div class="sched-tr-scr-inline" style="${fromFile ? 'display:none' : ''}">
+                <textarea class="input" id="sched-tr-code" rows="12" spellcheck="false"
+                    style="resize:vertical;font-family:var(--font-mono)"
+                    placeholder="${escAttr(t('sched.trScriptPh'))}">${escHtml(tr.code || '')}</textarea>
+                <div class="sched-tr-row">
+                    <button type="button" class="btn btn-xs btn-ghost" id="sched-tr-scr-load">${escHtml(t('sched.trScr.load'))}</button>
+                    <span class="sched-tr-lbl">${escHtml(t('sched.trScr.loadHint'))}</span>
+                </div>
+            </div>
+
+            <div class="sched-tr-scr-file" style="${fromFile ? '' : 'display:none'}">
+                <div class="sched-tr-row">
+                    <input class="input" id="sched-tr-scr-path" spellcheck="false" style="flex:1;min-width:220px"
+                        placeholder="${escAttr(t('sched.trScr.pathPh'))}" value="${escAttr((tr as any).path || '')}">
+                    <button type="button" class="btn btn-xs btn-ghost" id="sched-tr-scr-pick">${escHtml(t('common.browse') || 'Browse')}</button>
+                </div>
+                <p class="sched-hint">${escHtml(t('sched.trScr.fileHint'))}</p>
+            </div>
+
+            <div class="sched-tr-row">
+                <span class="sched-tr-lbl">${escHtml(t('sched.trScr.fires'))}</span>
+                <select class="input" id="sched-tr-scr-when" style="max-width:230px">
+                    ${rules.map(([v, l]) => `<option value="${v}"${fireOn === v ? ' selected' : ''}>${escHtml(l)}</option>`).join('')}
+                </select>
+                <input type="number" class="input" id="sched-tr-scr-exit" min="0" max="255" style="max-width:90px;${fireOn === 'exitIs' ? '' : 'display:none'}"
+                    value="${escAttr(String((tr as any).exitCode ?? 0))}">
+                <input class="input" id="sched-tr-scr-match" spellcheck="false" style="flex:1;min-width:160px;${fireOn === 'printsMatch' ? '' : 'display:none'}"
+                    placeholder="${escAttr(t('sched.trScr.matchPh'))}" value="${escAttr((tr as any).match || '')}">
+            </div>
+
+            <p class="sched-hint">${escHtml(t('sched.trScriptHint'))}</p>
+            <p class="sched-hint">${escHtml(t('sched.trScr.stdoutHint'))}</p>
+            ${granted ? '' : `<p class="sched-hint sched-hint-bad">${escHtml(t('sched.trScriptNoPerm'))}</p>`}`;
+        ph.querySelector('#sched-tr-eng')?.addEventListener('change', (e) => {
+            (_draft.trigger as any).engine = (e.target as HTMLSelectElement).value;
+        });
+        ph.querySelector('#sched-tr-scr-min')?.addEventListener('input', (e) => {
+            (_draft.trigger as any).everyMinutes = Math.max(1, parseInt((e.target as HTMLInputElement).value) || 5);
+        });
+        ph.querySelector('#sched-tr-code')?.addEventListener('input', (e) => {
+            (_draft.trigger as any).code = (e.target as HTMLTextAreaElement).value;
+        });
+        ph.querySelector('#sched-tr-scr-to')?.addEventListener('input', (e) => {
+            (_draft.trigger as any).timeoutSecs = Math.min(900, Math.max(1, parseInt((e.target as HTMLInputElement).value) || 60));
+        });
+        ph.querySelectorAll('input[name="sched-tr-scr-src"]').forEach((r) => {
+            r.addEventListener('change', (e) => {
+                const v = (e.target as HTMLInputElement).value;
+                (_draft.trigger as any).source = v;
+                (ph.querySelector('.sched-tr-scr-inline') as HTMLElement).style.display = v === 'file' ? 'none' : '';
+                (ph.querySelector('.sched-tr-scr-file') as HTMLElement).style.display = v === 'file' ? '' : 'none';
+            });
+        });
+        ph.querySelector('#sched-tr-scr-path')?.addEventListener('input', (e) => {
+            (_draft.trigger as any).path = (e.target as HTMLInputElement).value;
+        });
+        ph.querySelector('#sched-tr-scr-pick')?.addEventListener('click', async () => {
+            const { pickFile } = await import('../../core/api.js');
+            const f = await pickFile({ filters: [{ name: 'Scripts', extensions: ['ps1', 'cmd', 'bat', 'sh', 'py', 'js', 'mjs', 'rs', 'txt'] }] }).catch(() => null);
+            if (!f) return;
+            (_draft.trigger as any).path = f;
+            (ph.querySelector('#sched-tr-scr-path') as HTMLInputElement).value = String(f);
+        });
+        // "Load" COPIES the file in rather than linking it. The two are different promises and
+        // the radio above is where you choose: this one takes a snapshot you can then edit
+        // here, the file mode re-reads on every probe.
+        ph.querySelector('#sched-tr-scr-load')?.addEventListener('click', async () => {
+            const { pickFile } = await import('../../core/api.js');
+            const f = await pickFile({ filters: [{ name: 'Scripts', extensions: ['ps1', 'cmd', 'bat', 'sh', 'py', 'js', 'mjs', 'rs', 'txt'] }] }).catch(() => null);
+            if (!f) return;
+            try {
+                const text = String(await invoke('read_file_text', { path: f }));
+                (_draft.trigger as any).code = text;
+                (ph.querySelector('#sched-tr-code') as HTMLTextAreaElement).value = text;
+                toast(t('sched.trScr.loaded').replace('{f}', String(f).replace(/^.*[/\\]/, '')), 'success', 6000);
+            } catch (e) {
+                toast(String(e), 'warning', 8000);
+            }
+        });
+        ph.querySelector('#sched-tr-scr-when')?.addEventListener('change', (e) => {
+            const v = (e.target as HTMLSelectElement).value;
+            (_draft.trigger as any).fireOn = v;
+            (ph.querySelector('#sched-tr-scr-exit') as HTMLElement).style.display = v === 'exitIs' ? '' : 'none';
+            (ph.querySelector('#sched-tr-scr-match') as HTMLElement).style.display = v === 'printsMatch' ? '' : 'none';
+        });
+        ph.querySelector('#sched-tr-scr-exit')?.addEventListener('input', (e) => {
+            (_draft.trigger as any).exitCode = Math.min(255, Math.max(0, parseInt((e.target as HTMLInputElement).value) || 0));
+        });
+        ph.querySelector('#sched-tr-scr-match')?.addEventListener('input', (e) => {
+            (_draft.trigger as any).match = (e.target as HTMLInputElement).value;
+        });
+    }
+    if (tr.type === 'interval') {
+        ph.innerHTML = `<div class="sched-tr-row"><input type="number" class="input" id="sched-tr-min" min="1" value="${tr.everyMinutes}" style="max-width:120px"><span>${t('sched.unitMin') || 'min'}</span></div>`;
+        ph.querySelector('#sched-tr-min')?.addEventListener('input', (e) => { (_draft.trigger as any).everyMinutes = parseInt((e.target as HTMLInputElement).value) || 1; });
+    } else if (tr.type === 'hourly') {
+        ph.innerHTML = `<div class="sched-tr-row"><input type="number" class="input" id="sched-tr-h" min="1" value="${tr.everyHours}" style="max-width:120px"><span>${t('sched.unitH') || 'h'}</span></div>`;
+        ph.querySelector('#sched-tr-h')?.addEventListener('input', (e) => { (_draft.trigger as any).everyHours = parseInt((e.target as HTMLInputElement).value) || 1; });
+    } else if (tr.type === 'monthlyAt') {
+        ph.innerHTML = `<span style="font-size:12px;color:var(--text-muted)">${t('sched.day') || 'Day'}</span>
+            <input type="number" class="input" id="sched-tr-dom" min="1" max="31" value="${tr.day}" style="max-width:90px">
+            <span style="font-size:12px;color:var(--text-muted)">${t('sched.atTime') || 'at'}</span>
+            <input type="time" class="input" id="sched-tr-time" value="${tr.time}" style="max-width:140px">`;
+        ph.querySelector('#sched-tr-dom')?.addEventListener('input', (e) => { (_draft.trigger as any).day = Math.min(31, Math.max(1, parseInt((e.target as HTMLInputElement).value) || 1)); });
+        ph.querySelector('#sched-tr-time')?.addEventListener('input', (e) => { (_draft.trigger as any).time = (e.target as HTMLInputElement).value; });
+    } else if (tr.type === 'watchFile') {
+        // This watches A FILE. It used to carry a "Set up DCS" button that installed a Lua
+        // hook into DCS and filled the path in with the file that hook writes — so the first
+        // thing somebody choosing this trigger met was one game's name, and, if they pressed
+        // it, a path ending in `bmm-server.json` with nothing on screen saying what that was.
+        //
+        // Setting a game up is a step, and there is an action for it: `game.watch`. The
+        // trigger asks for a path, and says where the other thing went.
+        ph.innerHTML = `
+            <div class="sched-tr-row">
+                <input class="input" id="sched-tr-watch" spellcheck="false" style="flex:1;min-width:220px"
+                    placeholder="${escAttr(t('sched.trWatchPh') || 'Full path to the file to watch')}"
+                    value="${escAttr(tr.path || '')}">
+                <button type="button" class="btn btn-xs btn-ghost" id="sched-tr-watch-pick">${escHtml(t('common.browse') || 'Browse')}</button>
+            </div>
+            <p class="sched-hint">${escHtml(t('sched.trWatchHint') || '')}</p>
+            <p class="sched-hint">${escHtml(t('sched.trWatchGame') || '')}</p>`;
+        ph.querySelector('#sched-tr-watch')?.addEventListener('input', (e) => {
+            (_draft.trigger as any).path = (e.target as HTMLInputElement).value;
+        });
+        ph.querySelector('#sched-tr-watch-pick')?.addEventListener('click', async () => {
+            const { pickFile } = await import('../../core/api.js');
+            const f = await pickFile({ filters: [{ name: 'All files', extensions: ['*'] }] }).catch(() => null);
+            if (!f) return;
+            (_draft.trigger as any).path = f;
+            (ph.querySelector('#sched-tr-watch') as HTMLInputElement).value = String(f);
+        });
+    } else if (tr.type === 'manual') {
+        ph.innerHTML = `<span style="font-size:12px;color:var(--text-muted)">${t('sched.trManualHint') || 'Never runs automatically — use the ▶ Run button or a bmm://schedule/run link.'}</span>`;
+    } else if (tr.type === 'dailyAt') {
+        ph.innerHTML = `<input type="time" class="input" id="sched-tr-time" value="${tr.time}" style="max-width:140px">`;
+        ph.querySelector('#sched-tr-time')?.addEventListener('input', (e) => { (_draft.trigger as any).time = (e.target as HTMLInputElement).value; });
+    } else if (tr.type === 'weeklyAt') {
+        const dayNames = (t('sched.dayNames') || 'Sun,Mon,Tue,Wed,Thu,Fri,Sat').split(',');
+        ph.innerHTML = `<input type="time" class="input" id="sched-tr-time" value="${tr.time}" style="max-width:140px;margin-bottom:8px">
+            <div style="display:flex;gap:4px;flex-wrap:wrap">${dayNames.map((d, i) =>
+                `<button type="button" class="btn btn-xs ${tr.days.includes(i) ? 'btn-accent' : 'btn-ghost'}" data-day="${i}">${escHtml(d)}</button>`).join('')}</div>`;
+        ph.querySelector('#sched-tr-time')?.addEventListener('input', (e) => { (_draft.trigger as any).time = (e.target as HTMLInputElement).value; });
+        ph.querySelectorAll('[data-day]').forEach(b => b.addEventListener('click', () => {
+            const i = parseInt((b as HTMLElement).dataset.day!); const days = (_draft.trigger as any).days as number[];
+            const k = days.indexOf(i); if (k >= 0) days.splice(k, 1); else days.push(i); renderTriggerEditor(host);
+        }));
+    } else if (tr.type === 'once') {
+        ph.innerHTML = `<input type="datetime-local" class="input" id="sched-tr-at" value="${escAttr(tr.at.slice(0, 16))}" style="max-width:220px">`;
+        ph.querySelector('#sched-tr-at')?.addEventListener('input', (e) => { (_draft.trigger as any).at = new Date((e.target as HTMLInputElement).value).toISOString(); });
+    } else if (tr.type === 'appStart') {
+        ph.innerHTML = `<span style="font-size:12px;color:var(--text-muted)">${t('sched.trAppStartHint') || 'Runs once each time BMM launches.'}</span>`;
+    } else if (tr.type === 'rss') {
+        const granted = hasPerm(_draft as Task, 'network');
+        ph.innerHTML = `
+            <div class="sched-field"><label class="sched-flabel" for="sched-tr-rss">${escHtml(t('sched.trRssUrl'))}</label>
+                <input class="input" id="sched-tr-rss" spellcheck="false" placeholder="https://example.com/feed.xml" value="${escAttr(tr.url || '')}">
+                <span class="sched-field-err" id="sched-tr-rss-err" hidden></span></div>
+            <div class="sched-tr-row">
+                <span style="font-size:12px;color:var(--text-muted)">${escHtml(t('sched.trRssEvery'))}</span>
+                <input type="number" class="input" id="sched-tr-rss-min" min="5" value="${Math.max(5, Number(tr.everyMinutes) || 15)}" style="max-width:90px">
+                <span>${t('sched.unitMin') || 'min'}</span>
+            </div>
+            <label class="sched-cmd-row"><input type="checkbox" id="sched-tr-rss-lan" ${tr.allowLan ? 'checked' : ''}>
+                <span>${escHtml(t('sched.net.allowLan'))}</span></label>
+            <p class="sched-hint">${escHtml(t('sched.trRssHint'))}</p>
+            ${granted ? '' : `<p class="sched-hint sched-hint-warn">${escHtml(t('sched.trRssNoPerm'))}</p>`}
+            <div class="sched-tr-row">
+                <button type="button" class="btn btn-xs btn-ghost" id="sched-tr-rss-test">${escHtml(t('sched.trRssTest'))}</button>
+                <span class="sched-test-out" id="sched-tr-rss-out" aria-live="polite"></span>
+            </div>`;
+        const err = ph.querySelector('#sched-tr-rss-err') as HTMLElement;
+        const check = (v: string) => {
+            const bad = v.trim() ? webhookUrlProblem(v, 'webhook') : null;
+            err.hidden = !bad;
+            err.textContent = bad ? netWhy(bad) : '';
+        };
+        check(String(tr.url || ''));
+        ph.querySelector('#sched-tr-rss')?.addEventListener('input', (e) => {
+            const v = (e.target as HTMLInputElement).value;
+            (_draft.trigger as any).url = v.trim();
+            check(v);
+        });
+        ph.querySelector('#sched-tr-rss-min')?.addEventListener('input', (e) => {
+            (_draft.trigger as any).everyMinutes = Math.max(5, parseInt((e.target as HTMLInputElement).value) || 15);
+        });
+        ph.querySelector('#sched-tr-rss-lan')?.addEventListener('change', (e) => {
+            if ((e.target as HTMLInputElement).checked) (_draft.trigger as any).allowLan = true;
+            else delete (_draft.trigger as any).allowLan;
+        });
+        // Reads the feed once, now, and says what the trigger would see. Reading is not a
+        // fire: nothing is remembered, so the task still learns the feed on its first check.
+        ph.querySelector('#sched-tr-rss-test')?.addEventListener('click', async (e) => {
+            const btn = e.currentTarget as HTMLButtonElement;
+            const out = ph.querySelector('#sched-tr-rss-out') as HTMLElement;
+            const cur = _draft.trigger as any;
+            btn.disabled = true;
+            out.className = 'sched-test-out is-testing';
+            out.textContent = t('sched.test.running');
+            try {
+                const items = await invoke('sched_feed_fetch', { url: String(cur.url || ''), allowLan: cur.allowLan === true, timeoutMs: 20000 }) as FeedItem[];
+                out.className = 'sched-test-out is-ok';
+                out.textContent = (t('sched.trRssFound') || '{n} item(s) — newest: {t}')
+                    .replace('{n}', String(items.length)).replace('{t}', items[0]?.title || '—');
+            } catch (x) {
+                out.className = 'sched-test-out is-fail';
+                out.textContent = netErrorText(x);
+            } finally { btn.disabled = false; }
+        });
+    }
+    // Named, not a catch-all — and that one word was the whole bug.
+    //
+    // `onEvent`, `condition`, `script` and `afterTask` build their editors ABOVE, in their own
+    // `if` blocks, before this chain starts. None of them is named IN the chain, so a bare
+    // `else` fired for all four and overwrote what they had just built with "Runs once each
+    // time BMM launches." Four of the thirteen triggers had no configuration at all, told you
+    // they were something else entirely, and had their change handlers attached to elements
+    // that were removed a line later.
+    //
+    // It hid because `appStart` had no branch of its own: it reached that sentence through the
+    // catch-all, so the one trigger the catch-all was written for looked perfectly fine.
+    // check-trigger-editors.mjs now refuses a trigger type with no branch of its own.
+}
+
+// Recursive step list editor.
+/** Pointer-based step reordering (reliable in WebView2, unlike native HTML5 DnD).
+ *  Grabs the grip handle, tracks the cursor, shows an insertion line, applies on release. */
+// Every rendered step container (root list, IF then/else, LOOP body) registers its
+// backing Step[] here, so a drag can move a step ACROSS containers — into an IF
+// branch, out of a loop, between branches — not just reorder within one list.
+const _zoneSteps = new WeakMap<HTMLElement, Step[]>();
+
+/** Re-render the whole root steps tree (source of truth after a cross-zone move). */
+function _rerenderRootSteps(): void {
+    const m = document.getElementById('modal-scheduler');
+    const root = m?.querySelector('#sched-steps') as HTMLElement | null;
+    if (!m || !root) return;
+    const body = m.querySelector('.sched-body') as HTMLElement | null;
+    const top = body ? body.scrollTop : 0;
+    renderStepsEditor(root, _draft.steps, 0);
+    if (body) body.scrollTop = top;
+    refreshSummary(m as HTMLElement);
+}
+
+function _startStepDrag(ev: MouseEvent, steps: Step[], fromIdx: number, block: HTMLElement, host: HTMLElement, rerender: () => void): void {
+    if (ev.button !== 0) return;
+    ev.preventDefault();
+    const startY = ev.clientY;
+    let dragging = false;
+    let insertIdx = fromIdx;
+    let targetZone: HTMLElement = host;
+
+    const clearMarks = () => {
+        document.querySelectorAll('.sched-drop-before, .sched-drop-after').forEach(el => el.classList.remove('sched-drop-before', 'sched-drop-after'));
+        document.querySelectorAll('.sched-drop-into').forEach(el => el.classList.remove('sched-drop-into'));
+    };
+    const zoneBlocks = (zone: HTMLElement): HTMLElement[] =>
+        Array.from(zone.children).filter(c => (c as HTMLElement).classList.contains('sched-step') && c !== block) as HTMLElement[];
+
+    /** The step container under the cursor. A zone inside the dragged block itself
+     *  is invalid (a step can't be dropped into its own branches) → climb out. */
+    const zoneAt = (x: number, y: number): HTMLElement => {
+        let el = document.elementFromPoint(x, y) as HTMLElement | null;
+        let z = el?.closest('.sched-drop-zone') as HTMLElement | null;
+        while (z && block.contains(z)) z = (z.parentElement?.closest('.sched-drop-zone') as HTMLElement | null) ?? null;
+        return (z && _zoneSteps.has(z)) ? z : host;
+    };
+
+    const computeInsert = (e: MouseEvent) => {
+        clearMarks();
+        targetZone = zoneAt(e.clientX, e.clientY);
+        const bs = zoneBlocks(targetZone);
+        let idx = bs.length;                    // default: append at the end
+        for (let k = 0; k < bs.length; k++) {
+            const r = bs[k].getBoundingClientRect();
+            if (e.clientY < r.top + r.height / 2) { idx = k; break; }
+        }
+        if (idx < bs.length) bs[idx].classList.add('sched-drop-before');
+        else if (bs.length) bs[bs.length - 1].classList.add('sched-drop-after');
+        else targetZone.classList.add('sched-drop-into');   // empty branch → "drop here" ring
+        insertIdx = idx;
+    };
+
+    const onMove = (e: MouseEvent) => {
+        if (!dragging) {
+            if (Math.abs(e.clientY - startY) < 4) return;   // small threshold before it counts as a drag
+            dragging = true;
+            block.classList.add('sched-dragging');
+            document.body.classList.add('sched-drag-live'); // reveals empty drop zones
+            document.body.style.userSelect = 'none';
+        }
+        computeInsert(e);
+    };
+    const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.body.style.userSelect = '';
+        document.body.classList.remove('sched-drag-live');
+        block.classList.remove('sched-dragging');
+        clearMarks();
+        if (!dragging) return;
+        const targetArr = _zoneSteps.get(targetZone);
+        if (!targetArr) return;
+        const sameZone = targetArr === steps;
+        // The insert index was computed over the list WITHOUT the dragged block, so
+        // within the same zone it maps 1:1 after removal — no extra shift needed.
+        if (sameZone && insertIdx === fromIdx) return;      // dropped where it started
+        _snapshot();
+        const [moved] = steps.splice(fromIdx, 1);
+        targetArr.splice(Math.min(insertIdx, targetArr.length), 0, moved);
+        // A cross-zone move touches two containers — re-render the whole tree.
+        if (sameZone) rerender(); else _rerenderRootSteps();
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+}
+
+/**
+ * Blocks ⇄ Code, over the same draft.
+ *
+ * Going TO code prints `_draft.steps`; coming BACK compiles the text and replaces them. The
+ * one rule that matters: leaving code mode with code that does not compile is refused. The
+ * alternative is a switch that quietly keeps the old bricks while the text on screen says
+ * something else — you would go back to blocks, see your previous work, and never learn
+ * that the edit was dropped.
+ *
+ * Only the STEPS travel. The name, trigger and permissions have their own controls in the
+ * sidebar and stay in charge of themselves; printing them into the text would give every
+ * one of them two places to be edited and a rule about which wins.
+ */
+/**
+ * What the code box offers as suggestions.
+ *
+ * Read from the SAME arrays the brick editor renders from, so an action added tomorrow is
+ * suggested tomorrow. A hand-kept copy of 75 names is a list that goes stale the first time
+ * somebody adds an action and does not think of this file.
+ */
+function codeVocabulary() {
+    // Parameter names come from the GENERATED index rather than from a second list here:
+    // gen-bmms-reference.mjs already extracts them from the runner, and a copy would be a
+    // list that offers `passphrase` to an action that stopped taking it two versions ago.
+    const params: Record<string, string[]> = {};
+    for (const e of BMMS_INDEX) if (e.p?.length) params[e.n] = e.p;
+    return {
+        actions: ACTION_TYPES.map((a) => a.v),
+        conditions: COND_TYPES.slice(),
+        sources: VALUE_SOURCES.slice(),
+        loops: LOOP_SOURCES.slice(),
+        params,
+    };
+}
+
+/**
+ * One line about the highlighted suggestion, in the reader's language.
+ *
+ * The same keys the reference panel and the block editor use, so the box, the panel and the
+ * bricks cannot describe one action three ways.
+ */
+function describeCompletion(c: { text: string; kind: string }): string {
+    if (c.kind === 'action') {
+        const d = t('sched.actd.' + c.text) || '';
+        const l = t('sched.act.' + c.text) || '';
+        const p = BMMS_INDEX.find((e) => e.k === 'a' && e.n === c.text)?.p || [];
+        const head = [l, d].filter(Boolean).join(' \u2014 ');
+        return p.length ? `${head}${head ? '  ' : ''}(${p.join(', ')})` : head;
+    }
+    if (c.kind === 'condition') return t('sched.cond.' + c.text) || '';
+    if (c.kind === 'type') return t('sched.bmms.type.' + c.text) || '';
+    if (c.kind === 'variable') return t('sched.bmms.acVariable') || 'a variable this script sets';
+    if (c.kind === 'param') return t('sched.bmms.acParam') || 'a parameter of this action';
+    return '';
+}
+
+/** The three ways to edit a task: bricks, BMMScript text, and the flow graph. */
+type EditorMode = 'bricks' | 'code' | 'flow';
+const EDITOR_MODE_KEY = 'bmm.sched.editorMode';
+void EDITOR_MODE_KEY;
+/** The preference lives in sched-modes.ts (the key is the same one, so nobody's choice is lost). */
+function readEditorMode(): EditorMode {
+    try { return readMode(localStorage); } catch { return 'bricks'; }
+}
+function writeEditorMode(m: EditorMode): void {
+    try { writeMode(localStorage, m); } catch { /* private mode or quota: a preference, nothing lost */ }
+    const sel = document.getElementById('sched-mode-pref') as HTMLSelectElement | null;
+    if (sel && sel.value !== m) sel.value = m;
+}
+/** The mode the open editor is showing. */
+let _mode: EditorMode = 'bricks';
+/** Compile the code box into the draft when the code mode is showing; false when it does not compile. */
+let _flushCode: (() => Promise<boolean>) | null = null;
+async function flushCode(): Promise<boolean> { return _flushCode ? _flushCode() : true; }
+/** Switch the open editor's mode, as its buttons do (the Alt+1/2/3 commands call this). */
+let _switchMode: ((m: EditorMode) => void) | null = null;
+export function switchEditorMode(m: EditorMode): void { _switchMode?.(m); }
+
+/** The one line under a node's title in the flow: what THIS step is about. */
+function flowSummary(step: Step): string {
+    switch (step.kind) {
+        case 'action': {
+            // A webhook address is often the credential itself (Discord, Slack): the node
+            // shows only the host, never the path or the query.
+            const ty = String(step.action?.type || '');
+            if (ty === 'webhook.send' || ty === 'discord.send' || ty === 'slack.send') return hostOf(String(step.action?.params?.url || ''));
+            return condSubject({ type: step.action?.type, params: step.action?.params }, 38);
+        }
+        case 'delay': return `${step.seconds || 0}${t('sched.unitSec') || 's'}`;
+        case 'waitFor': case 'if': case 'ensure': return condSummary(step.condition);
+        case 'repeat': return step.mode === 'times'
+            ? `${step.times || 0}\u00d7`
+            : `${t('sched.loop.' + step.mode) || step.mode} \u2014 ${condSummary(step.condition)}`;
+        case 'forEach': return t('sched.fe.' + step.source) || step.source;
+        case 'retry': return `${step.times || 0}\u00d7 \u00b7 ${step.everySec ?? 0}${t('sched.unitSec') || 's'}`;
+        case 'switch': return (t('sched.flow.nCases') || '{n} case(s)').replace('{n}', String(step.cases?.length || 0));
+        case 'parallel': return (t('sched.flow.nBranches') || '{n} branch(es)').replace('{n}', String(step.branches?.length || 0));
+        case 'call': return step.block || '';
+        default: return '';
+    }
+}
+
+/** What the flow view may use of this module. Passed in, so sched-flow.ts never imports the
+ *  scheduler (and so the executor, the permission check and the editors stay here, once). */
+function flowHost(): FlowHost {
+    return {
+        getDraft: () => _draft as any,
+        snapshot: _snapshot,
+        undo: _undoAction,
+        redo: _redoAction,
+        makeStep: (kind: string) => paletteStep(kind, (k) => _makeStep(k) as any),
+        // The inspector IS the brick editor, for one step: the same fields, the same pickers,
+        // the same validation. Its bodies are drawn on the canvas instead (sched-flow.css hides
+        // them here), and the tools that act on a LIST (duplicate, delete, drag) are the
+        // canvas's, so they are hidden too.
+        renderInspector: (host: HTMLElement, step: any) => renderStepsEditor(host, [step as Step], 1),
+        hasPerm: (key) => hasPerm(_draft as Task, key as keyof TaskPerms),
+        permLabel: (key: string) => t(key),
+        stepTitle: (step: any) => stepLabel(step as Step),
+        stepSummary: (step: any) => flowSummary(step as Step),
+        triggerTitle: () => triggerLabel(_draft.trigger),
+        kindIcon: (kind: string) => KIND_ICON[kind] || KIND_ICON.signal,
+        actionIcon: (type: string) => GROUP_ICON[ACTION_TYPES.find((a) => a.v === type)?.group || ''] || KIND_ICON.action,
+        triggerIcon: () => triggerIcon(_draft.trigger),
+        actionItems: () => actionPickItems(),
+        actionGroups: () => actionPickGroups(),
+        actionGroup: (type: string) => ACTION_TYPES.find((a) => a.v === type)?.group || '',
+        focusSidebar: (sel: string) => {
+            const el = document.querySelector(`#modal-scheduler ${sel}`) as HTMLElement | null;
+            const fold = el?.closest('details') as HTMLDetailsElement | null;
+            if (fold && !fold.open) fold.open = true;
+            const target = (el?.closest('.sched-perm, .sched-opt') as HTMLElement | null) || el;
+            if (!target) return;
+            target.scrollIntoView({ block: 'center' });
+            target.classList.remove('sflow-flash');
+            void target.offsetWidth;
+            target.classList.add('sflow-flash');
+            setTimeout(() => target.classList.remove('sflow-flash'), 1400);
+            (el as HTMLInputElement | null)?.focus?.();
+        },
+        lastRun: async () => {
+            if (!_editing || !_draft.id) return null;
+            try {
+                const runs = await invoke('sched_runs_list', { taskId: _draft.id }) as any[];
+                return Array.isArray(runs) && runs.length ? runs[0] : null;
+            } catch { return null; }
+        },
+        savedSteps: () => (_editing ? (_editing.steps as any) : null),
+        switchMode: (m) => switchEditorMode(m),
+        describe: (step: any) => describeStep(step as Step),
+        learnMore: (step: any) => learnMore(step?.kind === 'action' ? 'actions' : 'scheduler', { compact: false }),
+        hasBreakpoint: (path: string) => breakpointPaths().has(path),
+        toggleBreakpoint: (path: string) => { toggleBreakpoint(path); },
+        testStep: async (path: string) => {
+            const st = resolvePath(_draft.steps as any, path) as Step | undefined;
+            return st ? testOneStep(st) : { ok: false, message: t('common.error') || 'Error' };
+        },
+    };
+}
+
+/** One line about what a step does: the action's description, or the legend of its kind. */
+function describeStep(step: Step): string {
+    if (step.kind === 'action') {
+        const k = 'sched.actd.' + String(step.action?.type || '');
+        const d = t(k);
+        return d === k ? '' : d;
+    }
+    const LEGEND: Record<string, string> = {
+        if: 'sched.legendIf', repeat: 'sched.legendLoop', forEach: 'sched.legendForEach', switch: 'sched.legendSwitch',
+        try: 'sched.legendTry', waitFor: 'sched.legendWait', break: 'sched.legendBreak', stop: 'sched.legendStop',
+        ensure: 'sched.legendEnsure', continue: 'sched.legendBreak',
+    };
+    const key = LEGEND[step.kind];
+    if (!key) return '';
+    const d = t(key);
+    return d === key ? '' : d;
+}
+
+// ── One step, tested ───────────────────────────────────────────────────────────
+//
+// The Test button of a brick and of the flow's inspector: run THIS step once, on its own, with
+// the draft's permissions and fresh variables, and say how it went — the HTTP status and the
+// first line of the answer for a webhook, whether it threw for anything else. A step that
+// changes something (enables a mod, deletes a profile) asks first: a Test button that silently
+// did that would be a trap (sched-test.ts decides which do).
+async function testOneStep(step: Step): Promise<StepTestResult> {
+    if (testNeedsConfirm(step as any)) {
+        const go = await showConfirm(t('sched.test.confirmTitle'), t('sched.test.confirm').replace('{s}', stepLabel(step)));
+        if (!go) return { ok: false, message: '', skipped: true };
+    }
+    if (!(await flushCode())) return { ok: false, message: t('sched.bmms.badcode') || 'This BMMScript did not compile.' };
+    const ctx: RunCtx = { nums: {}, text: taskVars(_draft), shared: readSharedVars() };
+    let err: unknown = undefined;
+    try {
+        await runSteps([{ ...(step as any), disabled: false } as Step], { ..._draft, id: `${_draft.id || 'draft'}#test` } as Task, ctx);
+    } catch (e) { err = e; }
+    return testOutcome(ctx, err, {
+        ok: t('sched.test.ok'), fail: t('sched.test.fail'), stopped: t('sched.test.stopped'),
+    }, (e) => e instanceof _StopTask);
+}
+
+/** Show a test's verdict on a brick: the pulse while it runs, then a chip with what came back. */
+function paintBrickTest(block: HTMLElement, res: StepTestResult | null): void {
+    block.classList.remove('sched-testing', 'sched-test-ok', 'sched-test-fail');
+    block.querySelector(':scope > .sched-test-chip')?.remove();
+    if (!res) { block.classList.add('sched-testing'); return; }
+    if (res.skipped) return;
+    block.classList.add(res.ok ? 'sched-test-ok' : 'sched-test-fail');
+    const chip = document.createElement('div');
+    chip.className = `sched-test-chip ${res.ok ? 'is-ok' : 'is-fail'}`;
+    chip.setAttribute('role', 'status');
+    chip.innerHTML = `<b>${escHtml(res.message)}</b>${res.status ? ` <span class="sched-test-status">HTTP ${res.status}</span>` : ''}${res.excerpt ? `<code>${escHtml(res.excerpt)}</code>` : ''}
+        <button type="button" class="sched-test-x" aria-label="${escAttr(t('common.close'))}">&times;</button>`;
+    chip.querySelector('.sched-test-x')?.addEventListener('click', (e) => { e.stopPropagation(); chip.remove(); block.classList.remove('sched-test-ok', 'sched-test-fail'); });
+    const head = block.querySelector('.sched-act-head, .sched-step-head');
+    (head?.parentElement === block ? head : block.firstElementChild)?.insertAdjacentElement('afterend', chip);
+    if (res.ok) setTimeout(() => { if (chip.isConnected) { chip.remove(); block.classList.remove('sched-test-ok'); } }, 6000);
+}
+
+// ── The debugger, in each editor ────────────────────────────────────────────────
+//
+// The runner reports WHERE it stands as a path (sched-debug.ts); sched-debug-map.ts turns that
+// into a node, a brick or a line. This is the painting.
+
+/** Brick element ↔ step, for lighting the brick a run stands on. Registered by the main editor. */
+const _brickOf = new WeakMap<object, HTMLElement>();
+const _stepOfBrick = new WeakMap<HTMLElement, Step>();
+/** The code box's statement lines (bmms_line_map), for the highlight and the gutter. */
+let _lineMap: LineRow[] = [];
+let _codeLine: number | null = null;
+let _codeLineFail = false;
+let _unsubDebug: (() => void) | null = null;
+let _unsubBps: (() => void) | null = null;
+
+async function refreshLineMap(src: string): Promise<void> {
+    try { _lineMap = await invoke('bmms_line_map', { source: src }) as LineRow[]; } catch { _lineMap = []; }
+    paintCodeGutter();
+}
+
+function reducedMotion(): boolean {
+    try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; }
+}
+
+function paintDebug(ev: DebugEvent | null): void {
+    const modal = document.getElementById('modal-scheduler');
+    if (!modal) return;
+    const live = ev && ev.phase !== 'closed' && ev.phase !== 'done' ? ev : null;
+    // Blocks.
+    modal.querySelectorAll('.sched-dbg-here, .sched-dbg-run, .sched-dbg-fail').forEach((el) => el.classList.remove('sched-dbg-here', 'sched-dbg-run', 'sched-dbg-fail'));
+    if (live?.path && _mode === 'bricks') {
+        const st = resolvePath(_draft.steps as any, live.path);
+        const el = st ? _brickOf.get(st) : undefined;
+        if (el?.isConnected) {
+            el.classList.add(live.phase === 'failed' ? 'sched-dbg-fail' : live.phase === 'paused' ? 'sched-dbg-here' : 'sched-dbg-run');
+            if (live.phase !== 'running') el.scrollIntoView({ block: 'nearest', behavior: reducedMotion() ? 'auto' : 'smooth' });
+        }
+    }
+    // Flow.
+    if (_mode === 'flow') flowDebugPaint(ev);
+    // Code.
+    const target = live ? debugTargetFor('code', live.path, _lineMap) : null;
+    _codeLine = target?.line ?? null;
+    _codeLineFail = live?.phase === 'failed';
+    paintCodeGutter();
+}
+
+function paintBreakpoints(): void {
+    paintBrickBreakpoints();
+    if (_mode === 'flow') flowRefresh();
+    paintCodeGutter();
+}
+
+function paintBrickBreakpoints(): void {
+    const bps = breakpointPaths();
+    document.querySelectorAll<HTMLElement>('#sched-steps .sched-step').forEach((el) => {
+        const st = _stepOfBrick.get(el);
+        const path = st ? findPath(_draft.steps as any, st as any) : null;
+        const on = !!path && bps.has(path);
+        el.classList.toggle('sched-has-bp', on);
+        const b = el.querySelector(':scope > .sched-act-card .sched-bp, :scope > .sched-step-head .sched-bp, :scope .sched-act-head .sched-bp') as HTMLElement | null;
+        b?.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+}
+
+/** The gutter beside the code box: a dot per breakpoint line, and the line the run stands on. */
+function paintCodeGutter(): void {
+    const modal = document.getElementById('modal-scheduler');
+    const gut = modal?.querySelector('#sched-code-gutter') as HTMLElement | null;
+    const ta = modal?.querySelector('#sched-code-ta') as HTMLTextAreaElement | null;
+    const hl = modal?.querySelector('#sched-code-hl') as HTMLElement | null;
+    if (!gut || !ta || !hl) return;
+    const m = codeMetrics(ta, gut);
+    const bps = breakpointPaths();
+    const lines = new Set<number>();
+    for (const r of _lineMap) if (bps.has(r.path)) lines.add(r.line);
+    gut.innerHTML = [...lines].map((ln) => {
+        const top = m.top + (ln - 1) * m.lh - ta.scrollTop;
+        return top < -m.lh || top > gut.clientHeight ? '' : `<span class="sched-gutter-bp" style="top:${top}px;height:${m.lh}px"></span>`;
+    }).join('');
+    if (_codeLine === null || _mode !== 'code') { hl.hidden = true; return; }
+    const row = hl.parentElement as HTMLElement;
+    const rr = row.getBoundingClientRect();
+    const tr = ta.getBoundingClientRect();
+    const top = tr.top - rr.top + m.pad + (_codeLine - 1) * m.lh - ta.scrollTop;
+    hl.hidden = top < tr.top - rr.top - m.lh || top > tr.bottom - rr.top;
+    hl.classList.toggle('is-fail', _codeLineFail);
+    hl.style.top = `${top}px`;
+    hl.style.left = `${tr.left - rr.left}px`;
+    hl.style.width = `${tr.width}px`;
+    hl.style.height = `${m.lh}px`;
+}
+
+function codeMetrics(ta: HTMLTextAreaElement, gut: HTMLElement): { lh: number; pad: number; top: number } {
+    const cs = getComputedStyle(ta);
+    const fs = parseFloat(cs.fontSize) || 13;
+    const lh = parseFloat(cs.lineHeight) || fs * 1.5;
+    const pad = parseFloat(cs.paddingTop) || 0;
+    const top = ta.getBoundingClientRect().top - gut.getBoundingClientRect().top + pad;
+    return { lh, pad, top };
+}
+
+function wireGutter(modal: HTMLElement, ta: HTMLTextAreaElement): void {
+    const gut = modal.querySelector('#sched-code-gutter') as HTMLElement | null;
+    if (!gut) return;
+    gut.addEventListener('click', (e) => {
+        const m = codeMetrics(ta, gut);
+        const y = (e as MouseEvent).clientY - gut.getBoundingClientRect().top;
+        const line = Math.floor((y - m.top + ta.scrollTop) / m.lh) + 1;
+        const path = pathForLine(_lineMap, line);
+        if (!path) { toast(t('sched.bp.noStep'), 'info', 2500); return; }
+        toggleBreakpoint(path);
+    });
+    ta.addEventListener('scroll', () => paintCodeGutter());
+}
+
+/** "Jump to the step": show it in whichever editor is open. */
+function revealStep(path: string): void {
+    const modal = document.getElementById('modal-scheduler');
+    if (!modal || !modal.classList.contains('open')) return;
+    if (_mode === 'flow') { flowReveal(path); return; }
+    if (_mode === 'code') {
+        const ta = modal.querySelector('#sched-code-ta') as HTMLTextAreaElement | null;
+        const target = debugTargetFor('code', path, _lineMap);
+        if (!ta || !target?.line) return;
+        const at = ta.value.split('\n').slice(0, target.line - 1).join('\n').length + (target.line > 1 ? 1 : 0);
+        ta.focus();
+        ta.setSelectionRange(at, at);
+        return;
+    }
+    const st = resolvePath(_draft.steps as any, path);
+    const el = st ? _brickOf.get(st) : undefined;
+    if (!el?.isConnected) return;
+    el.scrollIntoView({ block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' });
+    el.classList.remove('sched-flash');
+    void el.offsetWidth;
+    el.classList.add('sched-flash');
+    setTimeout(() => el.classList.remove('sched-flash'), 1400);
+}
+
+/** The step the keyboard means in the open editor: the selected node, the focused brick, the caret's line. */
+function selectedStepPath(): string | null {
+    const modal = document.getElementById('modal-scheduler');
+    if (!modal) return null;
+    if (_mode === 'flow') return flowSelectedPath();
+    if (_mode === 'code') {
+        const ta = modal.querySelector('#sched-code-ta') as HTMLTextAreaElement | null;
+        if (!ta) return null;
+        const line = ta.value.slice(0, ta.selectionStart).split('\n').length;
+        return pathForLine(_lineMap, line);
+    }
+    const el = (document.activeElement as HTMLElement | null)?.closest?.('#sched-steps .sched-step') as HTMLElement | null;
+    const st = el ? _stepOfBrick.get(el) : undefined;
+    return st ? findPath(_draft.steps as any, st as any) : null;
+}
+
+setDebugHost({
+    jump: revealStep,
+    modeHint: () => t('sched.dbg.where.' + _mode),
+});
+
+let _editorKeysBound = false;
+/** The editor's own commands (Ctrl+S, F9, the mode switches) and the debugger's (F10, F5, Shift+F5). */
+function bindEditorKeys(): void {
+    if (_editorKeysBound) return;
+    _editorKeysBound = true;
+    const editorOpen = () => !!document.getElementById('modal-scheduler')?.classList.contains('open') && !document.querySelector('.sflow-palette');
+    bindScopeKeys('editor', {
+        'sched.save': () => { (document.getElementById('sched-save-stay') as HTMLButtonElement | null)?.click(); },
+        'sched.debug.breakpoint': () => {
+            const p = selectedStepPath();
+            if (!p) { toast(t('sched.bp.noStep'), 'info', 2500); return; }
+            const on = toggleBreakpoint(p);
+            toast(t(on ? 'sched.bp.set' : 'sched.bp.cleared'), 'info', 1500);
+        },
+        'sched.mode.blocks': () => switchEditorMode('bricks'),
+        'sched.mode.code': () => switchEditorMode('code'),
+        'sched.mode.flow': () => switchEditorMode('flow'),
+    }, editorOpen);
+    bindScopeKeys('debug', {
+        'sched.debug.step': debugStep, 'sched.debug.continue': debugContinue, 'sched.debug.stop': debugStop,
+    }, debugActive);
+}
+
+// ── The first task: which editor? ──────────────────────────────────────────────
+/**
+ * Asked once, the first time somebody creates a task: Flux (recommended), BMMScript or Blocs,
+ * one line each. Resolves with the choice, or null when the dialog is dismissed (asked again
+ * next time, until answered), or 'away' when its "Learn more" took the reader to the docs.
+ */
+function askEditorMode(): Promise<EditorMode | null | 'away'> {
+    return new Promise((resolve) => {
+        const ov = document.createElement('div');
+        ov.className = 'modal-overlay open sched-modeask';
+        ov.innerHTML = `<div class="modal glass sched-modeask-card" role="dialog" aria-modal="true" aria-labelledby="sched-modeask-h">
+            <div class="modal-header"><h3 class="modal-title" id="sched-modeask-h">${escHtml(t('sched.modes.askTitle'))}</h3>
+                <button class="modal-close" type="button" data-x aria-label="${escAttr(t('common.close'))}">${uiIcon('close', 16)}</button></div>
+            <div class="modal-body">
+                <p class="sched-modeask-lede">${escHtml(t('sched.modes.askLede'))}</p>
+                <div class="sched-modeask-list" role="radiogroup" aria-labelledby="sched-modeask-h">
+                ${MODE_CHOICES.map((c, i) => `<button type="button" class="sched-modeask-opt${c.recommended ? ' is-rec' : ''}" role="radio" aria-checked="${i === 0 ? 'true' : 'false'}" data-mode="${c.mode}">
+                    <span class="sched-modeask-ic">${modeIcon(c.mode)}</span>
+                    <span class="sched-modeask-txt"><b>${escHtml(t(c.titleKey))}${c.recommended ? ` <em class="sched-modeask-rec">${escHtml(t('sched.modes.recommended'))}</em>` : ''}</b>
+                        <span>${escHtml(t(c.descKey))}</span></span>
+                </button>`).join('')}
+                </div>
+                <p class="sched-modeask-foot">${escHtml(t('sched.modes.askFoot'))} ${learnMore('scheduler')}</p>
+            </div>
+        </div>`;
+        let untrap = (): void => { /* set once mounted */ };
+        const done = (m: EditorMode | null | 'away') => { ov.remove(); document.removeEventListener('keydown', onKey, true); untrap(); resolve(m); };
+        const onKey = (e: KeyboardEvent) => {
+            // Only while the question is on screen and the focus is not in another dialog over it.
+            if (!ov.isConnected || !ov.classList.contains('open')) return;
+            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(null); }
+            if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && ov.contains(document.activeElement)) {
+                const opts = [...ov.querySelectorAll<HTMLElement>('.sched-modeask-opt')];
+                const i = opts.indexOf(document.activeElement as HTMLElement);
+                opts[(i + (e.key === 'ArrowDown' ? 1 : opts.length - 1)) % opts.length]?.focus();
+                e.preventDefault();
+            }
+        };
+        ov.querySelectorAll<HTMLElement>('.sched-modeask-opt').forEach((b) => b.addEventListener('click', () => {
+            const m = b.dataset.mode;
+            done(isMode(m) ? m : null);
+        }));
+        ov.querySelector('[data-x]')?.addEventListener('click', () => done(null));
+        // "Learn more" (the foot) takes `.open` off this overlay and opens the docs. Left in the
+        // DOM, hidden, this dialog kept its capture-phase keys: every ↑/↓ in the app was
+        // swallowed, and the next Escape — pressed in the docs — "dismissed" it and threw the
+        // task editor open over them. Leaving for the docs ends the question instead.
+        ov.addEventListener(LEARN_MORE_EVENT, () => done('away'));
+        document.addEventListener('keydown', onKey, true);
+        untrap = installFocusTrap(ov, () => ov.isConnected && ov.classList.contains('open'));
+        (document.getElementById('app-window-outer') || document.body).appendChild(ov);
+        raiseAboveAll(ov);
+        (ov.querySelector('.sched-modeask-opt') as HTMLElement | null)?.focus();
+    });
+}
+
+function modeIcon(m: EditorMode): string {
+    return uiIcon(m === 'flow' ? 'workflow' : m === 'code' ? 'code' : 'grid', 18);
+}
+
+/** The preference, as a setting: a row in Settings → the scheduler card. */
+function renderModePref(): void {
+    const section = document.getElementById('settings-scheduler-section');
+    if (!section) return;
+    // The row's styles live in sched-editor.css, which is otherwise linked only when the editor
+    // opens: drawn in Settings before that, the row was unstyled and glued to the card's edges.
+    ensureSchedCss();
+    let row = document.getElementById('sched-mode-pref-row');
+    if (!row) {
+        row = document.createElement('div');
+        row.id = 'sched-mode-pref-row';
+        row.className = 'sched-mode-pref';
+        row.innerHTML = `<label for="sched-mode-pref">${escHtml(t('sched.modes.pref'))}</label>
+            <select class="input" id="sched-mode-pref">
+                ${MODE_CHOICES.map((c) => `<option value="${c.mode}">${escHtml(t(c.titleKey))}${c.recommended ? ` (${escHtml(t('sched.modes.recommended'))})` : ''}</option>`).join('')}
+            </select>
+            <span class="sched-mode-pref-hint">${escHtml(t('sched.modes.prefHint'))}</span>`;
+        const list = document.getElementById('scheduler-running') || document.getElementById('scheduler-list-container');
+        list?.insertAdjacentElement('beforebegin', row);
+        row.querySelector('#sched-mode-pref')?.addEventListener('change', (e) => {
+            const v = (e.target as HTMLSelectElement).value;
+            if (isMode(v)) writeEditorMode(v);
+        });
+    }
+    const sel = row.querySelector('#sched-mode-pref') as HTMLSelectElement | null;
+    if (sel) sel.value = readEditorMode();
+}
+
+// ── Learn more, from inside the editor ─────────────────────────────────────────
+//
+// The docs open in the main view, which the task editor covers. Closing the editor would lose
+// an unsaved draft; so a "Learn more" clicked inside it PARKS the editor (hidden, draft intact)
+// and leaves a "Back to the task" button that brings it back exactly as it was.
+if (typeof window !== 'undefined' && !(window as any).__bmmSchedLearnPark) {
+    (window as any).__bmmSchedLearnPark = true;
+    window.addEventListener('click', (e) => {
+        const el = (e.target as Element | null)?.closest?.('[data-learn-more]');
+        const modal = el?.closest('#modal-scheduler') as HTMLElement | null;
+        if (!modal || !modal.classList.contains('open')) return;
+        modal.classList.remove('open');
+        let back = document.getElementById('sched-return');
+        if (!back) {
+            back = document.createElement('button');
+            back.id = 'sched-return';
+            back.setAttribute('type', 'button');
+            back.className = 'btn btn-primary sched-return';
+            back.textContent = t('sched.returnToTask');
+            back.addEventListener('click', () => {
+                document.getElementById('modal-scheduler')?.classList.add('open');
+                back?.remove();
+            });
+            (document.getElementById('app-window-outer') || document.body).appendChild(back);
+            raiseAboveAll(back, 11900);
+        }
+    }, true);
+}
+
+function wireCodeMode(modal: HTMLElement): void {
+    const pane = modal.querySelector('#sched-codepane') as HTMLElement | null;
+    const timeline = modal.querySelector('.sched-timeline') as HTMLElement | null;
+    const ta = modal.querySelector('#sched-code-ta') as HTMLTextAreaElement | null;
+    const status = modal.querySelector('#sched-code-status') as HTMLElement | null;
+
+    // The reference, one click from the editor.
+    //
+    // Writing BMMScript by hand means knowing eighty-two action names and their parameters,
+    // and the page that lists them was three screens away behind a modal you had to close
+    // first. It opens the generated reference — the one built from the registry, so it can
+    // never list an action this build does not have.
+    wireReferencePanel(modal);
+    wireOutlineAndHover(modal);
+
+
+    const btns = Array.from(modal.querySelectorAll('.sched-mode-btn')) as HTMLElement[];
+    if (!pane || !timeline || !ta || !status || !btns.length) return;
+
+    // The switch, drawn. The glider is moved by a class rather than by measuring, so it cannot
+    // drift out of step with the buttons when the labels are translated to different widths.
+    // One tab stop (the selected one); the arrows move between the three, as in any tab list.
+    const sw = modal.querySelector('.sched-mode-switch') as HTMLElement | null;
+    const paintSwitch = (next: EditorMode) => {
+        for (const b of btns) {
+            const on = b.dataset.mode === next;
+            b.classList.toggle('on', on);
+            b.setAttribute('aria-selected', on ? 'true' : 'false');
+            b.tabIndex = on ? 0 : -1;
+        }
+        sw?.classList.toggle('at-code', next === 'code');
+        sw?.classList.toggle('at-flow', next === 'flow');
+    };
+    // Painted in the remembered mode BEFORE the editor is on screen, without the slide: on a
+    // first open the pill used to start on Blocks and travel to Flow while the dialog faded in.
+    sw?.classList.add('is-settling');
+    paintSwitch(readEditorMode());
+    setTimeout(() => sw?.classList.remove('is-settling'), 320);
+
+    // Starts in Blocks; the mode used last is applied below, once everything is wired.
+    let mode: EditorMode = 'bricks';
+
+    const say = (msg: string, bad: boolean) => {
+        status.textContent = msg;
+        status.classList.toggle('is-bad', bad);
+    };
+
+    /**
+     * Compile what is in the box. Returns the steps, or null after reporting why not.
+     *
+     * `jump` moves the caret to the error, and defaults to OFF. It is the right thing to do
+     * when somebody pressed Blocks or Save — they asked, and hunting for line 34 by
+     * counting is the difference between an editor and a text box that judges you. It is the
+     * wrong thing to do while they are typing: half a line is a syntax error, so the live
+     * check fired on nearly every pause and threw the caret across the file mid-sentence.
+     */
+    const readCode = async (jump = false, hushCaretLine = false): Promise<Step[] | null> => {
+        const src = ta.value.trim();
+        // Empty is a legitimate task with no steps, not an error.
+        if (!src) return [];
+        try {
+            const r: any = await invoke('bmms_compile_steps', { source: src });
+            if (r?.ok) return (r.steps || []) as Step[];
+            const e = (r.errors || [])[0];
+            // Half a line is a syntax error. Complaining about the line somebody is still
+            // typing is complaining about every keystroke, so the live check stays quiet
+            // about THAT line and reports everything else — move away and the error appears.
+            const caretLine = ta.value.slice(0, ta.selectionStart).split('\n').length;
+            if (!(hushCaretLine && e?.line === caretLine)) {
+                say(e ? `${t('sched.bmms.line') || 'Line'} ${e.line}:${e.col} — ${e.message}` : (t('common.error') || 'Error'), true);
+            }
+            if (jump && e?.line) {
+                const upto = ta.value.split('\n').slice(0, e.line - 1).join('\n').length + (e.line > 1 ? 1 : 0);
+                ta.focus();
+                ta.setSelectionRange(upto, upto);
+            }
+            return null;
+        } catch {
+            say(t('sched.bmms.badcode') || 'This BMMScript did not compile.', true);
+            return null;
+        }
+    };
+
+    const flowPane = modal.querySelector('#sched-flowpane') as HTMLElement | null;
+    const main = modal.querySelector('.sched-body') as HTMLElement | null;
+    const show = (next: EditorMode) => {
+        mode = next;
+        _mode = next;
+        timeline.hidden = next !== 'bricks';
+        pane.hidden = next !== 'code';
+        if (flowPane) flowPane.hidden = next !== 'flow';
+        main?.classList.toggle('sflow-on', next === 'flow');
+        paintSwitch(next);
+    };
+
+    /**
+     * One door for every switch, whichever way it goes. Leaving CODE compiles first and is
+     * refused if the text does not compile (the rule above); the flow and the blocks read the
+     * draft directly, so going between those two costs nothing and loses nothing.
+     */
+    const switchTo = async (next: EditorMode): Promise<void> => {
+        if (next === mode) return;
+        if (mode === 'code') {
+            const steps = await readCode(true);
+            if (steps === null) return;   // refused — stay here, the message says why
+            _draft.steps = steps;
+        }
+        if (mode === 'flow') unmountFlow();
+        writeEditorMode(next);
+        if (next === 'code') {
+            // Printed fresh from the draft every time, so the text can never be a stale
+            // copy of steps edited in the other view since.
+            try {
+                ta.value = await invoke('bmms_decompile', { task: { name: _draft.name, trigger: _draft.trigger, steps: _draft.steps } }) as string;
+                // Only the body: the header is the sidebar's business, and showing it
+                // here would invite editing it in two places.
+                ta.value = stripTaskWrapper(ta.value);
+            } catch { ta.value = ''; }
+            // Assigning .value fires no input event, so nothing would repaint and the
+            // mirror would keep showing the previous task.
+            hl?.refresh();
+            say((t('sched.bmms.ok') || '{n} step(s)').replace('{n}', String(stepCount(_draft.steps))), false);
+            show('code');
+            // The printed text is the draft, statement for statement, so its line map names the
+            // same paths the runner will report.
+            void refreshLineMap(ta.value);
+            return;
+        }
+        show(next);
+        if (next === 'flow' && flowPane) { mountFlow(flowPane, flowHost()); flowDebugPaint(lastDebugEvent()); return; }
+        renderStepsEditor(modal.querySelector('#sched-steps') as HTMLElement, _draft.steps);
+        renderAddRow(modal.querySelector('#sched-root-add') as HTMLElement, _draft.steps);
+    };
+    _switchMode = (m) => { void switchTo(m); };
+    _flushCode = async () => {
+        if (mode !== 'code') return true;
+        const steps = await readCode(true);
+        if (steps === null) return false;
+        _draft.steps = steps;
+        void refreshLineMap(ta.value);
+        return true;
+    };
+    wireGutter(modal, ta);
+
+    for (const b of btns) {
+        b.addEventListener('click', () => {
+            const m = b.dataset.mode;
+            void switchTo(m === 'code' ? 'code' : m === 'flow' ? 'flow' : 'bricks');
+        });
+    }
+    sw?.addEventListener('keydown', (e) => {
+        const at = btns.findIndex((b) => b.dataset.mode === mode);
+        let to = -1;
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') to = (at + 1) % btns.length;
+        else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') to = (at - 1 + btns.length) % btns.length;
+        else if (e.key === 'Home') to = 0;
+        else if (e.key === 'End') to = btns.length - 1;
+        if (to < 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const m = btns[to].dataset.mode;
+        void switchTo(m === 'code' ? 'code' : m === 'flow' ? 'flow' : 'bricks').then(() => btns.find((b) => b.dataset.mode === mode)?.focus());
+    });
+
+    // Checked as you stop typing, so the Blocks button is never the first thing to tell you
+    // there is a mistake.
+    let timer: any = null;
+    mountCompletions(ta, codeVocabulary(), describeCompletion);
+    // Colour, through the same mirror every other code box in BMM uses. It decides
+    // nothing — the live compile below is the thing that judges the code.
+    registerBmmsLanguage();
+    const hl = attachHighlight(ta, 'bmms');
+
+    ta.addEventListener('input', () => {
+        clearTimeout(timer);
+        timer = setTimeout(async () => {
+            const steps = await readCode(false, true);
+            if (steps) say((t('sched.bmms.ok') || '{n} step(s)').replace('{n}', String(stepCount(steps))), false);
+            void refreshLineMap(ta.value);
+        }, 350);
+    });
+
+    // Open in the mode used last. After the listeners, so the code mode's first compile and
+    // print go through exactly the path a click does.
+    {
+        const pref = readEditorMode();
+        if (pref !== 'bricks') void switchTo(pref);
+    }
+
+    // Saving from code mode must save the CODE, not the steps it replaced. Without this a
+    // task edited entirely in text and saved without switching back would keep whatever the
+    // blocks held — the worst possible outcome and a silent one.
+    modal.querySelector('#sched-save')?.addEventListener('click', async (e) => {
+        if (mode !== 'code') return;
+        const steps = await readCode(true);
+        if (steps === null) { e.preventDefault(); e.stopImmediatePropagation(); return; }
+        _draft.steps = steps;
+    }, true);   // capture, so this runs BEFORE the save handler reads _draft
+}
+
+/** The body of a printed task, without its `task "…" { … }` wrapper and header lines. */
+/**
+ * The first word of the line each trigger PRINTS. One table, because it is one fact.
+ *
+ * It was written as a single regex naming four keywords — every, once, manual, on app — out of
+ * the thirteen triggers. The other nine print `on file`, `on event`, `after task`, `when` and
+ * `probe`, none of which it recognised, so for five trigger types the header line was left in
+ * the code box AS A STEP. A `script` trigger was worse than one stray line: it prints as a
+ * BLOCK, so the box showed
+ *
+ *     probe powershell every 5m {
+ *         Test-Path C:/dcs/Logs/dcs.log
+ *     }
+ *     allow script
+ *
+ *     do mods.scan()
+ *
+ * — the trigger, its code, and the permission line, all offered as steps. Press Blocks and
+ * that is what gets compiled and assigned to the task's steps.
+ *
+ * A Record keyed by the union type, so a new trigger does not compile until its keyword is
+ * here, and check-trigger-editors.mjs re-checks it from the union at build time.
+ */
+const TRIGGER_HEAD: Record<Trigger['type'], RegExp> = {
+    once: /^once\b/, interval: /^every\b/, hourly: /^every\b/, dailyAt: /^every\b/,
+    weeklyAt: /^every\b/, monthlyAt: /^every\b/, appStart: /^on\s+app\b/,
+    watchFile: /^on\s+file\b/, onEvent: /^on\s+event\b/, afterTask: /^after\s+task\b/,
+    condition: /^when\b/, script: /^probe\b/, manual: /^manual\b/, rss: /^on\s+feed\b/,
+};
+/** The header lines that are not the trigger: what the task is called, and what it may do. */
+const HEADER_WORDS = /^(describe|disabled|allow)\b/;
+
+const isTaskHeaderLine = (line: string): boolean => {
+    const l = line.trim();
+    return HEADER_WORDS.test(l) || Object.values(TRIGGER_HEAD).some((re) => re.test(l));
+};
+
+/**
+ * Split a printed task into the part the sidebar owns and the part the code box edits.
+ *
+ * ONE function, because the two halves have to cut in the same place. They were two
+ * independent keyword lists, and the day they disagreed the code box showed a trigger as a
+ * step — which is not a display bug, because that text is what gets compiled back.
+ *
+ * `probe … {` opens a block, so the header consumes lines until its braces balance rather
+ * than stopping at the next one.
+ */
+function splitPrintedTask(src: string): { header: string; body: string } {
+    const open = src.indexOf('{');
+    const close = src.lastIndexOf('}');
+    if (open < 0 || close <= open) return { header: '', body: src };
+    const head = [src.slice(0, open + 1)];
+    const lines = src.slice(open + 1, close).split('\n');
+    let i = 0;
+    while (i < lines.length) {
+        const l = lines[i];
+        if (!l.trim()) { i += 1; continue; }
+        if (!isTaskHeaderLine(l)) break;
+        head.push(l);
+        // A block-shaped header line (the script trigger) takes its body with it.
+        let depth = (l.match(/\{/g) || []).length - (l.match(/\}/g) || []).length;
+        i += 1;
+        while (depth > 0 && i < lines.length) {
+            head.push(lines[i]);
+            depth += (lines[i].match(/\{/g) || []).length - (lines[i].match(/\}/g) || []).length;
+            i += 1;
+        }
+    }
+    const body = lines.slice(i);
+    while (body.length && !body[body.length - 1].trim()) body.pop();
+    // One indent level removed, so the text starts at the left margin like an editor's does.
+    return { header: head.join('\n'), body: body.map((l) => (l.startsWith('    ') ? l.slice(4) : l)).join('\n') };
+}
+
+function stripTaskWrapper(src: string): string {
+    return splitPrintedTask(src).body;
+}
+
+function renderStepsEditor(host: HTMLElement, steps: Step[], depth = 0): void {
+    host.innerHTML = '';
+    // Register this container as a drop zone so steps can be dragged INTO it
+    // (root list, IF then/else branches, LOOP bodies — all become valid targets).
+    _zoneSteps.set(host, steps);
+    host.classList.add('sched-drop-zone');
+    steps.forEach((step, i) => {
+        const block = document.createElement('div');
+        block.className = 'sched-step sched-step-' + step.kind + (step.collapsed ? ' collapsed' : '') + (step.disabled ? ' sched-disabled' : '');
+        // The main editor's bricks are what the debugger lights; the flow's inspector draws the
+        // same editor for one step and must not take the step's place in that map.
+        if (!host.closest('.sflow-insp')) { _brickOf.set(step, block); _stepOfBrick.set(block, step); }
+        block.tabIndex = -1;
+        // Indentation is handled entirely by the branch containers' padding (one
+        // clean guide line per level) — NOT a per-step margin, which used to stack
+        // on top of the branch padding and squeezed deep blocks into a tiny column.
+        const rerenderHere = () => renderStepsEditor(host, steps, depth);
+
+        if (step.kind === 'action') {
+            block.appendChild(actionEditor(step.action, rerenderHere));
+        } else if (step.kind === 'delay') {
+            block.innerHTML = `<div class="sched-step-head">${_kindTile('delay')}<span class="sched-step-tag sched-pause">${t('sched.delay') || 'Wait'}</span>
+                <span class="sched-delay-body"><input type="number" class="input" min="0" value="${step.seconds}" style="max-width:90px"> ${t('sched.unitSec') || 's'}</span></div>`;
+            block.querySelector('input')?.addEventListener('input', (e) => { step.seconds = parseInt((e.target as HTMLInputElement).value) || 0; });
+        } else if (step.kind === 'waitFor') {
+            const toMode = step.onTimeout || 'abort';
+            block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}${_kindTile('waitFor')}<span class="sched-step-tag sched-wait">${t('sched.waitUntil') || 'WAIT UNTIL'}</span>
+                <span class="sched-cond-label">${t('sched.condition') || 'condition:'}</span>
+                <div class="sched-cond" style="flex:1"></div></div>
+                <div class="sched-opts sched-wait-opts">
+                    <span class="sched-pair"><span class="sched-wait-lbl">${t('sched.checkEvery') || 'check every'}</span>
+                        <input type="number" class="input sched-wait-poll" min="1" value="${step.pollSec || 2}" style="max-width:70px"> ${t('sched.unitSec') || 's'}</span>
+                    <span class="sched-pair"><span class="sched-wait-lbl">${t('sched.timeout') || 'timeout'}</span>
+                        <input type="number" class="input sched-wait-to" min="1" value="${step.timeoutSec}" style="max-width:80px"> ${t('sched.unitSec') || 's'}</span>
+                    <span class="sched-pair"><span class="sched-wait-lbl">${t('sched.onTimeout') || 'on timeout'}</span>
+                    <select class="input sched-wait-ot" style="max-width:150px">
+                        <option value="abort"${toMode === 'abort' ? ' selected' : ''}>${t('sched.timeoutAbort') || 'stop the task (error)'}</option>
+                        <option value="continue"${toMode === 'continue' ? ' selected' : ''}>${t('sched.timeoutContinue') || 'continue anyway'}</option>
+                    </select></span>
+                </div>`;
+            block.querySelector('.sched-cond')?.appendChild(conditionEditor(step.condition));
+            block.querySelector('.sched-wait-to')?.addEventListener('input', (e) => { step.timeoutSec = parseInt((e.target as HTMLInputElement).value) || 60; });
+            block.querySelector('.sched-wait-poll')?.addEventListener('input', (e) => { step.pollSec = parseInt((e.target as HTMLInputElement).value) || 2; });
+            block.querySelector('.sched-wait-ot')?.addEventListener('change', (e) => { step.onTimeout = (e.target as HTMLSelectElement).value as any; });
+            _wireFold(block, step);
+        } else if (step.kind === 'if') {
+            block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}${_kindTile('if')}<span class="sched-step-tag sched-if">${t('sched.if') || 'IF'}</span>
+                <span class="sched-cond-label">${t('sched.condition') || 'condition:'}</span>
+                <div class="sched-cond" style="flex:1"></div></div>
+                <div class="sched-branch"><div class="sched-branch-label">${t('sched.then') || 'THEN'}</div><div class="sched-then"></div><div class="sched-then-add"></div></div>
+                <div class="sched-branch"><div class="sched-branch-label">${t('sched.else') || 'ELSE'}</div><div class="sched-else"></div><div class="sched-else-add"></div></div>`;
+            block.querySelector('.sched-cond')?.appendChild(conditionEditor(step.condition));
+            renderStepsEditor(block.querySelector('.sched-then') as HTMLElement, step.then, depth + 1);
+            renderStepsEditor(block.querySelector('.sched-else') as HTMLElement, step.else, depth + 1);
+            renderAddRow(block.querySelector('.sched-then-add') as HTMLElement, step.then, depth + 1, host, steps, depth);
+            renderAddRow(block.querySelector('.sched-else-add') as HTMLElement, step.else, depth + 1, host, steps, depth);
+            _wireFold(block, step);
+        } else if (step.kind === 'repeat') {
+            const modeSel = (['while', 'until', 'doWhile', 'times'] as const).map(m =>
+                `<option value="${m}"${step.mode === m ? ' selected' : ''}>${escHtml(t('sched.loop.' + m) || m)}</option>`).join('');
+            block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}${_kindTile('repeat')}
+                    <span class="sched-step-tag sched-repeat">${t('sched.repeat') || 'REPEAT'}</span>
+                    <select class="input sched-rep-mode" style="max-width:130px">${modeSel}</select>
+                    <span class="sched-rep-cond-wrap" style="display:${step.mode === 'times' ? 'none' : 'flex'};align-items:center;gap:6px;flex:1"><div class="sched-cond" style="flex:1"></div></span>
+                    <span class="sched-rep-times-wrap sched-pair" style="display:${step.mode === 'times' ? 'inline-flex' : 'none'}"><input type="number" class="input sched-rep-times" min="1" value="${step.times || 3}" style="max-width:90px"> ${t('sched.loopTimes') || 'times'}</span></div>
+                <div class="sched-opts">
+                    <span class="sched-pair"><span class="sched-wait-lbl">${t('sched.loopMax') || 'max'}</span><input type="number" class="input sched-rep-max" min="1" value="${step.maxIters || 100}" style="max-width:90px"></span>
+                    <span class="sched-pair"><span class="sched-wait-lbl">${t('sched.loopEvery') || 'every'}</span><input type="number" class="input sched-rep-every" min="0" value="${step.everySec || 1}" style="max-width:80px"> ${t('sched.unitSec') || 's'}</span>
+                </div>
+                <div class="sched-branch"><div class="sched-branch-label">${t('sched.loopBody') || 'LOOP'}</div><div class="sched-loop"></div><div class="sched-loop-add"></div></div>`;
+            if (!step.condition) step.condition = { type: 'always', params: {} };
+            block.querySelector('.sched-cond')?.appendChild(conditionEditor(step.condition));
+            block.querySelector('.sched-rep-mode')?.addEventListener('change', (e) => { _snapshot(); step.mode = (e.target as HTMLSelectElement).value as any; renderStepsEditor(host, steps, depth); });
+            block.querySelector('.sched-rep-times')?.addEventListener('input', (e) => { step.times = parseInt((e.target as HTMLInputElement).value) || 1; });
+            block.querySelector('.sched-rep-max')?.addEventListener('input', (e) => { step.maxIters = parseInt((e.target as HTMLInputElement).value) || 100; });
+            block.querySelector('.sched-rep-every')?.addEventListener('input', (e) => { step.everySec = parseFloat((e.target as HTMLInputElement).value) || 0; });
+            renderStepsEditor(block.querySelector('.sched-loop') as HTMLElement, step.steps, depth + 1);
+            renderAddRow(block.querySelector('.sched-loop-add') as HTMLElement, step.steps, depth + 1, host, steps, depth);
+            _wireFold(block, step);
+        } else if (step.kind === 'forEach') {
+            // 'list' and 'mapKeys' were missing from this picker. The runtime has resolved a
+            // list source the whole time and the type has allowed it, so `for each` over a
+            // list the task built itself worked and could not be chosen — the same gap that
+            // left the list ACTIONS without a form.
+            const srcSel = LOOP_SOURCES.map(m =>
+                `<option value="${m}"${step.source === m ? ' selected' : ''}>${escHtml(t('sched.fe.' + m) || m)}</option>`).join('');
+            const ownSource = step.source === 'list' || step.source === 'mapKeys';
+            const nameBox = ownSource ? `<input class="input sched-fe-name" spellcheck="false" style="max-width:150px"
+                    placeholder="${escAttr(step.source === 'list' ? (t('sched.fe.listPh') || 'list name') : (t('sched.fe.mapPh') || 'map name'))}"
+                    value="${escAttr(step.listName || '')}">` : '';
+            block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}${_kindTile('forEach')}
+                    <span class="sched-step-tag sched-repeat">${t('sched.forEach') || 'FOR EACH'}</span>
+                    <select class="input sched-fe-src" style="max-width:190px">${srcSel}</select>${nameBox}</div>
+                <div class="sched-opts">
+                    <span class="sched-pair"><span class="sched-wait-lbl">${t('sched.loopMax') || 'max'}</span><input type="number" class="input sched-fe-max" min="1" value="${step.maxIters || 100}" style="max-width:90px"></span>
+                    <span class="sched-pair"><span class="sched-wait-lbl">${t('sched.loopEvery') || 'every'}</span><input type="number" class="input sched-fe-every" min="0" value="${step.everySec || 0}" style="max-width:80px"> ${t('sched.unitSec') || 's'}</span>
+                </div>
+                <p class="sched-step-hint">${escHtml(t('sched.fe.hint') || '{item.id} / {item.name} in the body')}</p>
+                <div class="sched-branch"><div class="sched-branch-label">${t('sched.fe.body') || 'PER ITEM'}</div><div class="sched-fe-body"></div><div class="sched-fe-add"></div></div>`;
+            block.querySelector('.sched-fe-src')?.addEventListener('change', (e) => {
+                step.source = (e.target as HTMLSelectElement).value as any;
+                // Redraw: the name box only exists for the two run-context sources, so without
+                // this, picking one shows no way to name it until the editor is reopened.
+                renderStepsEditor(host, steps, depth);
+            });
+            block.querySelector('.sched-fe-name')?.addEventListener('input', (e) => { step.listName = (e.target as HTMLInputElement).value; });
+            block.querySelector('.sched-fe-max')?.addEventListener('input', (e) => { step.maxIters = parseInt((e.target as HTMLInputElement).value) || 100; });
+            block.querySelector('.sched-fe-every')?.addEventListener('input', (e) => { step.everySec = parseFloat((e.target as HTMLInputElement).value) || 0; });
+            renderStepsEditor(block.querySelector('.sched-fe-body') as HTMLElement, step.steps, depth + 1);
+            renderAddRow(block.querySelector('.sched-fe-add') as HTMLElement, step.steps, depth + 1, host, steps, depth);
+            _wireFold(block, step);
+        } else if (step.kind === 'parallel') {
+            if (!Array.isArray(step.branches) || !step.branches.length) step.branches = [[], []];
+            const modeSel = ([['all', t('sched.par.all') || 'stop if one fails'], ['settle', t('sched.par.settle') || 'let them all finish']] as [string, string][])
+                .map(([v, l]) => `<option value="${v}"${(step.mode || 'all') === v ? ' selected' : ''}>${escHtml(l)}</option>`).join('');
+            block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}${_kindTile('parallel')}
+                    <span class="sched-step-tag sched-repeat">${t('sched.parallel') || 'AT THE SAME TIME'}</span>
+                    <select class="input sched-par-mode" style="max-width:190px">${modeSel}</select>
+                    <button type="button" class="btn btn-xs sched-par-add-branch">+ ${escHtml(t('sched.par.addBranch') || 'branch')}</button>
+                </div>
+                <p class="sched-step-hint">${escHtml(t('sched.parHint') || 'branches share the task\u2019s variables \u2014 use them for work that does not depend on each other')}</p>
+                ${step.branches.map((_b, bi) => `
+                <div class="sched-branch">
+                    <div class="sched-branch-label">
+                        ${escHtml((t('sched.par.branch') || 'BRANCH {n}').replace('{n}', String(bi + 1)))}
+                        ${step.branches.length > 1 ? `<button type="button" class="btn btn-xs btn-ghost sched-par-del" data-b="${bi}" title="${escAttr(t('sched.par.delBranch') || 'Remove this branch')}">\u00d7</button>` : ''}
+                    </div>
+                    <div class="sched-par-body" data-b="${bi}"></div>
+                    <div class="sched-par-add" data-b="${bi}"></div>
+                </div>`).join('')}`;
+            block.querySelector('.sched-par-mode')?.addEventListener('change', (e) => {
+                _snapshot(); step.mode = (e.target as HTMLSelectElement).value as 'all' | 'settle';
+            });
+            block.querySelector('.sched-par-add-branch')?.addEventListener('click', () => {
+                _snapshot(); step.branches.push([]); renderStepsEditor(host, steps, depth);
+            });
+            block.querySelectorAll('.sched-par-del').forEach((b) => b.addEventListener('click', (e) => {
+                _snapshot();
+                // A floor of one: removing the last branch leaves a step that renders as an
+                // empty box with no way to put anything back in it.
+                const bi = Number((e.currentTarget as HTMLElement).dataset.b);
+                if (step.branches.length > 1) step.branches.splice(bi, 1);
+                renderStepsEditor(host, steps, depth);
+            }));
+            block.querySelectorAll('.sched-par-body').forEach((el) => {
+                const bi = Number((el as HTMLElement).dataset.b);
+                renderStepsEditor(el as HTMLElement, step.branches[bi], depth + 1);
+            });
+            block.querySelectorAll('.sched-par-add').forEach((el) => {
+                const bi = Number((el as HTMLElement).dataset.b);
+                renderAddRow(el as HTMLElement, step.branches[bi], depth + 1, host, steps, depth);
+            });
+            _wireFold(block, step);
+        } else if (step.kind === 'retry') {
+            block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}${_kindTile('retry')}
+                    <span class="sched-step-tag sched-repeat">${escHtml(t('sched.retry'))}</span></div>
+                <div class="sched-opts">
+                    <span class="sched-pair"><input type="number" class="input sched-rt-times" min="1" max="99" value="${step.times || 3}" style="max-width:80px">
+                        <span class="sched-wait-lbl">${escHtml(t('sched.retry.timesWord'))}</span></span>
+                    <span class="sched-pair"><span class="sched-wait-lbl">${escHtml(t('sched.loopEvery') || 'every')}</span>
+                        <input type="number" class="input sched-rt-every" min="0" value="${step.everySec ?? 30}" style="max-width:80px">
+                        <span class="sched-wait-lbl">${t('sched.unitSec') || 's'}</span></span>
+                    <label class="sched-ensure-cont"><input type="checkbox" class="sched-rt-cont" ${step.onFail === 'continue' ? 'checked' : ''}>
+                        <span data-tooltip="${escAttr(t('sched.retry.orContinueHint'))}">${escHtml(t('sched.ensure.orContinue'))}</span></label>
+                </div>
+                <p class="sched-step-hint">${escHtml(t('sched.retry.hint'))}</p>
+                <div class="sched-branch"><div class="sched-branch-label">${escHtml(t('sched.retry.body'))}</div><div class="sched-rt-body"></div><div class="sched-rt-add"></div></div>`;
+            block.querySelector('.sched-rt-times')?.addEventListener('input', (e) => { step.times = Math.max(1, parseInt((e.target as HTMLInputElement).value, 10) || 1); });
+            block.querySelector('.sched-rt-every')?.addEventListener('input', (e) => { step.everySec = Math.max(0, parseInt((e.target as HTMLInputElement).value, 10) || 0); });
+            block.querySelector('.sched-rt-cont')?.addEventListener('change', (e) => { step.onFail = (e.target as HTMLInputElement).checked ? 'continue' : 'abort'; });
+            renderStepsEditor(block.querySelector('.sched-rt-body') as HTMLElement, step.steps, depth + 1);
+            renderAddRow(block.querySelector('.sched-rt-add') as HTMLElement, step.steps, depth + 1, host, steps, depth);
+            _wireFold(block, step);
+        } else if (step.kind === 'ensure') {
+            block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}${_kindTile('ensure')}
+                    <span class="sched-step-tag sched-if">${escHtml(t('sched.ensure'))}</span>
+                    <span class="sched-cond-label">${escHtml(t('sched.ensure.condLabel'))}</span>
+                    <div class="sched-cond" style="flex:1;min-width:0"></div></div>
+                <div class="sched-opts">
+                    <label class="sched-ensure-cont"><input type="checkbox" class="sched-ens-cont" ${step.onFail === 'continue' ? 'checked' : ''}>
+                        <span data-tooltip="${escAttr(t('sched.ensure.orContinueHint'))}">${escHtml(t('sched.ensure.orContinue'))}</span></label>
+                </div>
+                <p class="sched-step-hint">${escHtml(t('sched.ensure.hint'))}</p>
+                <div class="sched-branch"><div class="sched-branch-label">${escHtml(t('sched.ensure.fix'))}</div><div class="sched-ens-body"></div><div class="sched-ens-add"></div></div>`;
+            if (!step.condition) step.condition = { type: 'always', params: {} };
+            block.querySelector('.sched-cond')?.appendChild(conditionEditor(step.condition));
+            block.querySelector('.sched-ens-cont')?.addEventListener('change', (e) => {
+                step.onFail = (e.target as HTMLInputElement).checked ? 'continue' : 'abort';
+            });
+            renderStepsEditor(block.querySelector('.sched-ens-body') as HTMLElement, step.steps, depth + 1);
+            renderAddRow(block.querySelector('.sched-ens-add') as HTMLElement, step.steps, depth + 1, host, steps, depth);
+            _wireFold(block, step);
+        } else if (step.kind === 'try') {
+            block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}${_kindTile('try')}
+                    <span class="sched-step-tag sched-if">${t('sched.try') || 'TRY'}</span></div>
+                <p class="sched-step-hint">${escHtml(t('sched.tryHint') || 'if anything below fails, run ON ERROR instead of aborting the task')}</p>
+                <div class="sched-branch"><div class="sched-branch-label">${t('sched.tryDo') || 'TRY'}</div><div class="sched-try-body"></div><div class="sched-try-add"></div></div>
+                <div class="sched-branch"><div class="sched-branch-label">${t('sched.tryCatch') || 'ON ERROR'}</div><div class="sched-catch-body"></div><div class="sched-catch-add"></div></div>`;
+            renderStepsEditor(block.querySelector('.sched-try-body') as HTMLElement, step.steps, depth + 1);
+            renderStepsEditor(block.querySelector('.sched-catch-body') as HTMLElement, step.onError, depth + 1);
+            renderAddRow(block.querySelector('.sched-try-add') as HTMLElement, step.steps, depth + 1, host, steps, depth);
+            renderAddRow(block.querySelector('.sched-catch-add') as HTMLElement, step.onError, depth + 1, host, steps, depth);
+            _wireFold(block, step);
+        } else if (step.kind === 'call') {
+            const names = Object.keys(readBlocks()).sort();
+            // No blocks yet is a state the picker has to SAY, not show as an empty select. An
+            // empty dropdown looks like a loading bug; a sentence explains where blocks come
+            // from, which is the sidebar's "save these steps as a block".
+            const body = names.length
+                ? `<select class="input sched-call-block" style="max-width:220px">
+                       <option value=""${step.block ? '' : ' selected'}>${escHtml(t('sched.call.pick') || '— pick a block —')}</option>
+                       ${names.map((n) => `<option value="${escAttr(n)}"${step.block === n ? ' selected' : ''}>${escHtml(n)}</option>`).join('')}
+                   </select>
+                   ${step.block && !names.includes(step.block)
+                       ? `<span style="font-size:11px;color:var(--danger)">${escHtml((t('sched.call.missing') || 'No block named “{n}”.').replace('{n}', step.block))}</span>`
+                       : ''}`
+                : `<span style="font-size:11px;color:var(--text-muted)">${escHtml(t('sched.call.none') || 'No block yet — build some steps, then use “Save as block” in the sidebar.')}</span>`;
+            block.innerHTML = `<div class="sched-step-head">${_kindTile('call')}
+                    <span class="sched-step-tag sched-repeat">${t('sched.call') || 'RUN BLOCK'}</span>
+                    ${body}</div>
+                <p class="sched-step-hint">${escHtml(t('sched.call.perm') || 'runs with THIS task9s permissions')}</p>`;
+            block.querySelector('.sched-call-block')?.addEventListener('change', (e) => {
+                (step as any).block = (e.target as HTMLSelectElement).value;
+            });
+        } else if (step.kind === 'break' || step.kind === 'continue' || step.kind === 'stop') {
+            const label = step.kind === 'break' ? (t('sched.break') || 'BREAK')
+                        : step.kind === 'continue' ? (t('sched.continue') || 'CONTINUE')
+                        : (t('sched.stop') || 'STOP');
+            const hint = step.kind === 'break' ? (t('sched.breakHint') || 'leave the loop now')
+                       : step.kind === 'continue' ? (t('sched.continueHint') || 'skip to the next iteration')
+                       : (t('sched.stopHint') || 'end the whole task, successfully');
+            block.innerHTML = `<div class="sched-step-head">${_kindTile('signal')}
+                    <span class="sched-step-tag sched-repeat">${label}</span></div>
+                <p class="sched-step-hint">${escHtml(hint)}</p>`;
+        } else if (step.kind === 'switch') {
+            block.innerHTML = `<div class="sched-step-head">${_foldBtn(step)}${_kindTile('switch')}
+                    <span class="sched-step-tag sched-if">${t('sched.switch') || 'SWITCH'}</span>
+                    <button class="btn btn-xs sched-chip sched-sw-addcase">${t('sched.switchAddCase') || '+ case'}</button></div>
+                <p class="sched-step-hint">${escHtml(t('sched.switchHint') || 'first matching case runs')}</p>
+                ${(() => {
+                    const gap = switchGaps(step);
+                    if (!gap) return '';
+                    return `<div class="sched-sw-gap">${escHtml((t('sched.switchGap') || 'Not handled: {m} — DEFAULT will catch them.').replace('{m}', gap.missing.join(', ')))}</div>`;
+                })()}
+                <div class="sched-sw-cases"></div>
+                <div class="sched-branch"><div class="sched-branch-label">${t('sched.switchDefault') || 'DEFAULT'}</div><div class="sched-sw-def"></div><div class="sched-sw-def-add"></div></div>`;
+            const casesHost = block.querySelector('.sched-sw-cases') as HTMLElement;
+            (step.cases || []).forEach((c, ci) => {
+                const cb = document.createElement('div');
+                cb.className = 'sched-branch';
+                cb.innerHTML = `<div class="sched-branch-label" style="display:flex;align-items:center;gap:8px">${t('sched.switchCase') || 'CASE'} ${ci + 1}
+                        <span class="sched-cond sched-sw-cond" style="flex:1"></span>
+                        <button class="btn btn-xs sched-chip sched-sw-delcase" aria-label="${t('common.delete')}">${uiIcon('delete', 14)}</button></div>
+                    <div class="sched-sw-case-steps"></div><div class="sched-sw-case-add"></div>`;
+                cb.querySelector('.sched-sw-cond')?.appendChild(conditionEditor(c.condition));
+                renderStepsEditor(cb.querySelector('.sched-sw-case-steps') as HTMLElement, c.steps, depth + 1);
+                renderAddRow(cb.querySelector('.sched-sw-case-add') as HTMLElement, c.steps, depth + 1, host, steps, depth);
+                cb.querySelector('.sched-sw-delcase')?.addEventListener('click', () => {
+                    _snapshot(); step.cases.splice(ci, 1); renderStepsEditor(host, steps, depth);
+                });
+                casesHost.appendChild(cb);
+            });
+            block.querySelector('.sched-sw-addcase')?.addEventListener('click', () => {
+                _snapshot(); step.cases.push({ condition: { type: 'always', params: {} }, steps: [] }); renderStepsEditor(host, steps, depth);
+            });
+            renderStepsEditor(block.querySelector('.sched-sw-def') as HTMLElement, step.default, depth + 1);
+            renderAddRow(block.querySelector('.sched-sw-def-add') as HTMLElement, step.default, depth + 1, host, steps, depth);
+            _wireFold(block, step);
+        }
+
+        // Every step is collapsible. if/repeat/waitFor add their fold inline; action +
+        // delay get one injected into their head here.
+        const headEl = block.querySelector('.sched-act-head, .sched-step-head') as HTMLElement | null;
+        if (headEl && !headEl.querySelector('.sched-fold')) {
+            headEl.insertAdjacentHTML('afterbegin', _foldBtn(step));
+            _wireFold(block, step);
+        }
+
+        // Unified step toolbar (hover): run just this step, duplicate, disable, delete.
+        if (headEl && !headEl.querySelector('.sched-tools')) {
+            const tools = document.createElement('span');
+            tools.className = 'sched-tools';
+            const offTip = step.disabled ? (t('sched.enableStep') || 'Enable this step') : (t('sched.disableStep') || 'Disable this step (skipped at run time)');
+            tools.innerHTML = `
+                <button class="sched-tool sched-run1" data-tooltip="${escAttr(t('sched.test.btnTip'))}" aria-label="${escAttr(t('sched.test.btn'))}">${uiIcon('play', 12)}</button>
+                <button class="sched-tool sched-bp" aria-pressed="false" data-tooltip="${escAttr(t('sched.bp.add'))}" aria-label="${escAttr(t('sched.bp.add'))}">${uiIcon('record', 12)}</button>
+                <button class="sched-tool sched-dup" data-tooltip="${escAttr(t('sched.dupStep') || 'Duplicate step')}">${uiIcon('copy', 12)}</button>
+                <button class="sched-tool sched-off ${step.disabled ? 'active' : ''}" data-tooltip="${escAttr(offTip)}">${uiIcon('power', 12)}</button>
+                <button class="sched-tool sched-del2" data-tooltip="${escAttr(t('common.delete') || 'Delete')}">${SCHED_X}</button>`;
+            headEl.appendChild(tools);
+            tools.querySelector('.sched-run1')?.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const btn = e.currentTarget as HTMLButtonElement;
+                btn.disabled = true;
+                // The Test button: a pulse on the brick while it runs, then the verdict on it —
+                // the status and the first line of the answer — rather than a toast in a corner.
+                paintBrickTest(block, null);
+                try {
+                    paintBrickTest(block, await testOneStep(step));
+                } finally { btn.disabled = false; }
+            });
+            tools.querySelector('.sched-bp')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const p = findPath(_draft.steps as any, step as any);
+                if (p) toggleBreakpoint(p);
+            });
+            tools.querySelector('.sched-dup')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                _snapshot();
+                steps.splice(i + 1, 0, JSON.parse(JSON.stringify(step)));
+                rerenderHere();
+            });
+            tools.querySelector('.sched-off')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                _snapshot();
+                step.disabled = !step.disabled;
+                block.classList.toggle('sched-disabled', !!step.disabled);
+                const b = e.currentTarget as HTMLElement;
+                b.classList.toggle('active', !!step.disabled);
+                b.title = step.disabled ? (t('sched.enableStep') || 'Enable this step') : (t('sched.disableStep') || 'Disable this step (skipped at run time)');
+            });
+            tools.querySelector('.sched-del2')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                _deleteStep(step, steps, i, rerenderHere);
+            });
+        }
+
+        // Grip handle — pointer-based reorder (native HTML5 DnD is unreliable in WebView2).
+        const handle = document.createElement('span');
+        handle.className = 'sched-drag-handle';
+        handle.title = t('sched.reorder') || 'Drag to reorder';
+        handle.innerHTML = uiIcon('grip', 12);
+        handle.addEventListener('mousedown', (e) => _startStepDrag(e, steps, i, block, host, rerenderHere));
+        block.prepend(handle);
+
+        // Notion-style insert-between: a slim hover bar between blocks; clicking it
+        // reveals the kind chips and inserts the new step at THAT position.
+        if (i > 0) {
+            const ins = document.createElement('div');
+            ins.className = 'sched-insert';
+            ins.innerHTML = `<button class="sched-insert-btn" data-tooltip="${escAttr(t('sched.insertHere') || 'Insert a step here')}">${uiIcon('add', 12)}</button>`;
+            ins.querySelector('.sched-insert-btn')?.addEventListener('click', () => {
+                if (ins.querySelector('.sched-insert-picker')) { ins.querySelector('.sched-insert-picker')?.remove(); return; }
+                const picker = document.createElement('div');
+                picker.className = 'sched-insert-picker sched-add-row';
+                picker.innerHTML = ['action', 'if', 'repeat', 'waitFor', 'delay'].map(k =>
+                    `<button class="btn btn-xs sched-chip sched-add-${k === 'action' ? 'do' : k === 'repeat' ? 'loop' : k === 'waitFor' ? 'wait' : k}" data-ins="${k}">${
+                        k === 'action' ? (t('sched.addAction') || 'Action') : k === 'if' ? (t('sched.addIf') || 'If/Else')
+                        : k === 'repeat' ? (t('sched.addLoop') || 'Loop') : k === 'waitFor' ? (t('sched.addWaitFor') || 'Wait until') : (t('sched.addDelay') || 'Pause')}</button>`).join('');
+                picker.querySelectorAll('[data-ins]').forEach(b => b.addEventListener('click', () => {
+                    _snapshot();
+                    steps.splice(i, 0, _makeStep((b as HTMLElement).dataset.ins!));
+                    renderStepsEditor(host, steps, depth);
+                }));
+                ins.appendChild(picker);
+            });
+            host.appendChild(ins);
+        }
+
+        host.appendChild(block);
+    });
+    // The breakpoints set in another mode show on the bricks as soon as they are drawn.
+    if (depth === 0 && !host.closest('.sflow-insp')) queueMicrotask(paintBrickBreakpoints);
+}
+
+function renderAddRow(host: HTMLElement, steps: Step[], depth = 0, rerenderHost?: HTMLElement, rerenderSteps?: Step[], rerenderDepth = 0): void {
+    host.className = 'sched-add-row';
+    host.innerHTML = `
+        <button class="btn btn-xs sched-chip sched-add-do" data-add="action" data-tooltip="${escAttr(t('sched.legendDo') || '')}">${KIND_ICON.action} ${t('sched.addAction') || 'Action'}</button>
+        <button class="btn btn-xs sched-chip sched-add-if" data-add="if" data-tooltip="${escAttr(t('sched.legendIf') || '')}">${KIND_ICON.if} ${t('sched.addIf') || 'If/Else'}</button>
+        <button class="btn btn-xs sched-chip sched-add-if" data-add="ensure" data-tooltip="${escAttr(t('sched.legendEnsure'))}">${KIND_ICON.ensure} ${escHtml(t('sched.addEnsure'))}</button>
+        <button class="btn btn-xs sched-chip sched-add-loop" data-add="repeat" data-tooltip="${escAttr(t('sched.legendLoop') || '')}">${KIND_ICON.repeat} ${t('sched.addLoop') || 'Loop'}</button>
+        <button class="btn btn-xs sched-chip sched-add-wait" data-add="waitFor" data-tooltip="${escAttr(t('sched.legendWait') || '')}">${KIND_ICON.waitFor} ${t('sched.addWaitFor') || 'Wait until'}</button>
+        <button class="btn btn-xs sched-chip sched-add-delay" data-add="delay" data-tooltip="${escAttr(t('sched.legendDelay') || '')}">${KIND_ICON.delay} ${t('sched.addDelay') || 'Pause'}</button>
+        <button class="btn btn-xs sched-chip" data-add="forEach" data-tooltip="${escAttr(t('sched.legendForEach') || '')}">${KIND_ICON.forEach} ${t('sched.addForEach') || 'For each'}</button>
+        <button class="btn btn-xs sched-chip" data-add="switch" data-tooltip="${escAttr(t('sched.legendSwitch') || '')}">${KIND_ICON.switch} ${t('sched.addSwitch') || 'Switch'}</button>
+        <button class="btn btn-xs sched-chip" data-add="parallel" data-tooltip="${escAttr(t('sched.legendPar') || 'Run several branches at the same time')}">${KIND_ICON.parallel} ${t('sched.addParallel') || 'At the same time'}</button>
+        <button class="btn btn-xs sched-chip sched-add-loop" data-add="retry" data-tooltip="${escAttr(t('sched.retry.hint'))}">${KIND_ICON.retry} ${escHtml(t('sched.addRetry'))}</button>
+        <button class="btn btn-xs sched-chip" data-add="try" data-tooltip="${escAttr(t('sched.legendTry') || '')}">${KIND_ICON.try} ${t('sched.addTry') || 'Try / on error'}</button>
+        <button class="btn btn-xs sched-chip" data-add="call" data-tooltip="${escAttr(t('sched.legendCall') || '')}">${KIND_ICON.call} ${t('sched.addCall') || 'Run a block'}</button>
+        <button class="btn btn-xs sched-chip" data-add="break" data-tooltip="${escAttr(t('sched.legendBreak') || '')}">${KIND_ICON.signal} ${t('sched.addBreak') || 'Break'}</button>
+        <button class="btn btn-xs sched-chip" data-add="continue" data-tooltip="${escAttr(t('sched.legendContinue') || '')}">${KIND_ICON.signal} ${t('sched.addContinue') || 'Continue'}</button>
+        <button class="btn btn-xs sched-chip" data-add="stop" data-tooltip="${escAttr(t('sched.legendStop') || '')}">${KIND_ICON.signal} ${t('sched.addStop') || 'Stop'}</button>`;
+    const rerender = () => {
+        // Preserve the modal's scroll position so adding a step deep in a big task
+        // doesn't yank the view back to the top (a real annoyance with lots of content).
+        const body = document.querySelector('#modal-scheduler .sched-body') as HTMLElement | null;
+        const top = body ? body.scrollTop : 0;
+        if (rerenderHost) renderStepsEditor(rerenderHost, rerenderSteps!, rerenderDepth);
+        else renderStepsEditor(host.previousElementSibling as HTMLElement || host.parentElement!.querySelector('.sched-steps') as HTMLElement, steps, depth);
+        if (body) body.scrollTop = top;
+    };
+    host.querySelectorAll('[data-add]').forEach(btn => btn.addEventListener('click', () => {
+        _snapshot();
+        steps.push(_makeStep((btn as HTMLElement).dataset.add!));
+        rerender();
+    }));
+}
+
+/** A fresh step of the given kind with sane defaults (shared by add rows + inserts). */
+function _makeStep(kind: string): Step {
+    if (kind === 'if') return { kind: 'if', condition: { type: 'always', params: {} }, then: [], else: [] } as Step;
+    if (kind === 'repeat') return { kind: 'repeat', mode: 'while', condition: { type: 'always', params: {} }, maxIters: 100, everySec: 1, steps: [] } as Step;
+    if (kind === 'forEach') return { kind: 'forEach', source: 'enabledMods', maxIters: 100, everySec: 0, steps: [] } as Step;
+    if (kind === 'switch') return { kind: 'switch', cases: [{ condition: { type: 'always', params: {} }, steps: [] }], default: [] } as Step;
+    if (kind === 'try') return { kind: 'try', steps: [], onError: [] } as Step;
+    if (kind === 'ensure') return { kind: 'ensure', condition: { type: 'always', params: {} }, steps: [], onFail: 'abort' } as Step;
+    if (kind === 'retry') return { kind: 'retry', times: 3, everySec: 30, steps: [], onFail: 'abort' } as Step;
+    // TWO empty branches, not one: a parallel with a single branch is a sequence with extra
+    // words, and the shape has to show what the step is for the moment it is added.
+    if (kind === 'parallel') return { kind: 'parallel', mode: 'all', branches: [[], []] } as Step;
+    // Empty block name on purpose: the editor's picker fills it, and a default pointing at
+    // somebody's first block would run a real block the moment the step was added.
+    if (kind === 'call') return { kind: 'call', block: '' } as Step;
+    if (kind === 'break' || kind === 'continue' || kind === 'stop') return { kind } as Step;
+    if (kind === 'waitFor') return { kind: 'waitFor', condition: { type: 'allModsActive', params: {} }, timeoutSec: 120 } as Step;
+    if (kind === 'delay') return { kind: 'delay', seconds: 5 } as Step;
+    return { kind: 'action', action: { type: 'profile.activate', params: {} } } as Step;
+}
+
+// group → optgroup label (matches the script generator's categories).
+const ACTION_GROUPS: { g: string; label: string }[] = [
+    { g: 'mods',    label: 'Mods & profiles' },
+    { g: 'repo',    label: 'Repo & sharing' },
+    { g: 'apps',    label: 'Apps & launch' },
+    { g: 'look',    label: 'Appearance' },
+    { g: 'perf',    label: 'Benchmarks & storage' },
+    { g: 'privacy', label: 'Privacy & recorder' },
+    { g: 'logic',   label: 'Logic & math' },
+    { g: 'notify',  label: 'Notifications & web' },
+    { g: 'system',  label: 'System & flow' },
+    { g: 'ai',      label: 'Laya (AI)' },
+    { g: 'nav',     label: 'Navigate BMM' },
+    { g: 'pkg',     label: 'Packages & games' },
+];
+
+// icon per group (inline SVG, no emoji — matches the BMM icon-only rule).
+// Simplified to clean, single-shape glyphs that stay legible at 14px (the old
+// "look"/"system"/"logic" icons were busy compound paths that read as a blur
+// at tile size — this was the "ugly action-type icons" complaint).
+const GROUP_ICON: Record<string, string> = {
+    mods:    (uiIcon('mod', 14)),
+    repo:    (uiIcon('git-branch', 14)),
+    apps:    (uiIcon('grid', 14)),
+    look:    (uiIcon('palette', 14)),
+    perf:    (uiIcon('activity', 14)),
+    privacy: (uiIcon('shield', 14)),
+    system:  (uiIcon('clock', 14)),
+    logic:   (uiIcon('sliders', 14)),
+    // A paper plane: something leaves BMM for somewhere else.
+    notify:  (uiIcon('send', 14)),
+    ai:      (uiIcon('ai', 14)),
+    nav:     (uiIcon('map', 14)),
+    pkg:     (uiIcon('package', 14)),
+};
+
+// Clean inline X icon for delete buttons (replaces the raw ✕ glyph).
+const SCHED_X = (uiIcon('close', 12));
+// One icon per step kind — used by the head tiles, the add-chips and the pickers.
+const KIND_ICON: Record<string, string> = {
+    action:  (uiIcon('play', 12)),
+    if:      (uiIcon('git-branch', 12)),
+    repeat:  (uiIcon('refresh', 12)),
+    waitFor: (uiIcon('clock', 12)),
+    delay:   (uiIcon('pause', 12)),
+    forEach: (uiIcon('list', 12)),
+    switch:  (uiIcon('list-ordered', 12)),
+    try:     (uiIcon('warning', 12)),
+    // Two lines running side by side, then meeting: the whole idea of the step.
+    parallel: (uiIcon('layers', 12)),
+    // A circular arrow with a small warning break: try again, because it went wrong.
+    retry:   (uiIcon('reapply', 12)),
+    ensure:  (uiIcon('shield-check', 12)),
+    signal:  (uiIcon('stop', 12)),
+    // A box with an arrow going into it — the body lives elsewhere and is brought in here.
+    call:    (uiIcon('link', 12)),
+};
+/** Kind-coloured icon tile that opens every step head (the visual anchor). */
+function _kindTile(kind: string): string {
+    return `<span class="sched-kind-ic k-${kind}">${KIND_ICON[kind] || ''}</span>`;
+}
+// Fold chevron for collapsible control blocks (if / loop / wait until) — a
+// small rounded chip (not a bare ghost button) so it reads as a control at a
+// glance instead of a stray dot.
+const SCHED_CHEV = (uiIcon('chevron-down', 12));
+// Fold button + a short summary shown only while collapsed.
+function _foldBtn(step: any): string {
+    let sum = '';
+    if (step.kind === 'if') sum = `${(step.then?.length || 0) + (step.else?.length || 0)} ${t('sched.stepsInside') || 'inside'}`;
+    else if (step.kind === 'repeat' || step.kind === 'forEach') sum = `${step.steps?.length || 0} ${t('sched.stepsInside') || 'inside'}`;
+    else if (step.kind === 'switch') sum = `${(step.cases?.length || 0)} cases`;
+    else if (step.kind === 'try') sum = `${(step.steps?.length || 0)} + ${(step.onError?.length || 0)}`;
+    else if (step.kind === 'ensure') sum = `${(step.steps?.length || 0)} ${t('sched.stepsInside') || 'inside'}`;
+    else if (step.kind === 'retry') sum = `${(step.steps?.length || 0)} ${t('sched.stepsInside') || 'inside'}`;
+    else if (step.kind === 'parallel') sum = (step.branches || []).map((b: Step[]) => b.length).join(' | ');
+    else if (step.kind === 'delay') sum = `${step.seconds || 0}${t('sched.unitSec') || 's'}`;
+    const sumHtml = sum ? `<span class="sched-fold-sum">${sum}</span>` : '';
+    return `<button class="btn btn-xs btn-ghost sched-fold" data-tooltip="${escAttr(t('sched.foldTip') || 'Collapse / expand')}" aria-label="fold">${SCHED_CHEV}</button>${sumHtml}`;
+}
+function _wireFold(block: HTMLElement, step: any): void {
+    block.querySelector('.sched-fold')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        step.collapsed = !step.collapsed;
+        block.classList.toggle('collapsed', !!step.collapsed);
+    });
+}
+
+/**
+ * Write a catalogue of the user's own things into `dir`, and return how many entries it has.
+ *
+ * Deliberately NOT one generic path with three flags. The kinds disagree about the one
+ * thing that matters — whether the index points at files or contains them — and a shape
+ * that hid that would have to invent a file for a theme, or drop the .bmmtut for a
+ * tutorial. Each branch is short and says which it is.
+ *
+ * Everything is a parameter. Nothing here opens a picker: this runs from a task, and a task
+ * that fires at 03:00 has nobody to answer a dialog.
+ */
+/**
+ * Every kind this can publish, and what each one is built FROM.
+ *
+ * Exported so the screen, the deeplink and the API offer the same list rather than three
+ * copies drifting apart — a kind on one and not the others is a capability that exists and
+ * cannot be found.
+ */
+export const BUILDABLE_KINDS: { kind: string; from: string }[] = [
+    { kind: 'tutorial', from: 'your custom tutorials' },
+    { kind: 'theme', from: 'your installed themes' },
+    { kind: 'plugin', from: 'your installed plugins' },
+    { kind: 'modpack', from: 'your modpacks' },
+    { kind: 'automation', from: 'your scheduled tasks' },
+    { kind: 'index', from: 'the catalogues you follow' },
+    { kind: 'folder', from: 'whatever is already in the folder' },
+];
+
+/**
+ * Write a catalogue folder from what this BMM holds.
+ *
+ * Exported because publishing was reachable from a scheduled task and by no other means —
+ * the same gap that once made FOLLOWING a catalogue clickable-only. The deeplink and the API
+ * come through here rather than reimplementing the shapes each format expects.
+ */
+export async function buildCatalogueInto(kind: string, dir: string, title: string, base: string): Promise<number> {
+    const stamp = new Date().toISOString();
+    const write = (file: string, content: string) => invoke('write_text_file', { path: `${dir}/${file}`, content });
+
+    if (kind === 'index') {
+        // A catalogue of catalogues, from what this BMM follows.
+        //
+        // `looksLikeIndex`, `parseCatalogIndex` and `importIndexForType` have read one for a
+        // long time; nothing could write one, so a group running four catalogues had to hand
+        // out four addresses or hand-write the JSON that ties them together.
+        //
+        // Read straight from the stores rather than through the screens: this is a snapshot
+        // of what is followed, and it must be the same whether a person or a schedule asks.
+        const { STORE_KEY } = await import('../catalogs/catalog-index.js');
+        const catalogs: { type: string; url: string; name: string }[] = [];
+        for (const [type, storeKey] of Object.entries(STORE_KEY)) {
+            let urls: string[] = [];
+            try {
+                const v = JSON.parse(localStorage.getItem(storeKey) || '[]');
+                urls = Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];
+            } catch { urls = []; }
+            for (const url of urls) {
+                // The host is the only name available without fetching every catalogue, and
+                // fetching them would make publishing depend on all of them being up. A
+                // reader shows the name the catalogue gives once it is followed.
+                let host = url;
+                try { host = new URL(url).host; } catch { /* keep the raw address */ }
+                catalogs.push({ type, url, name: host });
+            }
+        }
+        await write('catalog.json', JSON.stringify({
+            version: '1.0',
+            // Said in the document itself. `looksLikeIndex` accepts one without the marker,
+            // but an EMPTY index has no entries to be recognised by — unmarked it would read
+            // as a catalogue of nothing rather than an index of nothing.
+            kind: 'catalog-index',
+            name: title,
+            generatedAt: stamp,
+            catalogs,
+        }, null, 2));
+        return catalogs.length;
+    }
+
+    if (kind === 'modpack') {
+        // Embedded. BMM holds a modpack as data, so there is nothing to link to and nothing
+        // for the reader to fetch — the same shape the modpack catalogue reader expects.
+        const packs: any[] = (await invoke('load_modpacks').catch(() => [])) as any[];
+        await write('catalog.json', JSON.stringify({ version: '1.0', name: title, generatedAt: stamp, modpacks: packs }, null, 2));
+        return packs.length;
+    }
+
+    if (kind === 'automation') {
+        // Automations are written OUT as files and linked, not embedded, because a `.bmmpa`
+        // is a document somebody reads before trusting it — and a catalogue whose entries
+        // are inline JSON is one nobody can read without installing.
+        //
+        // Permissions are stripped on the way out for the same reason they are stripped on
+        // the way in: they are granted by the person who reads the task, never carried by
+        // the file that asks for them.
+        const tasks = await getTasks();
+        let n = 0;
+        const entries: any[] = [];
+        for (const task of tasks) {
+            const file = `${String(task.id).replace(/[^A-Za-z0-9._-]/g, '_')}.bmmpa`;
+            await write(file, JSON.stringify({ magic: 'BMMPA', version: 1, tasks: [forExport(task)] }, null, 2));
+            entries.push({
+                id: task.id,
+                name: task.name || task.id,
+                description: (task as any).description || '',
+                file,
+                url: base ? `${base}/${file}` : undefined,
+            });
+            n += 1;
+        }
+        // The index goes down LAST: a catalog.json listing files that failed to write looks
+        // finished and installs nothing.
+        await write('catalog.json', JSON.stringify({ version: '1.0', name: title, generatedAt: stamp, presets: entries }, null, 2));
+        return n;
+    }
+
+    if (kind === 'folder') {
+        // The universal one: publish whatever is already in the folder.
+        //
+        // This is the case the other kinds cannot cover. A `.mm` is not held by BMM — it is
+        // exported — so a catalogue of mod lists can only be built from files somebody has
+        // already put somewhere. Point this at that folder.
+        const files: string[] = (await invoke('list_dir_files', { dir, exts: null }).catch(() => [])) as string[];
+        const KNOWN: Record<string, string> = {
+            mm: 'lists', mmlist: 'lists', bmmplug: 'plugins', bmmtheme: 'themes',
+            bmmpa: 'presets', bmp: 'modpacks',
+        };
+        const buckets: Record<string, any[]> = {};
+        for (const f of files) {
+            const name = String(f).replace(/^.*[/\\]/, '');
+            const ext = (name.split('.').pop() || '').toLowerCase();
+            const bucket = KNOWN[ext];
+            if (!bucket) continue;
+            (buckets[bucket] = buckets[bucket] || []).push({
+                id: name.replace(/\.[^.]+$/, ''),
+                name: name.replace(/\.[^.]+$/, ''),
+                file: name,
+                url: base ? `${base}/${name}` : undefined,
+            });
+        }
+        const total = Object.values(buckets).reduce((a, b) => a + b.length, 0);
+        await write('catalog.json', JSON.stringify({ version: '1.0', name: title, generatedAt: stamp, ...buckets }, null, 2));
+        return total;
+    }
+
+    if (kind === 'theme') {
+        // Embedded, not linked — this is the shape the theme catalogue reader already
+        // expects, so a published folder can be followed without any other file.
+        const themes: any[] = JSON.parse((await invoke('list_installed_themes') as string) || '[]');
+        await write('catalog.json', JSON.stringify({ version: '1.0', name: title, generatedAt: stamp, themes }, null, 2));
+        return themes.length;
+    }
+
+    if (kind === 'plugin') {
+        // Linked, and the link is the author's own download URL: BMM holds an installed
+        // plugin as an extracted folder, not as the package it arrived in, so there is no
+        // file here to copy. A plugin with no URL is skipped rather than written as an
+        // entry that cannot be installed.
+        const installed: any[] = (await invoke('get_installed_plugins').catch(() => [])) as any[];
+        const plugins = installed
+            .map((ip) => ({ m: ip?.manifest || {}, url: ip?.manifest?.download_url || ip?.manifest?.downloadUrl || '' }))
+            .filter((x) => x.m.id && (x.url || base))
+            .map(({ m, url }) => ({
+                id: m.id,
+                name: m.name || m.id,
+                version: m.version || '1.0.0',
+                author: m.author || '',
+                description: m.description || '',
+                game: m.game || '',
+                official: false,
+                download_url: url || `${base}/${m.id}.bmmplug`,
+                tags: Array.isArray(m.tags) ? m.tags : [],
+            }));
+        await write('catalog.json', JSON.stringify({ version: '1.0', name: title, generatedAt: stamp, plugins }, null, 2));
+        return plugins.length;
+    }
+
+    // tutorial — the index points at files, and this writes them too. Same rule as the
+    // hub's own builder: the lessons go down BEFORE the index, because a catalog.json
+    // listing files that failed to write looks finished and installs nothing.
+    const { listCustomDocs, getCustomDoc } = await import('../../ui/tutorial-custom.js');
+    const docs = listCustomDocs();
+    const written: { id: string; name: string; desc: string }[] = [];
+    for (const d of docs) {
+        const full = getCustomDoc(d.id);
+        if (!full) continue;
+        await write(`${d.id}.bmmtut`, JSON.stringify(full, null, 2));
+        written.push({ id: d.id, name: d.title?.en || d.id, desc: d.desc?.en || '' });
+    }
+    const entries = written.map((w) => ({
+        id: w.id,
+        name: w.name,
+        description: w.desc,
+        // Relative unless an address was given — the reader resolves an entry URL against
+        // the catalogue's own address, so the folder works from wherever it is uploaded.
+        url: base ? `${base}/${w.id}.bmmtut` : `${w.id}.bmmtut`,
+    }));
+    await write('catalog.json', JSON.stringify({
+        name: title,
+        generatedAt: stamp,
+        tutorials: entries,
+        // Both shapes: `tutorials` is what this app's reader prefers, `items` with a kind is
+        // what BCWEB's pooled catalogues emit. One without the other is invisible to half
+        // the readers.
+        items: entries.map((e) => ({ ...e, kind: 'tutorial' })),
+    }, null, 2));
+    return entries.length;
+}
+
+/**
+ * The windows that are NOT screens, for `view.open`'s `dl:<name>` places.
+ *
+ * These have their own deeplinks and had no action at all, so "open the theme editor at the
+ * end of this task" meant hand-writing a bmm:// link into the generic action. Each one is
+ * `deeplink|params`, because that is what distinguishes them — there is no id that covers
+ * both kinds. The runner refuses a `dl:` name that is not here: the list is what makes the
+ * step typed rather than a raw link (security summary §9 #15).
+ */
+const VIEW_WINDOWS: readonly [string, string][] = [
+    ['theme/editor', 'sched.view.w.themeEditor'],
+    ['settings/layout', 'sched.view.w.layout'],
+    ['settings/navbar', 'sched.view.w.navbar'],
+    ['benchmark/open', 'sched.view.w.benchmark'],
+    ['docs/open', 'sched.view.w.docs'],
+];
+
+/**
+ * Steps that no longer exist, by type, with the key of their old label.
+ *
+ * A saved task can still hold one. It loads and keeps it (dropping it would silently change
+ * a task somebody wrote), the editor shows it as removed rather than as the first action of
+ * the list, and the runner skips it with a warning — see the `@retired-action` case in
+ * runAction. Distinct from an alias like `dcs.hook`, which still RUNS as its replacement.
+ */
+const REMOVED_ACTIONS: Record<string, { labelKey: string; label: string }> = {
+    deeplink: { labelKey: 'sched.act.deeplink', label: 'Run bmm:// deeplink' },
+};
+/** Own keys only: a step typed `toString` is not a removed step. */
+function removedAction(type: string): { labelKey: string; label: string } | null {
+    return Object.hasOwn(REMOVED_ACTIONS, type) ? REMOVED_ACTIONS[type] : null;
+}
+
+const ACTION_TYPES: { v: string; label: string; needs?: string; group: string }[] = [
+    // ── Mods & profiles ──
+    { v: 'profile.activate', label: 'Activate profile', needs: 'profile', group: 'mods' },
+    // The rest of a profile's life, and a mod's, and a modpack's. A task could switch to a
+    // profile and never make, rename or remove one — so "set up a fresh profile each
+    // season, retire last season's" was automation that stopped halfway and waited for a
+    // person, which is the half it was supposed to remove.
+    { v: 'profile.create', label: 'Create a profile', needs: 'profileNew', group: 'mods' },
+    { v: 'profile.rename', label: 'Rename a profile', needs: 'profileRename', group: 'mods' },
+    { v: 'profile.delete', label: 'Delete a profile', needs: 'profileDel', group: 'mods' },
+    { v: 'mod.remove', label: 'Remove a mod', needs: 'modRemove', group: 'mods' },
+    { v: 'modpack.delete', label: 'Delete a modpack', needs: 'modpackDel', group: 'mods' },
+    { v: 'mod.enable', label: 'Enable mod', needs: 'mod', group: 'mods' },
+    { v: 'mod.disable', label: 'Disable mod', needs: 'mod', group: 'mods' },
+    { v: 'mods.order', label: 'Set which mod wins shared files', needs: 'modOrder', group: 'mods' },
+    { v: 'modpack.enable', label: 'Enable modpack', needs: 'modpackOn', group: 'mods' },
+    { v: 'modpack.disable', label: 'Disable modpack', needs: 'modpack', group: 'mods' },
+    { v: 'modpack.create', label: 'Create modpack', needs: 'mpCreate', group: 'mods' },
+    { v: 'mod.add', label: 'Add a mod (from URL)', needs: 'modAdd', group: 'mods' },
+    { v: 'modlist.export', label: 'Export a mod list (.mmlist)', needs: 'savePath', group: 'mods' },
+    { v: 'modlist.import', label: 'Import a mod list (.mmlist)', needs: 'openPath', group: 'mods' },
+    { v: 'mods.enableAll', label: 'Enable all mods', needs: 'enableAll', group: 'mods' },
+    { v: 'mods.disableAll', label: 'Disable all mods', group: 'mods' },
+    { v: 'mods.scan', label: 'Scan mods folder', group: 'mods' },
+    { v: 'plugin.apply', label: 'Apply plugin modlist', needs: 'pluginId', group: 'mods' },
+    { v: 'plugin.compare', label: 'Compare plugin', needs: 'pluginId', group: 'mods' },
+    { v: 'plugin.delete', label: 'Delete plugin', needs: 'pluginId', group: 'mods' },
+    { v: 'mods.checkUpdates', label: 'Check mod updates', group: 'mods' },
+    { v: 'mods.autoImportOmm', label: 'Auto-import Open Mod Manager mods', group: 'mods' },
+    { v: 'mods.clearHistory', label: 'Clear profile activity history', needs: 'profile', group: 'mods' },
+    { v: 'mods.exportModpack', label: 'Export modpack (.bmp)', needs: 'modpackExport', group: 'mods' },
+    // ── Repo & sharing ──
+    { v: 'repo.connect', label: 'Connect repo', needs: 'repoConnect', group: 'repo' },
+    { v: 'repo.sync', label: 'Sync repo', needs: 'repoSync', group: 'repo' },
+    // Which BMM is running this. A task that installs something built for a newer BMM, or a
+    // report that says "it broke" without saying on which build, are both this question
+    // unanswered — and until now it could not be asked from an automation at all.
+    { v: 'app.buildInfo', label: 'Read this BMM\u2019s version', needs: 'buildInfo', group: 'app' },
+    // The sizes of the library, as numbers a condition can compare. Nothing wrote them, so
+    // "warn me when this profile passes 400 mods" and "only build a pack if there is one"
+    // were both unwritable.
+    { v: 'library.counts', label: 'Read how big the library is', needs: 'buildInfo', group: 'app' },
+    { v: 'repo.gen', label: 'Generate repo (opens the screen)', group: 'repo' },
+    // The one that actually produces a repo without anybody there. `repo.gen` opens the
+    // screen prefilled, which is the right answer for a person and no answer at all for a
+    // schedule — the same split `repo.sync` / `repo.syncNow` already makes.
+    { v: 'repo.genNow', label: 'Generate a server repo (unattended)', needs: 'repoGen', group: 'repo' },
+    { v: 'repo.update', label: 'Update repo', needs: 'repoUpdate', group: 'repo' },
+    { v: 'repo.host', label: 'Host repo (HTTP)', needs: 'repoHost', group: 'repo' },
+    // The repo action that actually RUNS unattended. `repo.gen`, `repo.update` and
+    // `repo.host` only open the screen prefilled, which is nothing at 3am; this rewrites
+    // repo.json for a folder that is already hosted, and returns what changed.
+    { v: 'repo.manifest', label: 'Rebuild a repo\'s manifest (unattended)', needs: 'repoManifest', group: 'repo' },
+    // Uses the SSH target saved in Server Repo. A scheduled task cannot answer a passphrase
+    // prompt at 04:00, so a key with one fails with a message instead of hanging forever.
+    { v: 'repo.publishSsh', label: 'Publish repo over SSH (uploads now)', needs: 'repoSshDir', group: 'repo' },
+    // The other direction: keep a local folder in step with what the server actually serves.
+    // Same target, same passphrase constraint.
+    { v: 'repo.fetchSsh', label: 'Fetch repo over SSH', needs: 'repoSshPullDir', group: 'repo' },
+    // ── Apps & launch ──
+    { v: 'app.launch', label: 'Launch app', needs: 'app', group: 'apps' },
+    { v: 'app.stop', label: 'Stop app / process', needs: 'appStop', group: 'apps' },
+    { v: 'file.open', label: 'Open / launch a file or program', needs: 'pathFile', group: 'apps' },
+    { v: 'folder.open', label: 'Open a folder', needs: 'pathFolder', group: 'apps' },
+    { v: 'app.install', label: 'Install app', needs: 'appInstall', group: 'apps' },
+    { v: 'launchpack.run', label: 'Run launch pack', needs: 'lpId', group: 'apps' },
+    // ── Appearance ──
+    { v: 'theme.set', label: 'Set theme', needs: 'theme', group: 'look' },
+    // ── Benchmarks & storage ──
+    { v: 'benchmark.run', label: 'Run benchmark', needs: 'benchmark', group: 'perf' },
+    { v: 'storage.diskBenchmark', label: 'Storage: benchmark a disk', needs: 'disk', group: 'perf' },
+    { v: 'storage.applyLimit', label: 'Storage: apply disk speed limit', needs: 'applyLimit', group: 'perf' },
+    { v: 'storage.calibration', label: 'Storage: Performance Auto-Calibration', needs: 'toggle', group: 'perf' },
+    { v: 'storage.smartIo', label: 'Storage: Smart I/O', needs: 'toggle', group: 'perf' },
+    { v: 'storage.flag', label: 'Storage: toggle a setting (advanced)', needs: 'flag', group: 'perf' },
+    { v: 'resources.preset', label: 'Resources: set the preset', needs: 'resPreset', group: 'perf' },
+    { v: 'resources.gameMode', label: 'Resources: app mode', needs: 'resGame', group: 'perf' },
+    { v: 'resources.queue', label: 'Resources: pause or resume the queue', needs: 'resQueue', group: 'perf' },
+    { v: 'perf.diskSpace', label: 'Check free disk space', needs: 'disk', group: 'perf' },
+    // ── Privacy & recorder ──
+    { v: 'telemetry.consent', label: 'Telemetry consent', needs: 'toggle', group: 'privacy' },
+    { v: 'telemetry.set', label: 'Telemetry options', needs: 'telemetry', group: 'privacy' },
+    { v: 'recorder.set', label: 'Session recorder', needs: 'recorder', group: 'privacy' },
+    { v: 'replay.export', label: 'Export replay', needs: 'savePath', group: 'privacy' },
+    { v: 'replay.import', label: 'Import replay', needs: 'replayImport', group: 'privacy' },
+    // ── System & flow ──
+    { v: 'notify', label: 'Show notification', needs: 'message', group: 'system' },
+    { v: 'discord.rpc', label: 'Discord Rich Presence', needs: 'toggle', group: 'system' },
+    // The old one wrote a `.json` through a different command than the Export data screen:
+    // a smaller, different thing, with no choice of contents and no way to lock it. Kept,
+    // because tasks refer to it and a JSON backup is still what an older BMM can read.
+    { v: 'data.exportAuto', label: 'Export data (backup, .json)', needs: 'exportAuto', group: 'system' },
+    { v: 'data.backup', label: 'Back up data (.DATABMM)', needs: 'dataBackup', group: 'system' },
+    { v: 'var.set', label: 'Set a variable', needs: 'varSet', group: 'logic' },
+    { v: 'app.checkUpdate', label: 'Check for BMM update', needs: 'checkUpdate', group: 'system' },
+    { v: 'system.clearApiLog', label: 'Clear API log', group: 'system' },
+    { v: 'system.clearResourceRecords', label: 'Clear resource monitor records', group: 'system' },
+    // ── Logic & math ──
+    { v: 'math.set', label: 'Math: compute into a variable', needs: 'mathSet', group: 'logic' },
+    { v: 'var.ternary', label: 'Ternary: var = cond ? a : b', needs: 'ternary', group: 'logic' },
+    { v: 'rule.table', label: 'Rule table (decision table)', needs: 'ruleTable', group: 'logic' },
+    { v: 'task.stop', label: 'Stop the task (guard clause)', needs: 'stopReason', group: 'logic' },
+    { v: 'task.run', label: 'Run another scheduled task', needs: 'taskId', group: 'system' },
+    { v: 'task.spawn', label: 'Start another task WITHOUT waiting (async)', needs: 'taskId', group: 'system' },
+    // Arming and disarming another task. `bmm://schedule/enable` has always been able to do
+    // it and a task could not — so "stop the nightly sync while I am away" meant either
+    // clicking a toggle by hand or firing a raw deeplink through the generic action.
+    { v: 'task.setEnabled', label: 'Arm or disarm another task', needs: 'taskArm', group: 'system' },
+    // Switching screens. `bmm://view/open` and `POST /api/view` have both done this for a
+    // while; a task could only reach it through the generic deeplink action, which meant
+    // typing a screen id nothing validates.
+    { v: 'view.open', label: 'Open a screen or a window', needs: 'viewPick', group: 'system' },
+    { v: 'restart', label: 'Restart BMM', group: 'system' },
+    { v: 'open.url', label: 'Open a URL / link', needs: 'url', group: 'system' },
+    { v: 'custom.command', label: 'Run custom command', needs: 'command', group: 'system' },
+    { v: 'custom.script', label: 'Run a script', needs: 'script', group: 'system' },
+    { v: 'folder.create', label: 'Create a folder (BMM data)', needs: 'bmmfolder', group: 'system' },
+    { v: 'catalog.create', label: 'Publish a catalogue', needs: 'catCreate', group: 'system' },
+    // The three verbs a task had no way to reach. It could publish a catalogue and follow
+    // one, and could neither change nor remove either — so an automation keeping a catalogue
+    // up to date could add to it for ever and never take anything out.
+    { v: 'catalog.import', label: 'Follow a catalogue (works out its kind)', needs: 'catImport', group: 'repo' },
+    { v: 'catalog.entry', label: 'Add, change or remove one catalogue entry', needs: 'catEntry', group: 'repo' },
+    { v: 'catalog.delete', label: 'Delete a catalogue you author', needs: 'catDelete', group: 'repo' },
+    { v: 'code.run', label: 'Run BMMScript (advanced)', needs: 'bmms', group: 'logic' },
+    { v: 'repo.syncNow', label: 'Sync a server repo (unattended)', needs: 'reposync', group: 'repo' },
+    { v: 'list.set', label: 'List — set it (JSON array or a, b, c)', needs: 'listSet', group: 'logic' },
+    { v: 'list.push', label: 'List — add one item', needs: 'listPush', group: 'logic' },
+    { v: 'list.clear', label: 'List — empty it', needs: 'listName', group: 'logic' },
+    { v: 'map.set', label: 'Map — set a key', needs: 'mapSet', group: 'logic' },
+    { v: 'map.get', label: 'Map — read a key into a variable', needs: 'mapGet', group: 'logic' },
+    { v: 'id.of', label: 'Content id of a thing, into a variable', needs: 'idOf', group: 'logic' },
+    { v: 'map.clear', label: 'Map — empty it', needs: 'mapName', group: 'logic' },
+    { v: 'var.clear', label: 'Clear a shared variable', needs: 'varClear', group: 'logic' },
+    { v: 'http.request', label: 'Call an HTTP API', needs: 'http', group: 'system' },
+    // Laya on this PC. Needs the `ai` permission; what comes back is data, never run.
+    { v: 'ai.classify', label: 'Laya: sort a text into your labels', needs: 'aiClassify', group: 'ai' },
+    { v: 'ai.run_task', label: 'Laya: run one of your Laya tasks', needs: 'aiRunTask', group: 'ai' },
+    { v: 'ai.ask', label: 'Laya: ask a question', needs: 'aiAsk', group: 'ai' },
+    { v: 'ai.suggest_mod_metadata', label: 'Laya: suggest details for a mod (not applied)', needs: 'aiSuggest', group: 'ai' },
+    { v: 'ai.classify_mod', label: 'Laya: tag a mod from its files', needs: 'aiModClassify', group: 'ai' },
+    { v: 'ai.library_check', label: 'Laya: check the library', needs: 'aiLibrary', group: 'ai' },
+    { v: 'ai.crash_label', label: 'Laya: find the causes of new crashes', needs: 'aiCrash', group: 'ai' },
+    { v: 'ai.explain_crash', label: 'Laya: explain a crash (writing model)', needs: 'aiExplain', group: 'ai' },
+    { v: 'ai.triage_report', label: 'Laya: sort a report (bug, idea, crash)', needs: 'aiTriage', group: 'ai' },
+    { v: 'ai.status', label: 'Laya: read its state', needs: 'aiStatus', group: 'ai' },
+    // Waiting for something OUTSIDE BMM to be ready. A task could wait for a clock and for
+    // a file; these are the two cases that kept coming up and had no answer.
+    { v: 'wait.http', label: 'Wait until an address answers', needs: 'waitHttp', group: 'system' },
+    { v: 'wait.hook', label: 'Wait for a signal (webhook)', needs: 'waitHook', group: 'system' },
+    // ── Games ──
+    // The glue between "a file changed" and "put the right mods on". Universal on purpose:
+    // nothing here knows what DCS is except the one action that installs its hook.
+    { v: 'text.extract', label: 'Read a value out of a file or a variable', needs: 'textExtract', group: 'logic' },
+    { v: 'log.print', label: 'Write a line to the log', needs: 'message', group: 'logic' },
+    { v: 'data.validate', label: 'Check what a file is', needs: 'validate', group: 'logic' },
+    { v: 'file.write', label: 'Write a file', needs: 'fileWrite', group: 'logic' },
+    { v: 'modlist.apply', label: 'Apply a mod list (install what is missing)', needs: 'listApply', group: 'mods' },
+    // One action for every game. DCS is a CASE inside it — the only one with a supported
+    // callback API, so it gets a hook installed; everything else is a log and a pattern.
+    // It used to be a DCS-only action, which made the whole feature look like a DCS feature.
+    { v: 'game.watch', label: 'Set up watching a game', needs: 'gameWatch', group: 'apps' },
+    // A plugin's shipped files, usable by an automation. The point is the `read` mode: a
+    // plugin ships a config template or a list of codes, and a task reads it into a variable
+    // instead of that value being typed into the task and drifting from the plugin.
+    { v: 'plugin.asset', label: 'Use a file a plugin ships', needs: 'pluginAsset', group: 'mods' },
+    // Identity and sources. Both were reachable only by clicking.
+    { v: 'key.create', label: 'Make an identity key', needs: 'keyCreate', group: 'repo' },
+    // Bringing a file IN. One action for every BMM format, because the questions are the
+    // same each time — where is it, is the source protected, is the file locked.
+    { v: 'import.file', label: 'Import a file (list, plugin, theme, automation, backup)', needs: 'importFile', group: 'system' },
+    { v: 'catalog.follow', label: 'Follow (or stop following) a catalogue', needs: 'catFollow', group: 'repo' },
+    // Telling the outside world. A generic webhook (any service that takes an HTTP POST),
+    // the two chat services people actually ask for, and a feed of the task's own that any
+    // RSS reader can follow. The first three need `network`; the feed is a local file.
+    { v: 'webhook.send', label: 'Send a webhook (HTTP POST/PUT)', needs: 'webhook', group: 'notify' },
+    { v: 'discord.send', label: 'Send a Discord message', needs: 'discordHook', group: 'notify' },
+    { v: 'slack.send', label: 'Send a Slack message', needs: 'slackHook', group: 'notify' },
+    { v: 'feed.publish', label: 'Add an entry to a feed (RSS/Atom)', needs: 'feedPublish', group: 'notify' },
+    // Upkeep (sched-maint.ts). Each measures before it acts and takes `dryRun` to only measure.
+    { v: 'repos.checkFollowed', label: 'Check the repos you follow (and sync)', needs: 'reposCheck', group: 'repo' },
+    { v: 'catalog.updates', label: 'Check, download or install catalogue updates', needs: 'catUpdates', group: 'repo' },
+    { v: 'repo.server', label: 'Start or stop the repo server', needs: 'repoServer', group: 'repo' },
+    { v: 'mods.verifyIntegrity', label: 'Verify mod integrity', needs: 'integrity', group: 'mods' },
+    { v: 'cache.clean', label: 'Clean BMM caches', needs: 'cacheClean', group: 'system' },
+    { v: 'logs.rotate', label: 'Rotate task logs and old session reports', needs: 'logsRotate', group: 'system' },
+    { v: 'disk.report', label: 'Disk usage report', needs: 'diskReport', group: 'perf' },
+    // The catalogue's single door (catalogs/catalog-actions.ts), as a task: never applied.
+    { v: 'catalog.install', label: 'Install one catalogue item', needs: 'catInstall', group: 'repo' },
+    // Any route of the local API, through the API itself: its own checks apply.
+    { v: 'api.call', label: 'Call the local API', needs: 'apiCall', group: 'system' },
+    // Navigation (sched-nav.ts, allow-lists in sched-nav-model.ts). Only modal and click act.
+    { v: 'nav.page', label: 'Open a page (and a tab)', needs: 'navPage', group: 'nav' },
+    { v: 'nav.settingsCard', label: 'Open a Settings card', needs: 'navCard', group: 'nav' },
+    { v: 'nav.item', label: 'Open a profile, mod, modpack, repo, plugin or app', needs: 'navItem', group: 'nav' },
+    { v: 'nav.highlight', label: 'Point at something on screen', needs: 'navTarget', group: 'nav' },
+    { v: 'nav.waitFor', label: 'Wait until something is on screen', needs: 'navWait', group: 'nav' },
+    { v: 'nav.message', label: 'Show a message on screen', needs: 'navMessage', group: 'nav' },
+    { v: 'nav.modal', label: 'Open a dialog', needs: 'navModal', group: 'nav' },
+    { v: 'nav.click', label: 'Click a named control', needs: 'navClick', group: 'nav' },
+    // Packages and games (sched-pkg.ts, commands/sched_pkg.rs). The files an automation carries,
+    // put in place with the person's yes; a mod list checked; a game started with arguments.
+    { v: 'pkg.install', label: 'Install a file the automation carries', needs: 'pkgInstall', group: 'pkg' },
+    { v: 'pkg.verify', label: 'Check a carried file is in place', needs: 'pkgVerify', group: 'pkg' },
+    { v: 'modlist.verify', label: 'Check a mod list is active and intact', needs: 'listVerify', group: 'pkg' },
+    { v: 'gate.report', label: 'Write the result for the server', needs: 'gateReport', group: 'pkg' },
+    { v: 'game.launch', label: 'Start a game with arguments', needs: 'gameLaunch', group: 'pkg' },
+    { v: 'ui.ask', label: 'Ask a question (yes / no)', needs: 'uiAsk', group: 'notify' },
+];
+
+/**
+ * The three things a protected source can ask for, as one block.
+ *
+ * A repo can want a download password, a signed proof from one of your identity keys, or
+ * both; a `.mm` or a `.DATABMM` can be sealed with a passphrase. Those were scattered — the
+ * sync form had a password buried under "Destructive options" (a password is not a
+ * destructive option), nothing offered a key, and nothing offered a passphrase. Written once
+ * here so every action that reaches a source asks the same way.
+ *
+ * `want` picks which of the three apply, because they are not all meaningful everywhere: a
+ * catalogue has no passphrase, and a local file has no download password.
+ */
+/**
+ * Which saved SSH server this step uses.
+ *
+ * Filled in after render because reading the targets is cheap but the list is not known when
+ * the markup is built. Blank means the one named `default`, and the option SAYS so rather
+ * than being an empty line that happens to mean something.
+ */
+function sshTargetField(params: Record<string, any>): string {
+    return `<div class="sched-field" style="margin-top:6px">
+        <label class="sched-flabel">${escHtml(t('sched.ssh.target'))}</label>
+        <select class="input sched-r-target" style="min-width:200px"></select>
+        <span class="sched-cmd-hint">${escHtml(t('sched.ssh.targetHint'))}</span>
+    </div>`;
+}
+
+async function fillSshTargets(host: HTMLElement, params: Record<string, any>): Promise<void> {
+    const sel = host.querySelector('.sched-r-target') as HTMLSelectElement | null;
+    if (!sel) return;
+    const { loadTargets, DEFAULT_TARGET } = await import('../repo/repo-ssh.js');
+    const names = Object.keys(loadTargets());
+    const chosen = String(params.target || '');
+    sel.innerHTML = `<option value="">${escHtml(t('sched.ssh.targetDefault').replace('{n}', DEFAULT_TARGET))}</option>`
+        + names.map((n) => `<option value="${escAttr(n)}"${n === chosen ? ' selected' : ''}>${escHtml(n)}</option>`).join('')
+        // A target the task names and that has since been deleted: shown as gone rather than
+        // silently falling back to `default`, which would publish to the wrong server.
+        + (chosen && !names.includes(chosen)
+            ? `<option value="${escAttr(chosen)}" selected>${escHtml(t('sched.ssh.targetMissing').replace('{n}', chosen))}</option>` : '');
+    if (!names.length) {
+        sel.insertAdjacentHTML('afterend',
+            `<span class="sched-cmd-hint">${escHtml(t('sched.ssh.none'))}</span>`);
+    }
+    sel.addEventListener('change', () => { params.target = sel.value; });
+}
+
+function credsFields(params: Record<string, any>, want: { password?: boolean; key?: boolean; passphrase?: boolean }): string {
+    const rows: string[] = [];
+    if (want.password) {
+        rows.push(`<label class="sched-cmd-label">${escHtml(t('sched.creds.password'))}</label>
+            <input class="input sched-c-pass" type="password" autocomplete="new-password"
+                placeholder="${escAttr(t('sched.creds.passwordPh'))}" value="${escAttr(params.password || '')}">`);
+    }
+    if (want.key) {
+        // Filled in from the ring after render — reading it is async and this returns markup.
+        rows.push(`<label class="sched-cmd-label">${escHtml(t('sched.creds.key'))}</label>
+            <select class="input sched-c-key" style="max-width:280px"></select>
+            <span class="sched-cmd-hint">${escHtml(t('sched.creds.keyHint'))}</span>`);
+    }
+    if (want.passphrase) {
+        rows.push(`<label class="sched-cmd-label">${escHtml(t('sched.creds.passphrase'))}</label>
+            <input class="input sched-c-phrase" type="password" autocomplete="new-password"
+                value="${escAttr(params.passphrase || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.creds.passphraseHint'))}</span>`);
+    }
+    if (!rows.length) return '';
+    return `<details class="sched-cmd-adv">
+        <summary>${escHtml(t('sched.creds.title'))}</summary>
+        ${rows.join('')}
+    </details>`;
+}
+
+/** Bind the block. Safe to call for a host that has none of it — nothing matches. */
+function wireCreds(host: HTMLElement, params: Record<string, any>): void {
+    host.querySelector('.sched-c-pass')?.addEventListener('input', (e) => {
+        params.password = (e.target as HTMLInputElement).value;
+    });
+    host.querySelector('.sched-c-phrase')?.addEventListener('input', (e) => {
+        params.passphrase = (e.target as HTMLInputElement).value;
+    });
+    const keySel = host.querySelector('.sched-c-key') as HTMLSelectElement | null;
+    if (!keySel) return;
+    void (async () => {
+        const ring = await (invoke('key_auth_list') as Promise<any>).catch(() => null);
+        const keys: { name: string }[] = Array.isArray(ring?.keys) ? ring.keys : [];
+        const chosen = String(params.keyName || '');
+        // "The active one" is the default and is named, rather than being a blank option
+        // that silently means the same thing. Which key is active is a global setting and
+        // somebody reading this task should not have to go and look it up.
+        const activeLabel = ring?.active
+            ? t('sched.creds.keyActive').replace('{k}', String(ring.active))
+            : t('sched.creds.keyNone');
+        keySel.innerHTML = `<option value="">${escHtml(activeLabel)}</option>`
+            + keys.map((k) => `<option value="${escAttr(k.name)}"${k.name === chosen ? ' selected' : ''}>${escHtml(k.name)}</option>`).join('')
+            // A key named by the task and since removed from the ring: shown as gone rather
+            // than silently falling back to the active one, which would sign as somebody else.
+            + (chosen && !keys.some((k) => k.name === chosen)
+                ? `<option value="${escAttr(chosen)}" selected>${escHtml(t('sched.creds.keyMissing').replace('{k}', chosen))}</option>` : '');
+        keySel.addEventListener('change', () => { params.keyName = keySel.value; });
+    })();
+}
+
+/**
+ * Apply an action's credentials before it reaches the source.
+ *
+ * The password and the passphrase are passed to the command that needs them; the KEY is
+ * different — proofs are signed by whichever key is bound to that host, so naming one here
+ * binds it. That binding is what `key_auth_set_for_url` was built for, and it persists,
+ * which is the honest behaviour: the next sync of the same repo, by hand, uses the same key.
+ */
+async function applyCredsFor(url: string, params: Record<string, any>): Promise<void> {
+    const name = String(params.keyName || '').trim();
+    if (!name || !url) return;
+    try { await invoke('key_auth_set_for_url', { url, name }); } catch { /* unprotected source */ }
+}
+
+// ── The kind picker ───────────────────────────────────────────────────────────
+// One popover for "which action" and "which condition": a search box, the kinds grouped
+// with an icon, a name and a one-line description. It replaces two <select>s that hid a
+// hundred options behind optgroups and could show no description at all — which is why
+// the list read as a wall of similar verbs.
+type PickItem = { v: string; label: string; desc?: string; group: string };
+type PickGroup = { g: string; label: string; icon?: string };
+function openKindPicker(anchor: HTMLElement, groups: PickGroup[], items: PickItem[], value: string, onPick: (v: string) => void): void {
+    document.querySelector('.skp')?.remove();
+    const pop = document.createElement('div');
+    pop.className = 'skp';
+    pop.setAttribute('role', 'dialog');
+    pop.innerHTML = `
+        <div class="skp-top"><input type="search" class="skp-search input" placeholder="${escAttr(t('sched.pick.search') || 'Search…')}" autocomplete="off" spellcheck="false"><button type="button" class="skp-close" aria-label="close">${uiIcon('close', 14)}</button></div>
+        <div class="skp-body"></div>`;
+    const body = pop.querySelector('.skp-body') as HTMLElement;
+    const input = pop.querySelector('.skp-search') as HTMLInputElement;
+    const close = () => { pop.remove(); document.removeEventListener('keydown', onKey, true); document.removeEventListener('mousedown', onOut, true); };
+    const draw = (q: string) => {
+        const needle = q.trim().toLowerCase();
+        const hit = (it: PickItem) => !needle || `${it.label} ${it.desc || ''} ${it.v}`.toLowerCase().includes(needle);
+        body.innerHTML = groups.map((grp) => {
+            const list = items.filter((it) => it.group === grp.g && hit(it));
+            if (!list.length) return '';
+            return `<div class="skp-group"><div class="skp-gh">${grp.icon || ''}<span>${escHtml(grp.label)}</span></div><div class="skp-grid">${list.map((it) => `
+                <button type="button" class="skp-item${it.v === value ? ' is-on' : ''}" data-v="${escAttr(it.v)}" title="${escAttr(it.desc || '')}">
+                    <span class="skp-item-l">${escHtml(it.label)}</span>${it.desc ? `<span class="skp-item-d">${escHtml(it.desc)}</span>` : ''}
+                </button>`).join('')}</div></div>`;
+        }).join('') || `<div class="skp-empty">${escHtml(t('sched.pick.none') || 'Nothing matches.')}</div>`;
+        body.querySelectorAll<HTMLElement>('.skp-item').forEach((b) => b.addEventListener('click', () => { const v = b.dataset.v || ''; close(); onPick(v); }));
+    };
+    const onKey = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') { e.preventDefault(); close(); return; }
+        if (e.key === 'Enter' && document.activeElement === input) { const first = body.querySelector<HTMLElement>('.skp-item'); if (first) { e.preventDefault(); first.click(); } }
+    };
+    const onOut = (e: MouseEvent) => { if (!pop.contains(e.target as Node)) close(); };
+    input.addEventListener('input', () => draw(input.value));
+    pop.querySelector('.skp-close')?.addEventListener('click', close);
+    document.body.appendChild(pop);
+    // Under the anchor, kept inside the viewport.
+    const r = anchor.getBoundingClientRect();
+    const W = Math.min(560, window.innerWidth - 16);
+    pop.style.width = `${W}px`;
+    pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - W - 8))}px`;
+    const below = window.innerHeight - r.bottom - 12;
+    pop.style.maxHeight = `${Math.max(240, Math.min(460, below > 260 ? below : r.top - 12))}px`;
+    pop.style.top = below > 260 ? `${r.bottom + 6}px` : '';
+    if (below <= 260) pop.style.bottom = `${window.innerHeight - r.top + 6}px`;
+    draw('');
+    document.addEventListener('keydown', onKey, true);
+    setTimeout(() => { document.addEventListener('mousedown', onOut, true); input.focus(); }, 0);
+    // The current one scrolled into view, so a long list opens where you are.
+    body.querySelector<HTMLElement>('.skp-item.is-on')?.scrollIntoView({ block: 'center' });
+}
+const actionPickItems = (): PickItem[] => ACTION_TYPES.map((a) => { const ad = t('sched.actd.' + a.v); return { v: a.v, label: t('sched.act.' + a.v) || a.label, desc: ad === ('sched.actd.' + a.v) ? '' : ad, group: a.group }; });
+const actionPickGroups = (): PickGroup[] => ACTION_GROUPS.map((g) => ({ g: g.g, label: t('sched.grp.' + g.g) || g.label, icon: GROUP_ICON[g.g] || '' }));
+// Conditions grouped the same way, each with its one-line description (sched.condd.*).
+const COND_GROUPS: { g: string; label: string; kinds: string[] }[] = [
+    { g: 'logic', label: 'Logic & values', kinds: ['always', 'all', 'any', 'value', 'textIs', 'enumIs'] },
+    { g: 'ai', label: 'Laya (AI)', kinds: ['aiLabel', 'aiScore', 'aiAbstained', 'aiAvailable', 'crashCause', 'aiLibraryCount', 'modAiTag'] },
+    { g: 'mods', label: 'Mods & profiles', kinds: ['profileActive', 'profileExists', 'modEnabled', 'modDisabled', 'modInstalled', 'modWins', 'modpackActive', 'modpackInactive', 'allModsActive', 'pluginInstalled'] },
+    { g: 'files', label: 'Files & folders', kinds: ['fileExists', 'pathIsDir', 'fileContains', 'fileHash', 'filesMatch', 'fileSize', 'fileType', 'fileName', 'fileNewer', 'fileIsValid'] },
+    { g: 'system', label: 'Apps, network & tasks', kinds: ['appRunning', 'appNotRunning', 'commandSucceeds', 'online', 'catalogOk', 'repoOk', 'taskArmed', 'themeActive', 'gameRunning', 'resourcesPresetIs', 'queueIdle'] },
+    { g: 'time', label: 'Time', kinds: ['timeReached', 'dayOfWeek', 'timeRange'] },
+];
+const condPickGroups = (): PickGroup[] => COND_GROUPS.map((g) => ({ g: g.g, label: t('sched.cgrp.' + g.g) || g.label, icon: GROUP_ICON[g.g === 'files' ? 'repo' : g.g === 'time' ? 'system' : g.g] || '' }));
+const condPickItems = (): PickItem[] => COND_TYPES.map((c) => { const grp = COND_GROUPS.find((g) => g.kinds.includes(c))?.g || 'logic'; const d = t('sched.condd.' + c); return { v: c, label: t('sched.cond.' + c) || c, desc: d === ('sched.condd.' + c) ? '' : d, group: grp }; });
+
+function actionEditor(action: Action, onStructureChange?: () => void): HTMLElement {
+    const el = document.createElement('div');
+    const render = () => {
+        // A removed step is SHOWN as removed. Falling back to ACTION_TYPES[0] would have
+        // labelled it as the first action of the list — a task that looks like it switches
+        // profiles and does nothing of the kind. Its old link is shown so the person can see
+        // what it was for, and the picker turns it into a real action.
+        const gone = ACTION_TYPES.some(a => a.v === action.type) ? null : removedAction(action.type);
+        if (gone) {
+            const oldUrl = String((action.params as any)?.url || '');
+            el.className = 'sched-act-card';
+            el.innerHTML = `
+                <div class="sched-act-head">
+                    <span class="sched-step-tag sched-do">${t('sched.do') || 'DO'}</span>
+                    <button type="button" class="input sched-act-type sched-pickbtn" title="${escAttr(t('sched.removedStepHint'))}"><span class="sched-pickbtn-l">${escHtml(t('sched.removedStep'))}: ${escHtml(t(gone.labelKey) || gone.label)}</span><span class="sched-pickbtn-chev">▾</span></button>
+                </div>
+                <div class="sched-act-params">
+                    <span class="sched-cmd-hint">${escHtml(t('sched.removedStepHint'))}</span>
+                    ${oldUrl ? `<code class="sched-cmd-hint">${escHtml(oldUrl)}</code>` : ''}
+                </div>`;
+            el.querySelector('.sched-act-type')?.addEventListener('click', (e) => {
+                openKindPicker(e.currentTarget as HTMLElement, actionPickGroups(), actionPickItems(), action.type, (v) => {
+                    if (v === action.type) return;
+                    _snapshot(); action.type = v; action.params = {};
+                    if (onStructureChange) onStructureChange(); else render();
+                });
+            });
+            return;
+        }
+        const def = ACTION_TYPES.find(a => a.v === action.type) || ACTION_TYPES[0];
+        // Build a grouped <optgroup> dropdown that mirrors the script generator's
+        // categorised action catalogue.
+        const groupsHtml = ACTION_GROUPS.map(grp => {
+            const opts = ACTION_TYPES.filter(a => a.group === grp.g);
+            if (!opts.length) return '';
+            return `<optgroup label="${escAttr(t('sched.grp.' + grp.g) || grp.label)}">${opts.map(a => {
+                const ad = t('sched.actd.' + a.v); const desc = ad === ('sched.actd.' + a.v) ? '' : ad;
+                return `<option value="${a.v}"${action.type === a.v ? ' selected' : ''} data-icon="${escAttr(GROUP_ICON[a.group] || '')}" data-desc="${escAttr(desc)}">${escHtml(t('sched.act.' + a.v) || a.label)}</option>`;
+            }).join('')}</optgroup>`;
+        }).join('');
+        void groupsHtml;
+        const ad = t('sched.actd.' + def.v); const desc = ad === ('sched.actd.' + def.v) ? '' : ad;
+        el.className = 'sched-act-card';
+        el.innerHTML = `
+            <div class="sched-act-head">
+                <span class="sched-act-icon">${GROUP_ICON[def.group] || ''}</span>
+                <span class="sched-step-tag sched-do">${t('sched.do') || 'DO'}</span>
+                <button type="button" class="input sched-act-type sched-pickbtn" title="${escAttr(desc)}"><span class="sched-pickbtn-l">${escHtml(t('sched.act.' + def.v) || def.label)}</span><span class="sched-pickbtn-chev">▾</span></button>
+            </div>
+            <div class="sched-act-params"></div>`;
+        el.querySelector('.sched-act-type')?.addEventListener('click', (e) => {
+            openKindPicker(e.currentTarget as HTMLElement, actionPickGroups(), actionPickItems(), action.type, (v) => {
+                if (v === action.type) return;
+                _snapshot(); action.type = v; action.params = {};
+                // Re-render the whole block (not just this card) so the injected step
+                // toolbar / fold controls survive the type switch.
+                if (onStructureChange) onStructureChange(); else render();
+            });
+        });
+        const paramsHost = el.querySelector('.sched-act-params') as HTMLElement;
+        renderParams(paramsHost, def?.needs, action.params);
+        // Hide the params row entirely when an action needs no configuration.
+        paramsHost.style.display = paramsHost.innerHTML.trim() ? '' : 'none';
+    };
+    render();
+    return el;
+}
+
+function pickerOptions(list: any[], selected: string, labelKey = 'name'): string {
+    return `<option value="">— ${t('sched.pick') || 'select'} —</option>` +
+        list.map(o => `<option value="${escAttr(o.id)}" ${o.id === selected ? 'selected' : ''}>${escHtml(o[labelKey] || o.title || o.id)}</option>`).join('');
+}
+
+// Micro-label shown above the simple single-picker params (profile/mod/…) so the
+// row never reads as a lone, context-free dropdown floating in empty space.
+const NEEDS_LABEL: Record<string, string> = {
+    profile: 'sched.fldProfile', mod: 'sched.fldMod', modpack: 'sched.fldModpack',
+    theme: 'sched.fldTheme', app: 'sched.fldApp', message: 'sched.fldMessage', url: 'sched.fldUrl',
+    disk: 'sched.fldDisk', pluginId: 'sched.fldPlugin', lpId: 'sched.fldLaunchpack', taskId: 'sched.fldTask',
+};
+const NEEDS_LABEL_FALLBACK: Record<string, string> = {
+    profile: 'Profile', mod: 'Mod', modpack: 'Modpack', theme: 'Theme', app: 'App', message: 'Message', url: 'URL',
+    disk: 'Disk', pluginId: 'Plugin', lpId: 'Launch pack', taskId: 'Task',
+};
+function _field(needs: string, controlHtml: string): string {
+    const key = NEEDS_LABEL[needs];
+    if (!key) return controlHtml;
+    return `<div class="sched-field"><label class="sched-flabel">${t(key) || NEEDS_LABEL_FALLBACK[needs]}</label>${controlHtml}</div>`;
+}
+
+type ProcInfo = { pid: number; name: string; exe: string | null; memMb: number };
+let _procsPromise: Promise<ProcInfo[]> | null = null;
+
+/**
+ * The processes running right now, for the name/pid pickers.
+ *
+ * Refreshed on demand rather than cached for the session, unlike the interpreter probe:
+ * what is running changes constantly, and a stale list is worse than none here — it would
+ * offer a pid that has already been recycled onto a different program.
+ */
+function runningProcesses(force = false): Promise<ProcInfo[]> {
+    if (force || !_procsPromise) {
+        _procsPromise = invoke('list_running_processes')
+            .then((r: any) => (Array.isArray(r) ? (r as ProcInfo[]) : []))
+            .catch(() => [] as ProcInfo[]);
+    }
+    return _procsPromise;
+}
+
+/**
+ * Fill a <datalist> with the process names actually running, so the field offers real
+ * answers instead of asking the user to remember an executable name.
+ *
+ * A name that matches nothing makes a condition that is silently always false, which is
+ * why this is worth more than it looks: the old field accepted "DCS" happily and the task
+ * simply never fired.
+ *
+ * Deduped by name — a browser with thirty helper processes should be one suggestion, not
+ * thirty — and kept in the backend's heaviest-first order, so the application somebody
+ * means is near the top.
+ */
+async function fillProcessDatalist(host: HTMLElement, id: string): Promise<void> {
+    const dl = host.querySelector(`#${id}`) as HTMLDataListElement | null;
+    if (!dl) return;
+    const procs = await runningProcesses(true);
+    if (!dl.isConnected) return;
+    const seen = new Set<string>();
+    dl.innerHTML = procs
+        .filter((p) => p.name && !seen.has(p.name.toLowerCase()) && seen.add(p.name.toLowerCase()))
+        .slice(0, 200)
+        .map((p) => `<option value="${escAttr(p.name)}">${escAttr(`pid ${p.pid} · ${p.memMb} MB`)}</option>`)
+        .join('');
+}
+
+/** What the backend probe found, once per session. */
+type EngineInfo = { engine: string; available: boolean; program: string | null; version: string | null };
+let _enginesPromise: Promise<EngineInfo[]> | null = null;
+
+// Probed once and reused. Each probe spawns interpreters to ask their version, which is
+// far too expensive to redo on every keystroke in the engine dropdown — and the answer
+// cannot change while the app is open without the user installing something, at which
+// point reopening BMM is a reasonable price.
+function scriptEngines(): Promise<EngineInfo[]> {
+    if (!_enginesPromise) {
+        // This project's invoke() returns Promise<any> and is not generic — the cast is the
+        // annotation, not a type argument.
+        _enginesPromise = invoke('scheduler_script_engines')
+            .then((r: any) => (Array.isArray(r) ? (r as EngineInfo[]) : []))
+            .catch(() => [] as EngineInfo[]);
+    }
+    return _enginesPromise;
+}
+
+/**
+ * Say whether the selected language can actually run here, and which binary it will use.
+ *
+ * BMM bundles no interpreter, so "does Python work?" is a property of the machine, not of
+ * the build — and the honest answer is often no. Without this, the first sign of trouble
+ * was a task failing at whatever hour it was scheduled for.
+ */
+async function paintEngineStatus(host: HTMLElement, engine: string): Promise<void> {
+    const el = host.querySelector('.sched-engine-status') as HTMLElement | null;
+    if (!el) return;
+    el.textContent = t('sched.scrEngChecking') || 'Checking…';
+    const info = (await scriptEngines()).find((e) => e.engine === engine);
+    // Still the panel we started on? The user can switch language while the probe runs.
+    if (!el.isConnected) return;
+    if (!info) { el.textContent = ''; return; }
+    if (info.available) {
+        el.classList.remove('sched-engine-missing');
+        el.textContent = (t('sched.scrEngOk') || 'Will run with {program} ({version}) on this computer.')
+            .replace('{program}', info.program || engine).replace('{version}', info.version || '?');
+    } else {
+        el.classList.add('sched-engine-missing');
+        el.textContent = engine === 'python'
+            ? (t('sched.scrEngNoPy') || 'No Python found on this computer. BMM does not bundle one — this task will fail until you install Python and it is on your PATH.')
+            : (t('sched.scrEngNo') || 'Not available on this computer — this task will fail until it is installed.');
+    }
+}
+
+/** The catalogue kinds, for the pickers. Same eight the Rust side accepts. */
+// The kinds this machine can AUTHOR — not the kinds it can follow, which is the list three
+// other places here keep and which deliberately has eight. The ninth is the INDEX: a catalogue
+// of catalogues, readable since forever and writable as of now.
+const KINDS: [string, string][] = [
+    ['app', 'app'], ['plugin', 'plugin'], ['theme', 'theme'], ['preset', 'preset'],
+    ['modpack', 'modpack'], ['repo', 'repo'], ['tutorial', 'tutorial'], ['list', 'list'],
+    ['index', 'index'],
+];
+
+/**
+ * Where a bulk enable puts its mods in the activation order (param `placement`): the default
+ * (the pack's own choice, then the setting), on top, below what is active, or nothing moves.
+ */
+function placementField(params: Record<string, any>, pack: boolean): string {
+    const cur = String(params.placement || '');
+    const opts: [string, string][] = [
+        ['', t(pack ? 'sched.place.packDefault' : 'sched.place.default')],
+        ['top', t('order.mode.top')], ['bottom', t('order.mode.bottom')], ['keep', t('order.mode.keep')],
+    ];
+    return `<div class="sched-field"><label class="sched-flabel">${escHtml(t('sched.place.label'))}</label>
+        <select class="input sched-p-place" style="max-width:220px" title="${escAttr(t('order.mode.tip'))}">
+            ${opts.map(([v, l]) => `<option value="${v}"${cur === v ? ' selected' : ''}>${escHtml(l)}</option>`).join('')}
+        </select></div>`;
+}
+
+function renderParams(host: HTMLElement, needs: string | undefined, params: Record<string, any>): void {
+    if (!needs) { host.innerHTML = ''; return; }
+    if (needs === 'profile') host.innerHTML = _field(needs, `<select class="input sched-p" style="max-width:200px">${pickerOptions(_profiles, params.id)}</select>`);
+    else if (needs === 'mod') host.innerHTML = _field(needs, `<select class="input sched-p" style="max-width:240px">${pickerOptions(_mods, params.id)}</select>`);
+    else if (needs === 'modOrder') {
+        const modes = [['last', t('sched.order.modeLast')], ['first', t('sched.order.modeFirst')]] as [string, string][];
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <div class="sched-cmd-row">
+                <select class="input sched-p" style="max-width:240px">${pickerOptions(_mods, params.id)}</select>
+                <select class="input sched-p-mode" style="max-width:190px">
+                    ${modes.map(([v, l]) => `<option value="${v}"${(params.mode || 'last') === v ? ' selected' : ''}>${escHtml(l)}</option>`).join('')}
+                </select>
+            </div>
+            <span class="sched-cmd-hint">${escHtml(t('sched.order.hint'))}</span>
+            <label class="sched-cmd-label">${escHtml(t('sched.order.exact'))}</label>
+            <input class="input sched-p-order" placeholder="${escAttr(t('sched.order.exactPh'))}" value="${escAttr(params.order || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.order.exactHint'))}</span>
+        </div>`;
+    }
+    else if (needs === 'modpack') host.innerHTML = _field(needs, `<select class="input sched-p" style="max-width:200px">${pickerOptions(_modpacks, params.id)}</select>`);
+    else if (needs === 'modpackOn') host.innerHTML = _field('modpack', `<select class="input sched-p" style="max-width:200px">${pickerOptions(_modpacks, params.id)}</select>`) + placementField(params, true);
+    else if (needs === 'enableAll') host.innerHTML = placementField(params, false);
+    else if (needs === 'theme') host.innerHTML = _field(needs, `<select class="input sched-p" style="max-width:200px">${pickerOptions(_themes, params.id)}</select>`);
+    else if (needs === 'appStop') {
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${t('sched.stopWhich') || '1. Which program'}</label>
+            <div class="sched-cmd-row">
+                <input class="input sched-p-name" list="sched-proc-list-a" placeholder="${escAttr(t('sched.appName') || 'app exe (e.g. DCS.exe)')}" value="${escAttr(params.name || '')}" style="max-width:220px">
+                <datalist id="sched-proc-list-a"></datalist>
+                <input class="input sched-p-pid" type="number" min="1" placeholder="${escAttr(t('sched.pidPh') || 'or pid')}" value="${escAttr(params.pid ?? '')}" style="max-width:110px">
+            </div>
+            <span class="sched-cmd-hint">${t('sched.stopHint') || 'Every process with that name is stopped. BMM itself is never stopped, so a task cannot kill the scheduler running it.'}</span>
+            <span class="sched-cmd-hint">${t('sched.stopPerm') || 'Grant “Stop programs” in this task’s Permissions, or it won’t run. Stopping a program can lose unsaved work.'}</span>
+        </div>`;
+        host.querySelector('.sched-p-name')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
+        host.querySelector('.sched-p-pid')?.addEventListener('input', (e) => {
+            const v = parseInt((e.target as HTMLInputElement).value, 10);
+            params.pid = Number.isFinite(v) && v > 0 ? v : undefined;
+        });
+        void fillProcessDatalist(host, 'sched-proc-list-a');
+    }
+    else if (needs === 'app') host.innerHTML = _field(needs, _apps.length
+        ? `<select class="input sched-p" style="max-width:220px">${pickerOptions(_apps, params.id)}</select>`
+        : `<input class="input sched-p" placeholder="${escAttr(t('sched.appIdPh') || 'app id (install an app first)')}" value="${escAttr(params.id || '')}" style="max-width:220px">`);
+    else if (needs === 'message') host.innerHTML = _field(needs, `<input class="input sched-p" placeholder="${escAttr(t('sched.message') || 'message')}" value="${escAttr(params.message || '')}">`);
+    else if (needs === 'url') host.innerHTML = _field(needs, `<input class="input sched-p" placeholder="bmm://mod/enable?id=…" value="${escAttr(params.url || '')}">`);
+    else if (needs === 'command') {
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${t('sched.cmdProgram') || '1. Program to run'}</label>
+            <div class="sched-cmd-row">
+                <!-- A datalist rather than a <select>: what is running right now is a good
+                     SUGGESTION and a terrible constraint. The program a task launches is
+                     usually one that is NOT running — that is generally the point — so the
+                     list has to sit beside free typing instead of replacing it. Filled
+                     asynchronously below; an empty list leaves an ordinary text box. -->
+                <input class="input sched-p-prog" list="sched-prog-list" spellcheck="false"
+                    placeholder="${escAttr(t('sched.programPh') || 'e.g. notepad.exe — or pick one that is running')}" value="${escAttr(params.program || '')}">
+                <datalist id="sched-prog-list"></datalist>
+                <button type="button" class="btn btn-sm btn-secondary sched-browse-prog">${t('sched.choose') || 'Choose…'}</button>
+            </div>
+            <label class="sched-cmd-label">${t('sched.cmdArgs') || '2. Arguments'} <span class="sched-cmd-opt">${t('common.optional') || '(optional)'}</span></label>
+            <input class="input sched-p-args" placeholder="${escAttr(t('sched.argsPh2') || 'e.g.  --profile DCS   (leave empty if none)')}" value="${escAttr(params.args || '')}">
+            <details class="sched-cmd-adv">
+                <summary>${t('sched.cmdAdvanced') || 'Advanced — working folder'}</summary>
+                <div class="sched-cmd-row" style="margin-top:6px">
+                    <input class="input sched-p-wd" placeholder="${escAttr(t('sched.workdirPh') || 'folder to run from (optional)')}" value="${escAttr(params.workingDir || '')}">
+                    <button type="button" class="btn btn-sm btn-secondary sched-browse-wd">${t('sched.choose') || 'Choose…'}</button>
+                </div>
+            </details>
+            <span class="sched-cmd-hint">${t('sched.cmdHint') || 'Tip: grant “Run external programs” in this task’s Permissions, or it won’t run.'}</span>
+        </div>`;
+        void fillProgramSuggestions(host);
+    }
+    else if (needs === 'reposync') {
+        const profOpts = _profiles.map((pr: any) =>
+            `<option value="${escAttr(pr.id)}"${params.targetProfile === pr.id ? ' selected' : ''}>${escHtml(pr.name || pr.id)}</option>`).join('');
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${t('sched.syncUrl') || '1. Repo URL'}</label>
+            <input class="input sched-rs-url" placeholder="https://example.com/repo.json" value="${escAttr(params.url || '')}">
+            <label class="sched-cmd-label">${t('sched.syncRepoProfile') || '2. Which profile inside the repo'}</label>
+            <input class="input sched-rs-rprof" placeholder="${escAttr(t('sched.syncRepoProfilePh') || 'its name, e.g. Main — required when the repo has several')}" value="${escAttr(params.repoProfile || '')}">
+            <label class="sched-cmd-label">${t('sched.syncTarget') || '3. Install into this local profile'}</label>
+            <select class="input sched-rs-target">
+                <option value="">${escHtml(t('sched.syncTargetNone') || '\u2014 pick one \u2014')}</option>
+                ${profOpts}
+                <!-- Creating one was refused outright, for a reason that was right about
+                     the wrong thing: a task that creates a profile every run mints one per
+                     run. Creating it ONCE and remembering it does not. -->
+                <option value="__new__"${params.newProfile ? ' selected' : ''}>${escHtml(t('sched.syncTargetNew'))}</option>
+            </select>
+            <div class="sched-rs-newprof" ${params.newProfile ? '' : 'hidden'}>
+                <input class="input sched-rs-newname" placeholder="${escAttr(t('sched.syncNewNamePh'))}"
+                    value="${escAttr(params.newProfile || '')}">
+                <span class="sched-cmd-hint">${escHtml(t('sched.syncNewHint'))}</span>
+            </div>
+            <label class="sched-cmd-label">${t('sched.syncFolders') || '4. Folders'}</label>
+            <!-- Each row says which folder it is, beside the field rather than inside it.
+                 The three were identified by their placeholders alone — grey text that
+                 disappears the moment somebody types, so a filled form was three identical
+                 paths in three identical boxes and no way to tell which was which without
+                 clearing one. That is the whole of "les champs sont collés": they are not
+                 too close together, they are indistinguishable. -->
+            <div class="sched-cmd-field">
+                <span class="sched-cmd-sub">${escHtml(t('sched.syncGame'))}</span>
+                <div class="sched-cmd-row"><input class="input sched-rs-game" placeholder="${escAttr(t('sched.syncGamePh') || 'game folder')}" value="${escAttr(params.gameDir || '')}"><button type="button" class="btn btn-sm btn-secondary sched-rs-browse" data-for="game">${t('sched.choose') || 'Choose…'}</button></div>
+            </div>
+            <div class="sched-cmd-field">
+                <span class="sched-cmd-sub">${escHtml(t('sched.syncMods'))}</span>
+                <div class="sched-cmd-row"><input class="input sched-rs-mods" placeholder="${escAttr(t('sched.syncModsPh') || 'mods folder')}" value="${escAttr(params.modsDir || '')}"><button type="button" class="btn btn-sm btn-secondary sched-rs-browse" data-for="mods">${t('sched.choose') || 'Choose…'}</button></div>
+            </div>
+            <div class="sched-cmd-field">
+                <span class="sched-cmd-sub">${escHtml(t('sched.syncBackup'))}</span>
+                <div class="sched-cmd-row"><input class="input sched-rs-backup" placeholder="${escAttr(t('sched.syncBackupPh') || 'backup folder (optional)')}" value="${escAttr(params.backupDir || '')}"><button type="button" class="btn btn-sm btn-secondary sched-rs-browse" data-for="backup">${t('sched.choose') || 'Choose…'}</button></div>
+            </div>
+            <details class="sched-cmd-adv">
+                <summary>${t('sched.syncDanger') || 'Destructive options — off by default'}</summary>
+                <label class="sched-opt" style="margin-top:6px"><input type="checkbox" class="sched-rs-overwrite" ${params.overwriteAll ? 'checked' : ''}><div><b>${t('sched.syncOverwriteT') || 'Overwrite every file'}</b><span>${t('sched.syncOverwrite') || 'Re-downloads and replaces files that already match. Slower, and your local edits are lost.'}</span></div></label>
+                <label class="sched-opt"><input type="checkbox" class="sched-rs-delete" ${params.deleteExtra ? 'checked' : ''}><div><b>${t('sched.syncDeleteT') || 'Delete mods the repo does not have'}</b><span>${t('sched.syncDelete') || 'Removes anything in the mods folder that is not in the repo. On a schedule this runs with nobody watching — leave it off unless the folder is only ever filled by this repo.'}</span></div></label>
+                <!-- Both of these were read by the runner and written by nothing, so an
+                     unattended sync always ran uncapped and always unzipped. The cap is the
+                     option that matters MOST unattended: the whole reason to schedule a sync
+                     is that it runs while somebody is using the same line for something else. -->
+                <div class="sched-cmd-row" style="margin-top:6px">
+                    <label class="sched-cmd-label" style="margin:0">${escHtml(t('sched.syncLimit'))}</label>
+                    <input class="input sched-rs-limit" type="number" min="0" style="max-width:150px"
+                        placeholder="${escAttr(t('sched.syncLimitPh'))}" value="${escAttr(params.downloadLimit || '')}">
+                </div>
+                <label class="sched-opt"><input type="checkbox" class="sched-rs-keepzip" ${params.keepZipped ? 'checked' : ''}><div><b>${escHtml(t('sched.syncKeepZipT'))}</b><span>${escHtml(t('sched.syncKeepZip'))}</span></div></label>
+            </details>
+            ${credsFields(params, { password: true, key: true })}
+        </div>`;
+        // The password used to live inside "Destructive options", which it is not. It is now
+        // in the block every action that reaches a protected source shares, next to the key.
+        wireCreds(host, params);
+        {
+            const sel = host.querySelector('.sched-rs-target') as HTMLSelectElement | null;
+            const box = host.querySelector('.sched-rs-newprof') as HTMLElement | null;
+            const name = host.querySelector('.sched-rs-newname') as HTMLInputElement | null;
+            const sync = () => {
+                const making = sel?.value === '__new__';
+                if (box) box.hidden = !making;
+                if (making) {
+                    params.targetProfile = '';
+                    params.newProfile = name?.value || (t('sched.syncNewDefault') || 'Repo');
+                    if (name && !name.value) name.value = params.newProfile;
+                } else {
+                    params.targetProfile = sel?.value || '';
+                    delete params.newProfile;
+                }
+            };
+            sel?.addEventListener('change', sync);
+            name?.addEventListener('input', () => { params.newProfile = name.value; });
+            if (params.newProfile && sel) sel.value = '__new__';
+        }
+    }
+    else if (needs === 'savePath' || needs === 'openPath') {
+        // One field, and it says what happens when it is empty — which is the whole point:
+        // empty means "ask me", and asking is what a schedule cannot do.
+        const saving = needs === 'savePath';
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t(saving ? 'sched.path.save' : 'sched.path.open'))}</label>
+            <div class="sched-cmd-row">
+                <input class="input sched-p-path" spellcheck="false"
+                    placeholder="${escAttr(t(saving ? 'sched.path.savePh' : 'sched.path.openPh'))}"
+                    value="${escAttr(params.path || '')}">
+                <button type="button" class="btn btn-sm btn-secondary sched-path-browse">${escHtml(t('sched.choose') || 'Choose\u2026')}</button>
+            </div>
+            <span class="sched-cmd-hint">${escHtml(t('sched.path.hint'))}</span>
+        </div>`;
+        host.querySelector('.sched-p-path')?.addEventListener('input', (e) => {
+            params.path = (e.target as HTMLInputElement).value;
+        });
+        host.querySelector('.sched-path-browse')?.addEventListener('click', async () => {
+            const api = await import('../../core/api.js');
+            const picked = saving
+                ? await api.saveFile({}).catch(() => null)
+                : await api.pickFile([]).catch(() => null);
+            if (!picked) return;
+            params.path = String(picked);
+            const el = host.querySelector('.sched-p-path') as HTMLInputElement | null;
+            if (el) el.value = String(picked);
+        });
+    }
+    else if (needs === 'profileNew') {
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.prof.name'))}</label>
+            <input class="input sched-p-pname" style="max-width:280px" value="${escAttr(params.name || '')}"
+                placeholder="${escAttr(t('sched.prof.namePh'))}">
+            <label class="sched-cmd-label">${escHtml(t('sched.prof.folders'))}</label>
+            <input class="input sched-p-pgame" placeholder="${escAttr(t('sched.prof.gamePh'))}" value="${escAttr(params.gameDir || '')}">
+            <input class="input sched-p-pmods" placeholder="${escAttr(t('sched.prof.modsPh'))}" value="${escAttr(params.modsDir || '')}">
+            <input class="input sched-p-pbackup" placeholder="${escAttr(t('sched.prof.backupPh'))}" value="${escAttr(params.backupDir || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.prof.foldersHint'))}</span>
+            <label class="sched-cmd-label">${escHtml(t('sched.prof.into'))}</label>
+            <input class="input sched-p-pinto" style="max-width:220px" placeholder="profile" value="${escAttr(params.into || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.prof.intoHint'))}</span>
+        </div>`;
+        const bind = (sel: string, key: string) => host.querySelector(sel)?.addEventListener('input', (e) => {
+            params[key] = (e.target as HTMLInputElement).value;
+        });
+        bind('.sched-p-pname', 'name'); bind('.sched-p-pgame', 'gameDir');
+        bind('.sched-p-pmods', 'modsDir'); bind('.sched-p-pbackup', 'backupDir');
+        bind('.sched-p-pinto', 'into');
+    }
+    else if (needs === 'profileRename') {
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.prof.which'))}</label>
+            <select class="input sched-p" style="max-width:280px">${pickerOptions(_profiles, params.id)}</select>
+            <label class="sched-cmd-label">${escHtml(t('sched.prof.newName'))}</label>
+            <input class="input sched-p-pname" style="max-width:280px" value="${escAttr(params.name || '')}"
+                placeholder="${escAttr(t('sched.prof.namePh'))}">
+        </div>`;
+        host.querySelector('.sched-p')?.addEventListener('change', (e) => { params.id = (e.target as HTMLSelectElement).value; });
+        host.querySelector('.sched-p-pname')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
+    }
+    else if (needs === 'profileDel') {
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.prof.which'))}</label>
+            <select class="input sched-p" style="max-width:280px">${pickerOptions(_profiles, params.id)}</select>
+            <label class="sched-opt" style="margin-top:10px"><input type="checkbox" class="sched-p-pactive"${params.evenIfActive ? ' checked' : ''}>
+                <div><b>${escHtml(t('sched.prof.evenActiveT'))}</b><span>${escHtml(t('sched.prof.evenActive'))}</span></div></label>
+            <span class="sched-cmd-hint">${escHtml(t('sched.prof.delHint'))}</span>
+        </div>`;
+        host.querySelector('.sched-p')?.addEventListener('change', (e) => { params.id = (e.target as HTMLSelectElement).value; });
+        host.querySelector('.sched-p-pactive')?.addEventListener('change', (e) => { params.evenIfActive = (e.target as HTMLInputElement).checked; });
+    }
+    else if (needs === 'modRemove') {
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.mod.which'))}</label>
+            <select class="input sched-p" style="max-width:280px">${pickerOptions(_mods, params.id)}</select>
+            <label class="sched-opt" style="margin-top:10px"><input type="checkbox" class="sched-p-mdis"${params.disableFirst === false ? '' : ' checked'}>
+                <div><b>${escHtml(t('sched.mod.disFirstT'))}</b><span>${escHtml(t('sched.mod.disFirst'))}</span></div></label>
+            <label class="sched-opt"><input type="checkbox" class="sched-p-mdel"${params.deleteFiles ? ' checked' : ''}>
+                <div><b>${escHtml(t('sched.mod.delFilesT'))}</b><span>${escHtml(t('sched.mod.delFiles'))}</span></div></label>
+            <span class="sched-cmd-hint">${escHtml(t('sched.mod.remHint'))}</span>
+        </div>`;
+        host.querySelector('.sched-p')?.addEventListener('change', (e) => { params.id = (e.target as HTMLSelectElement).value; });
+        host.querySelector('.sched-p-mdis')?.addEventListener('change', (e) => { params.disableFirst = (e.target as HTMLInputElement).checked; });
+        host.querySelector('.sched-p-mdel')?.addEventListener('change', (e) => { params.deleteFiles = (e.target as HTMLInputElement).checked; });
+    }
+    else if (needs === 'modpackDel') {
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.mp.which'))}</label>
+            <select class="input sched-p" style="max-width:280px">${pickerOptions(_modpacks, params.id)}</select>
+            <span class="sched-cmd-hint">${escHtml(t('sched.mp.delHint'))}</span>
+        </div>`;
+        host.querySelector('.sched-p')?.addEventListener('change', (e) => { params.id = (e.target as HTMLSelectElement).value; });
+    }
+    // The package and game steps: their forms live in sched-pkg.ts, next to what runs them.
+    else if (needs === 'pkgInstall' || needs === 'pkgVerify' || needs === 'listVerify' || needs === 'gateReport'
+        || needs === 'gameLaunch' || needs === 'uiAsk') {
+        // Something on screen synchronously: the caller hides an empty params row, and the
+        // previous action's fields must not stay while the module loads.
+        host.innerHTML = '<div class="sched-cmd-builder spkg-form"></div>';
+        void import('./sched-pkg.js').then((m) => { m.renderPkgForm(host, needs, params, _draft?.pkg); host.style.display = ''; });
+    }
+    // The upkeep and navigation steps: their forms live in sched-forms.ts, shared with the task
+    // builder of Plugins & API so a step is written with the same pickers in both places.
+    else if (needs === 'navPage' || needs === 'navCard' || needs === 'navItem' || needs === 'navTarget'
+        || needs === 'navWait' || needs === 'navMessage' || needs === 'navModal' || needs === 'navClick'
+        || needs === 'reposCheck' || needs === 'catUpdates' || needs === 'integrity' || needs === 'cacheClean'
+        || needs === 'logsRotate' || needs === 'diskReport' || needs === 'repoServer'
+        || needs === 'catInstall' || needs === 'apiCall') {
+        renderUpkeepForm(host, needs, params, { profiles: _profiles, mods: _mods, modpacks: _modpacks, apps: _apps });
+    }
+    else if (needs === 'viewPick') {
+        // The screens come from the navbar rather than a list written here: a list here goes
+        // stale the first time a screen is added or renamed, and the failure is silent —
+        // view/open warns to the console and does nothing.
+        const views = Array.from(document.querySelectorAll<HTMLElement>('.nav-item[data-view]'))
+            .map((el) => ({ id: el.dataset.view || '', label: (el.textContent || '').trim() || el.dataset.view || '' }))
+            .filter((v) => v.id);
+        // The windows that are NOT screens: VIEW_WINDOWS, shared with the runner, which
+        // refuses any other `dl:` name.
+        const WINDOWS = VIEW_WINDOWS;
+        const chosen = String(params.place || (params.id ? `view:${params.id}` : ''));
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.view.which'))}</label>
+            <select class="input sched-p-view" style="max-width:300px">
+                <option value="">${escHtml(t('sched.view.pick'))}</option>
+                <optgroup label="${escAttr(t('sched.view.gScreens'))}">
+                    ${views.map((v) => `<option value="view:${escAttr(v.id)}"${chosen === `view:${v.id}` ? ' selected' : ''}>${escHtml(v.label)}</option>`).join('')}
+                </optgroup>
+                <optgroup label="${escAttr(t('sched.view.gWindows'))}">
+                    ${WINDOWS.map(([dlName, key]) => `<option value="dl:${escAttr(dlName)}"${chosen === `dl:${dlName}` ? ' selected' : ''}>${escHtml(t(key))}</option>`).join('')}
+                </optgroup>
+                ${chosen.startsWith('view:') && !views.some((v) => `view:${v.id}` === chosen)
+                    ? `<option value="${escAttr(chosen)}" selected>${escHtml(t('sched.view.gone').replace('{n}', chosen.slice(5)))}</option>` : ''}
+            </select>
+            <!-- Only one of the windows takes anything, so the field appears with it rather
+                 than sitting there greyed out for the other four. -->
+            <div class="sched-view-arg"${chosen === 'dl:docs/open' ? '' : ' hidden'}>
+                <label class="sched-cmd-label">${escHtml(t('sched.view.article'))}</label>
+                <input class="input sched-p-viewarg" style="max-width:280px"
+                    placeholder="${escAttr(t('sched.view.articlePh'))}" value="${escAttr(params.arg || '')}">
+            </div>
+            <span class="sched-cmd-hint">${escHtml(t('sched.view.hint'))}</span>
+        </div>`;
+        const argBox = host.querySelector('.sched-view-arg') as HTMLElement | null;
+        host.querySelector('.sched-p-view')?.addEventListener('change', (e) => {
+            const v = (e.target as HTMLSelectElement).value;
+            params.place = v;
+            // `id` is kept in step for tasks saved before windows existed — dropping it
+            // would make an old task open nothing without saying why.
+            params.id = v.startsWith('view:') ? v.slice(5) : '';
+            if (argBox) argBox.hidden = v !== 'dl:docs/open';
+        });
+        host.querySelector('.sched-p-viewarg')?.addEventListener('input', (e) => {
+            params.arg = (e.target as HTMLInputElement).value;
+        });
+    }
+    else if (needs === 'repoGen') {
+        const profOpts = _profiles.map((pr: any) => {
+            const on = Array.isArray(params.profileIds) && params.profileIds.includes(pr.id);
+            return `<label class="sched-opt"><input type="checkbox" class="sched-g-prof" value="${escAttr(pr.id)}"${on ? ' checked' : ''}>
+                <div><b>${escHtml(pr.name || pr.id)}</b></div></label>`;
+        }).join('');
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.gen.out'))}</label>
+            <div class="sched-cmd-row">
+                <input class="input sched-g-out" placeholder="${escAttr(t('sched.gen.outPh'))}" value="${escAttr(params.outputDir || '')}">
+                <button type="button" class="btn btn-sm btn-secondary sched-browse-dir">${escHtml(t('sched.choose') || 'Choose\u2026')}</button>
+            </div>
+            <label class="sched-cmd-label">${escHtml(t('sched.gen.author'))}</label>
+            <input class="input sched-g-author" style="max-width:260px" maxlength="25"
+                placeholder="${escAttr(t('sched.gen.authorPh'))}" value="${escAttr(params.authorName || '')}">
+            <label class="sched-cmd-label">${escHtml(t('sched.gen.profiles'))}</label>
+            <div class="sched-gen-profs">${profOpts || `<span class="sched-cmd-hint">${escHtml(t('sched.gen.noProfiles'))}</span>`}</div>
+            <details class="sched-cmd-adv">
+                <summary>${escHtml(t('sched.gen.more'))}</summary>
+                <label class="sched-cmd-label">${escHtml(t('sched.gen.seed'))}</label>
+                <input class="input sched-g-seed" style="max-width:260px"
+                    placeholder="${escAttr(t('sched.gen.seedPh'))}" value="${escAttr(params.seed || '')}">
+                <span class="sched-cmd-hint">${escHtml(t('sched.gen.seedHint'))}</span>
+                <label class="sched-opt" style="margin-top:8px"><input type="checkbox" class="sched-g-zip"${params.zipOutput ? ' checked' : ''}>
+                    <div><b>${escHtml(t('sched.gen.zipT'))}</b><span>${escHtml(t('sched.gen.zip'))}</span></div></label>
+                <label class="sched-opt"><input type="checkbox" class="sched-g-zipmods"${params.zipMods ? ' checked' : ''}>
+                    <div><b>${escHtml(t('sched.gen.zipModsT'))}</b><span>${escHtml(t('sched.gen.zipMods'))}</span></div></label>
+                <label class="sched-cmd-label" style="margin-top:8px">${escHtml(t('sched.gen.methodT'))}</label>
+                <select class="select sched-g-method" style="max-width:320px">${['deflate', 'zstd', 'bzip2', 'stored'].map((m) =>
+                    `<option value="${m}"${(params.compression || 'deflate') === m ? ' selected' : ''}>${escHtml(t(`repo.zipMethod.${m}`))}</option>`).join('')}</select>
+                <span class="sched-cmd-hint">${escHtml(t('sched.gen.method'))}</span>
+            </details>
+            <span class="sched-cmd-hint">${escHtml(t('sched.gen.hint'))}</span>
+        </div>`;
+        const g = (sel: string) => host.querySelector(sel) as HTMLInputElement | null;
+        g('.sched-g-out')?.addEventListener('input', (e) => { params.outputDir = (e.target as HTMLInputElement).value; });
+        g('.sched-g-author')?.addEventListener('input', (e) => { params.authorName = (e.target as HTMLInputElement).value; });
+        g('.sched-g-seed')?.addEventListener('input', (e) => { params.seed = (e.target as HTMLInputElement).value; });
+        g('.sched-g-zip')?.addEventListener('change', (e) => { params.zipOutput = (e.target as HTMLInputElement).checked; });
+        g('.sched-g-zipmods')?.addEventListener('change', (e) => { params.zipMods = (e.target as HTMLInputElement).checked; });
+        g('.sched-g-method')?.addEventListener('change', (e) => { params.compression = (e.target as HTMLSelectElement).value; });
+        host.querySelectorAll('.sched-g-prof').forEach((cb) => cb.addEventListener('change', () => {
+            params.profileIds = Array.from(host.querySelectorAll<HTMLInputElement>('.sched-g-prof:checked')).map((x) => x.value);
+        }));
+        host.querySelector('.sched-browse-dir')?.addEventListener('click', async () => {
+            const { pickFolder } = await import('../../core/api.js');
+            const dir = await pickFolder().catch(() => null);
+            if (!dir) return;
+            params.outputDir = String(dir);
+            const el = g('.sched-g-out'); if (el) el.value = String(dir);
+        });
+    }
+    else if (needs === 'taskArm') {
+        // The list is other tasks, by name. An id typed by hand is a millisecond timestamp
+        // nobody recognises, and picking the wrong one silently disarms the wrong automation.
+        const opts = _tasks.filter((tk) => tk.id !== _draft.id).map((tk) =>
+            `<option value="${escAttr(tk.id)}"${params.taskId === tk.id ? ' selected' : ''}>${escHtml(tk.name || tk.id)}</option>`).join('');
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.arm.which'))}</label>
+            <select class="input sched-p-armid">
+                <option value="">${escHtml(t('sched.arm.pick'))}</option>${opts}
+            </select>
+            <label class="sched-cmd-label">${escHtml(t('sched.arm.what'))}</label>
+            <select class="input sched-p-armon" style="max-width:200px">
+                <option value="1"${params.armOn !== false ? ' selected' : ''}>${escHtml(t('sched.arm.on'))}</option>
+                <option value="0"${params.armOn === false ? ' selected' : ''}>${escHtml(t('sched.arm.off'))}</option>
+            </select>
+            <span class="sched-cmd-hint">${escHtml(t('sched.arm.hint'))}</span>
+        </div>`;
+        host.querySelector('.sched-p-armid')?.addEventListener('change', (e) => {
+            params.taskId = (e.target as HTMLSelectElement).value;
+        });
+        host.querySelector('.sched-p-armon')?.addEventListener('change', (e) => {
+            params.armOn = (e.target as HTMLSelectElement).value === '1';
+        });
+    }
+    else if (needs === 'buildInfo') {
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.bi.into'))}</label>
+            <input class="input sched-p-bi" spellcheck="false" style="max-width:220px"
+                placeholder="bmm" value="${escAttr(params.into || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.bi.hint'))}</span>
+        </div>`;
+        host.querySelector('.sched-p-bi')?.addEventListener('input', (e) => {
+            params.into = (e.target as HTMLInputElement).value;
+        });
+    }
+    else if (needs === 'bmmfolder') host.innerHTML = _field(needs,
+        `<input class="input sched-p-bmmdir" placeholder="${escAttr(t('sched.bmmFolderPh') || 'e.g. backups/weekly')}" value="${escAttr(params.path || '')}">`)
+        + `<span class="sched-cmd-hint">${t('sched.bmmFolderHint') || 'Created inside BMM’s own data folder. Sub-paths are allowed; the folder cannot be placed outside it.'}</span>`;
+    else if (needs === 'script') {
+        const eng = params.engine || 'powershell';
+        const engines: [string, string][] = [
+            ['powershell', 'PowerShell'], ['cmd', 'CMD / Batch'], ['bash', 'Bash'], ['python', 'Python'],
+            ['node', 'JavaScript (Node)'],
+            // Compiled, not interpreted: a Rust step pays rustc's startup before it runs.
+            // Fine for a nightly job, wrong for one that fires every minute — the status
+            // line below says so when this is selected.
+            ['rust', 'Rust'],
+        ];
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${t('sched.scrEngine') || '1. Language'}</label>
+            <select class="input sched-p-engine" style="max-width:180px">
+                ${engines.map(([v, l]) => `<option value="${v}"${eng === v ? ' selected' : ''}>${l}</option>`).join('')}
+            </select>
+            <!-- Filled in asynchronously by paintEngineStatus. BMM bundles no interpreter,
+                 so the answer to "will this run?" is a property of THIS machine and cannot
+                 be known at build time. Saying it here is the difference between finding out
+                 now and finding out from a failed run at 3am. -->
+            <span class="sched-cmd-hint sched-engine-status"></span>
+            <!-- painted right after this innerHTML lands; see the void call below -->
+            <label class="sched-cmd-label">${t('sched.scrCode') || '2. Code'}</label>
+            <textarea class="input sched-p-code sched-code" rows="9" spellcheck="false"
+                placeholder="${escAttr(t('sched.scrCodePh') || 'Write your script here. It runs as a file — no quoting or escaping needed.')}">${escHtml(params.code || '')}</textarea>
+            <span class="sched-cmd-hint">${t('sched.scrSubst') || 'Inside a For-Each, {item.name} and {item.id} are substituted before the script runs.'}</span>
+            <details class="sched-cmd-adv">
+                <summary>${t('sched.scrAdvanced') || 'Advanced — working folder, capture output'}</summary>
+                <div class="sched-cmd-row" style="margin-top:6px">
+                    <input class="input sched-p-wd" placeholder="${escAttr(t('sched.workdirPh') || 'folder to run from (optional)')}" value="${escAttr(params.workingDir || '')}">
+                    <button type="button" class="btn btn-sm btn-secondary sched-browse-wd">${t('sched.choose') || 'Choose…'}</button>
+                </div>
+                <input class="input sched-p-into" style="margin-top:6px"
+                    placeholder="${escAttr(t('sched.scrIntoPh') || 'store the first output line in a variable, e.g. count')}" value="${escAttr(params.into || '')}">
+                <span class="sched-cmd-hint">${t('sched.scrIntoHint') || 'Named here, the result becomes a variable later steps can test — otherwise a script can only pass or fail.'}</span>
+                <label class="sched-cmd-row" style="margin-top:8px"><input type="checkbox" class="sched-p-keepgoing"${params.keepGoing ? ' checked' : ''}>
+                    <span>${escHtml(t('sched.scrKeepGoing'))}</span></label>
+                <span class="sched-cmd-hint">${escHtml(t('sched.scrKeepGoingHint'))}</span>
+                <label class="sched-cmd-row" style="margin-top:8px">
+                    <span>${escHtml(t('sched.scrTimeout'))}</span>
+                    <input type="number" class="input sched-p-timeout" min="1" max="7200" style="max-width:110px"
+                        placeholder="300" value="${escAttr(params.timeoutSecs ?? '')}">
+                </label>
+                <span class="sched-cmd-hint">${escHtml(t('sched.scrTimeoutHint'))}</span>
+            </details>
+            <span class="sched-cmd-hint">${t('sched.scrHint') || 'Tip: grant “Run scripts” in this task’s Permissions, or it won’t run.'}</span>
+        </div>`;
+        void paintEngineStatus(host, eng);
+    }
+    // The three list actions had no branch here at all. `renderParams` only assigns
+    // host.innerHTML inside a matching branch, so picking "List — set it" left the PREVIOUS
+    // action's fields on screen: the list name and value could never be typed, and the step
+    // silently ran against the default name with an empty value. The actions worked; the
+    // editor could not reach them.
+    //
+    // Reuses .sched-p-varname / .sched-p-varvalue because the generic wiring at the end of
+    // this function already maps them to params.name / params.value — which is exactly what
+    // list.set, list.push and list.clear read.
+    else if (needs === 'importFile') {
+        const KINDS = ['auto', 'modlist', 'plugin', 'theme', 'automation', 'bundle', 'backup'];
+        const kind = String(params.kind || 'auto');
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.imp.file') || '1. A file on this machine')}</label>
+            <div style="display:flex;gap:6px">
+                <input class="input sched-p-impath" spellcheck="false" style="flex:1" value="${escAttr(params.path || '')}">
+                <button type="button" class="btn btn-xs btn-ghost sched-browse-impath">${escHtml(t('common.browse') || 'Browse')}</button>
+            </div>
+            <label class="sched-cmd-label">${escHtml(t('sched.imp.url') || '… or an address to fetch it from')}</label>
+            <input class="input sched-p-imurl" spellcheck="false" placeholder="https://…" value="${escAttr(params.url || '')}">
+            <label class="sched-cmd-label">${escHtml(t('sched.imp.kind') || '2. What it is')}</label>
+            <select class="input sched-p-imkind" style="max-width:280px">
+                ${KINDS.map((k) => `<option value="${k}"${kind === k ? ' selected' : ''}>${escHtml(t('sched.imp.k.' + k))}</option>`).join('')}
+            </select>
+            <span class="sched-cmd-hint">${escHtml(t('sched.imp.kindHint') || '')}</span>
+            <div class="sched-imp-extra"></div>
+            ${credsFields(params, { password: true, key: true, passphrase: true })}
+        </div>`;
+
+        // Per-kind extras, drawn for the kind that is chosen. `auto` shows the mod-list ones,
+        // because that is what `auto` resolves to for anything it cannot place, and a form
+        // with no options at all reads as an action with nothing to configure.
+        const extra = host.querySelector('.sched-imp-extra') as HTMLElement;
+        const paintExtra = () => {
+            const k = (host.querySelector('.sched-p-imkind') as HTMLSelectElement).value;
+            if (k === 'modlist' || k === 'auto') {
+                extra.innerHTML = `
+                    <label class="sched-cmd-row"><input type="checkbox" class="sched-p-imapply"${params.apply ? ' checked' : ''}>
+                        <span>${escHtml(t('sched.imp.apply'))}</span></label>
+                    <label class="sched-cmd-row"><input type="checkbox" class="sched-p-iminstall"${params.install !== false ? ' checked' : ''}>
+                        <span>${escHtml(t('sched.la.install'))}</span></label>
+                    <label class="sched-cmd-row"><input type="checkbox" class="sched-p-imexact"${params.exact ? ' checked' : ''}>
+                        <span>${escHtml(t('sched.la.exact'))}</span></label>`;
+            } else if (k === 'backup') {
+                extra.innerHTML = `
+                    <label class="sched-cmd-row sched-bk-danger"><input type="checkbox" class="sched-p-imrestore"${params.restore ? ' checked' : ''}>
+                        <span>${escHtml(t('sched.imp.restore'))}</span></label>
+                    <span class="sched-cmd-hint">${escHtml(t('sched.imp.restoreHint'))}</span>`;
+            } else if (k === 'bundle') {
+                const TYPES = ['app', 'plugin', 'theme', 'preset', 'modpack', 'repo', 'tutorial', 'list'];
+                extra.innerHTML = `<label class="sched-cmd-label">${escHtml(t('sched.cat.type'))}</label>
+                    <select class="input sched-p-imcattype" style="max-width:220px">
+                        ${TYPES.map((v) => `<option value="${v}"${(params.catType || 'plugin') === v ? ' selected' : ''}>${escHtml(t('sched.cat.t.' + v))}</option>`).join('')}
+                    </select>
+                    <span class="sched-cmd-hint">${escHtml(t('sched.imp.bundleHint'))}</span>`;
+            } else if (k === 'automation') {
+                extra.innerHTML = `<span class="sched-cmd-hint">${escHtml(t('sched.imp.autoHint'))}</span>`;
+            } else {
+                extra.innerHTML = '';
+            }
+            extra.querySelector('.sched-p-imapply')?.addEventListener('change', (e) => { params.apply = (e.target as HTMLInputElement).checked; });
+            extra.querySelector('.sched-p-iminstall')?.addEventListener('change', (e) => { params.install = (e.target as HTMLInputElement).checked; });
+            extra.querySelector('.sched-p-imexact')?.addEventListener('change', (e) => { params.exact = (e.target as HTMLInputElement).checked; });
+            extra.querySelector('.sched-p-imrestore')?.addEventListener('change', (e) => { params.restore = (e.target as HTMLInputElement).checked; });
+            extra.querySelector('.sched-p-imcattype')?.addEventListener('change', (e) => { params.catType = (e.target as HTMLSelectElement).value; });
+        };
+        host.querySelector('.sched-p-imkind')?.addEventListener('change', (e) => {
+            params.kind = (e.target as HTMLSelectElement).value;
+            paintExtra();
+        });
+        paintExtra();
+        wireCreds(host, params);
+    }
+    else if (needs === 'keyCreate') {
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.key.name') || '1. Name it')}</label>
+            <input class="input sched-p-kcname" spellcheck="false" style="max-width:260px"
+                placeholder="${escAttr(t('sched.key.namePh') || 'e.g. work')}" value="${escAttr(params.name || '')}">
+            <label class="sched-cmd-label">${escHtml(t('sched.key.kind') || '2. Type')}</label>
+            <select class="input sched-p-kckind" style="max-width:260px">
+                ${[['ed25519', 'ed25519'], ['ecdsa', 'ECDSA (nistp256)'], ['rsa', 'RSA 4096']]
+                    .map(([v, l]) => `<option value="${v}"${(params.kind || 'ed25519') === v ? ' selected' : ''}>${escHtml(l)}</option>`).join('')}
+            </select>
+            <span class="sched-cmd-hint">${escHtml(t('sched.key.kindHint') || '')}</span>
+            <label class="sched-cmd-label">${escHtml(t('sched.key.bind') || '3. Use it for this host (optional)')}</label>
+            <input class="input sched-p-kcbind" spellcheck="false"
+                placeholder="https://repo.example.org" value="${escAttr(params.bindUrl || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.key.hint') || '')}</span>
+        </div>`;
+    }
+    else if (needs === 'catFollow') {
+        const TYPES = ['app', 'plugin', 'theme', 'preset', 'modpack', 'repo', 'tutorial', 'list'];
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.cat.type') || '1. Kind of catalogue')}</label>
+            <select class="input sched-p-cftype" style="max-width:220px">
+                ${TYPES.map((v) => `<option value="${v}"${(params.catType || 'plugin') === v ? ' selected' : ''}>${escHtml(t('sched.cat.t.' + v))}</option>`).join('')}
+            </select>
+            <label class="sched-cmd-label">${escHtml(t('sched.cat.url') || '2. Address')}</label>
+            <input class="input sched-p-cfurl" spellcheck="false"
+                placeholder="https://…/catalog.json" value="${escAttr(params.url || '')}">
+            <label class="sched-cmd-row"><input type="checkbox" class="sched-p-cfoff"${params.unfollow ? ' checked' : ''}>
+                <span>${escHtml(t('sched.cat.unfollow') || 'Stop following it instead')}</span></label>
+            <span class="sched-cmd-hint">${escHtml(t('sched.cat.hint') || '')}</span>
+            <!-- A catalogue can be protected too. Every catalogue SCREEN has offered the
+                 password and the key for a while, through the shared source-access block;
+                 this form offered neither, so a task following a protected catalogue simply
+                 failed with "could not read it". A password is not the only way a source is
+                 protected: this form asked for one and never for a KEY, which is the half an
+                 ed25519-gated catalogue actually needs. -->
+            ${credsFields(params, { password: true, key: true })}
+        </div>`;
+        wireCreds(host, params);
+    }
+    else if (needs === 'dataBackup') {
+        // The sections, and their order, come from the shared defaults rather than a list
+        // typed here — a section added to the backup format would otherwise be missing from
+        // this screen and from nowhere else, which is invisible until somebody restores.
+        const SECTIONS: [string, string][] = [
+            ['appData', 'sched.bk.sAppData'], ['themes', 'sched.bk.sThemes'],
+            ['themePresets', 'sched.bk.sPresets'], ['translations', 'sched.bk.sLang'],
+            ['launchPacks', 'sched.bk.sPacks'], ['automations', 'sched.bk.sAutomations'],
+            ['navigation', 'sched.bk.sNav'], ['apps', 'sched.bk.sApps'],
+            ['replays', 'sched.bk.sReplays'], ['crashes', 'sched.bk.sCrashes'],
+            ['diagnostics', 'sched.bk.sDiag'], ['identityKeys', 'sched.bk.sKeys'],
+        ];
+        const DEFAULTS: Record<string, boolean> = {
+            appData: true, themes: true, themePresets: true, translations: true,
+            launchPacks: true, automations: true, navigation: true, apps: true,
+            replays: false, crashes: false, diagnostics: false, identityKeys: false,
+        };
+        params.sections = params.sections || { ...DEFAULTS };
+        const on = (k: string) => params.sections[k] !== undefined ? !!params.sections[k] : DEFAULTS[k];
+
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.bk.dir') || '1. Folder')}</label>
+            <div style="display:flex;gap:6px">
+                <input class="input sched-p-bkdir" spellcheck="false" style="flex:1" value="${escAttr(params.dir || '')}">
+                <button type="button" class="btn btn-xs btn-ghost sched-browse-bkdir">${escHtml(t('common.browse') || 'Browse')}</button>
+            </div>
+            <label class="sched-cmd-label">${escHtml(t('sched.bk.name') || '2. File name')}</label>
+            <input class="input sched-p-bkname" spellcheck="false"
+                placeholder="bmm-backup-{date}" value="${escAttr(params.name || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.bk.nameHint') || '')}</span>
+            <label class="sched-cmd-label">${escHtml(t('sched.bk.exists') || '3. If that name is taken')}</label>
+            <select class="input sched-p-bkinc" style="max-width:280px">
+                ${['paren', 'underscore', 'timestamp', 'overwrite'].map((v) =>
+                    `<option value="${v}"${(params.increment || 'paren') === v ? ' selected' : ''}>${escHtml(t('sched.bk.inc.' + v))}</option>`).join('')}
+            </select>
+            <label class="sched-cmd-label">${escHtml(t('sched.bk.what') || '4. What goes in')}</label>
+            <div class="sched-bk-grid">
+                ${SECTIONS.map(([k, key]) => `<label class="sched-cmd-row${k === 'identityKeys' ? ' sched-bk-danger' : ''}">
+                    <input type="checkbox" class="sched-p-bksec" data-sec="${escAttr(k)}"${on(k) ? ' checked' : ''}>
+                    <span>${escHtml(t(key))}</span></label>`).join('')}
+            </div>
+            <label class="sched-cmd-label">${escHtml(t('sched.bk.pass') || '5. Passphrase')}</label>
+            <input type="password" class="input sched-p-bkpass" autocomplete="new-password"
+                value="${escAttr(params.passphrase || '')}">
+            <span class="sched-cmd-hint sched-bk-passhint">${escHtml(t('sched.bk.passHint') || '')}</span>
+        </div>`;
+
+        const passHint = host.querySelector('.sched-bk-passhint') as HTMLElement;
+        const syncHint = () => {
+            // The one section that changes what the passphrase field MEANS: optional
+            // everywhere else, required here, and the screen has to say which it is now.
+            const keys = !!params.sections.identityKeys;
+            passHint.textContent = keys
+                ? (t('sched.bk.passRequired') || '')
+                : (t('sched.bk.passHint') || '');
+            passHint.classList.toggle('is-required', keys);
+        };
+        host.querySelectorAll<HTMLInputElement>('.sched-p-bksec').forEach((cb) => {
+            cb.addEventListener('change', () => {
+                params.sections[cb.dataset.sec as string] = cb.checked;
+                syncHint();
+            });
+        });
+        syncHint();
+    }
+    else if (needs === 'pluginAsset') {
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.pa.plugin') || '1. Plugin')}</label>
+            <select class="input sched-p-paplugin"><option value="">—</option></select>
+            <label class="sched-cmd-label">${escHtml(t('sched.pa.file') || '2. File it ships')}</label>
+            <select class="input sched-p-pafile"><option value="">—</option></select>
+            <label class="sched-cmd-label">${escHtml(t('sched.pa.mode') || '3. What to do with it')}</label>
+            <select class="input sched-p-pamode" style="max-width:260px">
+                <option value="read"${(params.mode || 'read') === 'read' ? ' selected' : ''}>${escHtml(t('sched.pa.modeRead'))}</option>
+                <option value="copy"${params.mode === 'copy' ? ' selected' : ''}>${escHtml(t('sched.pa.modeCopy'))}</option>
+                <option value="open"${params.mode === 'open' ? ' selected' : ''}>${escHtml(t('sched.pa.modeOpen'))}</option>
+                <option value="run"${params.mode === 'run' ? ' selected' : ''}>${escHtml(t('sched.pa.modeRun'))}</option>
+            </select>
+            <div class="sched-pa-extra"></div>
+        </div>`;
+
+        // The two lists come from what is actually installed, not from what the task
+        // remembers. A plugin uninstalled since the task was written must show as missing
+        // here rather than as a name that looks fine and fails at four in the morning.
+        void (async () => {
+            const plugins = await (invoke('get_installed_plugins') as Promise<any[]>).catch(() => []);
+            const psel = host.querySelector('.sched-p-paplugin') as HTMLSelectElement | null;
+            const fsel = host.querySelector('.sched-p-pafile') as HTMLSelectElement | null;
+            if (!psel || !fsel) return;
+
+            const chosen = String(params.pluginId || '');
+            const known = plugins.some((pl: any) => pl?.manifest?.id === chosen);
+            psel.innerHTML = `<option value="">—</option>`
+                + plugins.map((pl: any) => {
+                    const id = String(pl?.manifest?.id || '');
+                    return `<option value="${escAttr(id)}"${id === chosen ? ' selected' : ''}>${escHtml(pl?.manifest?.name || id)}</option>`;
+                }).join('')
+                // Named as gone rather than silently dropped: the task still holds the id,
+                // and a blank dropdown would look like nothing had ever been chosen.
+                + (chosen && !known ? `<option value="${escAttr(chosen)}" selected>${escHtml(t('sched.pa.missing').replace('{p}', chosen))}</option>` : '');
+
+            const fillFiles = async () => {
+                const id = psel.value;
+                const files = id
+                    ? await (invoke('plugin_assets_list', { pluginId: id }) as Promise<any[]>).catch(() => [])
+                    : [];
+                const cur = String(params.path || '');
+                fsel.innerHTML = files.length
+                    ? files.map((a: any) => `<option value="${escAttr(a.path)}"${a.path === cur ? ' selected' : ''}>${escHtml(a.path)}${a.kind === 'script' ? '  • ' + escHtml(t('plugins.assets.kindScript')) : ''}</option>`).join('')
+                    : `<option value="">${escHtml(t('sched.pa.noFiles'))}</option>`;
+                if (files.length && !files.some((a: any) => a.path === cur)) params.path = files[0].path;
+            };
+            psel.addEventListener('change', () => { params.pluginId = psel.value; params.path = ''; void fillFiles(); });
+            fsel.addEventListener('change', () => { params.path = fsel.value; });
+            await fillFiles();
+        })();
+
+        // The mode decides which extra field is needed, so it is drawn per mode rather than
+        // showing a "folder" box to somebody who chose "read".
+        const extra = host.querySelector('.sched-pa-extra') as HTMLElement;
+        const paintExtra = () => {
+            const mode = (host.querySelector('.sched-p-pamode') as HTMLSelectElement).value;
+            if (mode === 'read') {
+                extra.innerHTML = `<label class="sched-cmd-label">${escHtml(t('sched.pa.target') || 'Keep it as')}</label>
+                    <input class="input sched-p-patarget" spellcheck="false" style="max-width:220px"
+                        placeholder="asset" value="${escAttr(params.target || '')}">
+                    <span class="sched-cmd-hint">${escHtml(t('sched.pa.readHint') || '')}</span>`;
+                extra.querySelector('.sched-p-patarget')?.addEventListener('input', (e) => {
+                    params.target = (e.target as HTMLInputElement).value;
+                });
+            } else if (mode === 'copy') {
+                extra.innerHTML = `<label class="sched-cmd-label">${escHtml(t('sched.pa.dir') || 'Copy it into')}</label>
+                    <div style="display:flex;gap:6px">
+                        <input class="input sched-p-padir" spellcheck="false" style="flex:1" value="${escAttr(params.dir || '')}">
+                        <button type="button" class="btn btn-xs btn-ghost sched-browse-padir">${escHtml(t('common.browse') || 'Browse')}</button>
+                    </div>`;
+                extra.querySelector('.sched-p-padir')?.addEventListener('input', (e) => {
+                    params.dir = (e.target as HTMLInputElement).value;
+                });
+                extra.querySelector('.sched-browse-padir')?.addEventListener('click', async () => {
+                    const { pickFolder } = await import('../../core/api.js');
+                    const d = await pickFolder().catch(() => null);
+                    if (!d) return;
+                    params.dir = d;
+                    (extra.querySelector('.sched-p-padir') as HTMLInputElement).value = String(d);
+                });
+            } else if (mode === 'run') {
+                extra.innerHTML = `<span class="sched-cmd-hint">${escHtml(t('sched.pa.runHint') || '')}</span>`;
+            } else {
+                extra.innerHTML = `<span class="sched-cmd-hint">${escHtml(t('sched.pa.openHint') || '')}</span>`;
+            }
+        };
+        host.querySelector('.sched-p-pamode')?.addEventListener('change', (e) => {
+            params.mode = (e.target as HTMLSelectElement).value;
+            paintExtra();
+        });
+        paintExtra();
+    }
+    else if (needs === 'textExtract') {
+        // Two sources, one field each, and only one is used — whichever is filled in. A
+        // radio to choose between them would be a third control for a decision the two
+        // fields already make.
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.tx.file') || '1. Read from this file')}</label>
+            <div style="display:flex;gap:6px">
+                <input class="input sched-p-txpath" spellcheck="false" style="flex:1"
+                    placeholder="${escAttr(t('sched.tx.filePh') || '')}"
+                    value="${escAttr(params.path || '')}">
+                <button type="button" class="btn btn-xs btn-ghost sched-browse-txpath">${escHtml(t('common.browse') || 'Browse')}</button>
+            </div>
+            <label class="sched-cmd-label">${escHtml(t('sched.tx.orVar') || '… or from this variable')}</label>
+            <input class="input sched-p-txsource" spellcheck="false" style="max-width:220px"
+                placeholder="${escAttr(t('sched.tx.orVarPh') || 'a variable name')}"
+                value="${escAttr(params.source || '')}">
+            <label class="sched-cmd-label">${escHtml(t('sched.tx.regex') || '2. Pattern')}</label>
+            <select class="input sched-p-txlib" data-csel-search="1" style="max-width:100%;margin-bottom:6px">
+                <option value="">${escHtml(t('sched.rx.pick'))}</option>
+                ${REGEX_LIBRARY.map((r) => `<option value="${escAttr(r.re)}">${escHtml(t(r.label))}</option>`).join('')}
+            </select>
+            <input data-validate="regex" class="input sched-p-txregex" spellcheck="false"
+                placeholder="${escAttr(t('sched.tx.regexPh') || '')}"
+                value="${escAttr(params.regex || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.tx.regexHint') || '')}</span>
+            <label class="sched-cmd-label">${escHtml(t('sched.tx.target') || '3. Keep it as')}</label>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+                <input class="input sched-p-txtarget" spellcheck="false" style="max-width:200px"
+                    placeholder="server" value="${escAttr(params.target || '')}">
+                <span class="sched-cmd-hint">${escHtml(t('sched.tx.group') || 'group')}</span>
+                <input type="number" class="input sched-p-txgroup" min="0" style="max-width:80px"
+                    value="${escAttr(String(params.group ?? 1))}">
+                <span class="sched-cmd-hint">${escHtml(t('sched.tx.tail') || 'last KB')}</span>
+                <input type="number" class="input sched-p-txtail" min="1" style="max-width:90px"
+                    value="${escAttr(String(params.tailKb ?? 64))}">
+            </div>
+        </div>`;
+    }
+    else if (needs === 'validate') {
+        const formats = ['', 'mm', 'bmmpa', 'bmmplug', 'repo', 'bmmcat', 'bmp', 'cbmp', 'theme', 'databmm', 'bmmreplay', 'bmmnav', 'mm-locked'];
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.valid.file'))}</label>
+            <div style="display:flex;gap:6px">
+                <input class="input sched-path" spellcheck="false" style="flex:1"
+                    placeholder="${escAttr(t('sched.valid.filePh'))}" value="${escAttr(params.path || '')}">
+                <button type="button" class="btn btn-xs btn-ghost sched-browse-file">${escHtml(t('common.browse') || 'Browse')}</button>
+            </div>
+            <label class="sched-cmd-label">${escHtml(t('sched.valid.orText'))}</label>
+            <input class="input sched-p-vtext" spellcheck="false"
+                placeholder="${escAttr(t('sched.valid.orTextPh'))}" value="${escAttr(params.text || '')}">
+            <label class="sched-cmd-label">${escHtml(t('sched.valid.expect'))}</label>
+            <select class="input sched-p-vexpect" style="max-width:220px">
+                ${formats.map((f) => `<option value="${f}"${(params.expect || '') === f ? ' selected' : ''}>${f ? escHtml(f) : escHtml(t('sched.valid.anything'))}</option>`).join('')}
+            </select>
+            <span class="sched-cmd-hint">${escHtml(t('sched.valid.hint'))}</span>
+        </div>`;
+    }
+    else if (needs === 'fileWrite') {
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.fw.path'))}</label>
+            <div style="display:flex;gap:6px">
+                <input class="input sched-path" spellcheck="false" style="flex:1"
+                    placeholder="${escAttr(t('sched.fw.pathPh'))}" value="${escAttr(params.path || '')}">
+                <button type="button" class="btn btn-xs btn-ghost sched-browse-folder">${escHtml(t('common.browse') || 'Browse')}</button>
+            </div>
+            <span class="sched-cmd-hint">${escHtml(t('sched.fw.pathHint'))}</span>
+            <label class="sched-cmd-label">${escHtml(t('sched.fw.text'))}</label>
+            <textarea class="input sched-p-fwtext" rows="4" spellcheck="false"
+                placeholder="${escAttr(t('sched.fw.textPh'))}">${escHtml(params.text || '')}</textarea>
+            <label class="sched-cmd-opt"><input type="checkbox" class="sched-p-fwappend" ${params.append ? 'checked' : ''}>
+                <span>${escHtml(t('sched.fw.append'))}</span></label>
+            <span class="sched-cmd-hint">${escHtml(t('sched.fw.appendHint'))}</span>
+            <button type="button" class="btn btn-xs btn-ghost sched-fw-open" style="align-self:flex-start;margin-top:6px">${escHtml(t('sched.fw.openOut'))}</button>
+        </div>`;
+    }
+    else if (needs === 'listApply') {
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.la.file') || '1. The list file')}</label>
+            <div style="display:flex;gap:6px">
+                <input class="input sched-p-lapath" spellcheck="false" style="flex:1"
+                    placeholder="${escAttr(t('sched.la.filePh') || 'a .mm on this machine')}"
+                    value="${escAttr(params.path || '')}">
+                <button type="button" class="btn btn-xs btn-ghost sched-browse-lapath">${escHtml(t('common.browse') || 'Browse')}</button>
+            </div>
+            <label class="sched-cmd-label">${escHtml(t('sched.la.url') || '… or an address to fetch it from')}</label>
+            <input class="input sched-p-laurl" spellcheck="false"
+                placeholder="https://…/list.mm" value="${escAttr(params.url || '')}">
+            <label class="sched-cmd-row"><input type="checkbox" class="sched-p-lainstall"
+                ${params.install !== false ? 'checked' : ''}>
+                <span>${escHtml(t('sched.la.install') || 'Install what is missing')}</span></label>
+            <label class="sched-cmd-row"><input type="checkbox" class="sched-p-laexact"
+                ${params.exact ? 'checked' : ''}>
+                <span>${escHtml(t('sched.la.exact') || 'Turn everything else OFF')}</span></label>
+            <span class="sched-cmd-hint">${escHtml(t('sched.la.exactHint') || '')}</span>
+            <label class="sched-cmd-label">${escHtml(t('sched.la.pass') || 'Passphrase, if the list is locked')}</label>
+            <input type="password" class="input sched-p-lapass" autocomplete="new-password"
+                value="${escAttr(params.passphrase || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.la.passHint') || '')}</span>
+        </div>${placementField(params, false)}`;
+    }
+    else if (needs === 'waitHttp' || needs === 'waitHook') {
+        const isHook = needs === 'waitHook';
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(isHook ? t('sched.wait.name') : t('sched.wait.url'))}</label>
+            <input class="input ${isHook ? 'sched-p-wname' : 'sched-p-wurl'}" spellcheck="false"
+                ${isHook ? 'list="sched-wait-events"' : ''}
+                placeholder="${escAttr(isHook ? 'build-done' : 'https://…/health')}"
+                value="${escAttr((isHook ? params.name : params.url) || '')}">
+            ${isHook ? `<datalist id="sched-wait-events">
+                ${BMM_EVENTS.map((e) => `<option value="${escAttr(e)}">${escAttr(e)} — ${escAttr(t('sched.ev.' + e))}</option>`).join('')}
+            </datalist>` : ''}
+            <span class="sched-cmd-hint">${escHtml(isHook ? t('sched.wait.nameHint') : t('sched.wait.urlHint'))}</span>
+            ${isHook ? `<span class="sched-cmd-hint">${escHtml(t('sched.wait.eventHint'))}</span>` : ''}
+            ${isHook ? '' : `<label class="sched-cmd-label">${escHtml(t('sched.wait.status'))}</label>
+                <input type="number" class="input sched-p-wstatus" min="0" max="599" style="max-width:120px"
+                    placeholder="200" value="${escAttr(params.status ?? '')}">
+                <span class="sched-cmd-hint">${escHtml(t('sched.wait.statusHint'))}</span>
+                <label class="sched-cmd-label">${escHtml(t('sched.wait.body'))}</label>
+                <input class="input sched-p-wbody" spellcheck="false" placeholder="\"state\":\"done\""
+                    value="${escAttr(params.bodyContains || '')}">
+                <span class="sched-cmd-hint">${escHtml(t('sched.wait.bodyHint'))}</span>`}
+            <label class="sched-cmd-label">${escHtml(t('sched.wait.timing'))}</label>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <span class="sched-cmd-hint">${escHtml(t('sched.wait.every'))}</span>
+                <input type="number" class="input sched-p-wevery" min="1" style="max-width:90px"
+                    value="${escAttr(String(params.everySeconds ?? (isHook ? 2 : 5)))}">
+                <span class="sched-cmd-hint">${escHtml(t('sched.wait.upTo'))}</span>
+                <input type="number" class="input sched-p-wtimeout" min="1" style="max-width:110px"
+                    value="${escAttr(String(params.timeoutSeconds ?? 300))}">
+                <span class="sched-cmd-hint">${escHtml(t('sched.unitSec'))}</span>
+            </div>
+            <label class="sched-cmd-row"><input type="checkbox" class="sched-p-wstop"${params.stopOnTimeout !== false ? ' checked' : ''}>
+                <span>${escHtml(t('sched.wait.stopOnTimeout'))}</span></label>
+            <span class="sched-cmd-hint">${escHtml(t('sched.wait.stopHint'))}</span>
+        </div>`;
+    }
+    else if (needs === 'gameWatch') {
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.gw.game') || '1. Game')}</label>
+            <select class="input sched-p-gwgame" style="max-width:280px"></select>
+            <div class="sched-gw-note sched-cmd-hint"></div>
+            <label class="sched-cmd-label">${escHtml(t('sched.gw.file') || '2. File to watch')}</label>
+            <div style="display:flex;gap:6px">
+                <input class="input sched-p-gwpath" spellcheck="false" style="flex:1" value="${escAttr(params.path || '')}">
+                <button type="button" class="btn btn-xs btn-ghost sched-gw-scan">${escHtml(t('sched.gw.scan') || 'Find in a folder…')}</button>
+            </div>
+            <span class="sched-cmd-hint">${escHtml(t('sched.gw.fileHint') || '')}</span>
+            <label class="sched-cmd-label">${escHtml(t('sched.gw.mode') || '3. What to do')}</label>
+            <select class="input sched-p-gwmode" style="max-width:240px">
+                <option value="setup"${params.mode !== 'remove' ? ' selected' : ''}>${escHtml(t('sched.gw.setup'))}</option>
+                <option value="remove"${params.mode === 'remove' ? ' selected' : ''}>${escHtml(t('sched.gw.remove'))}</option>
+            </select>
+        </div>`;
+
+        const gameSel = host.querySelector('.sched-p-gwgame') as HTMLSelectElement;
+        const pathIn = host.querySelector('.sched-p-gwpath') as HTMLInputElement;
+        const noteEl = host.querySelector('.sched-gw-note') as HTMLElement;
+        void (async () => {
+            const profiles = await (invoke('game_profiles') as Promise<any[]>).catch(() => []);
+            const chosen = String(params.game || 'custom');
+            gameSel.innerHTML = profiles.map((g) =>
+                `<option value="${escAttr(g.id)}"${g.id === chosen ? ' selected' : ''}>${escHtml(g.id === 'custom' ? t('game.other') : g.name)}</option>`).join('');
+            const apply = (fromUser: boolean) => {
+                const g = profiles.find((x) => x.id === gameSel.value);
+                params.game = gameSel.value;
+                // A note per game: whether BMM found anything, and whether there is a hook.
+                // An empty dropdown with no explanation is the version of this screen that
+                // sends somebody hunting through their Documents folder.
+                noteEl.textContent = g?.note ? t(g.note) : (g?.found?.length ? '' : t('game.note.notFound'));
+                if (fromUser) {
+                    // Only on a real choice: overwriting a path somebody typed, because the
+                    // form was drawn, is the kind of help nobody asks for twice.
+                    pathIn.value = String(g?.found?.[0] || '');
+                    params.path = pathIn.value;
+                    if (g?.pattern) params.pattern = g.pattern;
+                }
+            };
+            gameSel.addEventListener('change', () => apply(true));
+            apply(false);
+        })();
+        host.querySelector('.sched-gw-scan')?.addEventListener('click', async () => {
+            const { pickFolder } = await import('../../core/api.js');
+            const dir = await pickFolder().catch(() => null);
+            if (!dir) return;
+            const hits = await (invoke('game_find_logs', { dir, limit: 25 }) as Promise<string[]>).catch(() => []);
+            if (!hits.length) { toast(t('sched.gw.noneFound'), 'warning', 8000); return; }
+            // Newest first, and the first is taken: the file a game just wrote to is the one
+            // being looked for, and it is never the one that sorts first alphabetically.
+            pathIn.value = hits[0];
+            params.path = hits[0];
+            toast(t('sched.gw.found').replace('{n}', String(hits.length)).replace('{f}', hits[0].replace(/^.*[/\\]/, '')), 'success', 8000);
+        });
+    }
+    else if (needs === 'dcsHook') {
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.dcs.mode') || 'What to do')}</label>
+            <select class="input sched-p-dcsmode" style="max-width:220px">
+                <option value="install"${params.mode !== 'remove' ? ' selected' : ''}>${escHtml(t('sched.dcs.install') || 'Set it up')}</option>
+                <option value="remove"${params.mode === 'remove' ? ' selected' : ''}>${escHtml(t('sched.dcs.remove') || 'Take it out')}</option>
+            </select>
+            <label class="sched-cmd-label">${escHtml(t('sched.dcs.dir') || 'A specific DCS folder (optional)')}</label>
+            <input class="input sched-p-dcsdir" spellcheck="false"
+                placeholder="${escAttr(t('sched.dcs.dirPh') || 'blank = every DCS folder found')}"
+                value="${escAttr(params.dir || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.dcs.hint') || '')}</span>
+        </div>`;
+    }
+    else if (needs === 'listSet' || needs === 'listPush' || needs === 'listName') {
+        const nameField = `
+            <label class="sched-cmd-label">${t('sched.list.name') || '1. List name'}</label>
+            <input class="input sched-p-varname" spellcheck="false"
+                placeholder="${escAttr(t('sched.list.namePh') || 'e.g. mods — read back as {list.mods.length}')}"
+                value="${escAttr(params.name || '')}">`;
+        const valueField = needs === 'listName' ? '' : `
+            <label class="sched-cmd-label">${needs === 'listPush'
+                ? (t('sched.list.item') || '2. Item to add')
+                : (t('sched.list.value') || '2. Items')}</label>
+            <textarea class="input sched-p-varvalue" rows="2" spellcheck="false"
+                placeholder="${escAttr(needs === 'listPush'
+                    ? (t('sched.list.itemPh') || 'One value. {variables} are substituted first.')
+                    : (t('sched.list.valuePh') || 'A JSON array, or a, b, c. {variables} are substituted first.'))}">${escHtml(params.value || '')}</textarea>`;
+        // Only "set it" splits anything, so only it offers a separator.
+        const sepField = needs !== 'listSet' ? '' : `
+            <label class="sched-cmd-label">${t('sched.list.sep') || '3. Separator'}</label>
+            <input class="input sched-p-listsep" spellcheck="false" style="max-width:120px"
+                placeholder="," value="${escAttr(params.sep || '')}">`;
+        host.innerHTML = `<div class="sched-cmd-builder">${nameField}${valueField}${sepField}</div>`;
+    }
+    else if (needs === 'mapSet' || needs === 'mapGet' || needs === 'mapName') {
+        const nameField = `
+            <label class="sched-cmd-label">${t('sched.map.name') || '1. Map name'}</label>
+            <input class="input sched-p-varname" spellcheck="false"
+                placeholder="${escAttr(t('sched.map.namePh') || 'e.g. urls — read back as {map.urls.size}')}"
+                value="${escAttr(params.name || '')}">`;
+        const keyField = needs === 'mapName' ? '' : `
+            <label class="sched-cmd-label">${t('sched.map.key') || '2. Key'}</label>
+            <input class="input sched-p-mapkey" spellcheck="false"
+                placeholder="${escAttr(t('sched.map.keyPh') || '{variables} are substituted first')}"
+                value="${escAttr(params.key || '')}">`;
+        const tail = needs === 'mapSet' ? `
+            <label class="sched-cmd-label">${t('sched.map.value') || '3. Value'}</label>
+            <textarea class="input sched-p-varvalue" rows="2" spellcheck="false"
+                placeholder="${escAttr(t('sched.map.valuePh') || 'Plain text. {variables} are substituted first.')}">${escHtml(params.value || '')}</textarea>`
+            : needs === 'mapGet' ? `
+            <label class="sched-cmd-label">${t('sched.map.into') || '3. Store it in'}</label>
+            <input class="input sched-p-mapinto" spellcheck="false"
+                placeholder="${escAttr(t('sched.map.intoPh') || 'variable name — read back as {name}')}"
+                value="${escAttr(params.into || '')}">` : '';
+        host.innerHTML = `<div class="sched-cmd-builder">${nameField}${keyField}${tail}</div>`;
+    }
+    else if (needs === 'idOf') {
+        // Three fields and no free text for the kind: a typo there is an action that always
+        // fails, and the list is short and fixed.
+        const KINDS = ['modpack', 'plugin', 'task'];
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${t('sched.idof.kind') || '1. What kind of thing'}</label>
+            <select class="input sched-p-idkind">
+                ${KINDS.map((k) => `<option value="${k}"${params.kind === k ? ' selected' : ''}>${escHtml(t('sched.idof.k.' + k) || k)}</option>`).join('')}
+            </select>
+            <label class="sched-cmd-label">${t('sched.idof.id') || '2. Its local id'}</label>
+            <input class="input sched-p-idid" spellcheck="false"
+                placeholder="${escAttr(t('sched.idof.idPh') || 'the id from its card — {variables} are substituted first')}"
+                value="${escAttr(params.id || '')}">
+            <label class="sched-cmd-label">${t('sched.idof.into') || '3. Store the content id in'}</label>
+            <input class="input sched-p-idinto" spellcheck="false"
+                placeholder="${escAttr(t('sched.idof.intoPh') || 'variable name — read back as {name}')}"
+                value="${escAttr(params.into || '')}">
+            <p class="sched-cmd-hint">${escHtml(t('sched.idof.hint') || 'The content id says WHAT the thing is, so the same pack on another machine gives the same answer. Compare it with textIs to check you have what you expect.')}</p>
+        </div>`;
+    }
+    else if (needs === 'varSet') {
+        const shared = params.scope === 'shared';
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${t('sched.var.name') || '1. Name'}</label>
+            <input class="input sched-p-varname" spellcheck="false"
+                placeholder="${escAttr(t('sched.var.namePh') || 'letters, digits and _ — this is what {name} will match')}"
+                value="${escAttr(params.name || '')}">
+            <label class="sched-cmd-label">${t('sched.var.value') || '2. Value'}</label>
+            <textarea class="input sched-p-varvalue" rows="2" spellcheck="false"
+                placeholder="${escAttr(t('sched.var.valuePh') || 'Plain text. {other} variables are substituted first.')}">${escHtml(params.value || '')}</textarea>
+            <label class="sched-cmd-label">${t('sched.var.scope') || '3. How long it lasts'}</label>
+            <select class="input sched-p-varscope" style="max-width:280px">
+                <option value="run"${shared ? '' : ' selected'}>${escHtml(t('sched.var.scopeRun') || 'This run only')}</option>
+                <option value="shared"${shared ? ' selected' : ''}>${escHtml(t('sched.var.scopeShared') || 'Shared — every task, until changed')}</option>
+            </select>
+            <span class="sched-cmd-hint">${escHtml(t('sched.var.hint') || 'A value this run captured always wins over a shared one with the same name, so a shared variable can never shadow a fresh result.')}</span>
+            <span class="sched-cmd-hint sched-var-warn">${escHtml(t('sched.var.secret') || 'Not a secret store: shared values sit in BMM’s local storage in plain text, and travel in an exported .bmmpa. Keep tokens out of them.')}</span>
+        </div>`;
+    }
+    else if (needs === 'varClear') host.innerHTML = _field(needs,
+        `<input class="input sched-p-varname" spellcheck="false" placeholder="${escAttr(t('sched.var.clearPh') || 'name to clear — leave empty to clear them all')}" value="${escAttr(params.name || '')}">`)
+        + `<span class="sched-cmd-hint">${escHtml(t('sched.var.clearHint') || 'Only shared variables. A run’s own values disappear when it ends.')}</span>`;
+    else if (needs === 'webhook') {
+        // Sensible defaults on a fresh step: a POST of a small JSON document, retried twice.
+        if (params.method === undefined) params.method = 'POST';
+        if (params.format === undefined) params.format = 'json';
+        if (params.retries === undefined) params.retries = 2;
+        if (params.body === undefined) params.body = '{\n  "text": "{task.name} finished at {stamp}"\n}';
+        const m = String(params.method || 'POST').toUpperCase();
+        host.innerHTML = `
+        <div class="sched-cmd-builder sched-net-form">
+            <div class="sched-fgroup">
+                <div class="sched-fgroup-h">${escHtml(t('sched.wh.gWhere'))}</div>
+                <div class="sched-cmd-row">
+                    <select class="input" data-pk="method" style="max-width:110px" aria-label="${escAttr(t('sched.wh.method'))}">
+                        ${['POST', 'PUT', 'PATCH'].map((x) => `<option value="${x}"${m === x ? ' selected' : ''}>${x}</option>`).join('')}
+                    </select>
+                    <input class="input" data-pk="url" data-vars="1" data-validate="url:webhook" spellcheck="false"
+                        placeholder="https://hooks.example.com/…" value="${escAttr(params.url || '')}" aria-label="${escAttr(t('sched.wh.url'))}">
+                </div>
+                <span class="sched-cmd-hint">${escHtml(t('sched.wh.urlHint'))}</span>
+                <label class="sched-cmd-opt"><input type="checkbox" data-pk="allowLan" ${params.allowLan ? 'checked' : ''}>
+                    <span>${escHtml(t('sched.net.allowLan'))}</span></label>
+            </div>
+            <div class="sched-fgroup">
+                <div class="sched-fgroup-h">${escHtml(t('sched.wh.gBody'))}</div>
+                <div class="sched-cmd-row">
+                    <select class="input" data-pk="format" style="max-width:180px" aria-label="${escAttr(t('sched.wh.format'))}">
+                        <option value="json"${params.format !== 'text' ? ' selected' : ''}>${escHtml(t('sched.wh.fmtJson'))}</option>
+                        <option value="text"${params.format === 'text' ? ' selected' : ''}>${escHtml(t('sched.wh.fmtText'))}</option>
+                    </select>
+                </div>
+                <textarea class="input" data-pk="body" data-vars="1" data-validate="${params.format === 'text' ? '' : 'json'}" rows="4" spellcheck="false"
+                    aria-label="${escAttr(t('sched.wh.body'))}">${escHtml(params.body || '')}</textarea>
+                <span class="sched-cmd-hint">${escHtml(t('sched.wh.bodyHint'))}</span>
+            </div>
+            <div class="sched-fgroup">
+                <div class="sched-fgroup-h">${escHtml(t('sched.wh.gHeaders'))}</div>
+                <textarea class="input" data-pk="headers" data-vars="1" data-validate="headers" rows="2" spellcheck="false"
+                    placeholder="${escAttr(t('sched.wh.headersPh'))}" aria-label="${escAttr(t('sched.wh.headers'))}">${escHtml(params.headers || '')}</textarea>
+                <label class="sched-cmd-label">${escHtml(t('sched.wh.secret'))}</label>
+                <textarea class="input sched-secret" data-pk="secretHeaders" data-validate="headers" rows="2" spellcheck="false" autocomplete="off"
+                    placeholder="Authorization: Bearer …" aria-label="${escAttr(t('sched.wh.secret'))}">${escHtml(params.secretHeaders || '')}</textarea>
+                <button type="button" class="btn btn-xs btn-ghost sched-secret-show" aria-pressed="false">${escHtml(t('sched.wh.show'))}</button>
+                <span class="sched-cmd-hint">${escHtml(t('sched.wh.secretHint'))}</span>
+            </div>
+            <details class="sched-cmd-adv">
+                <summary>${escHtml(t('sched.wh.adv'))}</summary>
+                <div class="sched-field"><label class="sched-flabel">${escHtml(t('sched.wh.retries'))}</label>
+                    <input class="input" type="number" min="0" max="4" data-pk="retries" data-validate="int:0-4" value="${escAttr(String(params.retries ?? 2))}" style="max-width:90px"></div>
+                <div class="sched-field"><label class="sched-flabel">${escHtml(t('sched.wh.timeout'))}</label>
+                    <input class="input" type="number" min="1000" max="60000" step="500" data-pk="timeoutMs" data-validate="int:1000-60000" placeholder="15000" value="${escAttr(params.timeoutMs || '')}" style="max-width:120px"></div>
+                <div class="sched-field"><label class="sched-flabel">${escHtml(t('sched.wh.into'))}</label>
+                    <input class="input" data-pk="into" spellcheck="false" placeholder="reply" value="${escAttr(params.into || '')}" style="max-width:200px"></div>
+                <label class="sched-cmd-opt"><input type="checkbox" data-pk="allowAnyStatus" ${params.allowAnyStatus ? 'checked' : ''}>
+                    <span>${escHtml(t('sched.http.anyT') || 'Treat 4xx and 5xx as success')}</span></label>
+            </details>
+            <span class="sched-cmd-hint">${escHtml(t('sched.net.permHint'))}</span>
+        </div>`;
+    }
+    else if (needs === 'discordHook' || needs === 'slackHook') {
+        const kind = needs === 'discordHook' ? 'discord' : 'slack';
+        if (params.retries === undefined) params.retries = 2;
+        host.innerHTML = `
+        <div class="sched-cmd-builder sched-net-form">
+            <div class="sched-fgroup">
+                <div class="sched-fgroup-h">${escHtml(t(kind === 'discord' ? 'sched.chat.gDiscord' : 'sched.chat.gSlack'))}</div>
+                <div class="sched-cmd-row">
+                    <input class="input sched-secret" type="password" data-pk="url" data-validate="url:${kind}" spellcheck="false" autocomplete="off"
+                        placeholder="${kind === 'discord' ? 'https://discord.com/api/webhooks/…' : 'https://hooks.slack.com/services/…'}"
+                        value="${escAttr(params.url || '')}" aria-label="${escAttr(t('sched.chat.url'))}">
+                    <button type="button" class="btn btn-xs btn-ghost sched-secret-show" aria-pressed="false">${escHtml(t('sched.wh.show'))}</button>
+                </div>
+                <span class="sched-cmd-hint">${escHtml(t(kind === 'discord' ? 'sched.chat.discordHint' : 'sched.chat.slackHint'))}</span>
+            </div>
+            <div class="sched-fgroup">
+                <div class="sched-fgroup-h">${escHtml(t('sched.chat.gMessage'))}</div>
+                <textarea class="input" data-pk="message" data-vars="1" data-validate="required" rows="3"
+                    placeholder="${escAttr(t('sched.chat.messagePh'))}" aria-label="${escAttr(t('sched.chat.message'))}">${escHtml(params.message || '')}</textarea>
+                ${kind === 'discord' ? `<div class="sched-field"><label class="sched-flabel">${escHtml(t('sched.chat.username'))}</label>
+                    <input class="input" data-pk="username" data-vars="1" placeholder="BMM" value="${escAttr(params.username || '')}" style="max-width:220px"></div>` : ''}
+            </div>
+            <details class="sched-cmd-adv">
+                <summary>${escHtml(t('sched.wh.adv'))}</summary>
+                <div class="sched-field"><label class="sched-flabel">${escHtml(t('sched.wh.retries'))}</label>
+                    <input class="input" type="number" min="0" max="4" data-pk="retries" data-validate="int:0-4" value="${escAttr(String(params.retries ?? 2))}" style="max-width:90px"></div>
+            </details>
+            <span class="sched-cmd-hint">${escHtml(t('sched.net.permHint'))}</span>
+        </div>`;
+    }
+    else if (needs === 'feedPublish') {
+        if (params.path === undefined) params.path = 'feed.xml';
+        if (params.title === undefined) params.title = '{task.name} — {stamp}';
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <div class="sched-fgroup">
+                <div class="sched-fgroup-h">${escHtml(t('sched.feed.gEntry'))}</div>
+                <div class="sched-field"><label class="sched-flabel">${escHtml(t('sched.feed.title'))}</label>
+                    <input class="input" data-pk="title" data-vars="1" data-validate="required" value="${escAttr(params.title || '')}"></div>
+                <div class="sched-field"><label class="sched-flabel">${escHtml(t('sched.feed.body'))}</label>
+                    <textarea class="input" data-pk="body" data-vars="1" rows="3">${escHtml(params.body || '')}</textarea></div>
+                <div class="sched-field"><label class="sched-flabel">${escHtml(t('sched.feed.link'))}</label>
+                    <input class="input" data-pk="link" data-vars="1" data-validate="url:optional" spellcheck="false" placeholder="https://…" value="${escAttr(params.link || '')}"></div>
+            </div>
+            <div class="sched-fgroup">
+                <div class="sched-fgroup-h">${escHtml(t('sched.feed.gFile'))}</div>
+                <div class="sched-field"><label class="sched-flabel">${escHtml(t('sched.feed.path'))}</label>
+                    <input class="input" data-pk="path" data-validate="required" spellcheck="false" value="${escAttr(params.path || '')}"></div>
+                <div class="sched-field"><label class="sched-flabel">${escHtml(t('sched.feed.feedTitle'))}</label>
+                    <input class="input" data-pk="feedTitle" placeholder="${escAttr(t('sched.feed.feedTitlePh'))}" value="${escAttr(params.feedTitle || '')}"></div>
+                <div class="sched-field"><label class="sched-flabel">${escHtml(t('sched.feed.max'))}</label>
+                    <input class="input" type="number" min="1" max="500" data-pk="max" data-validate="int:1-500" placeholder="50" value="${escAttr(params.max || '')}" style="max-width:90px"></div>
+                <span class="sched-cmd-hint">${escHtml(t('sched.feed.hint'))}</span>
+                <button type="button" class="btn btn-xs btn-ghost sched-fw-open" style="align-self:flex-start;margin-top:6px">${escHtml(t('sched.fw.openOut'))}</button>
+            </div>
+        </div>`;
+    }
+    else if (needs === 'http') {
+        const m = String(params.method || 'GET').toUpperCase();
+        const methods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'];
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${t('sched.http.req') || '1. Request'}</label>
+            <div class="sched-cmd-row">
+                <select class="input sched-p-method" style="max-width:110px">
+                    ${methods.map((x) => `<option value="${x}"${m === x ? ' selected' : ''}>${x}</option>`).join('')}
+                </select>
+                <input class="input sched-p-url" spellcheck="false" placeholder="https://api.example.com/v1/status" value="${escAttr(params.url || '')}">
+            </div>
+            <label class="sched-cmd-label">${t('sched.http.headers') || '2. Headers'}</label>
+            <textarea class="input sched-p-headers" rows="2" spellcheck="false"
+                placeholder="${escAttr(t('sched.http.headersPh') || 'One per line — Authorization: Bearer {token}')}">${escHtml(params.headers || '')}</textarea>
+            <label class="sched-cmd-label">${t('sched.http.body') || '3. Body'}</label>
+            <textarea class="input sched-p-httpbody" rows="3" spellcheck="false"
+                placeholder="${escAttr(t('sched.http.bodyPh') || 'Sent as-is. Ignored by GET and HEAD.')}">${escHtml(params.body || '')}</textarea>
+            <span class="sched-cmd-hint">${escHtml(t('sched.http.subst') || '{variables} are substituted in the address, the headers and the body before the call.')}</span>
+            <details class="sched-cmd-adv">
+                <summary>${t('sched.http.adv') || 'Advanced — read one field, timeout, allow error statuses'}</summary>
+                <input class="input sched-p-jsonpath" style="margin-top:6px" spellcheck="false"
+                    placeholder="${escAttr(t('sched.http.jsonPh') || 'field to read, e.g. data.0.version — blank keeps the whole body')}" value="${escAttr(params.jsonPath || '')}">
+                <input class="input sched-p-into" style="margin-top:6px"
+                    placeholder="${escAttr(t('sched.http.intoPh') || 'store the result in a variable, e.g. latest')}" value="${escAttr(params.into || '')}">
+                <input class="input sched-p-timeout" type="number" min="1000" max="120000" style="margin-top:6px"
+                    placeholder="${escAttr(t('sched.http.timeoutPh') || 'timeout in ms (default 15000)')}" value="${escAttr(params.timeoutMs || '')}">
+                <label class="sched-opt" style="margin-top:6px"><input type="checkbox" class="sched-p-anystatus" ${params.allowAnyStatus ? 'checked' : ''}><div><b>${escHtml(t('sched.http.anyT') || 'Treat 4xx and 5xx as success')}</b><span>${escHtml(t('sched.http.any') || 'Off by default: otherwise a 500 whose body is an HTML error page becomes the value of a variable a later step trusts. {http.status} is always readable either way.')}</span></div></label>
+            </details>
+            <span class="sched-cmd-hint">${escHtml(t('sched.http.perm') || 'Needs the “Run external programs” permission — a request can post a captured value anywhere.')}</span>
+        </div>`;
+    }
+    // Laya. One idea per line; the details behind « Plus ». The note under each says the one
+    // thing that surprises: an answer is data for later steps, never something BMM runs.
+    else if (needs === 'aiClassify') {
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.ai.text'))}</label>
+            <textarea class="input sched-p-aitext" rows="2" spellcheck="false" placeholder="${escAttr(t('sched.ai.textPh'))}">${escHtml(params.text || '')}</textarea>
+            <input class="input sched-p-aipath" spellcheck="false" placeholder="${escAttr(t('sched.ai.pathPh'))}" value="${escAttr(params.path || '')}">
+            <label class="sched-cmd-label">${escHtml(t('sched.ai.labels'))}</label>
+            <textarea class="input sched-p-ailabels" rows="3" spellcheck="false" placeholder="${escAttr(t('sched.ai.labelsPh'))}">${escHtml(params.labels || '')}</textarea>
+            <input class="input sched-p-aitask" spellcheck="false" placeholder="${escAttr(t('sched.ai.taskPh'))}" value="${escAttr(params.task || '')}">
+            <input class="input sched-p-into" spellcheck="false" placeholder="${escAttr(t('sched.ai.intoPh'))}" value="${escAttr(params.into || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.ai.classifyHint'))}</span>
+        </div>`;
+    }
+    else if (needs === 'aiAsk') {
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <input class="input sched-p-aiq" spellcheck="false" placeholder="${escAttr(t('sched.ai.questionPh'))}" value="${escAttr(params.question || '')}">
+            <input class="input sched-p-into" spellcheck="false" placeholder="${escAttr(t('sched.ai.intoPh'))}" value="${escAttr(params.into || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.ai.untrustedHint'))}</span>
+        </div>`;
+    }
+    else if (needs === 'aiSuggest') {
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <select class="input sched-p" style="max-width:240px">${pickerOptions(_mods, params.id)}</select>
+            <input class="input sched-p-into" spellcheck="false" placeholder="${escAttr(t('sched.ai.intoPh'))}" value="${escAttr(params.into || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.ai.suggestHint'))}</span>
+        </div>`;
+    }
+    // One of the user's saved Laya tasks, picked from a list (filled from the Laya settings).
+    else if (needs === 'aiRunTask') {
+        const cur = String(params.task || '');
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.ai.runTask'))}</label>
+            <select class="input sched-p-aitasksel" style="max-width:280px">
+                <option value="">${escHtml(t('sched.ai.runTaskPick'))}</option>
+                ${cur ? `<option value="${escAttr(cur)}" selected>${escHtml(cur)}</option>` : ''}
+            </select>
+            <label class="sched-cmd-label">${escHtml(t('sched.ai.text'))}</label>
+            <textarea class="input sched-p-aitext" rows="2" spellcheck="false" placeholder="${escAttr(t('sched.ai.textPh'))}">${escHtml(params.text || '')}</textarea>
+            <input class="input sched-p-aipath" spellcheck="false" placeholder="${escAttr(t('sched.ai.pathPh'))}" value="${escAttr(params.path || '')}">
+            <input class="input sched-p-into" spellcheck="false" placeholder="${escAttr(t('sched.ai.intoPh'))}" value="${escAttr(params.into || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.ai.runTaskHint'))}</span>
+        </div>`;
+        void (invoke('ai_laya_get') as Promise<any>).then((v) => {
+            const sel = host.querySelector<HTMLSelectElement>('.sched-p-aitasksel');
+            const tasks: any[] = Array.isArray(v?.config?.tasks) ? v.config.tasks : [];
+            if (!sel || !tasks.length) return;
+            sel.innerHTML = `<option value="">${escHtml(t('sched.ai.runTaskPick'))}</option>` + tasks.map((x) =>
+                `<option value="${escAttr(String(x.id))}"${String(x.id) === cur ? ' selected' : ''}>${escHtml(String(x.name || x.id))}${x.enabled === false ? ` (${escHtml(t('sched.ai.runTaskOff'))})` : ''}</option>`).join('');
+        }).catch(() => { /* AI settings unreadable: the typed id stays */ });
+    }
+    else if (needs === 'aiModClassify') {
+        // Inside a for each the id is `{item.id}` (the « Tag new mods » template): shown as such,
+        // not as an empty « select » that reads as « no mod chosen ».
+        const typed = String(params.id || '');
+        const extra = typed && !_mods.some((m: any) => m.id === typed) ? `<option value="${escAttr(typed)}" selected>${escHtml(typed)}</option>` : '';
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <select class="input sched-p" style="max-width:240px">${pickerOptions(_mods, params.id)}${extra}</select>
+            <label class="sched-opt"><input type="checkbox" class="sched-p-aiapply" ${params.apply ? 'checked' : ''}><div><b>${escHtml(t('sched.ai.applyT'))}</b><span>${escHtml(t('sched.ai.apply'))}</span></div></label>
+            <input class="input sched-p-into" spellcheck="false" placeholder="${escAttr(t('sched.ai.intoModPh'))}" value="${escAttr(params.into || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.ai.modHint'))}</span>
+        </div>`;
+    }
+    else if (needs === 'aiLibrary') {
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.ai.libSuggest'))}</label>
+            <input class="input sched-p-aisuggest" type="number" min="0" max="10" style="max-width:90px" value="${escAttr(String(params.suggest ?? 5))}">
+            <input class="input sched-p-into" spellcheck="false" placeholder="${escAttr(t('sched.ai.intoListPh'))}" value="${escAttr(params.into || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.ai.libHint'))}</span>
+        </div>`;
+    }
+    else if (needs === 'aiCrash') {
+        const scope = params.scope === 'recent' ? 'recent' : 'new';
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.ai.crashWhich'))}</label>
+            <select class="input sched-p-aiscope" style="max-width:280px">
+                <option value="new"${scope === 'new' ? ' selected' : ''}>${escHtml(t('sched.ai.crashNew'))}</option>
+                <option value="recent"${scope === 'recent' ? ' selected' : ''}>${escHtml(t('sched.ai.crashRecent'))}</option>
+            </select>
+            <input class="input sched-p-ailimit" type="number" min="1" max="12" style="max-width:90px" title="${escAttr(t('sched.ai.crashLimit'))}" aria-label="${escAttr(t('sched.ai.crashLimit'))}" value="${escAttr(String(params.limit ?? 12))}">
+            <input class="input sched-p-into" spellcheck="false" placeholder="${escAttr(t('sched.ai.intoCrashPh'))}" value="${escAttr(params.into || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.ai.crashHint'))}</span>
+        </div>`;
+    }
+    else if (needs === 'aiExplain') {
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <input class="input sched-p-aireport" spellcheck="false" placeholder="${escAttr(t('sched.ai.reportPh'))}" value="${escAttr(params.report || '')}">
+            <label class="sched-opt"><input type="checkbox" class="sched-p-airemote" ${params.allowRemote ? 'checked' : ''}><div><b>${escHtml(t('sched.ai.remoteT'))}</b><span>${escHtml(t('sched.ai.remote'))}</span></div></label>
+            <input class="input sched-p-into" spellcheck="false" placeholder="${escAttr(t('sched.ai.intoPh'))}" value="${escAttr(params.into || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.ai.explainHint'))}</span>
+        </div>`;
+    }
+    else if (needs === 'aiTriage') {
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.ai.triageText'))}</label>
+            <textarea class="input sched-p-aitext" rows="3" spellcheck="false" placeholder="${escAttr(t('sched.ai.triageTextPh'))}">${escHtml(params.text || '')}</textarea>
+            <input class="input sched-p-aipath" spellcheck="false" placeholder="${escAttr(t('sched.ai.pathPh'))}" value="${escAttr(params.path || '')}">
+            <input class="input sched-p-into" spellcheck="false" placeholder="${escAttr(t('sched.ai.intoReportPh'))}" value="${escAttr(params.into || '')}">
+            <span class="sched-cmd-hint">${escHtml(t('sched.ai.triageHint'))}</span>
+        </div>`;
+    }
+    else if (needs === 'aiStatus') {
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <span class="sched-cmd-hint">${escHtml(t('sched.ai.statusHint'))}</span>
+        </div>`;
+    }
+    else if (needs === 'benchmark') {
+        const profOpts = _profiles.filter((p: any) => p.mods_path)
+            .map((p: any) => `<option value="${escAttr(p.mods_path)}">${escHtml(p.name || p.id)}</option>`).join('');
+        host.innerHTML = `
+        <select class="input sched-b-dataset" style="max-width:120px">
+            <option value="sandbox"${params.dataset !== 'real' ? ' selected' : ''}>${t('bench.sandbox') || 'Sandbox'}</option>
+            <option value="real"${params.dataset === 'real' ? ' selected' : ''}>${t('bench.real') || 'Real'}</option>
+        </select>
+        <select class="input sched-b-size" style="max-width:100px">
+            ${['S', 'M', 'L', 'XL', 'CUSTOM'].map(s => `<option value="${s}"${(params.size || 'M') === s ? ' selected' : ''}>${s}</option>`).join('')}
+        </select>
+        <input class="input sched-b-mb" type="number" min="1" placeholder="${escAttr(t('sched.phMb') || 'MB')}" value="${escAttr(params.customMb || '')}" style="max-width:90px;display:${(params.size || 'M') === 'CUSTOM' ? 'inline-block' : 'none'}">
+        <div class="sched-b-sources" style="display:${params.dataset === 'real' ? 'block' : 'none'};width:100%;margin-top:8px">
+            <div class="sched-b-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px"></div>
+            <button type="button" class="btn btn-sm sched-b-add-folder">${t('bench.addFolder') || '+ Folder'}</button>
+            ${profOpts ? `<select class="input sched-b-add-profile" style="max-width:200px;margin-left:6px"><option value="">${t('bench.addProfile') || '+ Profile…'}</option>${profOpts}</select>` : ''}
+        </div>`;
+        // Sources picker (real mode): chips fed by a folder browser + profile dropdown.
+        if (!Array.isArray(params.sources)) params.sources = params.sources ? [params.sources] : [];
+        const chips = host.querySelector('.sched-b-chips') as HTMLElement;
+        const renderChips = () => {
+            const arr: string[] = params.sources;
+            chips.innerHTML = arr.length ? arr.map((p, i) => `<span class="pill" style="display:inline-flex;align-items:center;gap:6px;max-width:100%">
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px" data-tooltip="${escAttr(p)}">${escHtml((p.split(/[\\/]/).pop() || p))}</span>
+                <button type="button" class="sched-b-rm" data-i="${i}" style="background:none;border:0;color:var(--text-muted);cursor:pointer;display:inline-flex">${uiIcon('close', 12)}</button>
+            </span>`).join('') : `<span style="font-size:11px;color:var(--text-muted)">${t('bench.noProfile') || 'Pick profiles / folders (else sandbox is used)'}</span>`;
+            chips.querySelectorAll('.sched-b-rm').forEach(b => b.addEventListener('click', () => { params.sources.splice(Number((b as HTMLElement).dataset.i), 1); renderChips(); }));
+        };
+        renderChips();
+        host.querySelector('.sched-b-add-folder')?.addEventListener('click', async () => {
+            const { pickFolder } = await import('../../core/api.js');
+            const f = await pickFolder().catch(() => null);
+            if (f && !params.sources.includes(f)) { params.sources.push(f); renderChips(); }
+        });
+        const ap = host.querySelector('.sched-b-add-profile') as HTMLSelectElement | null;
+        ap?.addEventListener('change', () => { if (ap.value && !params.sources.includes(ap.value)) { params.sources.push(ap.value); renderChips(); } ap.value = ''; });
+    }
+    else if (needs === 'toggle') host.innerHTML = `<label style="font-size:12px;display:inline-flex;gap:6px;align-items:center"><input type="checkbox" class="sched-en" ${params.enabled ? 'checked' : ''}> ${t('sched.enableOn') || 'Enable (uncheck = disable)'}</label>`;
+    else if (needs === 'resPreset') {
+        host.innerHTML = `<select class="input sched-r-name" style="max-width:160px">${RES_PRESETS.map((v) => `<option value="${v}"${(params.name || 'balanced') === v ? ' selected' : ''}>${escHtml(resPresetLabel(v))}</option>`).join('')}</select>
+            <select class="input sched-r-scope" style="max-width:200px">
+                <option value="task"${params.scope !== 'persistent' ? ' selected' : ''}>${escHtml(t('sched.res.scopeTask') || 'for this task only')}</option>
+                <option value="persistent"${params.scope === 'persistent' ? ' selected' : ''}>${escHtml(t('sched.res.scopeKeep') || 'for good')}</option>
+            </select>
+            <label style="font-size:12px;display:inline-flex;gap:6px;align-items:center"><input type="checkbox" class="sched-r-og" ${params.overridesGame ? 'checked' : ''}> ${escHtml(t('sched.res.overGame') || 'even in app mode')}</label>
+            <span class="sched-cmd-hint">${escHtml(t('sched.res.hint') || 'For this task only: back to your preset when the task ends, and after 2 hours at most.')}</span>`;
+        host.querySelector('.sched-r-name')?.addEventListener('change', (e) => { params.name = (e.target as HTMLSelectElement).value; });
+        host.querySelector('.sched-r-scope')?.addEventListener('change', (e) => { params.scope = (e.target as HTMLSelectElement).value; });
+        host.querySelector('.sched-r-og')?.addEventListener('change', (e) => { params.overridesGame = (e.target as HTMLInputElement).checked; });
+    }
+    else if (needs === 'resGame') {
+        host.innerHTML = `<select class="input sched-r-mode" style="max-width:220px">${['auto', 'on', 'off'].map((v) => `<option value="${v}"${(params.mode || 'auto') === v ? ' selected' : ''}>${escHtml(t('sched.res.game.' + v) || v)}</option>`).join('')}</select>`;
+        host.querySelector('.sched-r-mode')?.addEventListener('change', (e) => { params.mode = (e.target as HTMLSelectElement).value; });
+    }
+    else if (needs === 'resQueue') {
+        host.innerHTML = `<select class="input sched-r-q" style="max-width:220px">${['pause_all', 'resume_all'].map((v) => `<option value="${v}"${(params.action || 'pause_all') === v ? ' selected' : ''}>${escHtml(t('sched.res.q.' + v) || v)}</option>`).join('')}</select>`;
+        host.querySelector('.sched-r-q')?.addEventListener('change', (e) => { params.action = (e.target as HTMLSelectElement).value; });
+    }
+    else if (needs === 'flag') host.innerHTML = `<select class="input sched-f-key" style="max-width:240px"><option value="">${escHtml(t('sched.settingKey') || 'setting…')}</option>${STORAGE_FLAGS.map((k) => `<option value="${k}"${params.key === k ? ' selected' : ''}>${escHtml(t('sched.flag.' + k) || k)}</option>`).join('')}</select><label style="font-size:12px;margin-left:8px;display:inline-flex;gap:6px;align-items:center"><input type="checkbox" class="sched-en" ${params.enabled ? 'checked' : ''}> on</label>`;
+    else if (needs === 'disk') host.innerHTML = _field('disk', `<select class="input sched-disk" style="max-width:240px">${diskOptions(params.mountPoint)}</select>`);
+    else if (needs === 'applyLimit') host.innerHTML = `<select class="input sched-disk" style="max-width:200px">${diskOptions(params.mountPoint)}</select><input class="input sched-limit" type="number" min="1" placeholder="${escAttr(t('sched.limitPh') || 'MB/s (empty = suggested)')}" value="${escAttr(params.limitMbS || '')}" style="max-width:200px;margin-left:6px">`;
+    else if (needs === 'var') host.innerHTML = `<input class="input sched-v-name" placeholder="${escAttr(t('sched.phName') || 'name')}" value="${escAttr(params.name || '')}" style="max-width:140px"><input class="input sched-v-val" type="number" placeholder="${escAttr(t('sched.phValue') || 'value')}" value="${escAttr(params.value || '')}" style="max-width:120px;margin-left:6px">`;
+    // ── Logic & math param editors ────────────────────────────────────────────
+    else if (needs === 'mathSet') host.innerHTML = `
+        <div class="sched-field"><label class="sched-flabel">${t('sched.mathTarget') || 'Store into variable'}</label>
+            <input class="input sched-m-target" placeholder="result" value="${escAttr(params.target || '')}" style="max-width:160px"></div>
+        <div class="sched-field" style="flex:1;min-width:240px"><label class="sched-flabel">${t('sched.mathExpr') || 'Expression (uses your variables)'}</label>
+            <input class="input sched-m-expr" placeholder="(disk.read_mbps + disk.write_mbps) / 2" value="${escAttr(params.expr || '')}"></div>`;
+    else if (needs === 'ternary') {
+        if (!params.condition) params.condition = { type: 'always', params: {} };
+        host.innerHTML = `
+            <div class="sched-field"><label class="sched-flabel">${t('sched.mathTarget') || 'Store into variable'}</label>
+                <input class="input sched-tn-target" placeholder="result" value="${escAttr(params.target || '')}" style="max-width:150px"></div>
+            <div class="sched-field" style="flex:1;min-width:220px"><label class="sched-flabel">${t('sched.tnCond') || 'If this condition is true…'}</label>
+                <div class="sched-cond"></div></div>
+            <div class="sched-field"><label class="sched-flabel">${t('sched.tnTrue') || 'then ='}</label>
+                <input class="input sched-tn-true" type="number" value="${escAttr(params.ifTrue ?? 1)}" style="max-width:90px"></div>
+            <div class="sched-field"><label class="sched-flabel">${t('sched.tnFalse') || 'else ='}</label>
+                <input class="input sched-tn-false" type="number" value="${escAttr(params.ifFalse ?? 0)}" style="max-width:90px"></div>`;
+        host.querySelector('.sched-cond')?.appendChild(conditionEditor(params.condition));
+    }
+    else if (needs === 'stopReason') host.innerHTML = `<input class="input sched-stop-reason" placeholder="${escAttr(t('sched.stopReasonPh') || 'reason (optional) — put inside an IF for a guard clause')}" value="${escAttr(params.reason || '')}" style="min-width:300px">`;
+    else if (needs === 'ruleTable') {
+        if (!Array.isArray(params.rows)) params.rows = [];
+        const opSel = (v: string) => ['==', '!=', '>', '<', '>=', '<='].map(o => `<option value="${o}"${v === o ? ' selected' : ''}>${o}</option>`).join('');
+        const rowsHtml = params.rows.map((r: any, ri: number) => `
+            <div class="sched-rule-row" data-ri="${ri}">
+                <span class="sched-rule-when">${t('sched.ruleWhen') || 'when'}</span>
+                <select class="input sched-rl-op" style="max-width:64px">${opSel(r.op || '==')}</select>
+                <input class="input sched-rl-val" type="number" value="${escAttr(r.value ?? 0)}" style="max-width:90px" placeholder="${escAttr(t('sched.phValue') || 'value')}">
+                <span class="sched-rule-then">${t('sched.ruleThen') || '→ set ='}</span>
+                <input class="input sched-rl-res" type="number" value="${escAttr(r.result ?? 0)}" style="max-width:90px" placeholder="${escAttr(t('sched.ruleResult') || 'result')}">
+                <button type="button" class="btn btn-xs btn-ghost sched-rl-del" style="color:var(--danger)">${SCHED_X}</button>
+            </div>`).join('');
+        host.innerHTML = `
+            <div class="sched-rule-head">
+                <div class="sched-field"><label class="sched-flabel">${t('sched.ruleSource') || 'Compare this variable'}</label>
+                    <input class="input sched-rl-src" placeholder="my_var" value="${escAttr(params.source || '')}" style="max-width:150px"></div>
+                <div class="sched-field"><label class="sched-flabel">${t('sched.ruleTarget') || 'Store the match into'}</label>
+                    <input class="input sched-rl-target" placeholder="result" value="${escAttr(params.target || '')}" style="max-width:150px"></div>
+            </div>
+            <div class="sched-rule-rows">${rowsHtml || `<span style="font-size:11px;color:var(--text-muted)">${t('sched.ruleEmpty') || 'No rules — add one. First matching row wins (top to bottom).'}</span>`}</div>
+            <button type="button" class="btn btn-xs sched-chip sched-rl-add">${t('sched.ruleAdd') || '+ Rule'}</button>`;
+    }
+    // ── New script-generator actions ──────────────────────────────────────────
+    else if (needs === 'pathFile') host.innerHTML = `<input class="input sched-path" placeholder="${escAttr(t('sched.filePathPh') || 'file or .exe to open/launch')}" value="${escAttr(params.path || '')}" style="min-width:260px"><button type="button" class="btn btn-sm btn-secondary sched-browse-file" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button>`;
+    else if (needs === 'pathFolder') host.innerHTML = `<input class="input sched-path" placeholder="${escAttr(t('sched.folderPathPh') || 'folder to open')}" value="${escAttr(params.path || '')}" style="min-width:260px"><button type="button" class="btn btn-sm btn-secondary sched-browse-folder" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button>`;
+    else if (needs === 'pluginId') host.innerHTML = _field(needs, `<input class="input sched-p" placeholder="${escAttr(t('sched.pluginIdPh') || 'plugin id (from plugin.json)')}" value="${escAttr(params.id || '')}" style="max-width:260px">`);
+    else if (needs === 'lpId')     host.innerHTML = _field(needs, `<input class="input sched-p" placeholder="${escAttr(t('sched.lpIdPh') || 'launch pack id')}" value="${escAttr(params.id || '')}" style="max-width:260px">`);
+    else if (needs === 'taskId')   host.innerHTML = _field(needs, `<input class="input sched-p" placeholder="${escAttr(t('sched.taskIdPh') || 'scheduled task id')}" value="${escAttr(params.id || '')}" style="max-width:260px">`);
+    // A repo can be password-protected. These two forms offered a URL and nothing else, so
+    // a task pointed at a protected repo opened the screen with an empty password box and
+    // waited for somebody who is not there. `repo.syncNow` has asked properly for a while;
+    // these did not, which is the sort of gap that only shows up at 3am.
+    //
+    // Password only, deliberately: both act through a `bmm://` deeplink, and a link able to
+    // name WHICH identity key signs is a link choosing who you are to a server. The key
+    // stays the active one — the same rule the SSH actions already follow.
+    else if (needs === 'repoConnect') {
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <div class="sched-cmd-row">
+                <input class="input sched-r-url" placeholder="${escAttr(t('sched.repoUrlPh') || 'repo.json URL')}" value="${escAttr(params.url || '')}" style="min-width:240px">
+                <input class="input sched-r-name" placeholder="${escAttr(t('sched.repoNamePh') || 'name (optional)')}" value="${escAttr(params.name || '')}" style="max-width:180px;margin-left:6px">
+            </div>
+            ${credsFields(params, { password: true })}
+        </div>`;
+        wireCreds(host, params);
+    }
+    else if (needs === 'repoSync') {
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <div class="sched-cmd-row">
+                <input class="input sched-r-url" placeholder="${escAttr(t('sched.repoUrlPh') || 'repo.json URL')}" value="${escAttr(params.url || '')}" style="min-width:240px">
+                <input class="input sched-r-prof" placeholder="${escAttr(t('sched.repoProfPh') || 'remote profile id')}" value="${escAttr(params.profile || '')}" style="max-width:180px;margin-left:6px">
+            </div>
+            ${credsFields(params, { password: true })}
+        </div>`;
+        wireCreds(host, params);
+    }
+    else if (needs === 'repoUpdate') host.innerHTML = `<input class="input sched-r-dir" placeholder="${escAttr(t('sched.repoDirPh') || 'repo folder')}" value="${escAttr(params.dir || '')}" style="min-width:240px"><button type="button" class="btn btn-sm btn-secondary sched-browse-dir" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button>`;
+    else if (needs === 'repoHost') host.innerHTML = `<input class="input sched-r-dir" placeholder="${escAttr(t('sched.serveDirPh') || 'folder to serve')}" value="${escAttr(params.dir || '')}" style="min-width:220px"><button type="button" class="btn btn-sm btn-secondary sched-browse-dir" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button><input class="input sched-r-port" type="number" min="1" placeholder="port" value="${escAttr(params.port || '')}" style="max-width:100px;margin-left:6px">`;
+    else if (needs === 'repoManifest') {
+        host.innerHTML = `<div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${escHtml(t('sched.rm.dir') || '1. The repo folder')}</label>
+            <div style="display:flex;gap:6px">
+                <input class="input sched-p-rmdir" spellcheck="false" style="flex:1" value="${escAttr(params.dir || '')}">
+                <button type="button" class="btn btn-xs btn-ghost sched-browse-rmdir">${escHtml(t('common.browse') || 'Browse')}</button>
+            </div>
+            <span class="sched-cmd-hint">${escHtml(t('sched.rm.dirHint') || '')}</span>
+            <label class="sched-cmd-label">${escHtml(t('sched.rm.name') || '2. Repo name (optional)')}</label>
+            <input class="input sched-p-rmname" spellcheck="false" style="max-width:260px" value="${escAttr(params.name || '')}">
+            <label class="sched-cmd-label">${escHtml(t('sched.rm.author') || '3. Author (optional)')}</label>
+            <input class="input sched-p-rmauthor" spellcheck="false" style="max-width:260px" value="${escAttr(params.author || '')}">
+        </div>`;
+    }
+    else if (needs === 'repoSshDir') {
+        host.innerHTML = `<input class="input sched-r-dir" placeholder="${escAttr(t('sched.sshDirPh') || 'exported repo folder to publish')}" value="${escAttr(params.dir || '')}" style="min-width:260px"><button type="button" class="btn btn-sm btn-secondary sched-browse-dir" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button>`
+            + sshTargetField(params);
+        void fillSshTargets(host, params);
+    }
+    // Same shape as repoSshDir, different placeholder: this folder is the DESTINATION, and
+    // reusing the "folder to publish" wording here is how somebody points a fetch at the
+    // wrong directory and overwrites an export they had not published yet.
+    else if (needs === 'repoSshPullDir') {
+        host.innerHTML = `<input class="input sched-r-dir" placeholder="${escAttr(t('sched.sshPullDirPh') || 'local folder to fetch INTO')}" value="${escAttr(params.dir || '')}" style="min-width:260px"><button type="button" class="btn btn-sm btn-secondary sched-browse-dir" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button>`
+            + sshTargetField(params);
+        void fillSshTargets(host, params);
+    }
+    else if (needs === 'appInstall') host.innerHTML = `<input class="input sched-a-id" placeholder="${escAttr(t('sched.appIdPh2') || 'app id')}" value="${escAttr(params.id || '')}" style="max-width:140px"><input class="input sched-a-url" placeholder="${escAttr(t('sched.appUrlPh') || 'download URL')}" value="${escAttr(params.url || '')}" style="min-width:220px;margin-left:6px"><input class="input sched-a-title" placeholder="${escAttr(t('sched.appTitlePh') || 'title (optional)')}" value="${escAttr(params.title || '')}" style="max-width:160px;margin-left:6px">`;
+    else if (needs === 'mpCreate') host.innerHTML = `
+        <div class="sched-field"><label class="sched-flabel">${t('sched.mpNameLbl') || 'Modpack name'}</label>
+            <input class="input sched-mp-name" placeholder="${escAttr(t('sched.mpNamePh') || 'e.g. My DCS pack')}" value="${escAttr(params.name || '')}" style="min-width:200px"></div>
+        <div class="sched-field"><label class="sched-flabel">${t('sched.mpFromLbl') || 'From profile (its active mods)'}</label>
+            <select class="input sched-mp-prof" style="min-width:200px">${pickerOptions(_profiles, params.profile)}</select></div>`;
+    else if (needs === 'modAdd') host.innerHTML = `
+        <div class="sched-field"><label class="sched-flabel">${t('sched.modUrlLbl') || 'Mod download URL'}</label>
+            <input class="input sched-ma-url" placeholder="https://example.com/mod.zip" value="${escAttr(params.url || '')}" style="min-width:240px"></div>
+        <div class="sched-field"><label class="sched-flabel">${t('sched.modNameLbl') || 'Display name (optional)'}</label>
+            <input class="input sched-ma-name" placeholder="${escAttr(t('sched.modNamePh') || 'MyMod')}" value="${escAttr(params.name || '')}" style="min-width:160px"></div>`;
+    else if (needs === 'telemetry') host.innerHTML = `<label class="sched-tg"><input type="checkbox" class="sched-tl-replay" ${params.replay ? 'checked' : ''}> ${t('sched.tlReplay') || 'Replay'}</label><label class="sched-tg"><input type="checkbox" class="sched-tl-full" ${params.full ? 'checked' : ''}> ${t('sched.tlFull') || 'Full (unmasked)'}</label><label class="sched-tg"><input type="checkbox" class="sched-tl-bench" ${params.bench ? 'checked' : ''}> ${t('sched.tlBench') || 'Benchmarks'}</label>`;
+    else if (needs === 'recorder') host.innerHTML = `<label class="sched-tg"><input type="checkbox" class="sched-rc-on" ${params.on ? 'checked' : ''}> ${t('sched.rcOn') || 'Record'}</label><label class="sched-tg"><input type="checkbox" class="sched-rc-full" ${params.full ? 'checked' : ''}> ${t('sched.rcFull') || 'Full'}</label><label class="sched-tg"><input type="checkbox" class="sched-rc-rust" ${params.rust ? 'checked' : ''}> ${t('sched.rcRust') || 'Rust log'}</label><label class="sched-tg"><input type="checkbox" class="sched-rc-js" ${params.js ? 'checked' : ''}> ${t('sched.rcJs') || 'JS log'}</label>`;
+    else if (needs === 'replayImport') host.innerHTML = `<input class="input sched-ri-path" placeholder="${escAttr(t('sched.replayPathPh') || 'local .bmmreplay path')}" value="${escAttr(params.path || '')}" style="min-width:220px"><input class="input sched-ri-url" placeholder="${escAttr(t('sched.replayUrlPh') || 'or URL')}" value="${escAttr(params.url || '')}" style="max-width:200px;margin-left:6px">`;
+    else if (needs === 'exportAuto') host.innerHTML = `<input class="input sched-ea-dir" placeholder="${escAttr(t('sched.backupDirPh') || 'backup folder')}" value="${escAttr(params.dir || '')}" style="min-width:200px"><button type="button" class="btn btn-sm btn-secondary sched-browse-dir" style="margin-left:6px">${t('sched.choose') || 'Choose…'}</button><input class="input sched-ea-name" placeholder="bmm-backup-{date}" value="${escAttr(params.name || '')}" style="max-width:180px;margin-left:6px"><select class="input sched-ea-inc" style="max-width:170px;margin-left:6px">${['paren', 'underscore', 'timestamp', 'overwrite'].map(o => `<option value="${o}"${(params.increment || 'paren') === o ? ' selected' : ''}>${escHtml(t('sched.inc_' + o) || o)}</option>`).join('')}</select>`;
+    else if (needs === 'bmms') {
+        host.innerHTML = `
+        <div class="sched-cmd-builder">
+            <label class="sched-cmd-label">${t('sched.bmms.codeLbl') || 'BMMScript'}</label>
+            <textarea class="input sched-bmms-code sched-code" rows="9" spellcheck="false"
+                placeholder="${escAttr(t('sched.bmms.codePh') || 'do mods.scan()\nif online {\n    do notify(message: "hello")\n}')}">${escHtml(params.code || '')}</textarea>
+            <!-- Compiled as you stop typing, so a syntax error is found here rather than at
+                 whatever hour the task runs. Filled in by the checker below. -->
+            <span class="sched-cmd-hint sched-bmms-status"></span>
+            <span class="sched-cmd-hint">${t('sched.bmms.hint') || 'The same steps as the bricks, written as text. It runs inside this task — same permissions, same variables.'}</span>
+        </div>`;
+        const ta = host.querySelector('.sched-bmms-code') as HTMLTextAreaElement | null;
+        const status = host.querySelector('.sched-bmms-status') as HTMLElement | null;
+        // Debounced: the compiler is a Tauri round trip and running it per keystroke would
+        // queue one call per character on a fast typist.
+        let timer: any = null;
+        const check = async () => {
+            if (!status || !ta) return;
+            const src = ta.value.trim();
+            if (!src) { status.textContent = ''; status.classList.remove('sched-engine-missing'); return; }
+            try {
+                const r: any = await invoke('bmms_compile_steps', { source: src });
+                if (!status.isConnected) return;   // panel changed while we were away
+                if (r?.ok) {
+                    status.classList.remove('sched-engine-missing');
+                    status.textContent = (t('sched.bmms.ok') || '{n} step(s)').replace('{n}', String((r.steps || []).length));
+                } else {
+                    const e = (r?.errors || [])[0];
+                    status.classList.add('sched-engine-missing');
+                    status.textContent = e ? `${t('sched.bmms.line') || 'Line'} ${e.line}: ${e.message}` : (t('common.error') || 'Error');
+                }
+            } catch { /* the checker is a courtesy; its failure must not block editing */ }
+        };
+        // Same language, smaller window — so the same colours. attachHighlight is
+        // idempotent and degrades to a plain textarea when Prism is missing.
+        registerBmmsLanguage();
+        if (ta) attachHighlight(ta, 'bmms');
+        ta?.addEventListener('input', () => {
+            params.code = ta.value;
+            clearTimeout(timer);
+            timer = setTimeout(() => { void check(); }, 300);
+        });
+        void check();
+    }
+    else if (needs === 'catImport') {
+        host.innerHTML = `
+        <div class="sched-field" style="flex:1;min-width:260px"><label class="sched-flabel">${t('sched.catImp.url') || 'Address of the catalogue or index'}</label>
+            <input class="input sched-cat-url" spellcheck="false" placeholder="https://…/catalog.json" value="${escAttr(params.url || '')}"></div>
+        <div class="sched-field"><label class="sched-flabel">${t('sched.catImp.type') || 'Only this kind (optional)'}</label>
+            <select class="input sched-cat-type" style="min-width:150px">
+                <option value="">${escHtml(t('sched.catImp.any') || 'whatever it is')}</option>
+                ${KINDS.map(([v, l]) => `<option value="${v}"${params.catType === v ? ' selected' : ''}>${escHtml(l)}</option>`).join('')}
+            </select></div>
+        <p class="sched-hint">${escHtml(t('sched.catImp.hint') || 'An index follows everything it lists; a single catalogue is matched against the eight kinds. One that fits none is refused rather than guessed at.')}</p>
+        ${credsFields(params, { password: true, key: true })}`;
+        // Without this the key chooser renders empty and the password lands nowhere.
+        wireCreds(host, params);
+    }
+
+    else if (needs === 'catEntry') host.innerHTML = `
+        <div class="sched-field"><label class="sched-flabel">${t('sched.catEnt.mode') || 'What to do'}</label>
+            <select class="input sched-cat-mode" style="min-width:150px">${
+                ([['add', t('sched.catEnt.add') || 'Add it'],
+                  ['update', t('sched.catEnt.update') || 'Change it'],
+                  ['remove', t('sched.catEnt.remove') || 'Remove it']] as [string, string][])
+                    .map(([v, l]) => `<option value="${v}"${(params.mode || 'add') === v ? ' selected' : ''}>${escHtml(l)}</option>`).join('')
+            }</select></div>
+        <div class="sched-field"><label class="sched-flabel">${t('sched.catEnt.type') || 'Which catalogue'}</label>
+            <select class="input sched-cat-type" style="min-width:150px">${
+                KINDS.map(([v, l]) => `<option value="${v}"${(params.catType || 'app') === v ? ' selected' : ''}>${escHtml(l)}</option>`).join('')
+            }</select></div>
+        <div class="sched-field"><label class="sched-flabel">${t('sched.catEnt.id') || 'Entry id'}</label>
+            <input class="input sched-cat-id" spellcheck="false" value="${escAttr(params.id || '')}" style="min-width:150px"></div>
+        <div class="sched-field" style="flex:1;min-width:240px"><label class="sched-flabel">${t('sched.catEnt.json') || 'Fields, as JSON'}</label>
+            <input class="input sched-cat-json" spellcheck="false" placeholder='{"name": "…", "version": "1.0"}' value="${escAttr(params.json || '')}"></div>
+        <p class="sched-hint">${escHtml(t('sched.catEnt.hint') || 'The id is what change and remove match on. Removing ignores the fields.')}</p>`;
+
+    else if (needs === 'catDelete') host.innerHTML = `
+        <div class="sched-field"><label class="sched-flabel">${t('sched.catDel.type') || 'Which catalogue to delete'}</label>
+            <select class="input sched-cat-type" style="min-width:150px">${
+                KINDS.map(([v, l]) => `<option value="${v}"${(params.catType || 'app') === v ? ' selected' : ''}>${escHtml(l)}</option>`).join('')
+            }</select></div>
+        <p class="sched-hint">${escHtml(t('sched.catDel.hint') || 'The catalogue this machine AUTHORS, not one you follow. It asks before it goes.')}</p>`;
+
+    else if (needs === 'catCreate') host.innerHTML = `
+        <div class="sched-field"><label class="sched-flabel">${t('sched.catKindLbl') || 'What to publish'}</label>
+            <select class="input sched-cat-kind" style="min-width:170px">${
+                ([['tutorial', t('sched.catKindTut') || 'My tutorials'],
+                  ['theme', t('sched.catKindTheme') || 'My themes'],
+                  ['plugin', t('sched.catKindPlugin') || 'My plugins'],
+                  ['modpack', t('sched.catKindModpack')],
+                  ['automation', t('sched.catKindAuto')],
+                  // A catalogue of catalogues, from what this BMM follows. The reader has
+                  // understood one for a long time; nothing could write one.
+                  ['index', t('sched.catKindIndex')],
+                  // The one the others cannot cover: a `.mm` is exported, not held by BMM,
+                  // so a catalogue of mod lists can only be built from a folder.
+                  ['folder', t('sched.catKindFolder')]] as [string, string][])
+                    .map(([v, l]) => `<option value="${v}"${(params.kind || 'tutorial') === v ? ' selected' : ''}>${escHtml(l)}</option>`).join('')
+            }</select></div>
+        <div class="sched-field" style="flex:1;min-width:220px"><label class="sched-flabel">${t('sched.catDirLbl') || 'Destination folder'}</label>
+            <span style="display:flex;gap:6px"><input class="input sched-ea-dir" placeholder="${escAttr(t('sched.backupDirPh') || 'folder')}" value="${escAttr(params.dir || '')}" style="flex:1"><button type="button" class="btn btn-sm btn-secondary sched-browse-dir">${t('sched.choose') || 'Choose…'}</button></span></div>
+        <div class="sched-field"><label class="sched-flabel">${t('sched.catNameLbl') || 'Catalogue name'}</label>
+            <input class="input sched-cat-name" placeholder="${escAttr(t('sched.catNamePh') || 'My catalogue')}" value="${escAttr(params.name || '')}" style="min-width:170px"></div>
+        <div class="sched-field" style="flex:1;min-width:220px"><label class="sched-flabel">${t('sched.catBaseLbl') || 'Address the files will be served from (optional)'}</label>
+            <input class="input sched-cat-base" placeholder="${escAttr(t('sched.catBasePh') || 'leave empty — they sit beside the catalogue')}" value="${escAttr(params.base || '')}"></div>
+        <label class="sched-cmd-row" style="margin-top:6px"><input type="checkbox" class="sched-cat-bundle"${params.bundle ? ' checked' : ''}>
+            <span>${escHtml(t('sched.catBundle'))}</span></label>
+        <span class="sched-cmd-hint">${escHtml(t('sched.catBundleHint'))}</span>
+        <span class="sched-cmd-hint">${t('sched.catHint') || 'Writes catalog.json into the folder, plus the files it points at when the kind has any. Themes are embedded in the index and have no separate files.'}</span>`;
+    else if (needs === 'checkUpdate') host.innerHTML = `<label class="sched-tg"><input type="checkbox" class="sched-en" ${params.enabled ? 'checked' : ''}> ${t('sched.includePrerelease') || 'Include pre-releases'}</label>`;
+    else if (needs === 'modpackExport') host.innerHTML = `
+        <div class="sched-field"><label class="sched-flabel">${t('sched.mpNameLbl') || 'Modpack'}</label>
+            <select class="input sched-p" style="min-width:200px">${pickerOptions(_modpacks, params.id)}</select></div>
+        <div class="sched-field" style="flex:1;min-width:220px"><label class="sched-flabel">${t('sched.exportDirLbl') || 'Destination folder (empty = ask each time)'}</label>
+            <span style="display:flex;gap:6px"><input class="input sched-ea-dir" placeholder="${escAttr(t('sched.backupDirPh') || 'folder')}" value="${escAttr(params.dir || '')}" style="flex:1"><button type="button" class="btn btn-sm btn-secondary sched-browse-dir">${t('sched.choose') || 'Choose…'}</button></span></div>`;
+
+    // Fields that name their parameter (`data-pk`) bind themselves. The notification forms use
+    // it; a checkbox is a boolean, anything else the text as typed.
+    host.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('[data-pk]').forEach((el) => {
+        const key = el.dataset.pk!;
+        const set = () => {
+            if (el instanceof HTMLInputElement && el.type === 'checkbox') {
+                if (el.checked) params[key] = true; else delete params[key];
+            } else params[key] = el.value;
+            // The JSON rule only applies to a JSON body.
+            if (key === 'format') {
+                const body = host.querySelector('[data-pk="body"]') as HTMLElement | null;
+                if (body) { body.dataset.validate = el.value === 'text' ? '' : 'json'; body.dispatchEvent(new Event('input', { bubbles: true })); }
+            }
+        };
+        el.addEventListener('input', set);
+        el.addEventListener('change', set);
+    });
+    host.querySelectorAll<HTMLButtonElement>('.sched-secret-show').forEach((b) => b.addEventListener('click', () => {
+        const field = (b.parentElement?.querySelector('.sched-secret') || b.previousElementSibling) as HTMLInputElement | HTMLTextAreaElement | null;
+        if (!field) return;
+        const on = b.getAttribute('aria-pressed') !== 'true';
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        field.classList.toggle('is-shown', on);
+        if (field instanceof HTMLInputElement) field.type = on ? 'text' : 'password';
+        b.textContent = on ? t('sched.wh.hide') : t('sched.wh.show');
+    }));
+    wireValidation(host);
+    wireVarPickers(host);
+
+    const sel = host.querySelector('.sched-p') as HTMLInputElement | HTMLSelectElement;
+    if (sel) {
+        const set = () => {
+            if (needs === 'message') params.message = (sel as HTMLInputElement).value;
+            else if (needs === 'url') params.url = (sel as HTMLInputElement).value;
+            else params.id = (sel as HTMLInputElement).value;
+        };
+        sel.addEventListener('change', set);
+        sel.addEventListener('input', set);
+    }
+    host.querySelector('.sched-p-mode')?.addEventListener('change', (e) => { params.mode = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-p-place')?.addEventListener('change', (e) => {
+        const v = (e.target as HTMLSelectElement).value;
+        if (v) params.placement = v; else delete params.placement;
+    });
+    // Picking a pattern FILLS the field rather than replacing it invisibly: the point is to
+    // see what you got, and to edit it afterwards.
+    host.querySelector('.sched-p-txlib')?.addEventListener('change', (e) => {
+        const v = (e.target as HTMLSelectElement).value;
+        if (!v) return;
+        params.regex = v;
+        const inp = host.querySelector('.sched-p-txregex') as HTMLInputElement | null;
+        if (inp) { inp.value = v; inp.focus(); }
+    });
+    host.querySelector('.sched-p-fwtext')?.addEventListener('input', (e) => { params.text = (e.target as HTMLTextAreaElement).value; });
+    host.querySelector('.sched-p-vtext')?.addEventListener('input', (e) => { params.text = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-timeout')?.addEventListener('input', (e) => {
+        const v = parseInt((e.target as HTMLInputElement).value, 10);
+        // Cleared means "the default", not zero. Storing 0 would be a limit of one second
+        // after the clamp, which is not what an empty field means to anybody.
+        if (Number.isFinite(v) && v > 0) params.timeoutSecs = v; else delete params.timeoutSecs;
+    });
+    host.querySelector('.sched-p-vexpect')?.addEventListener('change', (e) => { params.expect = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-p-fwappend')?.addEventListener('change', (e) => { params.append = (e.target as HTMLInputElement).checked; });
+    // Where a bare filename actually lands. The rule is one sentence and it is still a rule
+    // somebody has to take on trust until they can see the folder — and after the first write
+    // "where did it go" is the only question.
+    host.querySelector('.sched-fw-open')?.addEventListener('click', async () => {
+        try {
+            const dir = await invoke('task_output_dir', {
+                taskId: _draft.id || 'draft', outputDir: _draft.outputDir || null,
+            }) as string;
+            await invoke('open_folder', { path: dir });
+        } catch (e) { toast(String(e), 'error', 8000); }
+    });
+    host.querySelector('.sched-p-order')?.addEventListener('input', (e) => { params.order = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-prog')?.addEventListener('input', (e) => { params.program = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-args')?.addEventListener('input', (e) => { params.args = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-wd')?.addEventListener('input', (e) => { params.workingDir = (e.target as HTMLInputElement).value; });
+    const rsBind = (sel: string, key: string, prop: 'value' | 'checked' = 'value') => {
+        host.querySelector(sel)?.addEventListener(prop === 'checked' ? 'change' : 'input', (e) => {
+            params[key] = (e.target as any)[prop];
+        });
+    };
+    rsBind('.sched-rs-url', 'url'); rsBind('.sched-rs-rprof', 'repoProfile');
+    rsBind('.sched-rs-target', 'targetProfile'); rsBind('.sched-rs-game', 'gameDir');
+    rsBind('.sched-rs-mods', 'modsDir'); rsBind('.sched-rs-backup', 'backupDir');
+    // The password moved into the shared credentials block (credsFields/wireCreds), which
+    // binds it. This selector now matches nothing and would be a binding nobody can see.
+    rsBind('.sched-rs-overwrite', 'overwriteAll', 'checked');
+    rsBind('.sched-rs-delete', 'deleteExtra', 'checked');
+    rsBind('.sched-rs-limit', 'downloadLimit');
+    rsBind('.sched-rs-keepzip', 'keepZipped', 'checked');
+    host.querySelectorAll('.sched-rs-browse').forEach((b) => b.addEventListener('click', async () => {
+        const which = (b as HTMLElement).dataset.for!;
+        // Imported here, like the other browse buttons in this file do — the dialog
+        // module is not on the scheduler's own load path.
+        const { pickFolder } = await import('../../core/api.js');
+        const d = await pickFolder().catch(() => null);
+        if (!d) return;
+        const map: Record<string, [string, string]> = {
+            game: ['.sched-rs-game', 'gameDir'], mods: ['.sched-rs-mods', 'modsDir'], backup: ['.sched-rs-backup', 'backupDir'],
+        };
+        const [sel, key] = map[which];
+        params[key] = d;
+        (host.querySelector(sel) as HTMLInputElement).value = d;
+    }));
+    host.querySelector('.sched-p-bmmdir')?.addEventListener('input', (e) => { params.path = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-engine')?.addEventListener('change', (e) => {
+        params.engine = (e.target as HTMLSelectElement).value;
+        void paintEngineStatus(host, params.engine);
+    });
+    host.querySelector('.sched-p-code')?.addEventListener('input', (e) => { params.code = (e.target as HTMLTextAreaElement).value; });
+    host.querySelector('.sched-p-into')?.addEventListener('input', (e) => { params.into = (e.target as HTMLInputElement).value; });
+    // Variables and HTTP. Bound here with the rest rather than inside their own branch:
+    // every one of these is a querySelector that finds nothing for the other action types,
+    // which is how the existing bindings already work.
+    host.querySelector('.sched-p-varname')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-varvalue')?.addEventListener('input', (e) => { params.value = (e.target as HTMLTextAreaElement).value; });
+    host.querySelector('.sched-p-listsep')?.addEventListener('input', (e) => { params.sep = (e.target as HTMLInputElement).value; });
+    // text.extract / modlist.apply / dcs.hook. Same shape as everything else here: a
+    // querySelector that finds nothing for the other action types binds nothing.
+    host.querySelector('.sched-p-rmdir')?.addEventListener('input', (e) => { params.dir = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-rmname')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-rmauthor')?.addEventListener('input', (e) => { params.author = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-browse-rmdir')?.addEventListener('click', async () => {
+        const { pickFolder } = await import('../../core/api.js');
+        const d = await pickFolder().catch(() => null);
+        if (!d) return;
+        params.dir = d;
+        (host.querySelector('.sched-p-rmdir') as HTMLInputElement).value = String(d);
+    });
+    host.querySelector('.sched-cat-bundle')?.addEventListener('change', (e) => { params.bundle = (e.target as HTMLInputElement).checked; });
+    host.querySelector('.sched-p-impath')?.addEventListener('input', (e) => { params.path = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-imurl')?.addEventListener('input', (e) => { params.url = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-browse-impath')?.addEventListener('click', async () => {
+        const { pickFile } = await import('../../core/api.js');
+        const f = await pickFile({ filters: [
+            { name: 'BMM files', extensions: ['mm', 'mmlist', 'bmmplug', 'bmmtheme', 'bmmpa', 'bmmbundle', 'DATABMM', 'json'] },
+            { name: 'All files', extensions: ['*'] },
+        ] }).catch(() => null);
+        if (!f) return;
+        params.path = f;
+        (host.querySelector('.sched-p-impath') as HTMLInputElement).value = String(f);
+    });
+    host.querySelector('.sched-p-kcname')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-kckind')?.addEventListener('change', (e) => { params.kind = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-p-kcbind')?.addEventListener('input', (e) => { params.bindUrl = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-cftype')?.addEventListener('change', (e) => { params.catType = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-p-cfurl')?.addEventListener('input', (e) => { params.url = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-cfoff')?.addEventListener('change', (e) => { params.unfollow = (e.target as HTMLInputElement).checked; });
+    host.querySelector('.sched-p-bkdir')?.addEventListener('input', (e) => { params.dir = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-bkname')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-bkinc')?.addEventListener('change', (e) => { params.increment = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-p-bkpass')?.addEventListener('input', (e) => { params.passphrase = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-browse-bkdir')?.addEventListener('click', async () => {
+        const { pickFolder } = await import('../../core/api.js');
+        const d = await pickFolder().catch(() => null);
+        if (!d) return;
+        params.dir = d;
+        (host.querySelector('.sched-p-bkdir') as HTMLInputElement).value = String(d);
+    });
+    host.querySelector('.sched-p-txpath')?.addEventListener('input', (e) => { params.path = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-txsource')?.addEventListener('input', (e) => { params.source = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-txregex')?.addEventListener('input', (e) => { params.regex = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-txtarget')?.addEventListener('input', (e) => { params.target = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-txgroup')?.addEventListener('input', (e) => { params.group = parseInt((e.target as HTMLInputElement).value) || 0; });
+    host.querySelector('.sched-p-txtail')?.addEventListener('input', (e) => { params.tailKb = parseInt((e.target as HTMLInputElement).value) || 64; });
+    host.querySelector('.sched-p-lapath')?.addEventListener('input', (e) => { params.path = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-laurl')?.addEventListener('input', (e) => { params.url = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-lainstall')?.addEventListener('change', (e) => { params.install = (e.target as HTMLInputElement).checked; });
+    host.querySelector('.sched-p-laexact')?.addEventListener('change', (e) => { params.exact = (e.target as HTMLInputElement).checked; });
+    host.querySelector('.sched-p-lapass')?.addEventListener('input', (e) => { params.passphrase = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-wurl')?.addEventListener('input', (e) => { params.url = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-wname')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-wstatus')?.addEventListener('input', (e) => { params.status = parseInt((e.target as HTMLInputElement).value, 10) || 0; });
+    host.querySelector('.sched-p-wbody')?.addEventListener('input', (e) => { params.bodyContains = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-wevery')?.addEventListener('input', (e) => { params.everySeconds = parseInt((e.target as HTMLInputElement).value, 10) || 1; });
+    host.querySelector('.sched-p-wtimeout')?.addEventListener('input', (e) => { params.timeoutSeconds = parseInt((e.target as HTMLInputElement).value, 10) || 1; });
+    host.querySelector('.sched-p-wstop')?.addEventListener('change', (e) => { params.stopOnTimeout = (e.target as HTMLInputElement).checked; });
+    host.querySelector('.sched-p-keepgoing')?.addEventListener('change', (e) => { params.keepGoing = (e.target as HTMLInputElement).checked; });
+    host.querySelector('.sched-p-gwpath')?.addEventListener('input', (e) => { params.path = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-gwmode')?.addEventListener('change', (e) => { params.mode = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-p-dcsmode')?.addEventListener('change', (e) => { params.mode = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-p-dcsdir')?.addEventListener('input', (e) => { params.dir = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-browse-txpath')?.addEventListener('click', async () => {
+        const { pickFile } = await import('../../core/api.js');
+        const f = await pickFile({ filters: [{ name: 'All files', extensions: ['*'] }] }).catch(() => null);
+        if (f) { params.path = f; (host.querySelector('.sched-p-txpath') as HTMLInputElement).value = String(f); }
+    });
+    host.querySelector('.sched-browse-lapath')?.addEventListener('click', async () => {
+        const { pickFile } = await import('../../core/api.js');
+        const f = await pickFile({ filters: [{ name: 'BMM mod list', extensions: ['mm', 'mmlist', 'json'] }] }).catch(() => null);
+        if (f) { params.path = f; (host.querySelector('.sched-p-lapath') as HTMLInputElement).value = String(f); }
+    });
+    host.querySelector('.sched-p-mapkey')?.addEventListener('input', (e) => { params.key = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-mapinto')?.addEventListener('input', (e) => { params.into = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-idkind')?.addEventListener('change', (e) => { params.kind = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-p-idid')?.addEventListener('input', (e) => { params.id = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-idinto')?.addEventListener('input', (e) => { params.into = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-varscope')?.addEventListener('change', (e) => { params.scope = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-p-method')?.addEventListener('change', (e) => { params.method = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-p-url')?.addEventListener('input', (e) => { params.url = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-headers')?.addEventListener('input', (e) => { params.headers = (e.target as HTMLTextAreaElement).value; });
+    host.querySelector('.sched-p-httpbody')?.addEventListener('input', (e) => { params.body = (e.target as HTMLTextAreaElement).value; });
+    host.querySelector('.sched-p-jsonpath')?.addEventListener('input', (e) => { params.jsonPath = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-timeout')?.addEventListener('input', (e) => { params.timeoutMs = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-anystatus')?.addEventListener('change', (e) => { params.allowAnyStatus = (e.target as HTMLInputElement).checked; });
+    host.querySelector('.sched-p-aitext')?.addEventListener('input', (e) => { params.text = (e.target as HTMLTextAreaElement).value; });
+    host.querySelector('.sched-p-aipath')?.addEventListener('input', (e) => { params.path = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-ailabels')?.addEventListener('input', (e) => { params.labels = (e.target as HTMLTextAreaElement).value; });
+    host.querySelector('.sched-p-aitask')?.addEventListener('input', (e) => { params.task = (e.target as HTMLInputElement).value.trim(); });
+    host.querySelector('.sched-p-aiq')?.addEventListener('input', (e) => { params.question = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-aitasksel')?.addEventListener('change', (e) => { params.task = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-p-aiapply')?.addEventListener('change', (e) => { params.apply = (e.target as HTMLInputElement).checked; });
+    host.querySelector('.sched-p-aisuggest')?.addEventListener('input', (e) => { params.suggest = parseInt((e.target as HTMLInputElement).value, 10) || 0; });
+    host.querySelector('.sched-p-aiscope')?.addEventListener('change', (e) => { params.scope = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-p-ailimit')?.addEventListener('input', (e) => { params.limit = parseInt((e.target as HTMLInputElement).value, 10) || 12; });
+    host.querySelector('.sched-p-aireport')?.addEventListener('input', (e) => { params.report = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-p-airemote')?.addEventListener('change', (e) => { params.allowRemote = (e.target as HTMLInputElement).checked; });
+    host.querySelector('.sched-browse-prog')?.addEventListener('click', async () => {
+        const { pickFile } = await import('../../core/api.js');
+        const f = await pickFile({ filters: [{ name: 'Programs', extensions: ['exe', 'bat', 'cmd', 'ps1', 'com'] }, { name: 'All files', extensions: ['*'] }] }).catch(() => null);
+        if (f) { params.program = f; (host.querySelector('.sched-p-prog') as HTMLInputElement).value = f; }
+    });
+    host.querySelector('.sched-browse-wd')?.addEventListener('click', async () => {
+        const { pickFolder } = await import('../../core/api.js');
+        const d = await pickFolder().catch(() => null);
+        if (d) { params.workingDir = d; (host.querySelector('.sched-p-wd') as HTMLInputElement).value = d; }
+    });
+    // benchmark / storage / var editors
+    host.querySelector('.sched-b-dataset')?.addEventListener('change', (e) => {
+        params.dataset = (e.target as HTMLSelectElement).value;
+        const src = host.querySelector('.sched-b-sources') as HTMLElement | null;
+        if (src) src.style.display = params.dataset === 'real' ? 'block' : 'none';
+    });
+    host.querySelector('.sched-b-size')?.addEventListener('change', (e) => {
+        params.size = (e.target as HTMLSelectElement).value;
+        const mb = host.querySelector('.sched-b-mb') as HTMLElement | null;
+        if (mb) mb.style.display = params.size === 'CUSTOM' ? 'inline-block' : 'none';
+    });
+    host.querySelector('.sched-b-mb')?.addEventListener('input', (e) => { params.customMb = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-en')?.addEventListener('change', (e) => { params.enabled = (e.target as HTMLInputElement).checked; });
+    host.querySelector('.sched-f-key')?.addEventListener('change', (e) => { params.key = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-disk')?.addEventListener('change', (e) => { params.mountPoint = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-limit')?.addEventListener('input', (e) => { params.limitMbS = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-v-name')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-v-val')?.addEventListener('input', (e) => { params.value = (e.target as HTMLInputElement).value; });
+    // ── Logic & math listeners ──
+    host.querySelector('.sched-m-target')?.addEventListener('input', (e) => { params.target = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-m-expr')?.addEventListener('input', (e) => { params.expr = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-tn-target')?.addEventListener('input', (e) => { params.target = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-tn-true')?.addEventListener('input', (e) => { params.ifTrue = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-tn-false')?.addEventListener('input', (e) => { params.ifFalse = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-stop-reason')?.addEventListener('input', (e) => { params.reason = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-rl-src')?.addEventListener('input', (e) => { params.source = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-rl-target')?.addEventListener('input', (e) => { params.target = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-rl-add')?.addEventListener('click', () => { if (!Array.isArray(params.rows)) params.rows = []; params.rows.push({ op: '==', value: 0, result: 0 }); renderParams(host, needs, params); });
+    host.querySelectorAll('.sched-rule-row').forEach(rowEl => {
+        const ri = Number((rowEl as HTMLElement).dataset.ri);
+        rowEl.querySelector('.sched-rl-op')?.addEventListener('change', (e) => { params.rows[ri].op = (e.target as HTMLSelectElement).value; });
+        rowEl.querySelector('.sched-rl-val')?.addEventListener('input', (e) => { params.rows[ri].value = (e.target as HTMLInputElement).value; });
+        rowEl.querySelector('.sched-rl-res')?.addEventListener('input', (e) => { params.rows[ri].result = (e.target as HTMLInputElement).value; });
+        rowEl.querySelector('.sched-rl-del')?.addEventListener('click', () => { params.rows.splice(ri, 1); renderParams(host, needs, params); });
+    });
+    // ── New action params ──
+    host.querySelector('.sched-r-url')?.addEventListener('input', (e) => { params.url = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-r-name')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-r-prof')?.addEventListener('input', (e) => { params.profile = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-r-dir')?.addEventListener('input', (e) => { params.dir = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-r-port')?.addEventListener('input', (e) => { params.port = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-a-id')?.addEventListener('input', (e) => { params.id = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-a-url')?.addEventListener('input', (e) => { params.url = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-a-title')?.addEventListener('input', (e) => { params.title = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-mp-name')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-mp-prof')?.addEventListener('change', (e) => { params.profile = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-ma-url')?.addEventListener('input', (e) => { params.url = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-ma-name')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-tl-replay')?.addEventListener('change', (e) => { params.replay = (e.target as HTMLInputElement).checked; });
+    host.querySelector('.sched-tl-full')?.addEventListener('change', (e) => { params.full = (e.target as HTMLInputElement).checked; });
+    host.querySelector('.sched-tl-bench')?.addEventListener('change', (e) => { params.bench = (e.target as HTMLInputElement).checked; });
+    host.querySelector('.sched-rc-on')?.addEventListener('change', (e) => { params.on = (e.target as HTMLInputElement).checked; });
+    host.querySelector('.sched-rc-full')?.addEventListener('change', (e) => { params.full = (e.target as HTMLInputElement).checked; });
+    host.querySelector('.sched-rc-rust')?.addEventListener('change', (e) => { params.rust = (e.target as HTMLInputElement).checked; });
+    host.querySelector('.sched-rc-js')?.addEventListener('change', (e) => { params.js = (e.target as HTMLInputElement).checked; });
+    host.querySelector('.sched-ri-path')?.addEventListener('input', (e) => { params.path = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-ri-url')?.addEventListener('input', (e) => { params.url = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-ea-dir')?.addEventListener('input', (e) => { params.dir = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-ea-name')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-cat-kind')?.addEventListener('change', (e) => { params.kind = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-cat-url')?.addEventListener('input', (e) => { params.url = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-cat-type')?.addEventListener('change', (e) => { params.catType = (e.target as HTMLSelectElement).value; });
+    // `.sched-cat-pw` was catImport's own password box. It uses the shared credentials
+    // block now — same password field as every other action, plus the key it never had —
+    // so this listener had nothing left to bind to.
+    host.querySelector('.sched-cat-mode')?.addEventListener('change', (e) => { params.mode = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-cat-id')?.addEventListener('input', (e) => { params.id = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-cat-json')?.addEventListener('input', (e) => { params.json = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-cat-name')?.addEventListener('input', (e) => { params.name = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-cat-base')?.addEventListener('input', (e) => { params.base = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-ea-inc')?.addEventListener('change', (e) => { params.increment = (e.target as HTMLSelectElement).value; });
+    host.querySelector('.sched-browse-dir')?.addEventListener('click', async () => {
+        const { pickFolder } = await import('../../core/api.js');
+        const d = await pickFolder().catch(() => null);
+        if (d) { params.dir = d; const inp = host.querySelector('.sched-r-dir, .sched-ea-dir') as HTMLInputElement | null; if (inp) inp.value = d; }
+    });
+    host.querySelector('.sched-path')?.addEventListener('input', (e) => { params.path = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-browse-file')?.addEventListener('click', async () => {
+        const { pickFile } = await import('../../core/api.js');
+        const f = await pickFile({ filters: [{ name: 'All files', extensions: ['*'] }] }).catch(() => null);
+        if (f) { params.path = f; (host.querySelector('.sched-path') as HTMLInputElement).value = f; }
+    });
+    host.querySelector('.sched-browse-folder')?.addEventListener('click', async () => {
+        const { pickFolder } = await import('../../core/api.js');
+        const d = await pickFolder().catch(() => null);
+        if (d) { params.path = d; (host.querySelector('.sched-path') as HTMLInputElement).value = d; }
+    });
+    addBmmPathButtons(host, params);
+}
+
+/**
+ * Inline validation: every field with a `data-validate` rule says what is wrong with it under
+ * itself, as it is typed — in the blocks and in the flow's inspector alike (the inspector IS
+ * the block editor for one step). It never blocks typing; the runner still decides.
+ */
+function wireValidation(host: HTMLElement): void {
+    host.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('[data-validate]').forEach((el) => {
+        const paint = () => {
+            const rule = el.dataset.validate || '';
+            const key = rule ? fieldProblem(rule, el.value) : null;
+            // Under the field, and under its {x} button when it has one: never beside it, where
+            // it would squeeze the field it is talking about.
+            const anchor = (el.parentElement?.classList.contains('sched-varwrap') ? el.parentElement : el) as HTMLElement;
+            let err = anchor.nextElementSibling as HTMLElement | null;
+            if (!err || !err.classList.contains('sched-field-err')) {
+                if (!key) { el.removeAttribute('aria-invalid'); return; }
+                err = document.createElement('span');
+                err.className = 'sched-field-err';
+                err.setAttribute('role', 'status');
+                anchor.insertAdjacentElement('afterend', err);
+            }
+            err.hidden = !key;
+            err.textContent = key ? t(key) : '';
+            if (key) el.setAttribute('aria-invalid', 'true'); else el.removeAttribute('aria-invalid');
+        };
+        el.addEventListener('input', paint);
+        // A fresh step is not shouted at before anybody typed: an empty field is judged once
+        // somebody has typed in it, a filled one (a saved step) straight away.
+        if (el.value) paint();
+    });
+}
+
+/**
+ * A `{x}` button beside every field that takes `{variables}`: it lists the variables this task
+ * can name — what its steps write, what its trigger hands over, the shared store, the
+ * built-ins — and inserts the one picked at the caret.
+ */
+function wireVarPickers(host: HTMLElement): void {
+    const fields = host.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+        '[data-vars], .sched-p-url, .sched-p-headers, .sched-p-httpbody, .sched-p-fwtext, .sched-p-varvalue, input.sched-p:not([type])');
+    fields.forEach((el) => {
+        if (el.dataset.varPicker || (el instanceof HTMLInputElement && el.type === 'password')) return;
+        el.dataset.varPicker = '1';
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'sched-varbtn';
+        b.textContent = '{x}';
+        b.setAttribute('aria-label', t('sched.vp.open'));
+        b.setAttribute('data-tooltip', t('sched.vp.open'));
+        b.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); openVarPicker(b, el); });
+        const wrap = document.createElement('span');
+        wrap.className = 'sched-varwrap';
+        el.insertAdjacentElement('beforebegin', wrap);
+        wrap.appendChild(el);
+        wrap.appendChild(b);
+    });
+}
+
+function openVarPicker(anchor: HTMLElement, field: HTMLInputElement | HTMLTextAreaElement): void {
+    document.querySelector('.sched-varpop')?.remove();
+    const vars: KnownVar[] = variablesOf(_draft?.steps || [], _draft?.trigger, Object.keys(readSharedVars()));
+    const pop = document.createElement('div');
+    pop.className = 'sched-varpop';
+    pop.setAttribute('role', 'dialog');
+    pop.setAttribute('aria-label', t('sched.vp.title'));
+    pop.innerHTML = `
+        <input type="search" class="input sched-varpop-q" placeholder="${escAttr(t('sched.vp.search'))}" spellcheck="false">
+        <div class="sched-varpop-list" role="listbox"></div>
+        <p class="sched-varpop-foot">${escHtml(t('sched.vp.foot'))}</p>`;
+    const list = pop.querySelector('.sched-varpop-list') as HTMLElement;
+    const paint = (q: string) => {
+        const needle = q.trim().toLowerCase();
+        const rows = vars.filter((v) => !needle || v.name.toLowerCase().includes(needle));
+        list.innerHTML = rows.length ? rows.map((v, i) => `<button type="button" role="option" class="sched-varpop-row${i === 0 ? ' is-on' : ''}" data-v="${escAttr(v.name)}">
+                <code>{${escHtml(v.name)}}</code><span>${escHtml(t('sched.vp.from.' + v.from))}</span></button>`).join('')
+            : `<p class="sched-varpop-none">${escHtml(t('sched.vp.none'))}</p>`;
+    };
+    paint('');
+    const pick = (name: string) => {
+        const r = insertVar(field.value, field.selectionStart ?? field.value.length, field.selectionEnd ?? field.value.length, name);
+        field.value = r.value;
+        field.focus();
+        field.setSelectionRange(r.caret, r.caret);
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+        close();
+    };
+    const close = () => { pop.remove(); document.removeEventListener('pointerdown', outside, true); };
+    const outside = (e: Event) => { if (!pop.contains(e.target as Node) && e.target !== anchor) close(); };
+    list.addEventListener('click', (e) => {
+        const row = (e.target as HTMLElement).closest('[data-v]') as HTMLElement | null;
+        if (row) pick(row.dataset.v!);
+    });
+    const q = pop.querySelector('.sched-varpop-q') as HTMLInputElement;
+    q.addEventListener('input', () => paint(q.value));
+    q.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); field.focus(); }
+        if (e.key === 'Enter') { e.preventDefault(); const first = list.querySelector('[data-v]') as HTMLElement | null; if (first) pick(first.dataset.v!); }
+    });
+    (document.getElementById('app-window-outer') || document.body).appendChild(pop);
+    raiseAboveAll(pop, 12000);
+    const r = anchor.getBoundingClientRect();
+    pop.style.left = `${Math.max(8, Math.min(window.innerWidth - 280, r.right - 260))}px`;
+    pop.style.top = `${Math.min(window.innerHeight - 300, r.bottom + 4)}px`;
+    q.focus();
+    setTimeout(() => document.addEventListener('pointerdown', outside, true), 0);
+}
+
+function diskOptions(selected: string): string {
+    return `<option value="">— ${t('sched.pick') || 'select'} —</option>` +
+        _disks.map((d: any) => `<option value="${escAttr(d.mount_point)}"${d.mount_point === selected ? ' selected' : ''}>${escHtml(d.mount_point)}${d.name ? ' · ' + escHtml(d.name) : ''}</option>`).join('');
+}
+
+/** What `for each` can walk. One list: the editor's dropdown and the code box's suggestions. */
+const LOOP_SOURCES = ['enabledMods', 'disabledMods', 'mods', 'profiles', 'modpacks', 'themes', 'list', 'mapKeys'] as const;
+const COND_TYPES = ['always', 'all', 'any', 'value', 'textIs', 'fileContains', 'enumIs', 'profileActive', 'profileExists', 'modEnabled', 'modDisabled', 'modInstalled', 'modWins', 'fileIsValid', 'modpackActive', 'modpackInactive', 'allModsActive', 'pluginInstalled', 'themeActive', 'taskArmed', 'appRunning', 'appNotRunning', 'fileExists', 'pathIsDir', 'fileHash', 'filesMatch', 'fileSize', 'fileType', 'fileName', 'fileNewer', 'online', 'catalogOk', 'repoOk', 'timeReached', 'dayOfWeek', 'timeRange', 'commandSucceeds', 'gameRunning', 'resourcesPresetIs', 'queueIdle', 'aiLabel', 'aiScore', 'aiAbstained', 'aiAvailable', 'crashCause', 'aiLibraryCount', 'modAiTag'];
+// Values a preceding action can capture (used by the `value` condition).
+// Every variable an action writes into `ctx`, so a `value` condition can read all of
+// them. Four were missing — check_disk_space has always written disk.free_gb,
+// disk.free_percent and disk.total_gb, and app.checkUpdate writes update.available, but
+// none appeared in this dropdown, and the dropdown is the only way to name a source. The
+// actions were writing to variables no condition could reach: "if an update is available,
+// notify me" was simply not expressible.
+//
+// Keep this in step with the context writes in runAction. A source listed here with
+// nothing writing it reads as always-zero; a write missing from here is unreachable.
+
+/**
+ * Patterns worth not writing again.
+ *
+ * Every one of these is something people were writing by hand into `text.extract`, getting
+ * subtly wrong, and only finding out when a task read the wrong half of a line at 3am. A
+ * shelf of them is not a feature so much as a refusal to make everybody rediscover
+ * `\d+\.\d+\.\d+`.
+ *
+ * They all carry ONE capture group, because that is what `text.extract` keeps: a pattern with
+ * none matches and stores nothing, which reads exactly like a pattern that did not match.
+ */
+const REGEX_LIBRARY: { label: string; re: string }[] = [
+    { label: 'sched.rx.version', re: '\b(v?\d+\.\d+(?:\.\d+)?)\b' },
+    { label: 'sched.rx.number', re: '(-?\d+(?:\.\d+)?)' },
+    { label: 'sched.rx.url', re: '(https?://[^\s"<>)]+)' },
+    { label: 'sched.rx.ipv4', re: '\b((?:\d{1,3}\.){3}\d{1,3})\b' },
+    { label: 'sched.rx.hostPort', re: '([A-Za-z0-9.-]+:\d{2,5})' },
+    { label: 'sched.rx.email', re: '([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})' },
+    { label: 'sched.rx.sha256', re: '\b([a-fA-F0-9]{64})\b' },
+    { label: 'sched.rx.guid', re: '([0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12})' },
+    { label: 'sched.rx.isoDate', re: '(\d{4}-\d{2}-\d{2})' },
+    { label: 'sched.rx.time', re: '(\d{1,2}:\d{2}(?::\d{2})?)' },
+    { label: 'sched.rx.winPath', re: '([A-Za-z]:\\\\[^"<>|?*\r\n]+)' },
+    { label: 'sched.rx.quoted', re: '"([^"]*)"' },
+    { label: 'sched.rx.afterEquals', re: '=\s*(.+?)\s*$' },
+    { label: 'sched.rx.jsonString', re: '"name"\s*:\s*"([^"]*)"' },
+    { label: 'sched.rx.lastLine', re: '(.+)$' },
+    // The two people ask for by name. A DCS server line and a "player joined" line are the
+    // reason this list exists at all.
+    { label: 'sched.rx.joined', re: '(?:joined|connected)\s*:?\s*(.+?)\s*$' },
+    { label: 'sched.rx.error', re: '(?:ERROR|FATAL)\s*:?\s*(.+?)\s*$' },
+];
+
+/** The presets a task can pick (Custom is the user's own rules, not something to switch to). */
+const RES_PRESETS = ['silent', 'balanced', 'max'] as const;
+const resPresetLabel = (v: string) => t('sched.res.p.' + v) || v;
+
+const VALUE_SOURCES = [
+    'disk.read_mbps', 'disk.write_mbps', 'disk.suggested_limit',
+    'disk.free_gb', 'disk.free_percent', 'disk.total_gb',
+    'benchmark.mbps', 'benchmark.total_ms',
+    'update.available', 'lasttask.ok', 'lasttask.spawned', 'list.length',
+    // Operations waiting or running in the resource governor's queue (A3), read live.
+    'queue.length',
+    // The previous action (A2): 1 or 0, and how long it took. Also {last.out} as text.
+    'last.ok', 'last.ms',
+    // Which attempt of a task-level retry this run is (1 on the first run).
+    'retry.task_attempt',
+    // Laya (AI): the last classification's probability, and how many suggestions came back.
+    'ai.p', 'ai.suggestions',
+    // …and the other Laya steps (sched-vars.ts LAYA_VARS lists them with what they hold).
+    'ai.abstained',
+    'ai.mod.tagCount', 'ai.mod.adult', 'ai.mod.adultP', 'ai.mod.applied', 'ai.mod.abstained',
+    'ai.lib.total', 'ai.lib.untagged', 'ai.lib.duplicates', 'ai.lib.conflicts', 'ai.lib.suggested', 'ai.lib.findings',
+    'ai.crash.count', 'ai.crash.unknown', 'ai.crash.groups', 'ai.crash.pending', 'ai.crash.p',
+    'ai.report.kindP', 'ai.report.areaP', 'ai.report.abstained',
+    'ai.enabled', 'ai.available', 'ai.installed', 'ai.loaded', 'ai.writer', 'ai.explain.remote',
+    // How big the backup came out. A task can then warn when a nightly bundle suddenly
+    // triples — which is what a replays section left ticked by accident looks like.
+    'backup.bytes',
+    // How many files changed hands when the deployment order last moved. Zero is the
+    // ordinary answer and a useful one: it means the order changed and nothing on disk
+    // did, so the mods that moved share no file.
+    'order.moved',
+    // How many attempts the last retry took. 1 means it worked first time, which is
+    // worth being able to branch on: a step that needed three tries is working and worth
+    // knowing about.
+    'retry.attempts',
+    // What the last check found. `valid.ok` and `valid.matched` are 1/0 so a plain `value`
+    // condition can read them; the format itself is text, as {valid.format}.
+    'valid.ok',
+    'valid.matched',
+    'valid.count',
+    // Written by the two waits and by a script run with "keep going": what happened,
+    // as something a condition can select. Without these a task could wait and could not
+    // branch on the outcome of waiting, which is most of the reason to wait.
+    'wait.ok', 'wait.tries', 'script.code', 'script.ok',
+    // How much an import brought in — mods in a list, tasks in a .bmmpa, sections in a
+    // backup. The number is what a task branches on: "if the nightly backup came out
+    // with fewer sections than usual, say so".
+    'import.count',
+    // How many entries a publish wrote. Zero is the interesting number: a catalogue with
+    // no entries looks published and installs nothing.
+    'catalog.entries',
+    // How many files a publish or fetch moved. Zero from a publish means the folder was
+    // empty, which is what a failed export upstream looks like from here.
+    'ssh.files',
+    // What a manifest rebuild found. `removed` is the one worth a condition: a mistyped
+    // path and a deliberate removal both write a valid manifest, and only one of them
+    // describes an empty server.
+    'manifest.mods', 'manifest.added', 'manifest.removed', 'manifest.changed',
+    // Written by http.request on every call, including a failed one. Listed here because
+    // check-scheduler-vars caught that it was not: a value an action writes and no
+    // condition can select is half a feature, and the half that is missing is the point —
+    // "call the API, and if it answered 404 do something else".
+    'http.status',
+    // The last map touched: how many keys it holds, and whether the last `map.get` found its
+    // key. `map.hit` is the one that matters — without it, a missing key and a key whose value
+    // is genuinely empty are the same empty string, and a task cannot tell "not there" from
+    // "there and blank".
+    'map.size', 'map.hit',
+    // The upkeep steps (sched-maint.ts): what each one found, so a task can branch on it —
+    // « if a followed repo has updates, tell me », « if the caches weigh more than 2 GB, clean ».
+    'repos.checked', 'repos.updates', 'repos.errors',
+    'catalog.updates', 'catalog.done', 'catalog.skipped',
+    'integrity.checked', 'integrity.problems',
+    'cache.bytes', 'cache.freed',
+    'logs.rotated', 'logs.deleted', 'logs.freed',
+    'disk.used_gb', 'disk.profiles',
+    'server.running',
+    // The catalogue's single door, and the local API.
+    'catalog.installed', 'api.status', 'api.ok',
+    // Whether the last navigation step found what it was pointed at (1/0), for a step told to
+    // carry on when its target is missing.
+    'nav.ok',
+    // Packages and games (sched-pkg.ts): the person's answer, what was placed, whether a carried
+    // file is in place, what a mod list check found, the report, the game, a question's answer.
+    'pkg.consent', 'pkg.installed', 'pkg.ok', 'pkg.missing',
+    'list.ok', 'list.missing', 'list.inactive', 'list.altered', 'list.extra',
+    'gate.written', 'game.pid', 'game.copied', 'ask.yes',
+];
+function conditionEditor(cond: Condition): HTMLElement {
+    const el = document.createElement('div');
+    const render = () => {
+        el.innerHTML = `
+            <label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text-muted);margin-right:6px">
+                <input type="checkbox" class="sched-neg" ${cond.negate ? 'checked' : ''}> ${t('sched.not') || 'NOT'}</label>
+            <button type="button" class="input sched-cond-type sched-pickbtn" style="max-width:220px" title="${escAttr((() => { const d = t('sched.condd.' + cond.type); return d === ('sched.condd.' + cond.type) ? '' : d; })())}"><span class="sched-pickbtn-l">${escHtml(t('sched.cond.' + cond.type) || cond.type)}</span><span class="sched-pickbtn-chev">▾</span></button>
+            <span class="sched-cond-params"></span>
+            <button type="button" class="btn btn-xs btn-ghost sched-cond-try"
+                data-tooltip="${escAttr(t('sched.cond.tryHint'))}">${escHtml(t('sched.cond.try'))}</button>
+            <span class="sched-cond-result"></span>`;
+        el.querySelector('.sched-neg')?.addEventListener('change', (e) => { cond.negate = (e.target as HTMLInputElement).checked; });
+        el.querySelector('.sched-cond-type')?.addEventListener('click', (e) => {
+            openKindPicker(e.currentTarget as HTMLElement, condPickGroups(), condPickItems(), cond.type, (v) => { if (v === cond.type) return; _snapshot(); cond.type = v; cond.params = {}; render(); });
+        });
+        renderCondParams(el.querySelector('.sched-cond-params') as HTMLElement, cond);
+
+        // Ask it now.
+        //
+        // "Does fileExists see what I think it sees" needed a whole task built around it
+        // before: add a step, add a notify, save, run, read the toast, delete it again. The
+        // answer takes one call and it was never offered.
+        const out = el.querySelector('.sched-cond-result') as HTMLElement | null;
+        el.querySelector('.sched-cond-try')?.addEventListener('click', async () => {
+            if (!out) return;
+            out.className = 'sched-cond-result is-busy';
+            out.textContent = t('sched.cond.trying');
+            try {
+                // The task's SHARED variables, and nothing else. A condition that reads {path}
+                // captured by an earlier step cannot be answered here, and the hint says so —
+                // pretending otherwise would report false for a condition that is fine.
+                const ok = await evalCondition(cond, { nums: {}, text: {}, shared: readSharedVars() }, _draft as Task);
+                out.className = `sched-cond-result ${ok ? 'is-true' : 'is-false'}`;
+                out.textContent = ok ? t('sched.cond.isTrue') : t('sched.cond.isFalse');
+            } catch (e) {
+                // A condition that THREW is a third answer, and the most useful one: a
+                // permission it does not have, a path it cannot read.
+                out.className = 'sched-cond-result is-err';
+                out.textContent = String(e).slice(0, 120);
+            }
+        });
+    };
+    render();
+    return el;
+}
+
+// File path input + Browse button, shared by every file-verification condition.
+function condFileInput(p: Record<string, any>): string {
+    return `<input class="input sched-cp-path" placeholder="${escAttr(t('sched.filePath') || 'C:\\path\\to\\file')}" value="${escAttr(p.path || '')}" style="min-width:230px"><button type="button" class="btn btn-sm btn-secondary sched-cp-browse" style="margin:0 6px">${t('sched.choose') || 'Choose…'}</button>`;
+}
+
+function renderCondParams(host: HTMLElement, cond: Condition): void {
+    const p = cond.params || (cond.params = {});
+    // A GROUP renders the conditions inside it, each with its own full editor — so a group
+    // can hold a group, and "A and (B or not C)" is built by clicking rather than by nesting
+    // three ifs and repeating their else branches.
+    if (cond.type === 'all' || cond.type === 'any') {
+        if (!Array.isArray(p.of)) p.of = [];
+        const draw = () => {
+            host.innerHTML = `
+                <div class="sched-cond-group">
+                    <div class="sched-cond-group-head">${escHtml(cond.type === 'all'
+                        ? (t('sched.cond.allHint') || 'Every one of these must hold')
+                        : (t('sched.cond.anyHint') || 'At least one of these must hold'))}</div>
+                    <div class="sched-cond-list"></div>
+                    <button type="button" class="btn btn-xs btn-ghost sched-cond-add">+ ${escHtml(t('sched.cond.add') || 'condition')}</button>
+                </div>`;
+            const list = host.querySelector('.sched-cond-list') as HTMLElement;
+            (p.of as Condition[]).forEach((sub, i) => {
+                const row = document.createElement('div');
+                row.className = 'sched-cond-row';
+                const del = document.createElement('button');
+                del.type = 'button';
+                del.className = 'btn btn-xs btn-ghost sched-cond-del';
+                del.innerHTML = uiIcon('close', 14);
+                del.title = t('common.remove') || 'Remove';
+                del.setAttribute('aria-label', del.title);
+                del.addEventListener('click', () => { _snapshot(); (p.of as Condition[]).splice(i, 1); draw(); });
+                row.appendChild(conditionEditor(sub));
+                row.appendChild(del);
+                list.appendChild(row);
+            });
+            host.querySelector('.sched-cond-add')?.addEventListener('click', () => {
+                _snapshot();
+                (p.of as Condition[]).push({ type: 'always', params: {} });
+                draw();
+            });
+        };
+        draw();
+        return;
+    }
+    if (cond.type === 'profileActive') host.innerHTML = `<select class="input sched-cp" style="max-width:180px">${pickerOptions(_profiles, p.id)}</select>`;
+    else if (cond.type === 'fileIsValid') {
+        host.innerHTML = `<span style="display:flex;gap:6px;align-items:center;flex:1">
+            <input class="input sched-cp" spellcheck="false" style="flex:1" placeholder="${escAttr(t('sched.valid.filePh'))}" value="${escAttr(p.path || '')}">
+            <input class="input sched-cp2" spellcheck="false" style="max-width:130px" placeholder="${escAttr(t('sched.valid.expectPh'))}" value="${escAttr(p.expect || '')}">
+        </span>`;
+        host.querySelector('.sched-cp')?.addEventListener('input', (e) => { p.path = (e.target as HTMLInputElement).value; });
+        host.querySelector('.sched-cp2')?.addEventListener('input', (e) => { p.expect = (e.target as HTMLInputElement).value; });
+        return;
+    }
+    else if (cond.type === 'modEnabled' || cond.type === 'modDisabled' || cond.type === 'modInstalled' || cond.type === 'modWins') host.innerHTML = `<select class="input sched-cp" style="max-width:200px">${pickerOptions(_mods, p.id)}</select>`;
+    else if (cond.type === 'profileExists') host.innerHTML = `<select class="input sched-cp" style="max-width:200px">${pickerOptions(_profiles, p.id)}</select>`;
+    else if (cond.type === 'themeActive') host.innerHTML = `<select class="input sched-cp" style="max-width:200px">${pickerOptions(_themes, p.id)}</select>`;
+    else if (cond.type === 'modpackActive' || cond.type === 'modpackInactive') host.innerHTML = `<select class="input sched-cp" style="max-width:200px">${pickerOptions(_modpacks, p.id)}</select>`;
+    // Both pick from a list rather than taking a typed id. A plugin id is `com.someone.thing`
+    // and a task id is a millisecond timestamp: typed by hand, both are a silent `false`
+    // that reads as "the condition is not true" rather than "you named something that is
+    // not there".
+    else if (cond.type === 'pluginInstalled') {
+        // Filled after render: reading the installed list is a command, and this returns
+        // markup. Until it answers the box holds whatever the condition already names, so
+        // reopening a saved task never shows an empty picker for a plugin that is there.
+        host.innerHTML = `<select class="input sched-cp" style="max-width:240px">
+            <option value="">${escHtml(t('sched.cond.pickPlugin'))}</option>
+            ${p.id ? `<option value="${escAttr(p.id)}" selected>${escHtml(p.id)}</option>` : ''}
+        </select>`;
+        const sel = host.querySelector('.sched-cp') as HTMLSelectElement | null;
+        void (async () => {
+            const list = (await (invoke('get_installed_plugins') as Promise<any[]>).catch(() => [])) as any[];
+            if (!sel) return;
+            const chosen = String(p.id || '');
+            sel.innerHTML = `<option value="">${escHtml(t('sched.cond.pickPlugin'))}</option>`
+                + list.map((pl) => {
+                    const id = String(pl?.manifest?.id || pl?.id || '');
+                    return `<option value="${escAttr(id)}"${chosen === id ? ' selected' : ''}>${escHtml(String(pl?.manifest?.name || id))}</option>`;
+                }).join('')
+                // Named by the condition and not installed here: shown as absent rather than
+                // silently reset to nothing, which would turn "is it installed" into
+                // "is nothing installed" the next time the task was saved.
+                + (chosen && !list.some((pl) => String(pl?.manifest?.id || pl?.id || '') === chosen)
+                    ? `<option value="${escAttr(chosen)}" selected>${escHtml(t('sched.cond.gonePlugin').replace('{n}', chosen))}</option>` : '');
+        })();
+    }
+    else if (cond.type === 'resourcesPresetIs') host.innerHTML = `<select class="input sched-cp" style="max-width:200px">
+        ${RES_PRESETS.map((v) => `<option value="${v}"${(p.id || 'balanced') === v ? ' selected' : ''}>${escHtml(resPresetLabel(v))}</option>`).join('')}
+    </select>`;
+    else if (cond.type === 'taskArmed') host.innerHTML = `<select class="input sched-cp" style="max-width:240px">
+        <option value="">${escHtml(t('sched.cond.pickTask'))}</option>
+        ${_tasks.filter((tk) => tk.id !== _draft.id).map((tk) =>
+            `<option value="${escAttr(tk.id)}"${p.id === tk.id ? ' selected' : ''}>${escHtml(tk.name || tk.id)}</option>`).join('')}
+    </select>`;
+    else if (cond.type === 'appRunning' || cond.type === 'appNotRunning') {
+        // A pid is exact but does not survive a reboot; a name survives but can match
+        // several processes or none. Both are offered, and the backend prefers the pid when
+        // one is given. The datalist is what makes the name usable at all — see
+        // fillProcessDatalist.
+        host.innerHTML = `<input class="input sched-cp-name" list="sched-proc-list" placeholder="${escAttr(t('sched.appName') || 'app exe (e.g. DCS.exe)')}" value="${escAttr(p.name || '')}" style="max-width:200px">
+            <datalist id="sched-proc-list"></datalist>
+            <input class="input sched-cp-pid" type="number" min="1" placeholder="${escAttr(t('sched.pidPh') || 'or pid')}" value="${escAttr(p.pid ?? '')}" style="max-width:110px">
+            <span class="sched-cmd-hint">${t('sched.pidHint') || 'A pid is exact but changes every restart — prefer the name for a task that runs for months.'}</span>`;
+        host.querySelector('.sched-cp-pid')?.addEventListener('input', (e) => {
+            const v = parseInt((e.target as HTMLInputElement).value, 10);
+            p.pid = Number.isFinite(v) && v > 0 ? v : undefined;
+        });
+        void fillProcessDatalist(host, 'sched-proc-list');
+    }
+    else if (cond.type === 'fileExists') host.innerHTML = `<input class="input sched-cp-path" placeholder="${escAttr(t('sched.filePath') || 'C:\\path\\to\\file')}" value="${escAttr(p.path || '')}" style="min-width:240px">`;
+    else if (cond.type === 'timeReached') host.innerHTML = `<input type="time" class="input sched-cp-time" value="${escAttr(p.time || '17:00')}" style="max-width:140px">`;
+    else if (cond.type === 'dayOfWeek') {
+        const dayNames = (t('sched.dayNames') || 'Sun,Mon,Tue,Wed,Thu,Fri,Sat').split(',');
+        if (!Array.isArray(p.days)) p.days = [];
+        host.innerHTML = dayNames.map((d, i) => `<button type="button" class="btn btn-xs ${p.days.includes(i) ? 'btn-accent' : 'btn-ghost'}" data-d="${i}">${escHtml(d)}</button>`).join('');
+        host.querySelectorAll('[data-d]').forEach(b => b.addEventListener('click', () => {
+            const i = parseInt((b as HTMLElement).dataset.d!); const k = p.days.indexOf(i); if (k >= 0) p.days.splice(k, 1); else p.days.push(i); renderCondParams(host, cond);
+        }));
+    } else if (cond.type === 'timeRange') {
+        host.innerHTML = `<input type="time" class="input sched-cp-from" value="${escAttr(p.from || '08:00')}" style="max-width:120px"> → <input type="time" class="input sched-cp-to" value="${escAttr(p.to || '18:00')}" style="max-width:120px">`;
+        host.querySelector('.sched-cp-from')?.addEventListener('input', (e) => { p.from = (e.target as HTMLInputElement).value; });
+        host.querySelector('.sched-cp-to')?.addEventListener('input', (e) => { p.to = (e.target as HTMLInputElement).value; });
+    } else if (cond.type === 'commandSucceeds') {
+        host.innerHTML = `<input class="input sched-cp-prog" placeholder="${escAttr(t('sched.phProgram') || 'program')}" value="${escAttr(p.program || '')}" style="max-width:160px"> <input class="input sched-cp-args" placeholder="${escAttr(t('sched.phArgs') || 'args')}" value="${escAttr(p.args || '')}" style="max-width:140px">`;
+        host.querySelector('.sched-cp-prog')?.addEventListener('input', (e) => { p.program = (e.target as HTMLInputElement).value; });
+        host.querySelector('.sched-cp-args')?.addEventListener('input', (e) => { p.args = (e.target as HTMLInputElement).value; });
+    } else if (cond.type === 'enumIs') {
+        const enums = readEnums();
+        const names = Object.keys(enums).sort();
+        if (!names.length) {
+            host.innerHTML = `<span style="font-size:11px;color:var(--text-muted)">${t('sched.cond.noEnums') || 'No enum declared yet — add one in the sidebar.'}</span>`;
+        } else {
+            const chosen = names.includes(String(p.enum)) ? String(p.enum) : names[0];
+            p.enum = chosen;
+            const members = enums[chosen] || [];
+            if (!members.includes(String(p.member))) p.member = members[0] || '';
+            host.innerHTML = `
+                <input class="input sched-cp-name" spellcheck="false" placeholder="${escAttr(t('sched.cond.varPh') || 'variable')}" value="${escAttr(p.name || '')}" style="max-width:150px">
+                <select class="input sched-cp-enum" style="max-width:140px">${names.map(n => `<option value="${escAttr(n)}"${chosen === n ? ' selected' : ''}>${escHtml(n)}</option>`).join('')}</select>
+                <select class="input sched-cp-member" style="max-width:150px">${members.map(m => `<option value="${escAttr(m)}"${p.member === m ? ' selected' : ''}>${escHtml(m)}</option>`).join('')}</select>`;
+            host.querySelector('.sched-cp-name')?.addEventListener('input', (e) => { p.name = (e.target as HTMLInputElement).value; });
+            // Changing the enum redraws, because the member list belongs to it — leaving a
+            // member from the previous enum selected is a condition that can never be true.
+            host.querySelector('.sched-cp-enum')?.addEventListener('change', (e) => {
+                p.enum = (e.target as HTMLSelectElement).value;
+                p.member = (readEnums()[p.enum] || [])[0] || '';
+                renderCondParams(host, cond);
+            });
+            host.querySelector('.sched-cp-member')?.addEventListener('change', (e) => { p.member = (e.target as HTMLSelectElement).value; });
+        }
+    } else if (cond.type === 'value') {
+        // A datalist, not a <select>. Some actions write their numbers under a prefix the
+        // author picks — `app.buildInfo` puts every field of the build under `<prefix>.<key>`
+        // — so those names CANNOT be in VALUE_SOURCES, and a fixed dropdown made every one of
+        // them unreachable by the only condition that compares numbers. The list is still
+        // offered; it is now a list of suggestions rather than the whole vocabulary.
+        host.innerHTML = `
+            <input class="input sched-cp-src" list="sched-value-sources" spellcheck="false" style="max-width:170px"
+                placeholder="${escAttr(t('sched.phVarName') || 'variable')}" value="${escAttr(p.source || '')}">
+            <datalist id="sched-value-sources">
+                ${VALUE_SOURCES.map(s => `<option value="${escAttr(s)}"></option>`).join('')}
+            </datalist>
+            <select class="input sched-cp-op" style="max-width:70px">
+                ${['>', '<', '>=', '<=', '==', '!='].map(o => `<option value="${o}"${p.op === o ? ' selected' : ''}>${o}</option>`).join('')}
+            </select>
+            <input class="input sched-cp-val" type="number" placeholder="${escAttr(t('sched.phValue') || 'value')}" value="${escAttr(p.value ?? '')}" style="max-width:110px">`;
+        host.querySelector('.sched-cp-src')?.addEventListener('input', (e) => { p.source = (e.target as HTMLInputElement).value; });
+        host.querySelector('.sched-cp-op')?.addEventListener('change', (e) => { p.op = (e.target as HTMLSelectElement).value; });
+        host.querySelector('.sched-cp-val')?.addEventListener('input', (e) => { p.value = (e.target as HTMLInputElement).value; });
+    } else if (cond.type === 'textIs') {
+        // A free-typed variable name, not a dropdown of VALUE_SOURCES: the whole point of
+        // this condition is branching on something text.extract just invented a name for,
+        // and a fixed list cannot contain a name that does not exist yet.
+        host.innerHTML = `
+            <input class="input sched-cp-src" spellcheck="false" style="max-width:170px"
+                placeholder="${escAttr(t('sched.phVarName') || 'variable')}" value="${escAttr(p.source || '')}">
+            <select class="input sched-cp-op" style="max-width:130px">
+                ${['is', 'isNot', 'contains', 'matches', 'empty', 'notEmpty']
+                    .map(o => `<option value="${o}"${(p.op || 'is') === o ? ' selected' : ''}>${escHtml(t('sched.txtOp.' + o) || o)}</option>`).join('')}
+            </select>
+            <input class="input sched-cp-val" spellcheck="false" style="min-width:170px"
+                placeholder="${escAttr(t('sched.phValue') || 'value')}" value="${escAttr(p.value ?? '')}">`;
+        host.querySelector('.sched-cp-src')?.addEventListener('input', (e) => { p.source = (e.target as HTMLInputElement).value; });
+        host.querySelector('.sched-cp-op')?.addEventListener('change', (e) => { p.op = (e.target as HTMLSelectElement).value; });
+        host.querySelector('.sched-cp-val')?.addEventListener('input', (e) => { p.value = (e.target as HTMLInputElement).value; });
+    } else if (cond.type === 'aiLabel') {
+        host.innerHTML = `
+            <input class="input sched-cp-src" spellcheck="false" style="max-width:150px"
+                placeholder="${escAttr(t('sched.ai.condVarPh'))}" value="${escAttr(p.var || '')}">
+            <input class="input sched-cp-val" spellcheck="false" style="max-width:150px"
+                placeholder="${escAttr(t('sched.ai.condLabelPh'))}" value="${escAttr(p.label || '')}">
+            <input class="input sched-cp-min" type="number" min="0" max="1" step="0.05" style="max-width:90px"
+                title="${escAttr(t('sched.ai.condMin'))}" value="${escAttr(String(p.min ?? 0.5))}">`;
+        host.querySelector('.sched-cp-src')?.addEventListener('input', (e) => { p.var = (e.target as HTMLInputElement).value; });
+        host.querySelector('.sched-cp-val')?.addEventListener('input', (e) => { p.label = (e.target as HTMLInputElement).value; });
+        host.querySelector('.sched-cp-min')?.addEventListener('input', (e) => { p.min = (e.target as HTMLInputElement).value; });
+    } else if (cond.type === 'aiScore') {
+        host.innerHTML = `
+            <input class="input sched-cp-src" spellcheck="false" style="max-width:140px"
+                placeholder="${escAttr(t('sched.ai.condVarPh'))}" value="${escAttr(p.var || '')}">
+            <input class="input sched-cp-val" spellcheck="false" style="max-width:140px"
+                placeholder="${escAttr(t('sched.ai.condLabelPh'))}" value="${escAttr(p.label || '')}">
+            <select class="input sched-cp-op" style="max-width:70px">${['>=', '>', '<=', '<'].map(o => `<option value="${o}"${(p.op || '>=') === o ? ' selected' : ''}>${o}</option>`).join('')}</select>
+            <input class="input sched-cp-min" type="number" min="0" max="1" step="0.05" style="max-width:90px"
+                title="${escAttr(t('sched.ai.condScore'))}" aria-label="${escAttr(t('sched.ai.condScore'))}" value="${escAttr(String(p.value ?? 0.5))}">`;
+        host.querySelector('.sched-cp-src')?.addEventListener('input', (e) => { p.var = (e.target as HTMLInputElement).value; });
+        host.querySelector('.sched-cp-val')?.addEventListener('input', (e) => { p.label = (e.target as HTMLInputElement).value; });
+        host.querySelector('.sched-cp-op')?.addEventListener('change', (e) => { p.op = (e.target as HTMLSelectElement).value; });
+        host.querySelector('.sched-cp-min')?.addEventListener('input', (e) => { p.value = (e.target as HTMLInputElement).value; });
+    } else if (cond.type === 'aiAbstained') {
+        const which: [string, string][] = [['', t('sched.ai.abstSort')], ['ai.mod', t('sched.ai.abstMod')], ['ai.report', t('sched.ai.abstReport')]];
+        const known = which.some(([v]) => v === String(p.var || ''));
+        host.innerHTML = `
+            <select class="input sched-cp-which" style="max-width:230px">
+                ${which.map(([v, l]) => `<option value="${escAttr(v)}"${known && String(p.var || '') === v ? ' selected' : ''}>${escHtml(l)}</option>`).join('')}
+                <option value="*"${known ? '' : ' selected'}>${escHtml(t('sched.ai.abstNamed'))}</option>
+            </select>
+            <input class="input sched-cp-src" spellcheck="false" style="max-width:140px${known ? ';display:none' : ''}"
+                placeholder="${escAttr(t('sched.ai.condVarPh'))}" value="${escAttr(known ? '' : (p.var || ''))}">`;
+        const src = host.querySelector<HTMLInputElement>('.sched-cp-src');
+        host.querySelector('.sched-cp-which')?.addEventListener('change', (e) => {
+            const v = (e.target as HTMLSelectElement).value;
+            if (src) src.style.display = v === '*' ? '' : 'none';
+            p.var = v === '*' ? (src?.value || '') : v;
+        });
+        src?.addEventListener('input', () => { p.var = src.value; });
+    } else if (cond.type === 'aiAvailable') {
+        const words: Record<string, string> = {
+            available: t('sched.ai.st.available'), enabled: t('sched.ai.st.enabled'), installed: t('sched.ai.st.installed'),
+            loaded: t('sched.ai.st.loaded'), writer: t('sched.ai.st.writer'),
+        };
+        host.innerHTML = `
+            <select class="input sched-cp-what" style="max-width:260px">
+                ${STATUS_WHATS.map((w) => `<option value="${w}"${(p.what || 'available') === w ? ' selected' : ''}>${escHtml(words[w])}</option>`).join('')}
+            </select>`;
+        host.querySelector('.sched-cp-what')?.addEventListener('change', (e) => { p.what = (e.target as HTMLSelectElement).value; });
+    } else if (cond.type === 'crashCause') {
+        const field = p.field === 'cause' ? 'cause' : 'family';
+        const ids: readonly string[] = field === 'cause' ? CRASH_CAUSES : CRASH_FAMILIES;
+        const word = (id: string) => field === 'cause' ? causeWord(id) : familyWord(id);
+        host.innerHTML = `
+            <select class="input sched-cp-field" style="max-width:120px">
+                <option value="family"${field === 'family' ? ' selected' : ''}>${escHtml(t('sched.ai.crashFamily'))}</option>
+                <option value="cause"${field === 'cause' ? ' selected' : ''}>${escHtml(t('sched.ai.crashCause'))}</option>
+            </select>
+            <select class="input sched-cp-val" style="max-width:220px">
+                <option value="">${escHtml(t('sched.pick') || 'select')}</option>
+                ${ids.map((id) => `<option value="${escAttr(id)}"${String(p.value || '') === id ? ' selected' : ''}>${escHtml(word(id))}</option>`).join('')}
+            </select>
+            <input class="input sched-cp-min" type="number" min="0" max="1" step="0.05" style="max-width:90px"
+                title="${escAttr(t('sched.ai.condMin'))}" aria-label="${escAttr(t('sched.ai.condMin'))}" value="${escAttr(String(p.min ?? 0))}">
+            <select class="input sched-cp-scope" style="max-width:190px">
+                <option value="latest"${p.scope !== 'any' ? ' selected' : ''}>${escHtml(t('sched.ai.crashLatest'))}</option>
+                <option value="any"${p.scope === 'any' ? ' selected' : ''}>${escHtml(t('sched.ai.crashAny'))}</option>
+            </select>`;
+        host.querySelector('.sched-cp-field')?.addEventListener('change', (e) => { p.field = (e.target as HTMLSelectElement).value; p.value = ''; renderCondParams(host, cond); });
+        host.querySelector('.sched-cp-val')?.addEventListener('change', (e) => { p.value = (e.target as HTMLSelectElement).value; });
+        host.querySelector('.sched-cp-min')?.addEventListener('input', (e) => { p.min = (e.target as HTMLInputElement).value; });
+        host.querySelector('.sched-cp-scope')?.addEventListener('change', (e) => { p.scope = (e.target as HTMLSelectElement).value; });
+    } else if (cond.type === 'aiLibraryCount') {
+        const words: Record<string, string> = {
+            findings: t('sched.ai.lk.findings'), untagged: t('sched.ai.lk.untagged'), duplicates: t('sched.ai.lk.duplicates'),
+            conflicts: t('sched.ai.lk.conflicts'), suggested: t('sched.ai.lk.suggested'), total: t('sched.ai.lk.total'),
+        };
+        host.innerHTML = `
+            <select class="input sched-cp-kind" style="max-width:220px">
+                ${LIBRARY_KINDS.map((k) => `<option value="${k}"${(p.kind || 'findings') === k ? ' selected' : ''}>${escHtml(words[k])}</option>`).join('')}
+            </select>
+            <select class="input sched-cp-op" style="max-width:70px">${['>=', '>', '<=', '<', '==', '!='].map(o => `<option value="${o}"${(p.op || '>=') === o ? ' selected' : ''}>${o}</option>`).join('')}</select>
+            <input class="input sched-cp-val" type="number" min="0" style="max-width:90px" value="${escAttr(String(p.value ?? 1))}">`;
+        host.querySelector('.sched-cp-kind')?.addEventListener('change', (e) => { p.kind = (e.target as HTMLSelectElement).value; });
+        host.querySelector('.sched-cp-op')?.addEventListener('change', (e) => { p.op = (e.target as HTMLSelectElement).value; });
+        host.querySelector('.sched-cp-val')?.addEventListener('input', (e) => { p.value = (e.target as HTMLInputElement).value; });
+    } else if (cond.type === 'modAiTag') {
+        host.innerHTML = `
+            <select class="input sched-cp-mod" style="max-width:220px">
+                <option value="">${escHtml(t('sched.ai.lastMod'))}</option>
+                ${_mods.map((m: any) => `<option value="${escAttr(m.id)}"${String(p.id || '') === m.id ? ' selected' : ''}>${escHtml(m.name || m.id)}</option>`).join('')}
+            </select>
+            <input class="input sched-cp-val" spellcheck="false" style="max-width:150px"
+                placeholder="${escAttr(t('sched.ai.tagPh'))}" value="${escAttr(p.tag || '')}">`;
+        host.querySelector('.sched-cp-mod')?.addEventListener('change', (e) => { p.id = (e.target as HTMLSelectElement).value; });
+        host.querySelector('.sched-cp-val')?.addEventListener('input', (e) => { p.tag = (e.target as HTMLInputElement).value; });
+    } else if (cond.type === 'fileContains') {
+        host.innerHTML = `${condFileInput(p)}
+            <input class="input sched-cp-val" spellcheck="false" style="min-width:190px"
+                placeholder="${escAttr(t('sched.phContains') || 'text to look for')}" value="${escAttr(p.text || '')}">
+            <label class="sched-cp-chk"><input type="checkbox" class="sched-cp-re"${p.regex ? ' checked' : ''}>
+                <span>${escHtml(t('sched.asRegex') || 'as a pattern')}</span></label>
+            <input class="input sched-cp-tail" type="number" min="1" style="max-width:90px"
+                title="${escAttr(t('sched.tx.tail') || 'last KB')}" value="${escAttr(String(p.tailKb ?? 64))}">`;
+        host.querySelector('.sched-cp-val')?.addEventListener('input', (e) => { p.text = (e.target as HTMLInputElement).value; });
+        host.querySelector('.sched-cp-re')?.addEventListener('change', (e) => { p.regex = (e.target as HTMLInputElement).checked; });
+        host.querySelector('.sched-cp-tail')?.addEventListener('input', (e) => { p.tailKb = parseInt((e.target as HTMLInputElement).value) || 64; });
+    } else if (cond.type === 'fileHash') {
+        host.innerHTML = `${condFileInput(p)}
+            <select class="input sched-cp-algo" style="max-width:110px">${['blake3', 'sha256'].map(a => `<option value="${a}"${(p.algo || 'blake3') === a ? ' selected' : ''}>${a}</option>`).join('')}</select>
+            <input class="input sched-cp-val" placeholder="${escAttr(t('sched.expectedHash') || 'expected hash')}" value="${escAttr(p.value || '')}" style="min-width:200px">`;
+        host.querySelector('.sched-cp-algo')?.addEventListener('change', (e) => { p.algo = (e.target as HTMLSelectElement).value; });
+        host.querySelector('.sched-cp-val')?.addEventListener('input', (e) => { p.value = (e.target as HTMLInputElement).value; });
+    } else if (cond.type === 'fileSize') {
+        host.innerHTML = `${condFileInput(p)}
+            <select class="input sched-cp-op" style="max-width:70px">${['>', '<', '>=', '<=', '==', '!='].map(o => `<option value="${o}"${p.op === o ? ' selected' : ''}>${o}</option>`).join('')}</select>
+            <input class="input sched-cp-val" type="number" min="0" placeholder="${escAttr(t('sched.sizeBytes') || 'size (bytes)')}" value="${escAttr(p.value ?? '')}" style="max-width:140px">`;
+        host.querySelector('.sched-cp-op')?.addEventListener('change', (e) => { p.op = (e.target as HTMLSelectElement).value; });
+        host.querySelector('.sched-cp-val')?.addEventListener('input', (e) => { p.value = (e.target as HTMLInputElement).value; });
+    } else if (cond.type === 'fileType') {
+        host.innerHTML = `${condFileInput(p)}<input class="input sched-cp-ext" placeholder="${escAttr(t('sched.extPh') || 'extension e.g. zip')}" value="${escAttr(p.ext || '')}" style="max-width:120px">`;
+        host.querySelector('.sched-cp-ext')?.addEventListener('input', (e) => { p.ext = (e.target as HTMLInputElement).value; });
+    } else if (cond.type === 'fileName') {
+        host.innerHTML = `${condFileInput(p)}<input class="input sched-cp-val" placeholder="${escAttr(t('sched.nameContains') || 'name contains…')}" value="${escAttr(p.value || '')}" style="max-width:160px">`;
+        host.querySelector('.sched-cp-val')?.addEventListener('input', (e) => { p.value = (e.target as HTMLInputElement).value; });
+    } else if (cond.type === 'fileNewer') {
+        host.innerHTML = `${condFileInput(p)}<span style="font-size:11px;color:var(--text-muted)">${t('sched.modifiedWithin') || 'modified within last'}</span><input class="input sched-cp-min" type="number" min="1" value="${escAttr(p.minutes || 60)}" style="max-width:90px"> ${t('sched.unitMin') || 'min'}`;
+        host.querySelector('.sched-cp-min')?.addEventListener('input', (e) => { p.minutes = (e.target as HTMLInputElement).value; });
+    } else if (cond.type === 'pathIsDir') {
+        // A file and a folder are both "exists", so the thing being chosen is which one you
+        // meant — stated as two named outcomes rather than a checkbox nobody can read twice.
+        host.innerHTML = `${condFileInput(p)}<select class="input sched-cp-want" style="max-width:150px">
+            <option value="dir"${p.want !== 'file' ? ' selected' : ''}>${escAttr(t('sched.cond.isDir') || 'is a folder')}</option>
+            <option value="file"${p.want === 'file' ? ' selected' : ''}>${escAttr(t('sched.cond.isFile') || 'is a file')}</option>
+        </select>`;
+        host.querySelector('.sched-cp-want')?.addEventListener('change', (e) => { p.want = (e.target as HTMLSelectElement).value; });
+    } else if (cond.type === 'filesMatch') {
+        host.innerHTML = `<span style="font-size:11px;color:var(--text-secondary)">${t('sched.cond.filesIn') || 'every file listed in'}</span>
+            <input class="input sched-cp-list" placeholder="${escAttr(t('sched.listName') || 'list name')}" value="${escAttr(p.list || '')}" style="max-width:150px">
+            <span style="font-size:11px;color:var(--text-secondary)">${t('sched.cond.hashesTo') || 'still hashes to what'}</span>
+            <input class="input sched-cp-map" placeholder="${escAttr(t('sched.mapName') || 'map name')}" value="${escAttr(p.map || '')}" style="max-width:150px">
+            <span style="font-size:11px;color:var(--text-secondary)">${t('sched.cond.says') || 'says'}</span>
+            <select class="input sched-cp-algo" style="max-width:120px">
+                <option value="blake3"${p.algo !== 'sha256' ? ' selected' : ''}>blake3</option>
+                <option value="sha256"${p.algo === 'sha256' ? ' selected' : ''}>sha256</option>
+            </select>`;
+        host.querySelector('.sched-cp-list')?.addEventListener('input', (e) => { p.list = (e.target as HTMLInputElement).value; });
+        host.querySelector('.sched-cp-map')?.addEventListener('input', (e) => { p.map = (e.target as HTMLInputElement).value; });
+        host.querySelector('.sched-cp-algo')?.addEventListener('change', (e) => { p.algo = (e.target as HTMLSelectElement).value; });
+    } else if (cond.type === 'catalogOk' || cond.type === 'repoOk') {
+        host.innerHTML = `<input class="input sched-cp-url" placeholder="https://…" value="${escAttr(p.url || '')}" style="min-width:240px">
+            ${cond.type === 'catalogOk' ? `<select class="input sched-cp-kind" style="max-width:150px">
+                ${['any', 'app', 'plugin', 'theme', 'preset', 'repo', 'index'].map((k) =>
+                    `<option value="${k}"${(p.kind || 'any') === k ? ' selected' : ''}>${escAttr(t('sched.cond.kind.' + k) || k)}</option>`).join('')}
+            </select>` : ''}
+            <label style="font-size:11px;color:var(--text-secondary);display:inline-flex;align-items:center;gap:4px">
+                <input type="checkbox" class="sched-cp-shapeless"${p.shapeless ? ' checked' : ''}>
+                ${escAttr(t('sched.cond.answeredOnly') || 'answered is enough')}
+            </label>
+            <span style="font-size:11px;color:var(--warning)">${escAttr(t('sched.cond.needsNet') || 'needs the “run a program” permission')}</span>`;
+        host.querySelector('.sched-cp-url')?.addEventListener('input', (e) => { p.url = (e.target as HTMLInputElement).value; });
+        host.querySelector('.sched-cp-kind')?.addEventListener('change', (e) => { p.kind = (e.target as HTMLSelectElement).value; });
+        host.querySelector('.sched-cp-shapeless')?.addEventListener('change', (e) => { p.shapeless = (e.target as HTMLInputElement).checked; });
+    } else host.innerHTML = '';
+
+    const cp = host.querySelector('.sched-cp') as HTMLSelectElement;
+    if (cp) cp.addEventListener('change', () => { p.id = cp.value; });
+    host.querySelector('.sched-cp-name')?.addEventListener('input', (e) => { p.name = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-cp-path')?.addEventListener('input', (e) => { p.path = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-cp-time')?.addEventListener('input', (e) => { p.time = (e.target as HTMLInputElement).value; });
+    host.querySelector('.sched-cp-browse')?.addEventListener('click', async () => {
+        const { pickFile } = await import('../../core/api.js');
+        const f = await pickFile({ filters: [{ name: 'All files', extensions: ['*'] }] }).catch(() => null);
+        if (f) { p.path = f; const inp = host.querySelector('.sched-cp-path') as HTMLInputElement | null; if (inp) inp.value = f; }
+    });
+}
+
+// ── Share / import via .BMMPA (BMM Planification & Automation) ─────────────────
+// A .BMMPA file is just a small JSON envelope holding the task list — easy to
+// share. We reuse the gated write_text_file / read_file_text commands.
+const BMMPA_MAGIC = 'BMMPA';
+
+/**
+ * Which actions name something else by id, and what kind of thing.
+ *
+ * Data rather than a name pattern: `task.run` and `launchpack.run` share a suffix and
+ * nothing else, and a future `foo.run` should not be treated as a reference by accident.
+ * Every one of these keeps its target in `params.id`.
+ */
+const REF_ACTIONS: Record<string, 'task' | 'launchpack' | 'modpack' | 'profile' | 'plugin'> = {
+    'task.run': 'task',
+    'launchpack.run': 'launchpack',
+    'modpack.enable': 'modpack',
+    'modpack.disable': 'modpack',
+    'profile.activate': 'profile',
+    // A plugin is the same kind of dependency as a launch pack: small self-describing JSON
+    // that means nothing by id alone on another machine. `plugin.delete` is deliberately
+    // NOT here — exporting the definition of something the task removes would ship the very
+    // thing it exists to get rid of.
+    'plugin.apply': 'plugin',
+    'plugin.compare': 'plugin',
+};
+
+/** Every id a task names, by kind. Walks the whole tree — a sub-task called from inside a
+ *  loop inside an if is still a dependency, and a collector that reads only the top level
+ *  produces a file that is missing exactly the parts that were hardest to find. */
+/**
+ * The fields a step can hold other steps in.
+ *
+ * ONE list, because three walkers had their own copy and none of them learned about
+ * `branches` when the parallel kind arrived — so a reference inside a parallel branch was
+ * invisible to the exporter, the id remapper and the substituter at once. `cases` is not
+ * here: it holds objects with their own `steps`, so every caller handles it separately.
+ */
+const STEP_BODIES = ['steps', 'then', 'else', 'onError', 'default'] as const;
+
+/** Every array of steps hanging off this step, `branches` included. */
+function stepBodies(st: any): Step[][] {
+    const out: Step[][] = [];
+    for (const k of STEP_BODIES) if (Array.isArray(st?.[k])) out.push(st[k]);
+    if (Array.isArray(st?.branches)) for (const b of st.branches) if (Array.isArray(b)) out.push(b);
+    if (Array.isArray(st?.cases)) for (const c of st.cases) if (Array.isArray(c?.steps)) out.push(c.steps);
+    return out;
+}
+
+/**
+ * Everything that calls this block, by name.
+ *
+ * Blocks are stored in ONE place for the whole app, not per task — which is what makes them
+ * shareable and also what makes them dangerous: the panel is showing you every task's blocks,
+ * and the name you are about to save over may belong to something you have never opened.
+ *
+ * Blocks calling blocks are included. A helper called only by another helper is exactly the one
+ * nobody remembers, and it breaks the same way.
+ */
+function blockCallers(name: string, draft?: Task | null): string[] {
+    if (!name) return [];
+    const calls = (steps: Step[]): boolean => (steps || []).some(function seek(st: any): boolean {
+        if (st?.kind === 'call' && st.block === name) return true;
+        return stepBodies(st).some((body) => body.some(seek));
+    });
+    const out: string[] = [];
+    // The draft first: it is the one open on screen, and it is not in `_tasks` until saved.
+    if (draft && calls(draft.steps || [])) {
+        out.push(draft.name || t('sched.untitled') || 'Untitled');
+    }
+    for (const task of _tasks) {
+        if (draft && task.id === draft.id) continue;
+        if (calls(task.steps || [])) out.push(task.name || task.id);
+    }
+    const blocks = readBlocks();
+    for (const [other, steps] of Object.entries(blocks)) {
+        if (other !== name && calls(steps)) out.push(`${t('sched.bl.blockWord')} ${other}`);
+    }
+    return out;
+}
+
+function collectRefs(steps: Step[], out: Record<string, Set<string>> = {}): Record<string, Set<string>> {
+    for (const st of steps || []) {
+        if ((st as any).kind === 'action') {
+            const kind = REF_ACTIONS[String((st as any).action?.type || '')];
+            const id = String((st as any).action?.params?.id || '').trim();
+            if (kind && id) (out[kind] = out[kind] || new Set()).add(id);
+        }
+        // A `call` names a BLOCK, and a block is a kind of its own rather than an action —
+        // so REF_ACTIONS could never have found it, however many actions were added.
+        if ((st as any).kind === 'call') {
+            const name = String((st as any).block || '').trim();
+            if (name) (out.block = out.block || new Set()).add(name);
+        }
+        for (const body of stepBodies(st)) collectRefs(body, out);
+    }
+    return out;
+}
+
+/**
+ * A task plus everything it calls, transitively.
+ *
+ * Sharing a task that runs two other tasks used to share one third of an automation: the
+ * file imported, the step was there, and it failed at run time on an id that means nothing
+ * on the other machine. Following the references is the difference between sending an
+ * automation and sending a reference to one.
+ *
+ * The `seen` set is not an optimisation — two tasks that call each other are a legitimate
+ * thing to build (a retry loop, an error handler that re-runs the main job), and without it
+ * this recurses until the stack ends.
+ */
+function withSubTasks(root: Task, all: Task[]): { tasks: Task[]; missing: string[] } {
+    const byId = new Map(all.map((x) => [x.id, x]));
+    const out: Task[] = [];
+    const missing: string[] = [];
+    const seen = new Set<string>();
+    const walk = (task: Task) => {
+        if (seen.has(task.id)) return;
+        seen.add(task.id);
+        out.push(task);
+        for (const id of collectRefs(task.steps).task || []) {
+            const sub = byId.get(id);
+            // A reference to a task that does not exist HERE is recorded, not skipped. It
+            // is usually a task deleted since, and the person exporting is the only one who
+            // can still say what it was.
+            if (sub) walk(sub); else if (!missing.includes(id)) missing.push(id);
+        }
+    };
+    walk(root);
+    return { tasks: out, missing };
+}
+
+/**
+ * The launch packs and modpacks a set of tasks names, as definitions.
+ *
+ * Included because they are small, self-describing JSON that means nothing by id alone on
+ * another machine. Apps and mods are NOT: those are files, often gigabytes, frequently
+ * licensed, and a .bmmpa is a text document somebody reads before trusting.
+ *
+ * Failure is per-kind and silent-ish: a backend that cannot list launch packs should not
+ * stop somebody exporting a task, so the export continues without them and the inspector
+ * shows the reference as unresolved — which is the truth.
+ */
+async function collectIncludes(tasks: Task[]): Promise<Record<string, any[]>> {
+    const refs: Record<string, Set<string>> = {};
+    for (const t of tasks) collectRefs(t.steps, refs);
+    const includes: Record<string, any[]> = {};
+
+    if (refs.launchpack?.size) {
+        try {
+            const packs = await invoke('get_launch_packs') as any[];
+            const want = refs.launchpack;
+            includes.launchpacks = (packs || []).filter((p: any) => want.has(String(p?.id)));
+        } catch { /* see above */ }
+    }
+    if (refs.modpack?.size) {
+        try {
+            const packs = await invoke('load_modpacks') as any[];
+            const want = refs.modpack;
+            includes.modpacks = (packs || []).filter((p: any) => want.has(String(p?.id ?? p?.name)));
+        } catch { /* see above */ }
+    }
+    if (refs.block?.size) {
+        // The bodies, from the local store. Blocks are plain step arrays with no identity of
+        // their own, so there is nothing to fetch and nothing that can fail — a named block
+        // that does not exist here simply is not carried, and the inspector reports the
+        // reference as unresolved, which is the truth.
+        const store = readBlocks();
+        const want = refs.block;
+        const picked: Record<string, Step[]> = {};
+        for (const name of want) if (store[name]) picked[name] = store[name];
+        if (Object.keys(picked).length) includes.blocks = [picked];
+    }
+    if (refs.plugin?.size) {
+        try {
+            const installed = await invoke('get_installed_plugins') as any[];
+            const want = refs.plugin;
+            // The MANIFEST, which is the whole definition: id, version, permissions, and the
+            // modlist that says what applying it actually does. Not the plugin's script files
+            // — those live in its folder, and a .bmmpa is a text document somebody reads
+            // before trusting it. `has_scripts` still travels, so the inspector can say the
+            // original had them and this copy does not.
+            includes.plugins = (installed || [])
+                .filter((ip: any) => want.has(String(ip?.manifest?.id)))
+                .map((ip: any) => ip.manifest);
+        } catch { /* see above */ }
+    }
+    return includes;
+}
+
+/**
+ * Write a .bmmpa holding `tasks`.
+ *
+ * One task or forty go through the same envelope — `tasks` stays an array of one rather
+ * than gaining a singular `task` field. A second shape would mean a second branch in every
+ * reader: BMM's importer, BMM's inspector, and BCWEB's moderation inspector. Three places
+ * to keep in agreement, so that a file can say the same thing two ways.
+ *
+ * `suggested` only seeds the save dialog; the person picks the real path.
+ */
+/**
+ * One task, stripped of what belongs to THIS machine.
+ *
+ * The export already dropped `perms`, `enabled` and `osSchedule` — three decisions the person
+ * importing has to make for themselves. It kept the run history, which is a different kind of
+ * mistake: it is not a decision, it is a record of what happened here.
+ *
+ * `history` entries carry an error string, and an error string routinely carries a local path:
+ * `error: Could not write C:\Users\<name>\…`. Sharing an automation was therefore sharing
+ * a list of when the author was at their computer and where their files live. Nothing warned,
+ * because nothing was wrong with the automation.
+ *
+ * `lastRun` and `lastResult` go for the same reason and one more: an imported task showing
+ * "last ran 3 hours ago, OK" is describing a run that happened on somebody else's machine.
+ */
+function forExport(task: Task): Task {
+    // `pkg` names this machine's store: the package importer sets it again from what it verified.
+    const { history, lastRun, lastResult, pkg, ...rest } = task as any;
+    void history; void lastRun; void lastResult; void pkg;
+    return { ...rest, perms: {}, enabled: false, osSchedule: false } as Task;
+}
+
+async function writeBmmpa(tasks: Task[], suggested: string): Promise<void> {
+    if (!tasks.length) { toast(t('sched.noTasks') || 'No tasks to export', 'info'); return; }
+    const { saveFile } = await import('../../core/api.js');
+    const path = await saveFile({ defaultPath: suggested, filters: [{ name: 'BMM Automation', extensions: ['bmmpa'] }] }).catch(() => null);
+    if (!path) return;
+    const includes = await collectIncludes(tasks);
+    const payload = JSON.stringify({
+        magic: BMMPA_MAGIC, version: 1, exported: new Date().toISOString(),
+        tasks: tasks.map(forExport),
+        // Only when there is something. An empty `includes: {}` in every file
+        // invites a reader to render an empty section on every import.
+        ...(Object.keys(includes).length ? { includes } : {}),
+    }, null, 2);
+    try {
+        // Signed on the way to disk. A .bmmpa can carry scripts, so "is this still what the
+        // author wrote" is the question a person most needs answered before importing one —
+        // and the private key lives on the Rust side, where it belongs.
+        const signed = await invoke('write_signed_document', { path, json: payload, format: 'bmmpa' });
+        toast((t('sched.exportedN') || 'Exported {n} automation(s)').replace('{n}', String(tasks.length))
+            + (signed ? '' : ` — ${t('sched.exportUnsigned') || 'written unsigned'}`), 'success');
+    } catch (e) { toast(`${t('common.error') || 'Error'}: ${e}`, 'error'); }
+}
+
+export async function exportTasksFile(): Promise<void> {
+    await writeBmmpa(_tasks, 'automations.bmmpa');
+}
+
+/**
+ * Export one task. Sharing a single automation used to mean exporting everything and
+ * hand-editing the JSON to delete the rest — which is how a private path or an API token
+ * sitting in another task ends up in a file somebody meant to share.
+ */
+export async function exportOneTask(id: string): Promise<void> {
+    const task = _tasks.find((x) => x.id === id);
+    if (!task) { toast(t('sched.noTasks') || 'No tasks to export', 'info'); return; }
+    const safe = safeFileStem(task.name);
+    // Everything it calls, transitively. Sharing a task that runs two other tasks used
+    // to share one third of an automation: it imported, the step was there, and it failed
+    // at run time on an id that means nothing on the other machine.
+    const { tasks, missing } = withSubTasks(task, _tasks);
+    if (missing.length) {
+        // Said out loud rather than exported quietly. A reference to a task deleted since
+        // is something only the person exporting can still explain.
+        toast((t('sched.exp.missing') || '{n} referenced task(s) no longer exist and cannot be included.')
+            .replace('{n}', String(missing.length)), 'warning');
+    }
+    if (tasks.length > 1) {
+        toast((t('sched.exp.withSubs') || 'Including {n} task(s) this one calls.')
+            .replace('{n}', String(tasks.length - 1)), 'info');
+    }
+    await writeBmmpa(tasks, `${safe}.bmmpa`);
+}
+
+/**
+ * Show what a shared automation contains, WITHOUT importing it.
+ *
+ * The file is read and parsed; nothing is registered, nothing runs, and no task list is
+ * touched. That separation is the whole point — importing is the commitment, and until now
+ * it was also the only way to find out what you were committing to.
+ */
+/**
+ * Presets published by other people.
+ *
+ * Every entry is DOWNLOADED and INSPECTED before anything is imported — the same reader
+ * the Inspect button uses, on the same rules. A catalog of automations is a catalog of
+ * other people's code, and importing one on the strength of its description would be the
+ * thing this whole inspector exists to avoid.
+ */
+/** One row of the sources panel: where it came from, and how that went. */
+interface PresetSource {
+    url: string;
+    official: boolean;
+    // 'loading' exists so the panel can open BEFORE the feeds answer. Every other state is an
+    // outcome; this one is the absence of one, and giving it a name keeps the renderer a single
+    // switch over `state` instead of a second "are we still waiting" flag beside it.
+    // 'off' is not an outcome either: the feed was never asked. It is a state rather than a
+    // filter because a source removed from this list cannot be switched back on FROM this
+    // list — the one control that undoes it would be the one thing the filter hides.
+    state: 'ok' | 'error' | 'notfeed' | 'loading' | 'off';
+    count: number;
+    detail?: string;
+}
+
+/**
+ * The official feed comes from the link registry, never from a literal here.
+ *
+ * It used to be typed into a `window.prompt` default, which meant the official catalogue
+ * could only ever be the production domain. A BCWEB running behind a tunnel — cloudflared,
+ * ngrok, a staging host — was unreachable no matter how well it worked, so the one path
+ * that most needs testing before release was the one path that could not be tested. An
+ * empty entry in links.json now means "no official feed", which is a thing a fork may
+ * legitimately want to say.
+ */
+function officialPresetUrl(): string {
+    try { return String(getLinks().preset_catalog || '').trim(); } catch { return ''; }
+}
+
+async function loadPresetSources(): Promise<{ presets: any[]; sources: PresetSource[] }> {
+    const official = officialPresetUrl();
+    // Deduplicated against the followed list: somebody who pasted the official address by
+    // hand should see one source, not the same catalogue twice under two badges.
+    const followed = readPresetCatalogs().filter((u) => u.trim() !== official);
+    const wanted = [...(official ? [{ url: official, official: true }] : []),
+                    ...followed.map((url) => ({ url, official: false }))];
+
+    const presets: any[] = [];
+    const sources: PresetSource[] = [];
+    for (const { url, official: isOff } of wanted) {
+        // Switched off: listed, not fetched. Recorded as a source so the row — and the button
+        // that switches it back on — still exists.
+        if (!isOff && isDisabled(url)) { sources.push({ url, official: false, state: 'off', count: 0 }); continue; }
+        try {
+            // A BUNDLE is a file on this machine, not an address to fetch. The `bundle:`
+            // prefix is explicit rather than sniffed from the string: guessing that a
+            // source is local because it does not look like a URL is how a typo'd address
+            // becomes a file read.
+            let bundleDir = '';
+            let text: string;
+            if (url.startsWith('bundle:')) {
+                const res: any = await invoke('catalog_bundle_open', { path: url.slice('bundle:'.length) });
+                bundleDir = String(res?.dir || '');
+                text = String(res?.catalog || '');
+            } else {
+                // A preset source may be an ssh:// one; fetchSourceText picks the transport
+                // and handles a password-protected HTTP source, so this call site knows
+                // about neither.
+                text = await fetchSourceText(url);
+            }
+            // Any catalogue variant (universal, v2 feed, signed) reads as its preset view.
+            const doc = await (await import('../../core/catalog-read.js')).asLegacy(JSON.parse(text), 'preset', url);
+            if (!looksLikePresetFeed(doc)) {
+                // Told apart from "empty" on purpose: a plugin catalog reported as an empty
+                // preset catalog sends somebody looking for a problem that is not there.
+                sources.push({ url, official: isOff, state: 'notfeed', count: 0 });
+                continue;
+            }
+            const parsed = parsePresetFeed(doc, url, bundleDir);
+            // Trust follows the address, not the document — the rule apply_trust enforces
+            // for app catalogs. A community feed cannot call its own entries official by
+            // saying so in JSON.
+            // `_src` so a source can be hidden WITHOUT re-fetching every feed. Switching one
+            // off used to call reload(), which re-asked every catalogue over the network to
+            // answer a question already on screen — seconds of waiting for a checkbox. With
+            // the origin on each card the panel can filter in place.
+            for (const p of parsed.presets) presets.push({ ...p, official: isOff, _src: url });
+            sources.push({ url, official: isOff, state: 'ok', count: parsed.presets.length,
+                           detail: parsed.dropped.length ? parsed.dropped.join('\n') : undefined });
+        } catch (e) {
+            // The failure is kept ON the source rather than pooled into one "skipped" list.
+            // When bettercommunity.ch answers 503, the useful thing to see is which feed is
+            // down — not a footnote under an empty page that reads as "you follow nothing".
+            sources.push({ url, official: isOff, state: 'error', count: 0, detail: String(e).slice(0, 160) });
+        }
+    }
+    return { presets, sources };
+}
+
+/// Which open of the catalogue panel is current. Bumped on every open, cleared on close, so
+/// a slow load that finishes after the reader walked away knows it is stale.
+let _catalogOpenToken = 0;
+
+/**
+ * Make a catalogue of your own automations.
+ *
+ * This used to be a builder of its own — its own modal, its own wording, its own idea of
+ * what a catalogue is written as. Every other kind of catalogue in BMM had grown one too, and
+ * they disagreed: one said *Publish my own…* and another *Create catalog*, one had the
+ * protected-source block and three did not, and following a catalogue lived on a different
+ * screen from making one. Somebody who had learnt one had learnt one.
+ *
+ * So what is left here is the part that IS about automations — what can go in, what a row
+ * says, and how one is written — and the screen comes from ui/catalog-modal.ts.
+ *
+ * Writing an entry goes through `write_signed_document`, the same path a hand-export takes:
+ * a catalogue whose files were unsigned while an exported one was signed would be a quieter
+ * file for no reason anybody chose.
+ */
+export async function openTaskCatalogBuilder(): Promise<void> {
+    const { openCatalogModal } = await import('../../ui/catalog-modal.js');
+    let unsigned = 0;
+
+    /**
+     * Automations handed over as `.bmmpa` files rather than taken from your own list.
+     *
+     * Publishing on somebody else's behalf used to mean importing their automation first —
+     * which grants it nothing, but does put a task you did not write into your scheduler,
+     * with its permissions stripped, for you to remember to delete afterwards. Reading the
+     * file is not running it: it is parsed, checked for the shape a .bmmpa has, and the
+     * BYTES are copied at publish time. Nothing is imported and nothing executes.
+     *
+     * `_file` is what makes that work: writeEntry copies that file instead of re-exporting a
+     * task this machine does not have. It never reaches catalog.json, because the row is
+     * built by presetRow from the fields below.
+     */
+    type Candidate = Task & { _file?: string };
+    let handed: Candidate[] = [];
+    let firstCall = true;
+
+    const pickBmmpa = async (): Promise<Candidate[]> => {
+        const paths = await pickFiles([{ name: 'BMM automation', extensions: ['bmmpa', 'json'] }]).catch(() => null);
+        const out: Candidate[] = [];
+        for (const p of paths || []) {
+            const base = String(p).replace(/^.*[/\\]/, '');
+            try {
+                const doc = JSON.parse(await invoke('read_file_text', { path: p }) as string);
+                const first = Array.isArray(doc?.tasks) ? doc.tasks[0] : null;
+                // Checked when it is PICKED. A file that is not an automation must fail here,
+                // with its name, rather than produce a catalogue entry that installs nothing.
+                if (!first || typeof first !== 'object') {
+                    toast(t('sched.tcb.notTask').replace('{f}', base), 'warning', 7000);
+                    continue;
+                }
+                out.push({
+                    ...(first as Task),
+                    id: String(first.id || base),
+                    name: String(first.name || base.replace(/\.[^.]+$/, '')),
+                    _file: String(p),
+                });
+            } catch {
+                toast(t('sched.tcb.notTask').replace('{f}', base), 'warning', 7000);
+            }
+        }
+        return out;
+    };
+    await openCatalogModal<Task>({
+        id: 'preset',
+        title: t('sched.tcb.title'),
+        subtitle: t('sched.tcb.sub'),
+        storeKey: 'bmm_preset_catalogs',
+        feedField: 'presets',
+        ext: 'bmmpa',
+        fallbackNoun: 'automation',
+        candidates: async () => {
+            // The first call is the screen opening: your own automations. Every call after it
+            // is the "add a file" button, so it asks for files and adds them to what is there.
+            if (firstCall) { firstCall = false; return _tasks.slice(); }
+            const more = await pickBmmpa();
+            handed = [...handed, ...more];
+            return more;
+        },
+        addMoreLabel: t('sched.tcb.addFile'),
+        label: (task) => ({
+            name: task.name || '',
+            sub: `${(task.steps || []).length} ${t('sched.tcb.steps')}`,
+        }),
+        entryId: (task) => task.id,
+        writeEntry: async (task, dir, file) => {
+            const sep = dir.includes('\\') ? '\\' : '/';
+            // A handed-over file is COPIED, signature and all. Re-exporting it would sign
+            // somebody else's automation with this machine's key, and collectIncludes cannot
+            // resolve sub-tasks and blocks that live on their machine, not this one.
+            const src = (task as Candidate)._file;
+            if (src) {
+                await invoke('copy_file', { src, dest: `${dir}${sep}${file}` });
+                return true;
+            }
+            // Everything it calls, transitively — sub-tasks, blocks, launch packs, plugins.
+            // The same collector a hand-export uses, so a published automation is not a
+            // thinner thing than a shared one.
+            const includes = await collectIncludes([task]);
+            const payload = JSON.stringify({
+                magic: BMMPA_MAGIC, version: 1, exported: new Date().toISOString(), tasks: [task],
+                ...(Object.keys(includes).length ? { includes } : {}),
+            }, null, 2);
+            const signed = await invoke('write_signed_document', {
+                path: `${dir}${sep}${file}`, json: payload, format: 'bmmpa',
+            });
+            if (!signed) unsigned += 1;
+            return true;
+        },
+        row: (task, address) => presetRow(task, address),
+        looksLike: looksLikePresetFeed,
+        // Said once, at the end, rather than per file: one automation that could not be
+        // signed and forty that could is one sentence, not forty toasts.
+        onChange: () => {
+            if (unsigned) {
+                toast(t('sched.exportUnsigned') || 'written unsigned', 'warning');
+                unsigned = 0;
+            }
+        },
+    });
+    if (unsigned) toast(t('sched.exportUnsigned') || 'written unsigned', 'warning');
+}
+
+export async function browsePresetCatalogs(): Promise<void> {
+    // The modal opens FIRST, then fills in.
+    //
+    // It used to await every source before drawing anything, so clicking the button did
+    // nothing visible until the slowest feed answered — and the feed that made this obvious was
+    // one returning 503, where "nothing happens" lasted the whole timeout. A panel whose entire
+    // job is to explain why a catalogue did not answer cannot itself hang silently while it
+    // finds out.
+    //
+    // Each source row already states its own outcome, so `pending: true` is a state the
+    // existing renderer can show rather than a second loading screen.
+    const pending = officialPresetUrl();
+    // Each open gets a token. The panel below stamps it, the close handler clears it, and the
+    // re-render at the end refuses to run against a stale one.
+    const token = ++_catalogOpenToken;
+    showPresetCatalog({
+        presets: [],
+        sources: pending ? [{ url: pending, official: true, state: 'loading', count: 0 }] : [],
+    });
+    const data = await loadPresetSources();
+
+    // CLOSED MEANS CLOSED. A source that does not answer holds this await open for its whole
+    // timeout, and the panel re-rendered when it finally returned — so closing it while an
+    // unreachable catalogue was still being waited on made it spring back, which is not a
+    // thing a window is allowed to do. The result is announced instead, and it is still one
+    // click away.
+    if (token !== _catalogOpenToken || !document.querySelector('.sched-pc-overlay')) {
+        const found = (data.presets || []).length;
+        const failed = (data.sources || []).filter((x: any) => x.state === 'error').length;
+        toast(found
+            ? (t('sched.pc.doneToast') || '{n} automation(s) found in the catalogues').replace('{n}', String(found))
+            : (t('sched.pc.noneToast') || 'The catalogues returned nothing'),
+        failed ? 'warning' : 'info');
+        return;
+    }
+    // Re-render in place. showPresetCatalog closes any panel it already opened, so this
+    // replaces the pending view rather than stacking a second overlay on top of it.
+    showPresetCatalog(data);
+}
+
+/**
+ * Browse automations published by other people.
+ *
+ * Built as sources-beside-results rather than one flat list, for a reason the 503 on
+ * bettercommunity.ch demonstrated: the old panel showed "Nothing to show from the catalogs
+ * you follow" with the real reason folded into a collapsed "1 skipped" line. That sentence
+ * is false and discouraging — you follow a catalogue, it is simply down. Here every source
+ * is a row that states its own outcome, so an unreachable feed reads as an unreachable
+ * feed.
+ *
+ * Nothing here imports. Inspect downloads and analyses; the decision stays with the person.
+ */
+/**
+ * A transport error, in words somebody can act on.
+ *
+ * The panel used to print the raw string — "error sending request for url (https://…" —
+ * truncated mid-address. That tells a reader nothing about which of the two things went
+ * wrong, and those two things have different answers: a typo in the address is theirs to
+ * fix, a server that is down is not. The original is kept, behind a fold, because when
+ * neither guess is right the exact text is the only thing left.
+ */
+function explainFetchError(raw: string): { short: string; raw: string } {
+    const r = String(raw || '');
+    const status = r.match(/HTTP (\d{3})/);
+    if (status) {
+        const code = Number(status[1]);
+        if (code === 404) return { short: t('sched.pc.e404') || 'Nothing at that address (404).', raw: r };
+        if (code === 401 || code === 403) return { short: t('sched.pc.e403', { c: String(code) }), raw: r };
+        if (code >= 500) return { short: (t('sched.pc.e5xx') || 'The server is having trouble ({c}) — not your address.').replace('{c}', String(code)), raw: r };
+        return { short: `HTTP ${code}`, raw: r };
+    }
+    if (/timed? ?out|timeout/i.test(r)) return { short: t('sched.pc.etimeout') || 'No answer in time.', raw: r };
+    if (/dns|resolve|name/i.test(r)) return { short: t('sched.pc.ednst') || 'That host does not resolve — check the address.', raw: r };
+    if (/not a preset catalogue/i.test(r)) return { short: t('sched.pc.notfeed') || 'not a preset catalogue', raw: r };
+    return { short: t('sched.pc.eunreach') || 'Could not reach it.', raw: r };
+}
+
+function showPresetCatalog(data: { presets: any[]; sources: PresetSource[] }): void {
+    const esc = (x: unknown) => escHtml(String(x ?? ''));
+    // Replace, never stack. This is called twice now — once to open immediately, once when the
+    // feeds answer — and it builds a fresh overlay each time, so without this the loading panel
+    // would sit behind the real one, both listening for clicks. Matched on its OWN marker class
+    // rather than modal-generic-overlay, which every other modal in the app also uses.
+    document.querySelectorAll('.sched-pc-overlay').forEach((el) => el.remove());
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-generic-overlay sched-pc-overlay open';
+    let { presets, sources } = data;
+    let filter = '';
+    // What following last said, and what was typed. Both survive a repaint on purpose:
+    // paint() rebuilds the whole overlay, so an address that vanished from the field the
+    // moment its own error appeared would have to be retyped to be corrected.
+    // Sources switched off since the panel opened. Their cards are filtered out in place; the
+    // next open re-reads the flag from storage, so this is a view of the session, not a store.
+    let hidden: string[] = [];
+    let addOut: { kind: 'ok' | 'bad'; text: string; raw?: string } | null = null;
+    let addUrl = '';
+
+    const sourceRow = (s: PresetSource) => {
+        const label = s.official
+            ? (t('sched.pc.official') || 'Official')
+            : (t('sched.pc.community') || 'Community');
+        // 'loading' is NOT an error and must not be painted like one. Everything that is not
+        // 'ok' used to fall into the red branch, so a source still being fetched would have
+        // announced itself as unreachable — the panel would open by lying about the thing it
+        // exists to report accurately.
+        const state = s.state === 'loading'
+            ? `<span class="sched-pc-src-n">${esc(t('sched.pc.loading') || 'checking…')}</span>`
+            : s.state === 'ok'
+                ? `<span class="sched-pc-src-n">${s.count} ${esc(t('sched.pc.tasks') || 'automations')}</span>`
+                // 'off' is neither good nor bad — nobody asked it anything. Painting it red
+                // would report a problem where there is a choice.
+                : s.state === 'off'
+                    ? `<span class="sched-pc-src-n">${esc(t('sched.pc.off') || 'switched off')}</span>`
+                    : `<span class="sched-pc-src-bad">${esc(s.state === 'notfeed'
+                        ? (t('sched.pc.notfeed') || 'not a preset catalogue')
+                        : (t('sched.pc.unreachable') || 'unreachable'))}</span>`;
+        const bad = s.state === 'error' || s.state === 'notfeed';
+        return `
+            <div class="sched-pc-src${bad ? ' is-bad' : ''}${s.state === 'off' ? ' is-off' : ''}">
+                <div class="sched-pc-src-head">
+                    <span class="sched-pc-badge${s.official ? ' is-official' : ''}">${esc(label)}</span>
+                    ${state}
+                    ${s.official ? '' : `<button class="sched-pc-toggle" data-url="${escAttr(s.url)}"
+                        data-tooltip="${escAttr(s.state === 'off'
+                            ? (t('sched.pc.on') || 'Fetch this one again')
+                            : (t('sched.pc.offit') || 'Keep it listed but stop fetching it'))}">${
+                        s.state === 'off'
+                            ? SVG16('eye')
+                            : SVG16('eye-off')
+                    }</button>
+                    <button class="sched-pc-drop" data-url="${escAttr(s.url)}"
+                        data-tooltip="${escAttr(t('sched.pc.unfollow') || 'Stop following this catalogue')}">${SVG16('close')}</button>`}
+                </div>
+                <div class="sched-pc-src-url" title="${escAttr(s.url)}">${esc(s.url)}</div>
+                ${(() => {
+                    // Where it came from, when an index brought it in. The panel that follows
+                    // catalogues one at a time never said which index a source arrived with.
+                    const from = s.official ? null : originOf(s.url);
+                    return from ? `<div class="sched-pc-src-from">${esc(t('sched.pc.via') || 'via')} ${esc(originLabel(from))}</div>` : '';
+                })()}
+                ${s.detail ? (() => {
+                    const e = explainFetchError(s.detail!);
+                    return `<div class="sched-pc-src-why">${esc(e.short)}</div>
+                        <details class="sched-pc-src-raw"><summary>${esc(t('sched.pc.details') || 'exact message')}</summary>${esc(e.raw)}</details>`;
+                })() : ''}
+            </div>`;
+    };
+
+    const cards = () => {
+        const q = filter.trim().toLowerCase();
+        // Sources switched off in THIS session are filtered here rather than re-fetched away.
+        const live = hidden.length ? presets.filter((p) => !hidden.includes(p._src)) : presets;
+        const shown = q
+            ? live.filter((p) => `${p.name} ${p.description} ${p.author || ''}`.toLowerCase().includes(q))
+            : live;
+        if (!shown.length) {
+            // Three different situations, and they need different sentences. "Nothing to
+            // show" covers all three and helps with none.
+            if (presets.length) return `<p class="sched-pc-empty">${esc(t('sched.pc.noMatch') || 'Nothing matches that search.')}</p>`;
+            const anyOk = sources.some((x) => x.state === 'ok');
+            const title = anyOk
+                ? (t('sched.pc.emptyFeeds') || 'The catalogues you follow published nothing yet.')
+                : (t('sched.pc.allDown') || 'No catalogue answered.');
+            const body = anyOk
+                ? (t('sched.pc.emptyHelp') || 'Nothing is wrong — they simply have no automations in them. Follow another address on the left.')
+                : (t('sched.pc.downHelp') || 'Each source on the left says what happened. A server being down is not something you can fix from here; a wrong address is.');
+            return `<div class="sched-pc-blank">
+                <div class="sched-pc-blank-icon">${SVG16('info')}</div>
+                <b>${esc(title)}</b>
+                <p>${esc(body)}</p>
+                <button class="btn btn-sm btn-secondary" id="sched-pc-retry">${esc(t('sched.pc.retry') || 'Try again')}</button>
+            </div>`;
+        }
+        return shown.map((p) => `
+            <div class="sched-pc-card">
+                <div class="sched-pc-card-top">
+                    <b>${esc(p.name)}</b>
+                    ${p.official ? `<span class="sched-pc-badge is-official">${esc(t('sched.pc.official') || 'Official')}</span>` : ''}
+                    ${p.version ? `<span class="sched-pc-ver">v${esc(p.version)}</span>` : ''}
+                </div>
+                <div class="sched-pc-card-desc">${esc(p.description)}</div>
+                <div class="sched-pc-card-foot">
+                    <span class="sched-pc-from">${esc(p.author || '')}${p.author && p.source ? ' · ' : ''}${esc(p.source ? originLabel(p.source) : '')}</span>
+                    ${typeof p.tasks === 'number' ? `<span class="sched-pc-n">${p.tasks} ${esc(t('sched.pc.tasks') || 'automations')}</span>` : ''}
+                    <button class="btn btn-sm btn-secondary sched-pc-get" data-i="${presets.indexOf(p)}">${esc(t('sched.pc.inspect') || 'Inspect')}</button>
+                </div>
+            </div>`).join('');
+    };
+
+    const paint = () => {
+        overlay.innerHTML = `
+        <div class="modal sched-pc-modal">
+            <!-- The house modal header, not a bespoke one. This panel used sched-insp-top with a
+                 bare bold title and two text buttons, which is why it read as unfinished beside
+                 every other catalogue in the app: same job, different furniture. Icon tile,
+                 title with a subtitle, and a real × — the shape theme-catalog.ts already uses. -->
+            <div class="modal-header">
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <div class="bms-icon">
+                        ${uiIcon('clock', 18)}
+                    </div>
+                    <div>
+                        <h2 class="modal-title">${esc(t('sched.pc.title') || 'Automations from a catalogue')}</h2>
+                        <p style="margin:0;font-size:11px;color:var(--bmm-text-muted);">${esc(t('sched.pc.sub') || 'Published by other people — nothing is imported until you say so')}</p>
+                    </div>
+                </div>
+                <button class="modal-close" id="sched-pc-close" data-tooltip="${escAttr(t('common.close') || 'Close')}">
+                    ${uiIcon('close', 18)}
+                </button>
+            </div>
+            <div class="sched-pc-body">
+                <aside class="sched-pc-side">
+                    <div class="sched-pc-side-h">${esc(t('sched.pc.sources') || 'Sources')}</div>
+                    ${sources.map(sourceRow).join('') || `<p class="sched-pc-empty">${esc(t('sched.pc.noSources') || 'No source configured.')}</p>`}
+                    <div class="sched-pc-add">
+                        <input class="input" id="sched-pc-url" value="${escAttr(addUrl)}" placeholder="${escAttr(t('sched.pc.ask') || 'Address of a preset catalogue')}">
+                        <button class="btn btn-sm btn-secondary" id="sched-pc-follow">${esc(t('sched.pc.follow') || 'Follow')}</button>
+                    </div>
+                    <!-- A catalogue does not have to be somewhere. A bundle is one file
+                         holding the catalogue and its automations, so somebody can send you
+                         one and there is nothing to host and no address to keep alive. -->
+                    <button class="btn btn-sm btn-ghost sched-pc-publish" id="sched-pc-openbundle"
+                            data-tooltip="${escAttr(t('sched.pc.bundleTip') || 'Follow a catalogue that came as a single file — it carries its own automations')}">
+                        ${SVG16('archive')}
+                        <span>${esc(t('sched.pc.openBundle') || 'Open a bundle file…')}</span>
+                    </button>
+                    <!-- Publishing lives beside following, because they are the two halves of
+                         the same idea and BMM only ever had one of them. A reader with no
+                         writer makes a format look closed even when it is not. -->
+                    <button class="btn btn-sm btn-ghost sched-pc-publish" id="sched-pc-publish"
+                            data-tooltip="${escAttr(t('sched.tcb.tip') || 'Write a folder of your own automations plus a catalog.json — drop it on GitHub and follow it from anywhere')}">
+                        ${SVG16('upload')}
+                        <span>${esc(t('sched.tcb.open') || 'Publish my own…')}</span>
+                    </button>
+                    <!-- Where following says what happened. A toast was the only feedback, and
+                         a toast that has already faded is indistinguishable from no feedback at
+                         all — which is what "it just does nothing" means. -->
+                    <div class="sched-pc-addout" id="sched-pc-addout">${addOut ? `
+                        <div class="sched-pc-addout-${escAttr(addOut.kind)}">${esc(addOut.text)}</div>
+                        ${addOut.raw ? `<details class="sched-pc-src-raw"><summary>${esc(t('sched.pc.details') || 'exact message')}</summary>${esc(addOut.raw)}</details>` : ''}
+                    ` : ''}</div>
+                </aside>
+                <section class="sched-pc-main">
+                    <!-- The access block belongs in the WIDE column. In the sources rail it was
+                         squeezed into ~230px: labels wrapping mid-word, the key chooser and its
+                         button stacked, the hint a column of two-word lines. A control that has
+                         to explain itself needs room to. -->
+                    ${sourceAccessHtml('pc')}
+                    <!-- Refresh lives here, beside the search, exactly where the theme
+                         catalogue puts it. It was in the header; moving it kept its id so the
+                         existing handler still finds it — a button relocated must not become a
+                         handler bound to nothing. -->
+                    <div class="sched-pc-searchrow">
+                        <input class="input sched-pc-search" id="sched-pc-q" value="${escAttr(filter)}"
+                               placeholder="${escAttr(t('sched.pc.search') || 'Search automations')}">
+                        <button class="btn btn-ghost btn-sm" id="sched-pc-refresh"
+                            data-tooltip="${escAttr(t('sched.pc.refreshTip') || 'Fetch every source again')}">${esc(t('sched.pc.refresh') || 'Refresh')}</button>
+                    </div>
+                    <div class="sched-pc-grid">${cards()}</div>
+                </section>
+            </div>
+        </div>`;
+        wire();
+    };
+
+    // Clearing the token is what makes "closed" stick: a pending load that finishes
+    // afterwards reports itself instead of re-opening this.
+    const close = () => { _catalogOpenToken += 1; overlay.remove(); };
+    const reload = async () => { const d = await loadPresetSources(); presets = d.presets; sources = d.sources; paint(); };
+
+    function wire(): void {
+        wireSourceAccess('pc', (m, k) => toast(m, k === 'warning' ? 'warning' : 'success'),
+            () => { openKeyManager(); },
+            () => (document.getElementById('sched-pc-url') as HTMLInputElement | null)?.value?.trim() || '');
+        overlay.querySelector('#sched-pc-close')?.addEventListener('click', close);
+        overlay.querySelector('#sched-pc-refresh')?.addEventListener('click', () => { void reload(); });
+        overlay.querySelector('#sched-pc-retry')?.addEventListener('click', () => { void reload(); });
+
+        const q = overlay.querySelector<HTMLInputElement>('#sched-pc-q');
+        q?.addEventListener('input', () => {
+            filter = q.value;
+            // Only the grid is repainted. Rebuilding the whole modal would take the caret
+            // out of the box on every keystroke.
+            const grid = overlay.querySelector('.sched-pc-grid');
+            if (grid) { grid.innerHTML = cards(); wireCards(); }
+        });
+
+        const urlBox = overlay.querySelector<HTMLInputElement>('#sched-pc-url');
+        const followBtn = overlay.querySelector<HTMLButtonElement>('#sched-pc-follow');
+
+        /**
+         * Follow a catalogue — after checking it is one.
+         *
+         * It used to write the address and then re-fetch EVERY source. Two consequences, and
+         * the second is the one that reads as "nothing happened": you waited for the slowest
+         * feed you already followed before seeing anything, and a bad address was added anyway
+         * with its failure buried in a row that only appeared once that wait was over.
+         *
+         * Now the new address is fetched ALONE and judged first. Nothing is written unless it
+         * answers with a preset catalogue, so the followed list cannot fill up with addresses
+         * that were never going to work, and the reason is stated where the field is rather
+         * than in a toast that has already gone.
+         */
+        urlBox?.addEventListener('input', () => { addUrl = urlBox.value; });
+
+        // Where following says what happened. Hoisted out of `follow` because opening a
+        // bundle reports into the same place, and two copies of one line is two chances
+        // for the panel to answer one action and not the other.
+        const say = (kind: 'ok' | 'bad', text: string, raw?: string) => { addOut = { kind, text, raw }; paint(); };
+
+        const follow = async () => {
+            const url = (urlBox?.value || '').trim();
+            addUrl = url;
+
+            if (!/^https?:\/\//i.test(url)) { say('bad', t('sched.pc.badUrl') || 'That is not an http(s) address.'); return; }
+            // Case-insensitively, and against the official row too — the same question the
+            // rest of the catalogue code asks of a URL.
+            if (hasSource([...readPresetCatalogs(), officialPresetUrl()].filter(Boolean), url)) {
+                say('bad', t('sched.pc.dup') || 'You already follow that catalogue.'); return;
+            }
+
+            if (followBtn) followBtn.disabled = true;
+            say('ok', t('sched.pc.checking') || 'Checking that address…');
+            try {
+                // fetchSourceText, not fetch_remote_json: a protected preset catalogue was
+                // rejected here as unreachable rather than asked for its password.
+                const text = await fetchSourceText(url);
+                const doc = JSON.parse(text);
+                // An INDEX pasted here is the common mistake and deserves its own sentence:
+                // it would parse, contain no presets, and look like an empty catalogue.
+                if (looksLikeIndex(doc)) {
+                    // Imported here, and only its automation entries. Refusing and pointing at
+                    // Settings was correct and unhelpful: this panel knows which type it is,
+                    // and the index says which of its entries are that type.
+                    const r = await importIndexForType(doc, 'preset', url, undefined, writeSources);
+                    addUrl = '';
+                    say(r.added ? 'ok' : 'bad', r.added
+                        ? (t('sched.pc.fromIndex') || 'Added {n} automation catalogue(s) from that index.').replace('{n}', String(r.added))
+                        : r.ofType
+                            ? (t('sched.pc.indexAll') || 'That index lists {n} automation catalogue(s) and you already follow them all.').replace('{n}', String(r.ofType))
+                            : (t('sched.pc.indexNone') || 'That index lists no automation catalogues — it holds {n} entr(y/ies) of other kinds.').replace('{n}', String(r.total)));
+                    if (r.added) await reload();
+                    return;
+                }
+                if (!looksLikePresetFeed(doc)) {
+                    say('bad', t('sched.pc.notfeedAdd') || 'That address answered, but it is not a preset catalogue.');
+                    return;
+                }
+                const n = (doc.presets || doc.tasks || []).length || 0;
+                writePresetCatalogs([...readPresetCatalogs(), url]);
+                recordHistory({ action: 'add', type: 'preset', url });
+                addUrl = '';
+                say('ok', (t('sched.pc.followed') || 'Following — {n} automation(s).').replace('{n}', String(n)));
+                await reload();
+            } catch (e) {
+                // The explained reason AND the exact message, the same pair the source rows
+                // use. "Failed" alone is what sent people to look for a problem elsewhere.
+                const ex = explainFetchError(String(e));
+                say('bad', ex.short, ex.raw);
+            } finally {
+                if (followBtn) followBtn.disabled = false;
+            }
+        };
+        overlay.querySelector('#sched-pc-follow')?.addEventListener('click', () => { void follow(); });
+        overlay.querySelector('#sched-pc-publish')?.addEventListener('click', () => { void openTaskCatalogBuilder(); });
+        overlay.querySelector('#sched-pc-openbundle')?.addEventListener('click', async () => {
+            const { pickFile } = await import('../../core/api.js');
+            const path = await pickFile([{ name: t('catpub.bundleKind'), extensions: ['bmmbundle', 'zip'] }]).catch(() => null);
+            if (!path) return;
+            try {
+                // Opened before it is followed: a file that is not a catalogue must fail
+                // HERE, with the reason, rather than becoming a source that errors on every
+                // future open of this panel.
+                const res: any = await invoke('catalog_bundle_open', { path });
+                const doc = JSON.parse(String(res?.catalog || ''));
+                if (!looksLikePresetFeed(doc)) {
+                    say('bad', t('sched.pc.bundleNotFeed') || 'That bundle opened, but the catalogue inside it is not an automation catalogue.');
+                    return;
+                }
+                const src = `bundle:${path}`;
+                if (readPresetCatalogs().includes(src)) { say('bad', t('sched.pc.already') || 'You already follow that one.'); return; }
+                writePresetCatalogs([...readPresetCatalogs(), src]);
+                recordHistory({ action: 'add', type: 'preset', url: src });
+                say('ok', (t('sched.pc.followedBundle') || 'Following that bundle — {n} automation(s), no host needed.')
+                    .replace('{n}', String((doc.presets || []).length || 0)));
+                await reload();
+            } catch (e) {
+                say('bad', t('sched.pc.bundleBad') || 'That file is not a catalogue bundle.', String(e).slice(0, 200));
+            }
+        });
+        urlBox?.addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key === 'Enter') void follow(); });
+
+        overlay.querySelectorAll<HTMLElement>('.sched-pc-toggle').forEach((b) => b.addEventListener('click', () => {
+            const u = b.dataset.url || '';
+            const off = !isDisabled(u);
+            setDisabled(u, off);
+            // In place. Everything needed is already loaded: the source row keeps its count,
+            // and its cards are the ones carrying this `_src`. Turning one back ON re-uses the
+            // presets fetched earlier in this session rather than asking the network again.
+            const row = sources.find((x) => x.url === u);
+            if (row) row.state = off ? 'off' : (row.count ? 'ok' : 'notfeed');
+            hidden = off ? [...hidden, u] : hidden.filter((x) => x !== u);
+            paint();
+        }));
+
+        overlay.querySelectorAll<HTMLElement>('.sched-pc-drop').forEach((b) => b.addEventListener('click', async () => {
+            const u = b.dataset.url || '';
+            writePresetCatalogs(readPresetCatalogs().filter((x) => x !== u));
+            // The provenance, the history line and the on/off flag go with it — otherwise a
+            // catalogue removed here leaves a stale origin behind, and a source that was OFF
+            // when removed comes back OFF if it is ever followed again, which reads as the
+            // re-follow having silently failed.
+            forgetOrigin(u);
+            setDisabled(u, false);
+            recordHistory({ action: 'remove', type: 'preset', url: u });
+            await reload();
+        }));
+
+        wireCards();
+    }
+
+    function wireCards(): void {
+        overlay.querySelectorAll<HTMLElement>('.sched-pc-get').forEach((b) => b.addEventListener('click', async () => {
+            const p = presets[Number(b.dataset.i)];
+            b.textContent = t('sched.pc.loading') || 'Fetching…';
+            try {
+                // Inside a bundle it is a file BMM extracted itself, so it is read rather
+                // than fetched. Reaching for the network with a path produces an error that
+                // names neither the file nor the reason.
+                // A protected catalogue's DOWNLOADS are protected too, and this is the one
+                // that hands the file over — the session password from following the
+                // catalogue applies to it, so nobody is asked twice.
+                const text: string = p.local
+                    ? await invoke('read_file_text', { path: p.downloadUrl }) as string
+                    : await fetchSourceText(p.downloadUrl);
+                const report = inspectBmmpa(JSON.parse(text));
+                if (!report.ok) { toast(report.error || t('sched.inspectFailed') || 'Could not read that file', 'error'); return; }
+                close();
+                // Downloading is not importing: this ends in a report, and the person decides.
+                showBmmpaReport(report, p.name);
+            } catch (e) {
+                toast(`${t('sched.inspectFailed') || 'Could not read that file'} — ${String(e).slice(0, 100)}`, 'error');
+            } finally { b.textContent = t('sched.pc.inspect') || 'Inspect'; }
+        }));
+    }
+
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    // ATTACH FIRST, then paint.
+    //
+    // paint() ends by calling wire(), and wire() calls wireSourceAccess('pc', ...), which
+    // finds its controls with document.getElementById. Painting into a DETACHED overlay meant
+    // those ids were not in the document yet: the lookup returned null, wiring bailed out
+    // silently, and the protected-source block on this one screen opened onto a dropdown
+    // nothing ever filled and a "manage keys" button with no listener. Every other screen
+    // mounts into markup that is already on the page, which is why only this one was broken.
+    //
+    // It repaired itself on any later repaint — following a source, an error message, a
+    // refresh — which is exactly what made it look intermittent rather than broken.
+    (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
+    paint();
+}
+
+export async function inspectTasksFile(): Promise<void> {
+    const { pickFile } = await import('../../core/api.js');
+    const path = await pickFile({ filters: [{ name: 'BMM Automation', extensions: ['bmmpa', 'json'] }] }).catch(() => null);
+    if (!path) return;
+    let report;
+    try {
+        const raw: string = await invoke('read_file_text', { path });
+        report = inspectBmmpa(JSON.parse(raw));
+    } catch (e) {
+        // A parse failure is reported as such rather than as "nothing in it": the two mean
+        // very different things to somebody deciding whether to trust a file.
+        toast(`${t('sched.inspectFailed') || 'Could not read that file'} — ${String(e).slice(0, 120)}`, 'error');
+        return;
+    }
+    if (!report.ok) { toast(report.error || t('sched.inspectFailed') || 'Could not read that file', 'error'); return; }
+    showBmmpaReport(report, path);
+}
+
+function showBmmpaReport(report: ReturnType<typeof inspectBmmpa>, path: string): void {
+    const esc = (x: unknown) => escHtml(String(x ?? ''));
+    // The analyser returns codes; the words are the view's. An unknown code falls back to
+    // itself rather than to a blank — seeing "app.frobnicate" tells you something, seeing
+    // nothing does not.
+    const PERM: Record<string, string> = {
+        command: t('bmi.p.command') || 'Runs external programs',
+        script: t('bmi.p.script') || 'Runs scripts (PowerShell / CMD / Bash / Python)',
+        deeplink: t('bmi.p.deeplink') || 'Fires bmm:// deeplinks',
+        stopProcess: t('bmi.p.stop') || 'Stops running programs',
+        delete: t('bmi.p.delete') || 'Deletes profiles, modpacks or mod folders',
+        resources: t('bmi.p.resources') || 'Changes the resource preset, app mode or the queue',
+        tasks: t('bmi.p.tasks') || 'Runs, starts or switches on other tasks',
+    };
+    const REACH: Record<string, string> = {
+        'custom.command': t('bmi.r.command') || 'Runs an external program',
+        'custom.script': t('bmi.r.script') || 'Runs a script',
+        'app.stop': t('bmi.r.stop') || 'Stops a program',
+        'app.launch': t('bmi.r.launch') || 'Launches an app',
+        'file.open': t('bmi.r.file') || 'Opens a file or program',
+        'folder.open': t('bmi.r.folder') || 'Opens a folder',
+        'open.url': t('bmi.r.url') || 'Opens a URL',
+        restart: t('bmi.r.restart') || 'Restarts BMM',
+        'task.run': t('bmi.r.task') || 'Runs another scheduled task',
+    };
+    /**
+     * The step tree, in full.
+     *
+     * The panel used to say "12 steps" and list the risky verbs. That answers "should I be
+     * nervous" and not "what does this actually do" — and the second question is the one
+     * somebody has when the answer to the first is "a bit".
+     *
+     * Nested with real indentation, because a task's shape IS its meaning: three actions in
+     * a row and three actions inside a loop that runs a hundred times are the same list and
+     * very different automations.
+     */
+    const tree = (nodes: any[], depth = 0): string => nodes.map((n) => {
+        const label = n.type
+            ? (t('sched.act.' + n.type) || n.type)
+            : (t('sched.addIf') && n.kind === 'if' ? t('sched.addIf') : n.kind);
+        const params = n.params
+            ? Object.entries(n.params).map(([k, v]) =>
+                `<span class="sched-insp-kv"><i>${esc(k)}</i> ${esc(v)}</span>`).join('')
+            : '';
+        // A reference the file does not satisfy is the most useful line here: such a task
+        // imports cleanly and fails later, on a machine whose owner has no idea what the id
+        // was meant to be.
+        const ref = n.refId
+            ? (n.refName
+                ? `<span class="sched-insp-ref">→ ${esc(n.refName)}</span>`
+                : `<span class="sched-insp-ref is-missing">→ ${esc(t('sched.insp.notIncluded') || 'not in this file')}: <code>${esc(n.refId)}</code></span>`)
+            : '';
+        return `
+            <div class="sched-insp-node" style="margin-left:${depth * 14}px">
+                <div class="sched-insp-node-head">
+                    <span class="sched-insp-kind">${esc(label)}</span>
+                    ${n.note ? `<span class="sched-insp-flag">!</span>` : ''}
+                    ${ref}
+                </div>
+                ${params ? `<div class="sched-insp-params">${params}</div>` : ''}
+            </div>
+            ${tree(n.children || [], depth + 1)}`;
+    }).join('');
+
+    const body = report.tasks.map((tk) => `
+        <div class="sched-insp-task">
+            <div class="sched-insp-head">
+                <b>${esc(tk.name)}</b>
+                <span class="sched-insp-trigger">${esc(tk.trigger)}</span>
+                <span class="sched-insp-count">${tk.stepCount} ${esc(t('sched.insp.steps') || 'steps')}</span>
+            </div>
+            ${tk.description ? `<div class="sched-insp-desc">${esc(tk.description)}</div>` : ''}
+            ${tk.perms.length ? `<div class="sched-insp-warn"><b>${esc(t('sched.insp.asks') || 'It grants itself:')}</b> ${tk.perms.map((k) => esc(PERM[k] || k)).join(' · ')}</div>` : ''}
+            ${tk.reaching.length ? `<div class="sched-insp-warn"><b>${esc(t('sched.insp.reaches') || 'Reaches outside BMM:')}</b> ${tk.reaching.map((k) => esc(REACH[k] || k)).join(' · ')}</div>` : ''}
+            ${tk.targets.length ? `<div class="sched-insp-targets"><b>${esc(t('sched.insp.targets') || 'Names:')}</b> ${tk.targets.map((x) => `<code>${esc(x)}</code>`).join(' ')}</div>` : ''}
+            ${tk.scripts.map((sc) => `<details class="sched-insp-script">
+                <summary>${esc(sc.engine === 'command'
+                    ? (t('sched.insp.command') || 'Command')
+                    : (t('sched.insp.script') || 'Script'))} — ${esc(sc.engine)}</summary>
+                <div class="sched-insp-codewrap">
+                    <button class="sched-insp-copy" data-copy="${escAttr(sc.code)}"
+                        data-tooltip="${escAttr(t('sched.insp.copy') || 'Copy to clipboard')}">${esc(t('sched.insp.copy') || 'Copy')}</button>
+                    <pre>${esc(sc.code)}</pre>
+                </div>
+            </details>`).join('')}
+            <details class="sched-insp-steps" open>
+                <summary>${esc(t('sched.insp.tree') || 'Every step, in order')}</summary>
+                <div class="sched-insp-tree">${tree((tk as any).steps || [])}</div>
+            </details>
+        </div>`).join('');
+
+    // What the file carries besides tasks, and what it names but does not carry. Both go
+    // above the verdict: "12 automations" means something different when three of them call
+    // a fourth that is not here.
+    const inc = (report as any).includes || { launchpacks: 0, modpacks: 0 };
+    const unres: { kind: string; id: string }[] = (report as any).unresolved || [];
+    const extras = [
+        inc.launchpacks ? `${inc.launchpacks} ${t('sched.insp.launchpacks') || 'launch pack(s)'}` : '',
+        inc.modpacks ? `${inc.modpacks} ${t('sched.insp.modpacks') || 'modpack(s)'}` : '',
+    ].filter(Boolean).join(' · ');
+    const extraLine = extras
+        ? `<div class="sched-insp-extra">${esc(t('sched.insp.alsoCarries') || 'Also in this file:')} ${esc(extras)}</div>`
+        : '';
+    const missingLine = unres.length
+        ? `<div class="sched-insp-warn">${esc((t('sched.insp.unresolved')
+            || 'Names {n} thing(s) it does not include — these will fail on another machine:')
+            .replace('{n}', String(unres.length)))}
+            ${unres.slice(0, 8).map((u) => `<code>${esc(u.kind)}:${esc(u.id)}</code>`).join(' ')}</div>`
+        : '';
+
+    const verdict = report.needsReview
+        ? `<div class="sched-insp-verdict sched-insp-verdict-warn">${esc(t('sched.insp.review') || 'This file asks for permissions or reaches outside BMM. Read it before importing.')}</div>`
+        : `<div class="sched-insp-verdict">${esc(t('sched.insp.clean') || 'Nothing here asks for a permission or touches anything outside BMM.')}</div>`;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-generic-overlay open';
+    overlay.innerHTML = `
+        <div class="modal sched-insp-modal">
+            <div class="sched-insp-top">
+                <div>
+                    <b>${esc(t('sched.insp.title') || 'What this file contains')}</b>
+                    <span class="sched-insp-file">${esc(path.split(/[\\/]/).pop())}</span>
+                </div>
+                <button class="btn btn-ghost btn-sm" id="sched-insp-close">${esc(t('common.close') || 'Close')}</button>
+            </div>
+            ${verdict}
+            ${extraLine}
+            ${missingLine}
+            <div class="sched-insp">${body}</div>
+            <p class="sched-insp-foot">${esc(t('sched.insp.foot') || 'Nothing has been imported. Close this and use Import if you want it.')}</p>
+        </div>`;
+    const close = () => overlay.remove();
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    overlay.querySelector('#sched-insp-close')?.addEventListener('click', close);
+    // Copy the body out to try it somewhere safe. Reading a script in a <pre> and deciding
+    // it is fine is exactly the judgement this panel exists to support, and "paste it into
+    // a sandbox first" is the careful version of that — so it should not require selecting
+    // twenty lines by hand without catching the scrollbar.
+    overlay.querySelectorAll<HTMLElement>('.sched-insp-copy').forEach((b) => b.addEventListener('click', async (e) => {
+        e.preventDefault();   // the button lives inside <summary>'s sibling; stop the toggle
+        try {
+            await navigator.clipboard.writeText(b.dataset.copy || '');
+            const was = b.textContent;
+            b.textContent = t('sched.insp.copied') || 'Copied';
+            setTimeout(() => { b.textContent = was; }, 1200);
+        } catch {
+            toast(t('sched.insp.copyFail') || 'Could not reach the clipboard.', 'error');
+        }
+    }));
+    // Escape closes it too — this is a read-only view, so there is nothing to lose by
+    // dismissing it the fastest way somebody will try.
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); } };
+    document.addEventListener('keydown', onKey);
+    (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
+}
+
+/**
+ * Put back what an imported automation needs, and ONLY what is missing.
+ *
+ * An id that already exists here is left exactly as it was. Importing somebody's automation
+ * must never quietly rewrite a plugin or a modpack you already had — a merge nobody asked
+ * for is far worse than a step that fails loudly, because it is discovered much later and
+ * by then the original is gone.
+ *
+ * Per kind and per item, so one unrestorable thing costs only itself.
+ *
+ * Returns the count that actually landed AND a remap, because two of the three kinds keep
+ * the id they arrived with and one does not: create_launch_pack mints a fresh UUID. Without
+ * the remap a restored launch pack is a pack nobody references — the step still names the
+ * exporter's id, still fails, and now there is an orphan pack as well. Plugins and modpacks
+ * keep their ids (both commands preserve a non-empty one), so neither needs remapping.
+ */
+async function restoreIncludes(includes: any): Promise<{ count: number; remap: Record<string, string> }> {
+    const remap: Record<string, string> = {};
+    if (!includes || typeof includes !== 'object') return { count: 0, remap };
+    let n = 0;
+
+    const plugins = Array.isArray(includes.plugins) ? includes.plugins : [];
+    if (plugins.length) {
+        const have = new Set(((await invoke('get_installed_plugins').catch(() => [])) as any[])
+            .map((ip: any) => String(ip?.manifest?.id)));
+        for (const manifest of plugins) {
+            const id = String(manifest?.id || '');
+            if (!id || have.has(id)) continue;
+            try {
+                // Rebuilt from the manifest, WITHOUT scripts: the file never carried them,
+                // and inventing paths that do not exist would produce a plugin that fails
+                // the moment it is applied. has_scripts is cleared for the same reason —
+                // a plugin that claims scripts it does not have prompts for nothing.
+                await invoke('create_local_plugin', {
+                    manifest: { ...manifest, scripts: [], has_scripts: false, folders: [] },
+                    iconSrcPath: null, iconSvg: null, scriptSrcPaths: null, folderSrcPaths: null, removedBundled: null,
+                });
+                n++;
+            } catch { /* one plugin that will not rebuild must not cost the others */ }
+        }
+    }
+
+    // Blocks arrive as a single object of name → steps. Only the missing ones are written:
+    // a block name is chosen by a person and collisions are likely, and silently replacing
+    // the body of a block somebody else's task also calls would break that task instead.
+    const blockMap = Array.isArray(includes.blocks) ? (includes.blocks[0] || {}) : {};
+    if (blockMap && typeof blockMap === 'object' && Object.keys(blockMap).length) {
+        const store = readBlocks();
+        let touched = false;
+        for (const [name, body] of Object.entries(blockMap)) {
+            if (store[name] || !Array.isArray(body)) continue;
+            store[name] = body as Step[];
+            touched = true;
+            n++;
+        }
+        if (touched) writeBlocks(store);
+    }
+
+    const packs = Array.isArray(includes.launchpacks) ? includes.launchpacks : [];
+    if (packs.length) {
+        const have = new Set(((await invoke('get_launch_packs').catch(() => [])) as any[]).map((p: any) => String(p?.id)));
+        for (const pk of packs) {
+            if (!pk?.id || have.has(String(pk.id))) continue;
+            try {
+                const made: any = await invoke('create_launch_pack', {
+                    name: String(pk.name || pk.id),
+                    exePaths: (pk.executable_paths || pk.executablePaths || []).map((x: any) => String(x)),
+                    // The icon is a path on the machine that exported it, so it means
+                    // nothing here. The pack arrives without one rather than with a
+                    // broken reference.
+                    iconSourcePath: null,
+                });
+                if (made?.id) remap[String(pk.id)] = String(made.id);
+                n++;
+            } catch { /* as above */ }
+        }
+    }
+
+    const mps = Array.isArray(includes.modpacks) ? includes.modpacks : [];
+    if (mps.length) {
+        const have = new Set(((await invoke('load_modpacks').catch(() => [])) as any[]).map((m: any) => String(m?.id ?? m?.name)));
+        for (const mp of mps) {
+            const key = String(mp?.id ?? mp?.name ?? '');
+            if (!key || have.has(key)) continue;
+            try { await invoke('save_modpack', { modpack: mp }); n++; } catch { /* as above */ }
+        }
+    }
+    return { count: n, remap };
+}
+
+/** Point every step at the id the thing actually got. Walks the same branches collectRefs
+ *  does — a step inside a loop inside an if is still a step. */
+function remapRefs(steps: Step[], remap: Record<string, string>): void {
+    for (const st of steps || []) {
+        const a = (st as any).action;
+        if ((st as any).kind === 'action' && REF_ACTIONS[String(a?.type || '')] === 'launchpack') {
+            const was = String(a?.params?.id || '');
+            if (was && remap[was]) a.params.id = remap[was];
+        }
+        for (const body of stepBodies(st)) remapRefs(body, remap);
+    }
+}
+
+export async function importTasksFile(): Promise<void> {
+    const { pickFile } = await import('../../core/api.js');
+    const path = await pickFile({ filters: [{ name: 'BMM Automation', extensions: ['bmmpa', 'bmmbundle', 'json'] }] }).catch(() => null);
+    if (!path) return;
+    if (/\.bmmbundle$/i.test(path)) { await importPackageFile(path); return; }
+    try {
+        const raw: string = await invoke('read_file_text', { path });
+        const doc = JSON.parse(raw);
+        const arr: any[] = Array.isArray(doc) ? doc : (doc.magic === BMMPA_MAGIC ? doc.tasks : doc.tasks);
+        if (!Array.isArray(arr)) throw new Error('Not a valid .bmmpa file');
+        let added = 0;
+        // Every task in the file goes through the same door. Sanitising one import path and
+        // not the other is the shape this bug already had.
+        const askedAll = new Set<string>();
+        for (const tk of arr) {
+            if (tk && tk.name) {
+                const { task: safe, strippedPerms } = sanitiseImportedTask(tk);
+                safe.id = `sched-${Date.now()}-${added}`;
+                strippedPerms.forEach((x) => askedAll.add(x));
+                _tasks.push(safe as Task); added++;
+            }
+        }
+        // What the file carried WITH the tasks. Until now this was collected on export,
+        // shown by the inspector, and then dropped — so every launch pack and modpack ever
+        // exported in one of these files failed to arrive, silently, and the step that
+        // needed it failed later on an id nobody recognised.
+        //
+        // BEFORE saveTasks, because a restored launch pack gets a new id and the steps that
+        // name the old one have to be repointed while they are still in hand.
+        const { count: restored, remap } = await restoreIncludes(doc?.includes);
+        if (Object.keys(remap).length) for (const tk of arr) if (Array.isArray(tk?.steps)) remapRefs(tk.steps, remap);
+        await saveTasks(); renderScheduleList();
+        toast(`${added} ${t('sched.imported') || 'automation(s) imported'}`
+            + (restored ? ` — ${(t('sched.importedIncl') || 'also restored {n} item(s) it needed').replace('{n}', String(restored))}` : ''),
+            'success');
+        if (askedAll.size) {
+            toast((t('sched.importStripped') || 'Imported disabled. It asked for: {p} — grant what you want in its permissions.')
+                .replace('{p}', [...askedAll].join(', ')), 'warning', 8000);
+        }
+    } catch (e) { toast(`${t('common.error') || 'Error'}: ${e}`, 'error'); }
+}
+
+
+/**
+ * Import an automation PACKAGE (.bmmbundle with an automation.bmmpa inside): shown first —
+ * signature, files, what its tasks ask for — then its tasks arrive like any import: switched
+ * off, every permission taken away, and linked to the verified copy of the package's files.
+ */
+export async function importPackageFile(path: string): Promise<number> {
+    const P = await import('./sched-pkg.js');
+    const got = await P.reviewPackage(path, (k) => t('sched.perm.' + k) || k, (m2, k, ms) => toast(m2, k as any, ms));
+    if (!got) return 0;
+    const pkg: TaskPkg = { id: got.info.id, name: got.info.name, signature: got.info.signature };
+    const asked = new Set<string>();
+    let added = 0;
+    for (const tk of got.tasks) {
+        if (!tk || !tk.name) continue;
+        const { task: safe, strippedPerms } = sanitiseImportedTask(tk);
+        safe.id = newTaskId();
+        safe.pkg = pkg;
+        strippedPerms.forEach((x) => asked.add(x));
+        _tasks.push(safe as Task);
+        added++;
+    }
+    await saveTasks();
+    renderScheduleList();
+    toast(t('sched.pkg.imported', { n: String(added), p: pkg.name }), 'success', 8000);
+    if (asked.size) toast(t('sched.importStripped').replace('{p}', [...asked].join(', ')), 'warning', 9000);
+    return added;
+}
+
+/**
+ * The reference, BESIDE the code instead of instead of it.
+ *
+ * "Open the docs" switched view and closed this modal, which is the one thing you cannot do
+ * to somebody in the middle of writing a script: the answer arrives and the question is gone.
+ * The full page is still a click away for reading; this is for the other case, which is far
+ * more common — "what is that action called again", answered without leaving the line.
+ *
+ * Entries come from BMMS_INDEX, generated from the same registry as the docs page, so the
+ * panel cannot offer an action the runner does not have. What each one is CALLED comes from
+ * the app's own i18n at render time, so it is in the reader's language and matches the block
+ * editor word for word.
+ */
+function wireReferencePanel(modal: HTMLElement): void {
+    const btn = modal.querySelector('#sched-code-ref') as HTMLButtonElement | null;
+    const panel = modal.querySelector('#sched-ref') as HTMLElement | null;
+    const q = modal.querySelector('#sched-ref-q') as HTMLInputElement | null;
+    const list = modal.querySelector('#sched-ref-list') as HTMLElement | null;
+    const ta = modal.querySelector('#sched-code-ta') as HTMLTextAreaElement | null;
+    if (!btn || !panel || !q || !list || !ta) return;
+
+    const KINDS: Record<string, string> = { a: 'sched.ref.kindAction', c: 'sched.ref.kindCond', v: 'sched.ref.kindValue', s: 'sched.ref.kindSource' };
+
+    /** What this entry is called, and what it does — both empty for the ones with no keys. */
+    const label = (e: BmmsEntry): string =>
+        e.k === 'a' ? (t('sched.act.' + e.n) || '') : e.k === 'c' ? (t('sched.cond.' + e.n) || '') : '';
+    const desc = (e: BmmsEntry): string => (e.k === 'a' ? (t('sched.actd.' + e.n) || '') : '');
+
+    /**
+     * What gets typed for you.
+     *
+     * An action arrives with its parameter names and the cursor on the first value, because
+     * the names are the half nobody remembers. A value source arrives in braces — that is the
+     * only form the runner reads, and writing it bare is the mistake this prevents.
+     */
+    const snippet = (e: BmmsEntry): { text: string; caret: number } => {
+        if (e.k === 'a') {
+            const ps = e.p || [];
+            const body = ps.map((p) => `${p}: `).join(', ');
+            return { text: `do ${e.n}(${body})`, caret: `do ${e.n}(${ps[0] ? ps[0] + ': ' : ''}`.length };
+        }
+        if (e.k === 'v') return { text: `{${e.n}}`, caret: e.n.length + 2 };
+        return { text: e.n, caret: e.n.length };
+    };
+
+    const insert = (e: BmmsEntry): void => {
+        const { text, caret } = snippet(e);
+        const at = ta.selectionStart ?? ta.value.length;
+        const end = ta.selectionEnd ?? at;
+        ta.value = ta.value.slice(0, at) + text + ta.value.slice(end);
+        ta.focus();
+        // Where the value goes, not after the whole thing: landing past the closing bracket
+        // means every insert is followed by the same three arrow presses.
+        ta.setSelectionRange(at + caret, at + caret);
+        ta.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+
+    const paint = (): void => {
+        const needle = q.value.trim().toLowerCase();
+        const hits = BMMS_INDEX.filter((e) => {
+            if (!needle) return true;
+            return e.n.toLowerCase().includes(needle)
+                || label(e).toLowerCase().includes(needle)
+                || desc(e).toLowerCase().includes(needle);
+        });
+        if (!hits.length) {
+            list.innerHTML = `<p class="sched-ref-none">${escHtml(t('sched.ref.none'))}</p>`;
+            return;
+        }
+        // ALL of them, grouped and sorted.
+        //
+        // It used to stop at 60 of 151 and say so. Saying so is better than lying, and it is
+        // still a reference that does not contain two thirds of the reference — you cannot
+        // find what an action is called by searching for a name you do not know.
+        //
+        // Actions come first because they are what `do` takes and what people are looking for;
+        // within a kind, alphabetical, so the same search reads the same way twice.
+        const ORDER: BmmsEntry['k'][] = ['a', 'c', 'v', 's'];
+        const shown: BmmsEntry[] = [];
+        const chunks: string[] = [];
+        for (const kind of ORDER) {
+            const mine = hits.filter((e) => e.k === kind)
+                .sort((x, y) => x.n.localeCompare(y.n));
+            if (!mine.length) continue;
+            chunks.push(`<h5 class="sched-ref-h">${escHtml(t(KINDS[kind]))}<span>${mine.length}</span></h5>`);
+            for (const e of mine) {
+                const l = label(e);
+                const d = desc(e);
+                const ps = (e.p || []).join(', ');
+                chunks.push(`<button type="button" class="sched-ref-row" data-i="${shown.length}" title="${escAttr(d || l || e.n)}">
+                    <span class="sched-ref-k sched-ref-k-${e.k}">${escHtml(t(KINDS[e.k]))}</span>
+                    <span class="sched-ref-n">${escHtml(e.n)}</span>
+                    ${ps ? `<span class="sched-ref-p">${escHtml(ps)}</span>` : ''}
+                    ${l ? `<span class="sched-ref-l">${escHtml(l)}</span>` : ''}
+                </button>`);
+                shown.push(e);
+            }
+        }
+        list.innerHTML = chunks.join('');
+        list.querySelectorAll<HTMLElement>('.sched-ref-row').forEach((row) => {
+            row.addEventListener('click', () => insert(shown[parseInt(row.dataset.i || '0', 10)]));
+        });
+    };
+
+    btn.addEventListener('click', () => {
+        const open = panel.hasAttribute('hidden');
+        if (open) { panel.removeAttribute('hidden'); paint(); q.focus(); }
+        else panel.setAttribute('hidden', '');
+        btn.setAttribute('aria-pressed', open ? 'true' : 'false');
+    });
+    q.addEventListener('input', paint);
+}
+
+
+/** The scheme words a spec can start with. See src-tauri/src/commands/bmm_paths_core.rs. */
+const PATH_KINDS = ['plugin', 'app', 'modpack', 'profile', 'mods', 'game', 'backup', 'appdata'];
+
+/**
+ * Expand any parameter that names a place instead of giving a path.
+ *
+ * The prefilter here can only be too GENEROUS, never too strict: anything whose first word
+ * looks like a scheme is sent to Rust, and Rust hands back whatever is not really a spec
+ * unchanged. Deciding it here would be a second implementation of "is this a spec", and the
+ * one that matters — the one that must never mistake `C:\\mods` for a scheme — is the one
+ * with the tests.
+ */
+async function resolvePathSpecs(params: Record<string, any>): Promise<void> {
+    for (const [k, v] of Object.entries(params)) {
+        if (typeof v !== 'string' || !v) continue;
+        const head = v.split(/[:/\\]/)[0];
+        if (!PATH_KINDS.includes(head)) continue;
+        try {
+            params[k] = await invoke('bmm_path_resolve', { spec: v }) as string;
+        } catch (e) {
+            // Loud. A spec that cannot be resolved is a plugin that is not installed or a
+            // profile that is gone, and continuing with the unresolved text would hand
+            // `plugin:my-tools/bundle` to something expecting a path — which fails later,
+            // somewhere else, with a worse message.
+            throw new Error(`${t('paths.errFailed').replace('{s}', v)} — ${e}`);
+        }
+    }
+}
+
+/**
+ * Put a "BMM…" button beside every Browse button in a step's form.
+ *
+ * Injected rather than written into each form's markup: there are eight of those today and
+ * the ninth would be the one somebody forgets. Anything that already offers Browse gets this
+ * for free, including forms added later.
+ */
+function addBmmPathButtons(host: HTMLElement, params: Record<string, any>): void {
+    const targets: [string, string, string][] = [
+        ['.sched-browse-dir', '.sched-r-dir, .sched-ea-dir', 'dir'],
+        ['.sched-browse-file', '.sched-path', 'path'],
+        ['.sched-browse-folder', '.sched-path', 'path'],
+    ];
+    for (const [btnSel, inputSel, key] of targets) {
+        const browse = host.querySelector(btnSel) as HTMLElement | null;
+        const input = host.querySelector(inputSel) as HTMLInputElement | null;
+        if (!browse || !input || browse.dataset.bmmPath) continue;
+        browse.dataset.bmmPath = '1';
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-sm btn-ghost sched-bmm-path';
+        btn.textContent = t('paths.pick');
+        btn.title = t('paths.pickHint');
+        btn.addEventListener('click', async () => {
+            const spec = await pickBmmPath();
+            if (!spec) return;
+            params[key] = spec;
+            input.value = spec;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        browse.parentElement?.insertBefore(btn, browse.nextSibling);
+    }
+}
+
+/**
+ * Choose a place, and get back the SPEC rather than the path it points at today.
+ *
+ * The spec is the point. A resolved path is right on this machine until the plugin is
+ * reinstalled or the profile switches; `plugin:my-tools/bundle` keeps meaning the same thing,
+ * and means it on somebody else's machine too — which is what makes a task shareable.
+ */
+async function pickBmmPath(): Promise<string | null> {
+    let roots: { kind: string; id: string; label: string; path: string }[];
+    try {
+        roots = await invoke('bmm_path_roots') as typeof roots;
+    } catch (e) { toast(String(e), 'error', 8000); return null; }
+    if (!roots.length) { toast(t('paths.noneKnown'), 'info', 7000); return null; }
+
+    return new Promise((resolve) => {
+        const ov = document.createElement('div');
+        ov.className = 'modal-overlay open';
+        const rows = roots.map((r, i) => {
+            const spec = r.id ? `${r.kind}:${r.id}` : `${r.kind}:`;
+            return `<button type="button" class="pp-row" data-i="${i}" data-spec="${escAttr(spec)}">
+                <span class="pp-kind">${escHtml(r.kind)}</span>
+                <span class="pp-label">${escHtml(r.label || r.id)}</span>
+                <span class="pp-spec">${escHtml(spec)}</span>
+                <span class="pp-path">${escHtml(r.path)}</span>
+            </button>`;
+        }).join('');
+        ov.innerHTML = `<div class="modal glass cm-modal pp-modal">
+            <div class="modal-header"><h3 class="modal-title">${escHtml(t('paths.pickTitle'))}</h3>
+                <button class="modal-close" type="button" id="pp-x" aria-label="${escAttr(t('common.close'))}">${uiIcon('close', 16)}</button></div>
+            <p class="pp-lede">${escHtml(t('paths.pickLede'))}</p>
+            <input type="search" class="input pp-q" id="pp-q" placeholder="${escAttr(t('common.search') || 'Search')}" spellcheck="false">
+            <div class="pp-list" id="pp-list">${rows}</div>
+            <div class="modal-footer">
+                <label class="pp-sub">${escHtml(t('paths.subfolder'))}
+                    <input type="text" class="input" id="pp-sub" placeholder="bundle/presets" spellcheck="false"></label>
+                <button class="btn btn-sm btn-ghost" id="pp-cancel">${escHtml(t('common.cancel'))}</button>
+            </div>
+        </div>`;
+        const shut = (v: string | null) => { ov.remove(); resolve(v); };
+        ov.querySelector('#pp-x')?.addEventListener('click', () => shut(null));
+        ov.querySelector('#pp-cancel')?.addEventListener('click', () => shut(null));
+        const sub = ov.querySelector('#pp-sub') as HTMLInputElement;
+        ov.querySelectorAll<HTMLElement>('.pp-row').forEach((row) => {
+            row.addEventListener('click', () => {
+                const tail = sub.value.trim().replace(/^[/\\]+/, '');
+                const base = row.dataset.spec || '';
+                shut(tail ? `${base}${base.endsWith(':') ? '' : '/'}${tail}` : base);
+            });
+        });
+        const q = ov.querySelector('#pp-q') as HTMLInputElement;
+        q.addEventListener('input', () => {
+            const n = q.value.trim().toLowerCase();
+            ov.querySelectorAll<HTMLElement>('.pp-row').forEach((row) => {
+                row.style.display = !n || row.textContent!.toLowerCase().includes(n) ? '' : 'none';
+            });
+        });
+        (document.getElementById('app-window-outer') || document.body).appendChild(ov);
+        raiseAboveAll(ov, 11600);
+        q.focus();
+    });
+}
+
+
+/**
+ * The outline, and the hover that says what a word does.
+ *
+ * Both hang off the same textarea and neither changes what it contains: an editor aid that can
+ * edit is an editor aid that can lose somebody's work.
+ */
+function wireOutlineAndHover(modal: HTMLElement): void {
+    const ta = modal.querySelector('#sched-code-ta') as HTMLTextAreaElement | null;
+    const panel = modal.querySelector('#sched-outline') as HTMLElement | null;
+    const list = modal.querySelector('#sched-outline-list') as HTMLElement | null;
+    const btn = modal.querySelector('#sched-code-outline') as HTMLButtonElement | null;
+    if (!ta || !panel || !list || !btn) return;
+
+    let rows: OutlineRow[] = [];
+    const paint = () => {
+        rows = outlineOf(ta.value);
+        renderOutline(list, rows, (line) => {
+            // Caret first, then scroll. Setting selectionStart on a textarea that is not
+            // focused does nothing visible in some engines, and "it jumped nowhere" reads as
+            // a broken outline rather than a focus rule.
+            ta.focus();
+            const at = offsetOfLine(ta.value, line);
+            ta.setSelectionRange(at, at);
+            // Roughly: line height is not knowable without measuring, and being a line or two
+            // out is fine when the caret is already in the right place.
+            const lh = parseFloat(getComputedStyle(ta).lineHeight) || 18;
+            ta.scrollTop = Math.max(0, (line - 3) * lh);
+        });
+    };
+
+    btn.addEventListener('click', () => {
+        const open = panel.hasAttribute('hidden');
+        if (open) { panel.removeAttribute('hidden'); paint(); }
+        else panel.setAttribute('hidden', '');
+        btn.setAttribute('aria-pressed', open ? 'true' : 'false');
+    });
+    // Repainted on a timer rather than on every keystroke: the outline is a signpost, and one
+    // that re-sorts itself mid-word is a distraction.
+    let timer: number | null = null;
+    ta.addEventListener('input', () => {
+        if (panel.hasAttribute('hidden')) return;
+        if (timer !== null) window.clearTimeout(timer);
+        timer = window.setTimeout(paint, 400);
+    });
+
+    // ── Hover ───────────────────────────────────────────────────
+    let tip: HTMLElement | null = null;
+    let lastWord = '';
+    const hide = () => { tip?.remove(); tip = null; lastWord = ''; };
+
+    ta.addEventListener('mousemove', (e) => {
+        const mirror = ta.parentElement?.querySelector('.code-hl-mirror') as HTMLElement | null;
+        if (!mirror) return;
+        const hit = wordBoxAtPoint(mirror, e.clientX, e.clientY);
+        const word = hit?.word || null;
+        if (!hit || !word) { hide(); return; }
+        if (word === lastWord) return;
+        const said = explain(word);
+        hide();
+        if (!said) { lastWord = ''; return; }
+        lastWord = word;
+        tip = document.createElement('div');
+        tip.className = 'bmms-hover';
+        tip.innerHTML = `<b>${escHtml(said.title)}</b>${said.body ? `<span>${escHtml(said.body)}</span>` : ''}`;
+        (document.getElementById('app-window-outer') || document.body).appendChild(tip);
+        raiseAboveAll(tip, 11700);
+        // Anchored to the WORD, not to the pointer.
+        //
+        // It used to open 14px right and 20px below wherever the mouse happened to stop,
+        // which on a wide editor puts an explanation of `mods.scan` several centimetres from
+        // `mods.scan` — the reader has to work out what it is about. The token's own box was
+        // already computed by the hit test and thrown away.
+        const r = tip.getBoundingClientRect();
+        const box = hit.rect;
+        // Left edge of the word, clamped inside the window.
+        const x = Math.min(box.left, window.innerWidth - r.width - 10);
+        // Directly under it, flipping above when there is no room — 4px, so the tooltip and
+        // the word read as one thing.
+        const below = box.bottom + 4;
+        const y = below + r.height > window.innerHeight ? box.top - r.height - 4 : below;
+        tip.style.left = `${Math.max(8, x)}px`;
+        tip.style.top = `${Math.max(8, y)}px`;
+    });
+    ta.addEventListener('mouseleave', hide);
+    ta.addEventListener('scroll', hide);
+    ta.addEventListener('keydown', hide);
+}
+
+
+/**
+ * What this task would change, without changing it.
+ *
+ * The debugger runs for real — mods really get enabled. That is right for a debugger and wrong
+ * for the question people have BEFORE running something they just wrote.
+ *
+ * It reads the steps and does not evaluate a single condition, so it cannot be exactly right.
+ * The screen is built around saying so: every line is marked certain or maybe, and the note at
+ * the bottom explains what it could not know.
+ */
+async function openPreview(): Promise<void> {
+    const plan = planOf(_draft.steps || []);
+    if (!plan.length) {
+        toast(t('sched.prev.nothing'), 'info', 7000);
+        return;
+    }
+    const mods: any[] = await invoke('get_all_mods').catch(() => []);
+    const known = new Set((mods || []).map((m) => String(m.id)));
+    const on = new Set((mods || []).filter((m) => m.enabled).map((m) => String(m.id)));
+    const nameOf = (id: string) => (mods || []).find((m) => String(m.id) === id)?.name || id;
+    const lines = previewAgainst(plan, on, known);
+
+    const changes = lines.filter((l) => l.effect === 'change').length;
+    const maybes = lines.filter((l) => !l.certain).length;
+
+    const ov = document.createElement('div');
+    ov.className = 'modal-overlay open';
+    ov.innerHTML = `<div class="modal glass cm-modal pv-modal">
+        <div class="modal-header">
+            <h3 class="modal-title">${escHtml(t('sched.prev.title'))}</h3>
+            <button class="modal-close" type="button" id="pv-x" aria-label="${escAttr(t('common.close'))}">${uiIcon('close', 16)}</button>
+        </div>
+        <p class="pv-lede">${escHtml(t('sched.prev.lede')
+            .replace('{c}', String(changes))
+            .replace('{n}', String(lines.length)))}</p>
+        <div class="pv-list">
+            ${lines.map((l) => `<div class="pv-row pv-${escHtml(l.effect)}${l.certain ? '' : ' is-maybe'}">
+                <span class="pv-what">${escHtml(t('sched.prev.w.' + l.what))}</span>
+                <span class="pv-id">${escHtml(l.what === 'enable' || l.what === 'disable' ? nameOf(l.id) : (l.id || '—'))}</span>
+                <span class="pv-eff">${escHtml(t('sched.prev.e.' + l.effect))}</span>
+                ${l.certain ? '' : `<span class="pv-maybe">${escHtml(t('sched.prev.maybe'))}</span>`}
+            </div>`).join('')}
+        </div>
+        <div class="modal-footer">
+            <span class="pv-note">${escHtml(maybes ? t('sched.prev.noteMaybe').replace('{m}', String(maybes)) : t('sched.prev.note'))}</span>
+            <button class="btn btn-sm btn-accent" id="pv-ok">${escHtml(t('common.close'))}</button>
+        </div>
+    </div>`;
+    const shut = () => ov.remove();
+    ov.querySelector('#pv-x')?.addEventListener('click', shut);
+    ov.querySelector('#pv-ok')?.addEventListener('click', shut);
+    (document.getElementById('app-window-outer') || document.body).appendChild(ov);
+    raiseAboveAll(ov, 11500);
+}

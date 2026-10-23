@@ -1,0 +1,124 @@
+// @ts-nocheck
+/**
+ * tutorial-types.ts — TypeScript interfaces for the BMM tutorial hub system.
+ *
+ * Tutorials are composed of Parts, which contain Steps.
+ * Steps can be purely informational or require a specific user action inside BMM.
+ *
+ * Adding a tutorial:
+ *   1. Create a TutorialDef object in tutorial-data.ts
+ *   2. Add translation keys to en.json / fr.json
+ *   3. Register the tutorial in the TUTORIALS array (tutorial-data.ts)
+ */
+
+export interface TutorialStepAction {
+  /** Custom DOM event that signals the action was completed (dispatched via dispatchBmmAction) */
+  event: string;
+  /** i18n key for the instruction shown in the "action box" */
+  desc_key: string;
+}
+
+export interface TutorialStep {
+  /** Unique within the part, used for progress tracking (e.g. "create") */
+  id: string;
+  /** i18n key for the step title */
+  title_key: string;
+  /** i18n key for the step body text */
+  text_key: string;
+  /** Mascot image path (optional, defaults to Tasky.png) */
+  img?: string;
+  /** Navigate to this view when step is shown (e.g. "profiles", "library") */
+  nav?: string;
+  /** CSS selector or element ID to highlight */
+  selector?: string;
+  /** Multiple selectors to highlight simultaneously (all are shown, removed on action complete) */
+  selectors?: string[];
+  /** After the primary selector is interacted with (e.g. modal opens), highlight this element */
+  modal_selector?: string;
+  /** Once the modal is open, ALSO highlight + explain each of these fields. Each entry
+   *  is a DOM id/class + an i18n key describing what the field does. Rendered as a
+   *  numbered "field guide" in the coach card, and "Show me" visits each in turn. */
+  modal_fields?: { sel: string; key: string }[];
+  /** Same as modal_fields but for fields already on the page (no modal wait). */
+  fields?: { sel: string; key: string }[];
+  /** Inline SVG icon HTML to show next to the title */
+  icon?: string;
+  /** If set, the step waits for this BMM action before allowing Next */
+  action?: TutorialStepAction;
+  /** If true, the user can skip this step without completing the action */
+  optional?: boolean;
+  /** How this step hands off to the next — the author's choice between the two modes the
+   *  hub offers:
+   *   - 'interact' : the user must complete `action` before the Next button unlocks (this is
+   *                  the default whenever a step has an `action`, so stating it is documentation).
+   *   - 'next'     : a plain Next button that is always available. On a step that also has an
+   *                  `action`, this keeps tracking the interaction (it still marks complete when
+   *                  done) but does NOT force it — the reader may just continue. This is what an
+   *                  `optional` action step wants.
+   *  A step with no `action` is always 'next'. */
+  advance?: 'next' | 'interact';
+  /** false = outline the target without dimming the rest of the window (the spotlight is
+   *  the default). For a step about a control the reader should see IN CONTEXT. */
+  dim?: boolean;
+  /** Where Next goes, overriding the linear next step — the "jump to a specific step" choice.
+   *  Either a step id in THIS part, or `{ part, step }` to jump into another part. Lets a
+   *  tutorial branch instead of always walking straight through. Unknown targets fall back to
+   *  the linear next, so a typo can never strand the reader. */
+  goto?: string | { part?: string; step: string };
+}
+
+export interface TutorialPart {
+  /** Unique within the tutorial (e.g. "profiles", "scan") */
+  id: string;
+  /** i18n key for the part title shown in the breadcrumb */
+  title_key: string;
+  steps: TutorialStep[];
+}
+
+export interface TutorialAsset {
+  id: string;
+  name_key: string;
+  desc_key: string;
+  /** 'game' = playable sandbox, 'mod' = installable mod, 'modpack' = .MM file */
+  type: 'game' | 'mod' | 'modpack';
+  /** Description of where the file should go / how to use it (i18n key) */
+  usage_key: string;
+}
+
+export interface TutorialDef {
+  /** Unique across all tutorials (e.g. "basics", "advanced", "other") */
+  id: string;
+  title_key: string;
+  desc_key: string;
+  /** SVG icon HTML string */
+  icon: string;
+  /** CSS color for the card accent (e.g. "var(--accent)", "#f59e0b") */
+  color: string;
+  parts: TutorialPart[];
+  assets?: TutorialAsset[];
+  /** Where the hub files it. Custom tutorials are always 'mine'. */
+  category?: TutorialCategory;
+  /** How much the lesson assumes: 1 = nothing, 2 = the basics, 3 = a working setup. */
+  level?: 1 | 2 | 3;
+}
+
+export type TutorialCategory = 'start' | 'essentials' | 'advanced' | 'tools' | 'mine';
+
+// ── Progress store ──────────────────────────────────────────────────────────
+
+export type StepState = 'pending' | 'complete' | 'partial' | 'error';
+
+export interface StepStatus {
+  state: StepState;
+  /** Human-readable detail for partial / error states */
+  details?: string;
+}
+
+export interface TutorialProgressRecord {
+  last_part_id: string | null;
+  last_step_id: string | null;
+  /** Key: "{partId}:{stepId}" */
+  steps: Record<string, StepStatus>;
+}
+
+export type TutorialProgressStore = Record<string, TutorialProgressRecord>;

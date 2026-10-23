@@ -1,0 +1,15 @@
+/* « API Laya locale » card (features/settings/ai-api-card.ts). The rest comes from ai.css. */
+.ai-api-code {
+    margin: var(--space-2) 0 0;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bmm-bg-elevated);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-all;
+    overflow-x: auto;
+}

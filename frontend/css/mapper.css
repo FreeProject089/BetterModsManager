@@ -1,0 +1,1008 @@
+/**
+ * mapper.css — Premium design for Mod Mapper
+ */
+
+.mapper-container {
+    display: flex;
+    gap: 20px;
+    height: calc(100vh - 250px);
+    margin-top: 15px;
+}
+
+/* ── Mapper help banner ──────────────────────────────────────────────────────
+   Rebuilt as a proper card: an icon rail, a titled body with numbered steps, and
+   a footer for the modifier hint + the colour legend. Everything derives from the
+   theme tokens, so the accent tint follows a custom theme instead of being a
+   hard-coded blue. */
+.mapper-help-banner {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: start;
+    gap: 14px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    border-radius: var(--bmm-radius-card, 14px);
+    /* The kit-callout shape (kit.css), stated locally because this banner predates the
+       kit and its markup is already shipped. The angled accent gradient it used to wear
+       is gone: every advisory box in BMM is now a softly tinted surface — the SHAPE says
+       "read this", the tint says what kind. */
+    border: 1px solid var(--bmm-border);
+    border-color: color-mix(in srgb, var(--bmm-accent) 30%, var(--bmm-border)); background: color-mix(in srgb, var(--bmm-accent) 5%, var(--bmm-bg-elevated));
+}
+.mapper-help-banner[hidden] { display: none; }
+
+/* Icon rail — a tinted square so the banner reads as a callout, not a toolbar. */
+.mhb-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    flex: none;
+    border-radius: 11px;
+    color: var(--bmm-accent);
+    background: color-mix(in srgb, var(--bmm-accent) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bmm-accent) 22%, transparent);
+}
+
+.mhb-body { min-width: 0; display: flex; flex-direction: column; gap: 9px; }
+
+.mhb-head { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.mhb-title {
+    font-size: 13.5px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--bmm-text-primary);
+}
+/* The draft-mode promise is the single most reassuring thing about this screen,
+   so it gets a badge rather than being buried in a sentence. */
+.mhb-badge {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 999px;
+    color: var(--bmm-accent);
+    background: color-mix(in srgb, var(--bmm-accent) 13%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bmm-accent) 24%, transparent);
+}
+
+.mhb-steps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 22px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: none;
+}
+.mhb-steps li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: var(--bmm-text-secondary);
+}
+.mhb-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 19px;
+    height: 19px;
+    flex: none;
+    border-radius: 50%;
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--bmm-text-on-accent);
+    background: var(--bmm-accent);
+}
+
+.mhb-foot {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px 18px;
+    padding-top: 9px;
+    border-top: 1px solid var(--bmm-s08);
+}
+.mhb-tip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 11.5px;
+    color: var(--bmm-text-muted);
+}
+.mhb-tip kbd {
+    font-family: var(--bmm-font-mono, ui-monospace, monospace);
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 6px;
+    color: var(--bmm-text-secondary);
+    background: var(--bmm-s08);
+    border: 1px solid var(--bmm-s15);
+}
+.mhb-legend { display: inline-flex; align-items: center; gap: 14px; margin-left: auto; }
+
+@media (max-width: 900px) {
+    .mhb-legend { margin-left: 0; }
+}
+
+/* Dismiss (×) — pushed to the far right of the banner. */
+.mapper-hint-close {
+    margin-left: auto;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 7px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color .12s, background .12s;
+}
+.mapper-hint-close:hover { color: var(--text-primary); background: var(--bmm-s08); }
+
+/* Compact "Show tips" pill shown once the banner is dismissed. */
+.mapper-hint-show {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 5px;
+    padding: 5px 11px;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--bmm-accent) 26%, transparent);
+    background: color-mix(in srgb, var(--bmm-accent) 9%, transparent);
+    color: var(--bmm-accent);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .12s, border-color .12s;
+}
+.mapper-hint-show:hover {
+    background: color-mix(in srgb, var(--bmm-accent) 16%, transparent);
+    border-color: color-mix(in srgb, var(--bmm-accent) 45%, transparent);
+}
+.mapper-hint-show[hidden] { display: none; }
+.mapper-hint-show svg { flex: none; }
+
+.help-icon {
+    font-size: 1.2rem;
+}
+
+.help-text {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+/* Context Menu */
+.context-menu {
+    background: var(--bmm-bg-elevated);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--bmm-s15);
+    border-radius: 12px;
+    padding: 8px;
+    min-width: 220px;
+    box-shadow: 0 15px 40px rgba(0,0,0,0.6);
+    pointer-events: auto !important;
+}
+
+.menu-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.menu-item:hover {
+    background: var(--bmm-s08);
+    color: var(--text-main);
+}
+
+.menu-item.danger:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--danger);
+}
+
+.menu-divider {
+    height: 1px;
+    background: var(--bmm-s05);
+    margin: 6px 0;
+}
+
+/* Selection Visuals */
+.tree-item.selected {
+    background: rgba(59, 130, 246, 0.25) !important;
+    color: var(--text-main);
+    padding-left: 4px;
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.2);
+}
+
+/* The top row of a panel header: title, optional badge, controls. Was an inline style
+   repeated in both panels, which is how the two drifted apart in the first place. */
+.panel-header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    gap: var(--space-2, 8px);
+}
+
+/* The row under it — a <select> on one side, a path on the other. They are different
+   elements with different natural heights, and that 10px difference pushed the two file
+   trees out of line by exactly that much. Reserving one height makes the panels comparable,
+   which is the entire point of showing them side by side. */
+.panel-header {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3, 12px);
+}
+.panel-header > * {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+/* The row under the title: a <select> on one side, a path on the other, two elements with
+   different natural heights. Reserving one height is what keeps the two file trees starting
+   on the same line — and comparing them is the only reason they are side by side. */
+.panel-header > .panel-header-sub {
+    width: 100%;
+    min-height: 29px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+}
+
+.selection-counter {
+    font-size: 0.75rem;
+    color: var(--text-on-accent);
+    background: var(--accent);
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+/* Legend inside the panel it describes, pinned under the tree. `flex: 0 0 auto` so it
+   never competes with the scrolling tree for space. */
+.panel-legend {
+    flex: 0 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2, 8px);
+    padding: var(--space-2, 8px) var(--space-3, 12px);
+    border-top: 1px solid var(--border-color);
+    opacity: 0.85;
+}
+.panel-legend .legend-item {
+    margin-right: 0;
+    font-size: 0.72rem;
+}
+
+/* Legend dots */
+.legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 15px;
+    font-size: 0.8rem;
+}
+
+/* Inside the help banner the legend row supplies its own gap. */
+.mhb-legend .legend-item { margin-right: 0; font-size: 11.5px; color: var(--bmm-text-muted); }
+
+.dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.dot.orange { background: var(--bmm-warning); }
+.dot.green { background: var(--bmm-success); }
+
+/* Central Button */
+.btn-move-central {
+    background: var(--bmm-s05);
+    border: 1px solid var(--bmm-s10);
+    border-radius: 50%;
+    width: 54px;
+    height: 54px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-move-central:hover {
+    background: var(--accent);
+    color: var(--bmm-text-on-accent);
+    transform: scale(1.1) rotate(5deg);
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
+}
+
+.btn-move-central:active {
+    transform: scale(0.95);
+}
+
+/* Mapper Modals — the generic overlay fades in with opacity + visibility (so it can be
+   transitioned); the dim, blur, padding and the card itself are css/modal-shell.css. */
+.modal-generic-overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    z-index: 9000;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.modal-generic-overlay.open {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+
+/* Modal sizing for preview.
+   `.modal-large .modal.glass` and `.mapper-preview-container` each used to be declared
+   TWICE in this file, ~380 lines apart, with different values (width 90% vs 95%). Only the
+   later copy ever applied, so editing the one you found first changed nothing on screen.
+   Each is now declared once, here. */
+.modal-large {
+    z-index: 990001 !important;
+}
+
+.modal-large .modal-body {
+    flex: 1;
+    overflow: hidden;
+    padding: 0 !important;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.modal-large #confirm-message {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+}
+
+/* Tree Item Color Coding (Main Page) */
+.tree-item.root-item {
+    background: color-mix(in srgb, var(--bmm-warning) 9%, transparent);
+}
+
+.tree-item.mapped-item {
+    background: color-mix(in srgb, var(--bmm-success) 9%, transparent);
+}
+
+.modal-large .modal-body {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-large .preview-modal-list {
+    flex: 1;
+    max-height: none !important;
+}
+
+/* Live Mapping Highlight */
+.tree-item.mapping-target {
+    background: rgba(16, 185, 129, 0.25) !important;
+    box-shadow: 0 0 0 2px var(--success) inset !important;
+    color: var(--success) !important;
+}
+
+.tree-item.mapping-target-folder {
+    background: rgba(59, 130, 246, 0.15) !important;
+    box-shadow: 0 0 0 2px var(--accent) inset !important;
+}
+
+.tree-item.parent-highlight {
+    background: var(--bmm-s03) !important;
+    color: var(--text-main);
+}
+
+.pending-item {
+    font-style: italic;
+    background: rgba(59, 130, 246, 0.05);
+}
+
+.pending-badge {
+    font-size: 0.7rem;
+    background: var(--accent);
+    color: var(--bmm-text-on-accent);
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-left: 8px;
+    font-style: normal;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+
+.pending-badge.danger {
+    background: rgba(239, 68, 68, 0.2) !important;
+    color: var(--danger) !important;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.pending-badge.success {
+    background: rgba(16, 185, 129, 0.2) !important;
+    color: var(--success) !important;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.pending-delete .tree-item-label span {
+    opacity: 0.5;
+}
+
+.pending-new .tree-item-icon {
+    color: var(--success);
+}
+
+.root-target-item.mod-root-target {
+    color: var(--warning) !important;
+    border-bottom: 1px solid rgba(255, 165, 0, 0.1);
+    margin-bottom: 10px !important;
+    padding-bottom: 10px !important;
+    font-weight: 700;
+}
+
+.root-target-item.game-root-target {
+    color: var(--accent) !important;
+    border-bottom: 1px solid rgba(59, 130, 246, 0.1);
+    margin-bottom: 10px !important;
+    padding-bottom: 10px !important;
+    font-weight: 700;
+}
+
+.root-target-item:hover {
+    background: var(--bmm-s05) !important;
+}
+
+/* "Select whole mod root" button rendered directly on the mod-root tree item */
+.mod-root-target {
+    position: relative;
+}
+.mapper-root-select-btn {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 1px solid rgba(255, 165, 0, 0.35);
+    border-radius: 6px;
+    background: rgba(255, 165, 0, 0.12);
+    color: var(--warning);
+    cursor: pointer;
+    flex-shrink: 0;
+    opacity: 0.55;
+    transition: opacity 0.15s ease, background 0.15s ease, transform 0.1s ease;
+}
+.mod-root-target:hover .mapper-root-select-btn {
+    opacity: 1;
+}
+.mapper-root-select-btn:hover {
+    background: rgba(255, 165, 0, 0.25);
+    transform: scale(1.08);
+}
+.mapper-root-select-btn:active {
+    transform: scale(0.94);
+}
+
+.mapper-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 300px;
+}
+
+.panel-header {
+    padding: 16px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bmm-s02);
+    border-radius: 12px 12px 0 0;
+}
+
+.panel-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-main);
+    margin: 0;
+}
+
+.panel-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+}
+
+/* Tree Styles */
+.file-tree {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+}
+
+.tree-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px; /* Increased padding */
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+    white-space: nowrap;
+    min-height: 34px; /* Explicit height for drag target */
+}
+
+.tree-item:hover {
+    background: var(--bmm-s05);
+}
+
+.tree-item.folder {
+    color: var(--accent);
+    font-weight: 500;
+}
+
+.tree-item.file {
+    color: var(--text-muted);
+}
+
+.tree-item-icon {
+    margin-right: 8px;
+    display: flex;
+    align-items: center;
+    opacity: 0.8;
+}
+
+.tree-item-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tree-children {
+    margin-left: 20px;
+    border-left: 1px solid var(--bmm-s05);
+    padding-left: 4px;
+}
+
+/* Drag and Drop Visuals */
+.tree-item.dragging {
+    opacity: 0.4;
+    background: var(--accent-low);
+}
+
+.tree-item.drag-over {
+    background: var(--accent-low);
+    box-shadow: 0 0 0 2px var(--accent) inset;
+    transform: scale(1.02);
+}
+
+.global-drag-over {
+    background: rgba(59, 130, 246, 0.05) !important;
+    box-shadow: 0 0 0 2px var(--accent) inset !important;
+}
+
+/* Divider */
+.mapper-divider {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.5;
+}
+
+/* Utils */
+.game-path-display {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    background: rgba(0, 0, 0, 0.2);
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin-top: 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    border: 1px solid var(--bmm-s05);
+}
+
+.empty-hint {
+    padding: 40px;
+    text-align: center;
+    color: var(--text-muted);
+    font-style: italic;
+    font-size: 0.9rem;
+}
+
+.loading-spinner-container {
+    display: flex;
+    justify-content: center;
+    padding: 40px;
+}
+
+.loading-spinner {
+    width: 30px;
+    height: 30px;
+    border: 3px solid var(--bmm-s10);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* New Controls */
+.tree-controls {
+    display: flex;
+    gap: 4px;
+}
+
+.btn-icon-small {
+    background: var(--bmm-s05);
+    border: 1px solid var(--bmm-s10);
+    border-radius: 4px;
+    color: var(--text-muted);
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-icon-small:hover {
+    background: var(--bmm-s10);
+    color: var(--text-main);
+    border-color: var(--accent);
+}
+
+.bmm-input-small {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 6px 10px;
+    color: var(--text-main);
+    font-size: 0.8rem;
+    transition: all 0.2s ease;
+}
+
+.bmm-input-small:focus {
+    border-color: var(--accent);
+    outline: none;
+    background: rgba(0, 0, 0, 0.4);
+}
+
+/* Preview Modal Styles */
+.preview-modal-list {
+    max-height: 500px;
+    overflow-y: auto;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.preview-item {
+    display: flex;
+    gap: 12px;
+    padding: 8px;
+    border-bottom: 1px solid var(--bmm-s05);
+    align-items: flex-start;
+}
+
+.preview-icon {
+    margin-top: 4px;
+    color: var(--accent);
+}
+
+.preview-paths {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow: hidden;
+}
+
+.preview-rel {
+    font-weight: 600;
+    color: var(--text-main);
+    font-size: 0.9rem;
+}
+
+.preview-full {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Redesigned Preview Modal */
+.modal-large .modal.glass {
+    max-width: 1100px !important;
+    width: 95% !important;
+    height: 85vh !important;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--bmm-s15) !important;
+    box-shadow: 0 40px 100px rgba(0, 0, 0, 0.8) !important;
+}
+
+/* ── FINAL PREVIEW dialog (.mpv2-*, features/mapper/mapper-preview.ts) ──────────────
+   Summary tiles, warnings, a tree/list toggle with search and filters, a virtualised file
+   list (rows are absolutely positioned at 32px), and Back / Apply in the footer. */
+.mpv2-overlay { pointer-events: auto; z-index: 10060; }
+/* The card is the house shell (.modal.modal--xl.modal--tall): header, the summary, a
+   .modal-toolbar, a flush body whose only child scrolls, and the footer. */
+.mpv2 > .modal-body { overflow: hidden; }
+.mpv2-dest { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.mpv2-dest > svg { color: var(--accent); flex: none; }
+.mpv2-dest code { font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.mpv2-tiles { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; padding: 14px var(--bms-pad-x) 12px; flex: none; }
+.mpv2-tile { display: flex; flex-direction: column; gap: 2px; padding: 9px 12px; border-radius: 10px; background: var(--bmm-s03); border: 1px solid var(--bmm-s06); min-width: 0; }
+.mpv2-tile b { font-size: 17px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mpv2-tile span { font-size: 11.5px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mpv2-tile.is-ok b { color: var(--bmm-success); }
+.mpv2-tile.is-warn b { color: var(--bmm-warning); }
+
+.mpv2-warns { flex: none; list-style: none; margin: 0 var(--bms-pad-x) 12px; padding: 6px 12px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--bmm-warning) 35%, transparent); background: color-mix(in srgb, var(--bmm-warning) 8%, transparent); }
+.mpv2-warn { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12.5px; color: var(--text-secondary); }
+.mpv2-warn > span:first-child { color: var(--bmm-warning); display: grid; place-items: center; flex: none; }
+.mpv2-warn > span:nth-child(2) { flex: 1; min-width: 0; }
+.mpv2-link { background: none; border: 0; padding: 2px 4px; color: var(--accent); font: inherit; font-size: 12px; cursor: pointer; border-radius: 6px; flex: none; }
+.mpv2-link:hover { text-decoration: underline; }
+
+.mpv2-bar { gap: 10px; border-top: 1px solid var(--bmm-border); }
+.mpv2-seg { display: inline-flex; padding: 2px; border-radius: 9px; background: var(--bmm-s04); border: 1px solid var(--bmm-s06); }
+.mpv2-seg button, .mpv2-filters button { background: transparent; border: 0; color: var(--text-secondary); font: inherit; font-size: 12px; padding: 5px 11px; border-radius: 7px; cursor: pointer; }
+.mpv2-seg button.is-on { background: var(--bmm-bg-elevated); color: var(--text-primary); box-shadow: 0 1px 2px var(--bmm-s12); }
+.mpv2-search { flex: 1; min-width: 160px; display: flex; align-items: center; gap: 7px; padding: 0 10px; height: 30px; border-radius: 8px; border: 1px solid var(--border); background: var(--bmm-s02); color: var(--text-muted); }
+.mpv2-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text-primary); font: inherit; font-size: 12.5px; }
+.mpv2-search:focus-within { border-color: var(--accent); }
+.mpv2-filters { display: inline-flex; gap: 2px; }
+.mpv2-filters button:hover { color: var(--text-primary); background: var(--bmm-s04); }
+.mpv2-filters button.is-on { color: var(--accent); background: var(--accent-dim); }
+
+.mpv2-scroll { flex: 1; min-height: 0; overflow-y: auto; position: relative; padding: 0 12px; }
+.mpv2-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.mpv2-spacer { position: relative; }
+.mpv2-row {
+    position: absolute; left: 0; right: 0; height: 32px;
+    display: flex; align-items: center; gap: 10px; padding: 0 10px; border-radius: 8px;
+    font-size: 12.5px; color: var(--text-secondary);
+}
+.mpv2-row:hover { background: var(--bmm-s04); }
+.mpv2-group { border: 0; background: transparent; font: inherit; font-size: 12.5px; text-align: left; cursor: pointer; color: var(--text-primary); font-weight: 600; }
+.mpv2-chev { display: grid; place-items: center; color: var(--text-muted); transition: transform .15s; flex: none; }
+.mpv2-group.is-open .mpv2-chev { transform: rotate(90deg); }
+.mpv2-gico { display: grid; place-items: center; color: var(--accent); flex: none; }
+.mpv2-group.is-root .mpv2-gico { color: var(--bmm-warning); }
+.mpv2-path { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: var(--font-mono); }
+.mpv2-group .mpv2-path { font-family: inherit; }
+.mpv2-count { color: var(--text-secondary); font-weight: 400; font-size: 12px; white-space: nowrap; }
+.mpv2-count em { font-style: normal; color: var(--bmm-warning); margin-left: 6px; }
+.mpv2-size { color: var(--text-secondary); font-size: 11.5px; font-variant-numeric: tabular-nums; min-width: 64px; text-align: right; white-space: nowrap; font-weight: 400; }
+.mpv2-file.is-indent { padding-left: 40px; }
+.mpv2-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--bmm-success); }
+.mpv2-file.is-overwrite .mpv2-dot { background: var(--bmm-warning); }
+.mpv2-tag { font-size: 11px; color: var(--accent); background: var(--accent-dim); padding: 1px 7px; border-radius: 999px; flex: none; }
+.mpv2-empty { flex: 1; display: grid; place-items: center; color: var(--text-secondary); font-size: 13px; padding: 40px; }
+
+.mpv2-foot-note { flex: 1; margin-right: auto; }
+
+@media (max-width: 980px) {
+    .mpv2-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .mpv2-filters { width: 100%; }
+}
+
+/* Tasky tooltip replaces the CSS ::after tooltip everywhere in the mapper
+   (the tree panels clip ::after via overflow; Tasky follows the mouse, never cut) */
+#view-mapper [data-tooltip]::after,
+#view-mapper [data-tooltip]::before { display: none !important; }
+
+/* ── "This mod is a single archive" choice modal ────────────────────────────
+   Two cards rather than a yes/no pair: neither answer is the safe default, so
+   neither should look like one. The footer keeps only a way out. */
+.mapper-arch { display: flex; flex-direction: column; gap: 10px; }
+.mapper-arch-intro { margin: 0 0 2px; color: var(--text-secondary); line-height: 1.55; }
+.mapper-arch-note {
+    margin: 0;
+    padding: 9px 12px;
+    border-radius: 9px;
+    background: var(--bmm-warning-dim);
+    color: var(--bmm-warning);
+    font-size: 0.83rem;
+    line-height: 1.5;
+}
+.mapper-arch-opt {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    width: 100%;
+    padding: 12px 14px;
+    text-align: left;
+    border-radius: 11px;
+    border: 1px solid var(--bmm-s10);
+    background: var(--bmm-s04);
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    transition: background 0.12s ease, border-color 0.12s ease;
+}
+.mapper-arch-opt:hover { background: var(--bmm-s08); border-color: var(--accent); }
+.mapper-arch-opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mapper-arch-opt-t { font-weight: 700; color: var(--text-primary); }
+.mapper-arch-opt-d { font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; }
+
+/* ═══ Mapper page: hierarchy, toolbar, density, empty states (design pass) ═══════════════════
+   Scoped to #view-mapper (and the mapper's own dialogs) so it outranks the older rules above
+   and main.css's #view-mapper block without touching them. Tokens only; accent is a FILL or a
+   ring, and accent-coloured text goes through --mp-accent-ink (readable on BMM White too).
+   Text that must be read is --text-secondary, never -muted (2.3:1 on these panels). */
+#view-mapper {
+    --mp-accent-ink: color-mix(in srgb, var(--bmm-accent) 62%, var(--bmm-text-primary));
+}
+#view-mapper .view-subtitle { color: var(--bmm-text-secondary); }
+
+/* Header: the title, then ONE toolbar row under it: where you work (profile, refresh, new
+   folder) on the left, what you do with the result (preview, apply, learn more) on the right.
+   It was a 440px boxed card of two rows beside the title, taller than the tree headers. */
+#view-mapper > .view-header { align-items: center; gap: 12px 20px; flex-wrap: wrap; margin-bottom: 16px; }
+#view-mapper .view-actions.mapper-actions {
+    width: auto;
+    flex: 1 1 100%;
+    max-width: none;
+    margin-left: 0;
+    padding: 0;
+    background: none;
+    border: 0;
+    backdrop-filter: none;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+#view-mapper .mapper-profile-wrap { flex: 0 1 260px; max-width: 260px; height: 36px; background: var(--bmm-s04); border-color: var(--bmm-border-hover); }
+#view-mapper .mapper-profile-wrap:focus-within { box-shadow: 0 0 0 3px var(--bmm-accent-dim); }
+#view-mapper .mapper-profile-ic { color: var(--bmm-text-secondary); }
+#view-mapper .view-actions .btn { height: 36px; }
+#view-mapper .mapper-icon-btn { width: 36px; height: 36px; }
+#view-mapper .mapper-actions-sep { margin: 0 0 0 auto; width: 0; background: none; }
+
+/* Two panels, one gutter. The markup keeps a 20px spacer <div> between them; the container
+   gap already spaces them, so the spacer goes. */
+#view-mapper .mapper-container { gap: 16px; margin-top: 0; min-height: 420px; }
+#view-mapper .mapper-container > div:not(.mapper-panel) { display: none; }
+
+/* Panel = one card: a full-bleed header band, the tree, a footer. It was a card with padding
+   holding a second rounded box (the header), which read as a card inside a card. */
+#view-mapper .mapper-panel.glass-card {
+    padding: 0;
+    margin: 0;
+    min-width: 0;
+    border-radius: var(--bmm-radius-card);
+    border: 1px solid var(--bmm-border-hover);
+    background: var(--bmm-bg-elevated);
+    backdrop-filter: none;
+}
+#view-mapper .panel-header {
+    padding: 14px 16px;
+    gap: 10px;
+    border-radius: var(--bmm-radius-card) var(--bmm-radius-card) 0 0;
+    border-bottom: 1px solid var(--bmm-border);
+    background: var(--bmm-s02);
+}
+#view-mapper .panel-title { font-size: 13.5px; font-weight: 800; color: var(--bmm-text-primary); letter-spacing: -0.005em; }
+#view-mapper .panel-header > .panel-header-sub { min-height: 34px; }
+#view-mapper .game-path-display {
+    margin: 0;
+    padding: 0 10px;
+    height: 34px;
+    line-height: 32px;
+    display: block;
+    font-family: var(--bmm-font-mono);
+    font-size: 11.5px;
+    color: var(--bmm-text-secondary);
+    background: var(--bmm-s04);
+    border: 1px solid var(--bmm-border);
+    border-radius: var(--bmm-radius-input);
+}
+#view-mapper .bmm-input-small {
+    height: 32px;
+    padding: 0 10px;
+    font-size: 12.5px;
+    color: var(--bmm-text-primary);
+    background: var(--bmm-s04);
+    border: 1px solid var(--bmm-border-hover);
+    border-radius: var(--bmm-radius-input);
+}
+#view-mapper .bmm-input-small::placeholder { color: var(--bmm-text-secondary); opacity: 0.85; }
+#view-mapper .bmm-input-small:focus { background: var(--bmm-s06); border-color: var(--bmm-accent); box-shadow: 0 0 0 3px var(--bmm-accent-dim); }
+
+#view-mapper .btn-icon-small {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    color: var(--bmm-text-secondary);
+    background: transparent;
+    border-color: var(--bmm-border-hover);
+}
+#view-mapper .btn-icon-small:hover { color: var(--bmm-text-primary); background: var(--bmm-s06); border-color: var(--bmm-border-accent); }
+#view-mapper .btn-icon-small:focus-visible,
+#view-mapper .tree-item:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: 1px; }
+
+/* The tree: UI font (names read faster than in mono), 30px rows, folders in the accent INK. */
+#view-mapper .panel-content { padding: 8px; }
+#view-mapper .file-tree { font-family: var(--bmm-font-sans); font-size: 12.5px; }
+#view-mapper .tree-item { padding: 5px 10px; min-height: 30px; border-radius: 7px; transition: background var(--bmm-transition-fast); }
+#view-mapper .tree-item:hover { background: var(--bmm-s05); }
+#view-mapper .tree-item.folder { color: var(--mp-accent-ink); font-weight: 600; }
+#view-mapper .tree-item.file { color: var(--bmm-text-secondary); }
+#view-mapper .tree-item.selected { color: var(--bmm-text-primary); }
+#view-mapper .tree-children { margin-left: 16px; border-left-color: var(--bmm-border-hover); }
+
+/* Empty and "no results" states: an icon tile, then the sentence, in reading colours. It was
+   italic monospace at 2.3:1, which read as a disabled placeholder rather than as guidance.
+   The icon is a MASK filled with --text-secondary, so it follows the theme; tile and icon
+   share the first grid cell and the sentence falls into the second. */
+#view-mapper .empty-hint {
+    display: grid;
+    justify-items: center;
+    align-items: center;
+    row-gap: 12px;
+    padding: 44px 20px;
+    font-family: var(--bmm-font-sans);
+    font-style: normal;
+    font-size: 12.5px;
+    line-height: 1.5;
+    text-align: center;
+    color: var(--bmm-text-secondary);
+}
+#view-mapper .empty-hint::before,
+#view-mapper .empty-hint::after { content: ''; grid-area: 1 / 1; }
+#view-mapper .empty-hint::before { width: 42px; height: 42px; border-radius: 12px; background: var(--bmm-s05); border: 1px solid var(--bmm-border); }
+#view-mapper .empty-hint::after {
+    width: 20px;
+    height: 20px;
+    background: var(--bmm-text-secondary);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round'%3E%3Cpath d='M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round'%3E%3Cpath d='M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+#view-mapper .empty-hint.error { color: var(--bmm-danger); }
+
+#view-mapper .panel-foot-hint { color: var(--bmm-text-secondary); padding: 9px 16px; }
+#view-mapper .panel-legend { opacity: 1; padding: 9px 16px; border-top-color: var(--bmm-border); }
+#view-mapper .panel-legend .legend-item { color: var(--bmm-text-secondary); }
+
+
+/* Context menu: reading colours and a tighter row. */
+#mapper-context-menu .menu-item { color: var(--bmm-text-secondary); padding: 8px 12px; font-size: 13px; }
+#mapper-context-menu .menu-item:hover { color: var(--bmm-text-primary); }
+#mapper-context-menu .menu-item.danger:hover { color: var(--bmm-danger); background: var(--bmm-danger-dim); }

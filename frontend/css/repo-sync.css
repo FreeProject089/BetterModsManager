@@ -1,0 +1,332 @@
+/* Server repo → Sync: weight and grouping.
+ *
+ * Loaded after main.css, so this overrides without touching the markup — the same
+ * approach tutorial.css takes, and for the same reason: every id here is read by the
+ * tutorial engine and by repo-sync.ts, so restructuring the HTML would break things no
+ * stylesheet can see.
+ *
+ * Everything below is targeted by ID, not by position. A structural selector would break
+ * the first time a row gains a button.
+ *
+ * What was wrong, from reading the markup rather than the screen:
+ *
+ *   · Four buttons sat in one row under the URL field at equal weight — Fetch, plus
+ *     Browse, History and Check updates. Only one of them acts on what you just typed;
+ *     the other three go somewhere else entirely. Nothing said which to press. (The same
+ *     flaw the tutorial hub had, and tutorial.css already documents.)
+ *   · Start sync — the thing the whole panel exists for — was one button among several,
+ *     styled like the rest.
+ *   · The three folder pickers repeated the same shape three times with no shared rhythm.
+ */
+
+/* ── The one button that acts on the URL you just typed ─────────────────────── */
+#btn-fetch-repo-info {
+    font-weight: 700;
+    padding-inline: 18px;
+}
+/* The other three are destinations, not actions on this form. Quieter, and pushed away
+   from the primary so the eye does not read four equal choices. */
+#btn-browse-repos,
+#btn-repo-history,
+#btn-check-mod-updates {
+    font-weight: 500;
+    color: var(--bmm-text-secondary);
+}
+#btn-browse-repos { margin-inline-start: auto; }
+#btn-browse-repos:hover,
+#btn-repo-history:hover,
+#btn-check-mod-updates:hover { color: var(--bmm-text-primary); }
+
+/* ── The folder pickers get one rhythm instead of three ─────────────────────── */
+#btn-pick-sync-game,
+#btn-pick-sync-mods,
+#btn-pick-sync-backup {
+    flex: none;
+    min-width: 108px;
+    justify-content: center;
+}
+
+/* ── The panel's purpose ────────────────────────────────────────────────────── */
+#btn-start-repo-sync {
+    width: 100%;
+    padding-block: 12px;
+    font-size: 14px;
+    font-weight: 800;
+    margin-top: 4px;
+}
+/* Run controls read as a pair, and as secondary to the thing they interrupt. */
+#btn-pause-sync,
+#btn-cancel-sync {
+    flex: 1 1 0;
+    font-weight: 600;
+}
+#btn-cancel-sync { color: var(--bmm-danger); }
+
+/* A link, not a button competing with Start. */
+#btn-docs-resumable {
+    background: none;
+    border: none;
+    padding: 6px 2px;
+    font-size: 11px;
+    color: var(--bmm-text-muted);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+#btn-docs-resumable:hover { color: var(--bmm-accent); }
+
+/* ── Breathing room between the three stacked cards ─────────────────────────── */
+#repo-sync-info-card { margin-block: 14px; }
+#repo-sync-paths-section { margin-block-start: 14px; }
+
+/* The discovery verdict sits under its button; it is a result, not a peer of the card. */
+#discover-result {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--bmm-border);
+    border-radius: 8px;
+    background: var(--bmm-bg-base);
+    font-size: 11px;
+    line-height: 1.55;
+}
+
+/* ═══ Server repo → Host ═══════════════════════════════════════════════════════
+ *
+ * 26 buttons doing five separate jobs, every one of them at the same weight. Read from
+ * the markup, the jobs are: export a repo, generate a manifest only, refresh one from a
+ * server, serve it, and build a mini-server. Each has exactly ONE button that does the
+ * thing and several that help you get there — pick a folder, browse, preview — plus
+ * side-trips into management that are not part of the job at all.
+ *
+ * Same treatment as Sync above, same constraint: by ID, never by position, and no markup
+ * touched. Every id below verified present in index.html.
+ */
+
+/* ── The five that actually do something ───────────────────────────────────── */
+#btn-start-repo-export,
+#btn-generate-manifest,
+#btn-remote-refresh,
+#btn-toggle-repo-server,
+#btn-generate-mini-server {
+    font-weight: 800;
+    padding-block: 10px;
+    padding-inline: 20px;
+}
+
+/* ── The ones that only get you ready ──────────────────────────────────────── */
+#btn-pick-repo-export,
+#btn-manifest-browse,
+#btn-remote-browse,
+#btn-pick-repo-host,
+#btn-pick-mini-server-repo,
+#btn-pick-mini-folder {
+    flex: none;
+    min-width: 108px;
+    justify-content: center;
+    font-weight: 500;
+}
+
+/* Preview before you commit. Deliberately not as loud as the refresh it precedes, but
+   not a link either — skipping it is how you find out what changed by doing it. */
+#btn-remote-plan { font-weight: 600; }
+
+/* ── Interrupt and side-trip ───────────────────────────────────────────────── */
+#btn-cancel-repo-export { color: var(--bmm-danger); font-weight: 600; }
+
+/* Management, not part of hosting. They sit next to Start/Stop and read like steps of it. */
+#btn-open-monitoring,
+#btn-open-whitelist,
+#btn-open-bans,
+#btn-open-repo-update,
+#btn-refresh-repo-profiles {
+    font-weight: 500;
+    color: var(--bmm-text-secondary);
+}
+#btn-open-monitoring:hover,
+#btn-open-whitelist:hover,
+#btn-open-bans:hover,
+#btn-open-repo-update:hover,
+#btn-refresh-repo-profiles:hover { color: var(--bmm-text-primary); }
+
+/* ── Multi-repo hub modal — three numbered sections so the fields read as steps ───── */
+/* One surface (modal-shell.css, "Inside the body"): the number and the title make the step;
+   a hairline splits one step from the next, no box around each. */
+.repo-hub-sec { padding: 0; }
+.repo-hub-sec + .repo-hub-sec { padding-top: 14px; border-top: 1px solid var(--bmm-s08); }
+.repo-hub-sec-h {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--bmm-text-primary);
+    margin-bottom: 11px;
+}
+.repo-hub-sec-n {
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    flex: 0 0 auto;
+    border-radius: var(--radius-badge, 5px);
+    background: rgba(6, 182, 212, 0.14);
+    border: 1px solid rgba(6, 182, 212, 0.3);
+    color: var(--cyan);
+    font-size: 11px;
+    font-weight: 800;
+}
+
+/* ── Copy buttons are utilities, not choices ───────────────────────────────── */
+#btn-copy-my-creator-id,
+#btn-copy-repo-url,
+#btn-copy-repo-public-url,
+#btn-copy-repo-tunnel-url,
+#toggle-repo-export-pass {
+    flex: none;
+    padding: 5px 10px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--bmm-text-muted);
+}
+#btn-copy-my-creator-id:hover,
+#btn-copy-repo-url:hover,
+#btn-copy-repo-public-url:hover,
+#btn-copy-repo-tunnel-url:hover,
+#toggle-repo-export-pass:hover { color: var(--bmm-accent); }
+
+/* ── The folder/profile choice is one control, not two buttons ─────────────── */
+#btn-manifest-mode-folder,
+#btn-manifest-mode-profile {
+    flex: 1 1 0;
+    font-weight: 600;
+    border-radius: 0;
+}
+#btn-manifest-mode-folder { border-start-start-radius: 7px; border-end-start-radius: 7px; }
+#btn-manifest-mode-profile { border-start-end-radius: 7px; border-end-end-radius: 7px; margin-inline-start: -1px; }
+
+/* ── Sync options: the checkbox pile becomes a grid ──────────────────────────
+   (Screenshot feedback: "améliore les margins, des éléments dynamiques et non
+   dynamiques".) Four toggles stacked full-width with ad-hoc inline margins read as a
+   pile; on a wide card they waste half the width and the rhythm drifts with each one
+   added. A self-filling grid gives every toggle the same cell: two columns when the card
+   is wide, one when it is not, and adding a fifth toggle later lands in rhythm instead
+   of on a new hand-tuned margin. */
+#repo-sync-options {
+    display: grid;
+    /* 240px min packed THREE ragged columns on a wide card (field screenshot) — a
+       two-line toggle centered against one-line neighbours reads as disorder. 300px
+       caps it at two tidy columns, and start-alignment keeps multi-line labels level. */
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    column-gap: 18px;
+    row-gap: 10px;
+    align-items: start;
+}
+/* The section title and the mode/limit row keep the full width — they are not toggles. */
+#repo-sync-options > .form-label,
+#repo-sync-options > div { grid-column: 1 / -1; }
+/* !important: each label carries an inline margin-bottom that would otherwise stack on
+   top of the grid's row-gap, giving double spacing only where the old markup had it. */
+#repo-sync-options > .checkbox-container { margin: 0 !important; }
+
+/* ── Host: two jobs, two columns ─────────────────────────────────────────────
+   The panel's own markup says it is two groups — Publish (generate/export a repo) and
+   Serve (host it) — and its section titles have carried `grid-column:1/-1` inline since
+   they were written: a grid was PLANNED here and never applied, and the panel stacked
+   into one enormous column instead. The groups are now wrapped (every id and class
+   inside untouched) and sit side by side when the window affords it.
+
+   Each group is its own flow, so a card growing — the server status expanding, an export
+   in progress — reflows only its column, and the two never hold rows hostage for each
+   other the way one shared grid would. */
+[data-repo-panel="host"] {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
+    gap: 18px;
+    align-items: start;
+}
+.repo-host-group {
+    min-width: 0;                     /* long URLs must wrap, not blow the column out */
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+/* Inside a group, the old inline grid-column on the titles is inert (flex ignores it). */
+
+/* ── The checkbox rows themselves ────────────────────────────────────────────
+   .checkbox-container never had a base rule: the <label> was inline, so two toggles
+   in the same box flowed onto ONE crowded line (Generate card's ZIP options) and the
+   sync grid's cells hugged their text raggedly. One flex row fixes all 12 usages: box,
+   then text, then the help icon, aligned to the first text line. The .checkmark span
+   the markup carries was never styled anywhere — hidden, native checkboxes carry the
+   state (accent-color follows the theme). */
+.checkbox-container {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    cursor: pointer;
+    line-height: 1.45;
+}
+.checkbox-container input[type="checkbox"] {
+    margin: 2px 0 0;
+    flex-shrink: 0;
+    accent-color: var(--bmm-accent);
+    cursor: pointer;
+}
+.checkbox-container .checkmark { display: none; }
+
+/* ── Remote-update card (Mettre à jour depuis le serveur): breathing room ────
+   Everything inside was spaced 10px by inline styles — legible but airless, and the
+   action row sat flush against the checkbox above it. Inline margins can only be
+   out-spaced with !important, applied narrowly to this card's body. */
+#remote-base-url { margin-bottom: 2px; }
+#btn-remote-plan, #btn-remote-refresh { height: 36px !important; }
+#remote-force-full { margin-top: 2px; }
+
+/* The no-repo.json fallback block sat flush under the options grid. */
+#btn-discover-server { margin-top: 12px; }
+
+/* ── Every repo card folds from its header chevron; sections inside a card fold too ───── */
+/* The chevron is a flex item pushed to the end of the header (order), never absolutely
+   positioned — that way the trailing badges / "How it works?" buttons keep a real gap. */
+.repo-card-fold {
+    order: 99; flex: 0 0 auto; margin-left: 10px;
+    width: 26px; height: 26px; display: grid; place-items: center;
+    background: var(--bmm-s04); border: 1px solid var(--bmm-s08); border-radius: 7px;
+    color: var(--bmm-text-secondary); cursor: pointer; transition: background .12s, color .12s;
+}
+.repo-card-fold:hover { background: var(--bmm-s09); color: var(--bmm-text-primary); }
+.repo-card-fold svg { transition: transform .18s ease; }
+.repo-card--folded .repo-card-fold svg { transform: rotate(-90deg); }
+.repo-card--folded .repo-card-body { display: none !important; } /* !important: the hub body sets display:flex inline */
+.repo-card--folded { opacity: .92; }
+
+/* Numbered, collapsible sections inside the Generate / Manifest cards — native <details>,
+   so a dense card reads as three headings you open one at a time. */
+.repo-sec { border: 1px solid var(--bmm-s08); background: var(--bmm-s02); border-radius: 12px; padding: 0 16px; margin: 0 0 14px; }
+.repo-card-body > .repo-sec:first-of-type { margin-top: 4px; }
+.repo-sec[open] > .repo-sec-h { margin-bottom: 14px; }
+.repo-sec > .form-group, .repo-sec > div { margin-bottom: 12px; }
+.repo-sec > .repo-sec-h {
+    list-style: none; cursor: pointer; user-select: none;
+    display: flex; align-items: center; gap: 9px;
+    padding: 12px 0; font-size: 12px; font-weight: 700; color: var(--bmm-text-primary);
+}
+.repo-sec > .repo-sec-h::-webkit-details-marker { display: none; }
+.repo-sec > .repo-sec-h::after {
+    content: ''; margin-left: auto; width: 8px; height: 8px;
+    border-right: 2px solid var(--bmm-text-muted); border-bottom: 2px solid var(--bmm-text-muted);
+    transform: rotate(-45deg); transition: transform .18s ease;
+}
+.repo-sec[open] > .repo-sec-h::after { transform: rotate(45deg); }
+.repo-sec[open] > .repo-sec-h { border-bottom: 1px solid var(--bmm-s08); margin-bottom: 12px; }
+.repo-sec > :not(.repo-sec-h):last-child { margin-bottom: 14px !important; }
+.repo-sec-n {
+    display: grid; place-items: center; width: 20px; height: 20px; flex: 0 0 auto;
+    border-radius: var(--radius-badge, 5px);
+    background: rgba(6, 182, 212, 0.14); border: 1px solid rgba(6, 182, 212, 0.3);
+    color: var(--cyan); font-size: 11px; font-weight: 800;
+}
+
+/* ── Profiles: the Import menu button is a real secondary button, not cyan text ── */
+#btn-import-menu { color: var(--bmm-text-primary) !important; background: var(--bmm-s05); border: 1px solid var(--bmm-s10); font-weight: 600; gap: 8px; }
+#btn-import-menu:hover { background: var(--bmm-s09); border-color: var(--bmm-s14, var(--bmm-s10)); }
+#btn-import-menu svg { color: var(--accent); }

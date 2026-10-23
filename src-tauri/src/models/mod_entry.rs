@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(dead_code)]
@@ -49,6 +49,13 @@ pub struct ModEntry {
     pub author: Option<String>,
     pub description: Option<String>,
     pub dependencies: Vec<String>,
+    /// Installed from a repo that had no hash for its files.
+    ///
+    /// Persisted rather than derived, because the fact is only knowable at install time: a
+    /// later scan sees ordinary files on disk and would quietly promote them to the same
+    /// standing as mods whose bytes were actually checked.
+    #[serde(default)]
+    pub unverified: bool,
     pub enabled: bool,
     #[serde(default)]
     pub conflicts: Vec<ConflictReport>,
@@ -71,10 +78,116 @@ pub struct ModEntry {
     /// Activation order (0 = first, higher = more recent)
     #[serde(default)]
     pub activation_order: u32,
+    /// Cached list of relative paths for conflict detection
+    #[serde(default)]
+    pub cached_files: Option<Vec<String>>,
+    /// Last modification time of the mod folder during the last scan
+    #[serde(default)]
+    pub last_scan_mtime: u64,
+    /// Optional map of file relative paths to their SHA256 hashes for integrity verification
+    #[serde(default)]
+    pub file_hashes: Option<std::collections::HashMap<String, String>>,
+    /// Timestamp of when the hashes were last calculated
+    #[serde(default)]
+    pub file_hashes_timestamp: Option<String>,
+    /// Whether the last deep integrity check failed
+    #[serde(default)]
+    pub file_hashes_invalid: Option<bool>,
+    /// Stable cross-machine identifier derived from bmm.json or folder content fingerprint.
+    /// None until first scan after this field was introduced.
+    #[serde(default)]
+    pub content_id: Option<String>,
+    // ── Update system ────────────────────────────────────────────────────
+    /// Repository this mod was synced from (normalised repo URL). None for
+    /// mods added manually / from a site.
+    #[serde(default)]
+    pub source_repo: Option<String>,
+    /// Stable id of this mod inside its `source_repo` manifest (survives across
+    /// version bumps, unlike content_id). Used to detect repo updates.
+    #[serde(default)]
+    pub repo_mod_id: Option<String>,
+    /// Fingerprint of this mod's files in its repo manifest when it was last synced
+    /// (`repo::mod_content_hash`: relative paths + sha256). A manifest that changes the files
+    /// without bumping the version is still an update. None for mods not synced from a repo,
+    /// and for records written before this field (the version alone decides for those).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repo_content_hash: Option<String>,
+    /// Optional per-mod "own repo" URL for mods added outside a repo (e.g. a
+    /// site download that publishes its own repo.json). Checked independently.
+    #[serde(default)]
+    pub update_url: Option<String>,
+    /// User-configured additional update sources. A mod can be linked to one or
+    /// more repos that act as updaters; each entry may carry the mod's id inside
+    /// that repo (falls back to `repo_mod_id` when empty). These are checked in
+    /// addition to `source_repo` / `update_url`.
+    #[serde(default)]
+    pub update_sources: Vec<UpdateSource>,
+    /// Optional direct-download archive URL used to update this mod (e.g. a
+    /// GitHub release asset or a site's "latest" zip). Updates are detected by
+    /// comparing the remote validator against `direct_sig`, and applied by
+    /// re-downloading + overwriting the mod folder.
+    #[serde(default)]
+    pub direct_url: Option<String>,
+    /// Last seen validator (ETag, Last-Modified or Content-Length) for
+    /// `direct_url`. A differing value on a later check means a new build is
+    /// available. None until a baseline is captured.
+    #[serde(default)]
+    pub direct_sig: Option<String>,
+    /// The PRIMARY source asks for a password or a key.
+    ///
+    /// `UpdateSource` carries its own flag; the primary is not one of those — it is
+    /// `update_url` or `direct_url`, flat on the mod — so it needs its own field, or the box
+    /// on screen would be the one of the three that silently records nothing.
+    ///
+    /// Same meaning as `UpdateSource::protected`: it does not replace BMM discovering the
+    /// refusal, it precedes it, and it travels with a shared list so the recipient knows.
+    #[serde(default)]
+    pub update_source_protected: bool,
+}
+
+/// One configurable place to look for updates to a mod. These act as fallbacks,
+/// tried after the mod's primary source. A source is either a repo (`kind =
+/// "repo"`, default) or a direct-download archive (`kind = "direct"`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UpdateSource {
+    /// The source URL: a repo.json for `repo`, an archive URL for `direct`.
+    #[serde(alias = "repoUrl")]
+    pub repo_url: String,
+    /// (repo only) This mod's id inside that repo's manifest. `None`/empty → fall
+    /// back to the mod's main `repo_mod_id`.
+    #[serde(default, alias = "repoModId")]
+    pub repo_mod_id: Option<String>,
+    /// Source kind: `"repo"` (default) or `"direct"`.
+    #[serde(default = "default_source_kind")]
+    pub kind: String,
+    /// (direct only) Last seen validator (ETag/Last-Modified/size) for this
+    /// archive URL; a change means a new build. None until a baseline is captured.
+    #[serde(default)]
+    pub sig: Option<String>,
+    /// This source asks for a password or a key.
+    ///
+    /// BMM already DISCOVERS that, by asking and being refused. That works for the person who
+    /// holds the answer and for nobody else: a shared list arrives with addresses that will
+    /// 401 for its recipient, and nothing before or during says which ones or why.
+    ///
+    /// The flag does not replace the discovery, it precedes it — the screen can offer the key
+    /// and the password before the first failure, and the marker travels with the source so
+    /// whoever receives the list knows what they are missing.
+    ///
+    /// `default` because every source stored before this is unmarked, and unmarked means
+    /// "nobody has said", which is exactly what it meant then.
+    #[serde(default)]
+    pub protected: bool,
+}
+
+fn default_source_kind() -> String { "repo".to_string() }
+
+impl UpdateSource {
+    pub fn is_direct(&self) -> bool { self.kind.eq_ignore_ascii_case("direct") }
 }
 
 /// A download link for a mod
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DownloadLink {
     pub url: String,
     pub link_type: String,
@@ -118,6 +231,7 @@ impl ModEntry {
             author: None,
             description: None,
             dependencies: Vec::new(),
+            unverified: false,
             enabled: false,
             conflicts: Vec::new(),
             mod_folder_path,
@@ -128,11 +242,106 @@ impl ModEntry {
             tags: Vec::new(),
             install_notes: String::new(),
             activation_order: 0,
+            cached_files: None,
+            last_scan_mtime: 0,
+            file_hashes: None,
+            file_hashes_timestamp: None,
+            file_hashes_invalid: None,
+            content_id: None,
+            source_repo: None,
+            repo_mod_id: None,
+            repo_content_hash: None,
+            update_url: None,
+            update_sources: Vec::new(),
+            direct_url: None,
+            direct_sig: None,
+            update_source_protected: false,
         }
     }
 
     pub fn load_metadata(&mut self) -> bool {
         // Disabled: No longer reading _InfoBetterMod.Manager_ files as per user request
         false
+    }
+}
+
+/// Derives a stable cross-machine identifier for a mod folder.
+///
+/// Priority:
+///   1. `bmm.json` in the folder root with a non-empty `id` field (mod-author provided)
+///   2. SHA-256 fingerprint of sorted (relative_path, file_size) pairs — fast, no content reads
+///
+/// The result is deterministic: same files on any machine → same content_id.
+pub fn derive_content_id(folder_path: &Path) -> Option<String> {
+    use sha2::{Digest, Sha256};
+
+    // 1. Check for bmm.json
+    let bmm_json_path = folder_path.join("bmm.json");
+    if bmm_json_path.exists() {
+        if let Ok(raw) = std::fs::read_to_string(&bmm_json_path) {
+            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&raw) {
+                if let Some(id) = val.get("id").and_then(|v| v.as_str()) {
+                    let trimmed = id.trim();
+                    if !trimmed.is_empty() {
+                        return Some(trimmed.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Fingerprint: collect (relative_path_str, size) pairs, sort, hash.
+    //    For an ARCHIVE mod we read the entries straight from the archive — the
+    //    (rel, size) pairs are identical to the unpacked folder, so a zipped mod
+    //    and its unzipped twin get the SAME content_id.
+    let mut entries: Vec<(String, u64)> = if crate::archive::is_archive(folder_path) {
+        crate::archive::archive_entries(folder_path).unwrap_or_default()
+    } else {
+        let mut e: Vec<(String, u64)> = Vec::new();
+        collect_file_entries(folder_path, folder_path, &mut e);
+        e
+    };
+
+    if entries.is_empty() {
+        return None;
+    }
+
+    entries.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+
+    let mut hasher = Sha256::new();
+    for (rel_path, size) in &entries {
+        hasher.update(rel_path.as_bytes());
+        hasher.update(b"\x00");
+        hasher.update(size.to_le_bytes());
+    }
+    let hash = hasher.finalize();
+    Some(format!("{:x}", hash)[..32].to_string())
+}
+
+fn collect_file_entries(root: &Path, current: &Path, out: &mut Vec<(String, u64)>) {
+    let Ok(dir) = std::fs::read_dir(current) else { return };
+    for entry in dir.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_file_entries(root, &path, out);
+        } else if path.is_file() {
+            let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
+            let rel = path.strip_prefix(root).unwrap_or(&path);
+            let rel_str = rel.to_string_lossy().replace('\\', "/");
+            out.push((rel_str, size));
+        }
+    }
+}
+
+/// Updates `content_id` from already-computed `file_hashes` (true content hash).
+/// Skips if bmm.json declares an explicit id. Safe to call every time hashes are refreshed.
+pub fn update_content_id_from_hashes(entry: &mut ModEntry) {
+    // content_id is a cross-machine IDENTITY, not a content checksum. Derive it
+    // from bmm.json / the (path, size) fingerprint so it stays stable regardless
+    // of which hashing algorithm `file_hashes` uses — the SHA-256→BLAKE3 switch
+    // must NOT change a mod's identity (otherwise old and new installs of the same
+    // mod would stop matching across machines during the migration).
+    if let Some(id) = derive_content_id(&entry.mod_folder_path) {
+        entry.content_id = Some(id);
     }
 }

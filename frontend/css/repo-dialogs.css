@@ -1,0 +1,198 @@
+/* The repo dialogs: « Follow a repo » (src/features/repo/follow-dialog.ts, .rdlg-*) and
+   « SSH servers » (src/features/repo/ssh-servers.ts, .ssv-*). Linked on first open by
+   repo-dialogs-css.ts.
+
+   The card, header, body and footer are the house shell (css/modal-shell.css); this file only
+   lays out what is inside. Tokens only, so BMM White reads like the dark themes: tone colours
+   are icons and fills, text that must be read is mixed toward the theme's own ink.
+   One surface (modal-shell.css, "Inside the body"): list items and test steps are rows with a
+   tint, not framed cards; a frame stays on fingerprints (code) and on the warn / error
+   results. */
+
+/* ── shared ─────────────────────────────────────────────────────────────────────────────────── */
+
+.rdlg-modal .modal-body,
+.ssv-modal .modal-body { gap: 0; }
+
+.rdlg-label,
+.ssv-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--bmm-text-secondary);
+}
+.rdlg-hint,
+.ssv-hint {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--bmm-text-secondary);
+}
+.rdlg-hint .ic,
+.ssv-hint .ic { flex: none; margin-top: 2px; }
+.rdlg-mono,
+.ssv-mono { font-family: var(--bmm-font-mono); font-size: 12.5px; }
+
+/* ── Follow a repo ──────────────────────────────────────────────────────────────────────────── */
+
+.rdlg { display: flex; flex-direction: column; gap: 14px; }
+.rdlg-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.rdlg-opt { font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--bmm-text-muted); }
+.rdlg-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: end; }
+@media (max-width: 560px) { .rdlg-row { grid-template-columns: minmax(0, 1fr); } }
+
+.rdlg-out { display: flex; flex-direction: column; gap: 4px; min-height: 18px; font-size: 12px; }
+.rdlg-url { color: var(--bmm-text-secondary); overflow-wrap: anywhere; }
+.rdlg-url code {
+    font-family: var(--bmm-font-mono);
+    font-size: 11.5px;
+    color: var(--bmm-text-primary);
+    background: var(--bmm-s05);
+    border: 1px solid var(--bmm-border);
+    border-radius: 5px;
+    padding: 1px 6px;
+}
+.rdlg-muted { color: var(--bmm-text-secondary); }
+.rdlg-note { display: inline-flex; align-items: flex-start; gap: 6px; color: var(--bmm-text-secondary); line-height: 1.4; }
+.rdlg-note .ic { flex: none; margin-top: 2px; }
+.rdlg-note--ok .ic { color: var(--bmm-success); }
+.rdlg-note--warn { color: color-mix(in srgb, var(--bmm-warning) 45%, var(--bmm-text-primary)); }
+.rdlg-note--warn .ic { color: var(--bmm-warning); }
+.rdlg-note--bad { color: color-mix(in srgb, var(--bmm-danger) 50%, var(--bmm-text-primary)); }
+.rdlg-note--bad .ic { color: var(--bmm-danger); }
+
+.rdlg-check { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--bmm-text-primary); cursor: pointer; }
+.rdlg-check[hidden] { display: none; }
+
+.rdlg-test { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.rdlg-result-slot { width: 100%; }
+.rdlg-result-slot:empty { display: none; }
+.rdlg-result {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-s03);
+    font-size: 12.5px;
+    color: var(--bmm-text-secondary);
+}
+.rdlg-result--ok { flex-direction: column; align-items: stretch; gap: 8px; }
+.rdlg-result--bad { align-items: flex-start; border-color: color-mix(in srgb, var(--bmm-danger) 40%, var(--bmm-border)); background: var(--bmm-danger-dim); color: var(--bmm-text-primary); }
+.rdlg-result--bad > .ic { color: var(--bmm-danger); flex: none; margin-top: 1px; }
+.rdlg-result--bad p { margin: 4px 0 0; color: var(--bmm-text-secondary); }
+.rdlg-result-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--bmm-text-primary); font-size: 13.5px; }
+.rdlg-result-h > .ic { color: var(--bmm-success); }
+.rdlg-result-h strong { margin-right: auto; overflow-wrap: anywhere; }
+.rdlg-dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; margin: 0; font-size: 12.5px; }
+.rdlg-dl dt { color: var(--bmm-text-secondary); }
+.rdlg-dl dd { margin: 0; color: var(--bmm-text-primary); overflow-wrap: anywhere; }
+.rdlg-hint--bad { color: color-mix(in srgb, var(--bmm-danger) 50%, var(--bmm-text-primary)); }
+
+/* ── SSH servers ────────────────────────────────────────────────────────────────────────────── */
+
+.ssv { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 720px) { .ssv { grid-template-columns: minmax(0, 1fr); } }
+
+.ssv-side { display: flex; flex-direction: column; gap: 8px; position: sticky; top: 0; }
+.ssv-side-h { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--bmm-text-secondary); }
+.ssv-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 360px;
+    overflow-y: auto;
+    border-radius: 10px;
+    outline: none;
+}
+.ssv-list:focus-visible { box-shadow: 0 0 0 2px var(--bmm-accent); }
+.ssv-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 10px;
+    border-radius: 9px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    min-width: 0;
+}
+.ssv-item:hover { background: var(--bmm-s05); }
+.ssv-item.is-on { background: var(--bmm-accent-dim); }
+.ssv-item-name { font-weight: 700; font-size: 13px; color: var(--bmm-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ssv-item-where { font-family: var(--bmm-font-mono); font-size: 11.5px; color: var(--bmm-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ssv-tag {
+    font-family: var(--bmm-font-sans);
+    font-size: 10px;
+    font-weight: 600;
+    padding: 0 6px;
+    border-radius: 999px;
+    border: 1px solid var(--bmm-border-hover);
+    color: var(--bmm-text-secondary);
+}
+.ssv-empty { display: flex; align-items: center; gap: 8px; margin: 0; padding: 10px; font-size: 12.5px; color: var(--bmm-text-secondary); }
+.ssv-add { justify-content: center; }
+
+.ssv-st { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--bmm-text-secondary); }
+.ssv-st .ic { flex: none; }
+.ssv-st--ok .ic { color: var(--bmm-success); }
+.ssv-st--warn .ic { color: var(--bmm-warning); }
+.ssv-st--bad { color: color-mix(in srgb, var(--bmm-danger) 50%, var(--bmm-text-primary)); }
+.ssv-st--bad .ic { color: var(--bmm-danger); }
+
+.ssv-form { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.ssv-grid { display: grid; grid-template-columns: minmax(0, 1fr) 110px; gap: 12px; }
+.ssv-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.ssv-inline { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.ssv-inline > .form-input { flex: 1 1 200px; min-width: 0; }
+.ssv-field > .bms-seg { align-self: flex-start; }
+.ssv-err { display: flex; align-items: center; gap: 5px; font-size: 12px; color: color-mix(in srgb, var(--bmm-danger) 55%, var(--bmm-text-primary)); }
+.ssv-err:empty { display: none; }
+.ssv-err .ic { color: var(--bmm-danger); flex: none; }
+.ssv-field .form-input[aria-invalid="true"] { border-color: var(--bmm-danger); }
+.ssv-note { display: flex; align-items: flex-start; gap: 6px; margin: 0; font-size: 12px; color: var(--bmm-text-secondary); }
+.ssv-note .ic { flex: none; margin-top: 2px; }
+
+.ssv-known { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; }
+.ssv-known:empty { display: none; }
+.ssv-fp {
+    font-family: var(--bmm-font-mono);
+    font-size: 11.5px;
+    color: var(--bmm-text-primary);
+    background: var(--bmm-s05);
+    border: 1px solid var(--bmm-border);
+    border-radius: 5px;
+    padding: 1px 6px;
+    overflow-wrap: anywhere;
+}
+.ssv-fp--big { display: block; margin: 6px 0; padding: 8px 10px; font-size: 13px; }
+
+.ssv-steps:empty { display: none; }
+.ssv-steplist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.ssv-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 9px;
+    border: 1px solid transparent;
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: var(--bmm-text-primary);
+}
+.ssv-step > .ic { flex: none; margin-top: 2px; color: var(--bmm-text-secondary); }
+.ssv-step > div { min-width: 0; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.ssv-step--ok > .ic { color: var(--bmm-success); }
+.ssv-step--warn { border-color: color-mix(in srgb, var(--bmm-warning) 40%, var(--bmm-border)); background: var(--bmm-warning-dim); }
+.ssv-step--warn > .ic { color: var(--bmm-warning); }
+.ssv-step--bad { border-color: color-mix(in srgb, var(--bmm-danger) 40%, var(--bmm-border)); background: var(--bmm-danger-dim); }
+.ssv-step--bad > .ic { color: var(--bmm-danger); }
+.ssv-fps { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 10px; margin: 2px 0; }
+.ssv-fps dt { color: var(--bmm-text-secondary); }
+.ssv-fps dd { margin: 0; }
+.ssv-fps code { font-family: var(--bmm-font-mono); font-size: 11.5px; overflow-wrap: anywhere; }

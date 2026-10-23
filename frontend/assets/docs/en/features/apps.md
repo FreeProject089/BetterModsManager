@@ -1,0 +1,322 @@
+# App Catalog
+
+
+> Browse & install apps in one click.
+
+The tools *around* modding — the ones you'd otherwise hunt down on five different sites. The
+App Catalog lists companion apps and utilities, installs them for you, keeps track of the
+version you have, and launches them — without you managing downloads by hand.
+
+
+
+
+<!-- story:catalogues -->
+![Find apps and content in the catalogues](assets/docs/media/gifs/catalogues.gif)
+
+*Find apps and content in the catalogues. The App Catalog: browse and search, an app’s details, where the list comes from, and a catalogue of your own built in the Create tab.*
+
+<!-- /story:catalogues -->
+
+## Reading a card
+
+Each app shows the essentials at a glance: a thumbnail, its **category** (game, utility, or
+other), a **price** tag (free, freemium, or paid), a short description, its version, and up to
+three tags. Trust badges sit alongside the name:
+
+| Badge | Meaning |
+|---|---|
+| **Official** | The entry comes from BMM's own catalog. |
+| **Partner** | The entry comes from a catalog the official one vouches for. |
+| *(none)* | A community or self-added source — fine to use, just not vouched for. |
+
+These badges are assigned by BMM based on **where the catalog came from**, never by what the
+JSON claims — a community catalog can't badge itself "Official".
+
+Each card also shows its **state** (installed, not installed, installing, updating, failed)
+and the one **next action** that fits it: **Install**, **Launch**, **Update**, or **Try again**
+after a failure. Click a card for its details: the description and the README are rendered as
+[B.MD](doc-page:reference/custom-markdown) through the safe path, so a catalogue cannot run code
+in BMM by writing a page.
+
+### Finding an app
+
+| Control | Choices |
+|---|---|
+| **Install state** | Any state, **Installed**, **Not installed**, **Update available**. |
+| **Sort** | **Catalog order**, **Name A to Z**, **Name Z to A**, **Smallest download**. |
+| Category, price, tags | Narrow the list further. Tags are a list in the same bar, not a row of chips. |
+
+**Sources** in the page head says how many catalogues the list comes from, and how many did
+not answer; one click opens the list of sources. A card opens its details in a **drawer** on
+the right, so the grid stays beside it.
+
+!!! note "A catalogue proposes, you decide"
+
+    Nothing in a catalogue is downloaded, installed, enabled or applied on its own. Refreshing
+    a source, following a new one or opening this page only reads; an app installs when you
+    press **Install** or **Update**, or when a scheduled task or a plugin **you** set up asks
+    for it. Those two cannot answer a warning, so they get stricter rules instead: https only,
+    and a published SHA-256 or the install is refused.
+
+When a source cannot be reached, the page says so plainly, and the apps of every other source
+are still listed: one failing source no longer hides the others. Sources are cached and only
+read again when they changed.
+
+## Installing
+
+Click **Install** and BMM downloads the app, **verifies it against the publisher's checksum
+when one is provided** (on a mismatch, or when there is no checksum at all, BMM stops and asks:
+**Cancel** leaves nothing installed, so a tampered or corrupted download doesn't run unless you
+choose to), and records the installed version so it can offer
+updates later.
+
+What "install" means depends on the download's type:
+
+| Type | What BMM does |
+|---|---|
+| `zip` | Extracts it. If the archive *is* the app → portable, BMM picks the main executable. If it only contains an installer (`setup.exe`, `*install*`, `.msi`) → BMM runs that installer and auto-detects the result via the Windows registry. |
+| `exe` | If the filename looks like an installer (`setup`, `install`) → runs it, then auto-detects the installed app through the registry. Otherwise treated as a portable executable. |
+| `msi` | Runs it via `msiexec`, then auto-detects through the registry. |
+| `script` | Saves it and sets it as the launch target. Launching runs it with the right interpreter: `.ps1`→PowerShell, `.bat`/`.cmd`→cmd, `.py`→python, `.vbs`→wscript, `.sh`→bash. |
+
+For any installer path, BMM snapshots your install folders and the registry *before* running
+it and diffs afterwards — that's how it finds the real executable and the matching uninstaller
+with zero clicks from you beyond the app's own wizard.
+
+!!! warning "Installing runs code"
+
+    An app entry points at an executable or installer that runs on your machine. Only install
+    from sources you trust — the **Official** and **Partner** badges exist precisely so you can
+    tell at a glance which entries are vouched for.
+
+!!! question "The checksum is of the download, not of the installed app"
+
+    It is the sha256 of **the bytes at the download URL** — the installer if the entry points
+    at one, the zip if it points at a zip. Nothing has been installed yet at the moment the
+    check happens, which is the whole point: BMM hashes the payload while it streams to a
+    `.part` file and refuses to rename or run it on a mismatch.
+
+    So a catalogue's checksum changes whenever the publisher re-uploads the file, and it says
+    nothing about what ends up in `Program Files` afterwards.
+
+    The browse card says which entries have one. A missing checksum is common and proves
+    nothing by itself, so it is a quiet outline rather than an alarm — but between two entries
+    offering the same app, it is the difference worth seeing before you click rather than in a
+    warning after.
+
+## Launching
+
+Installed apps show a **Launch** action on their card. Most apps launch straight away. When an
+app ships more than one runnable file, BMM asks rather than guessing:
+
+> This app contains several executables. Pick the one to launch, or keep BMM's auto-detection.
+
+Pick explicitly when an app ships a launcher *and* the real binary — auto-detection is right
+most of the time, not all of it.
+
+## Updating & uninstalling
+
+When a source publishes a newer version than the one you have, the card offers an **Update**.
+
+Uninstalling depends on how the app got there:
+
+- **BMM-managed** installs (BMM created the folder) are removed cleanly — the folder goes.
+- **Externally-installed** apps (a setup wizard put them somewhere of its own) are removed via
+  the app's own uninstaller when BMM found one; otherwise BMM just drops its reference and
+  leaves the files, so it never deletes something it didn't create.
+
+## Executable detection
+
+For apps you installed **outside** BMM, the catalog can detect the existing executable and
+switch the card to "installed" instead of proposing a duplicate download — so a tool you
+already have doesn't show up asking to be fetched again.
+
+## Favorites & history
+
+Two tabs that are easy to miss because nothing points at them.
+
+**Favorites** is the star on any card — it collects the apps you keep coming back to, drawn
+from the catalogue, so the list survives uninstalling and reinstalling.
+
+**History** is every install, update and removal this machine has done, newest first. Useful
+for the question "what did I change just before this broke", which is otherwise unanswerable.
+
+## Adding a source
+
+> Add raw JSON URLs of community catalogs.
+
+A catalog is just a JSON file someone hosts. The official catalog can also **auto-import**
+community catalogs, so you often don't need to add anything by hand. Chains of imported catalogs
+are followed up to a total of **30 sources**, so a big community web of catalogs stays bounded.
+
+Every catalogue BMM reads, whatever its age or kind, goes through one versioned format, which
+also reads the signed feeds of BetterCommunity v2. The format is described in
+[Catalogue format](doc-page:reference/catalog-format), and a single address that brings in several
+catalogues at once is a [catalogue index](doc-page:reference/catalog-index).
+
+### The list of sources
+
+The same list is in the App catalogue (**Sources**) and in *Settings → Catalogue index*. Each
+row shows the name, the address, the kind, where it comes from, the signature state, the last
+refresh, the item count, the status and an on/off switch.
+
+| Origin | What it means |
+|---|---|
+| **Official** | Comes with BMM, from its [links file](doc-page:reference/links-and-updates). Shown read-only: it cannot be removed here. |
+| **Partner** | A catalogue the official catalogue names. It goes away when the official catalogue stops naming it. |
+| **Yours** | One you added, by hand, from an index or by a link. You can switch it off, edit it, move it or remove it. |
+
+**Order matters**: when two catalogues list the same item, the first one wins (official, then
+partners, then yours from the top). Move yours with **Move up** and **Move down**.
+
+| Status | |
+|---|---|
+| **OK** | It answered, with its item count. |
+| **Last good copy** | It did not answer this time; BMM shows what it read last. |
+| **Did not answer** | It failed, and the row says why: timeout, HTTP code, refused signature, not a catalogue. **Retry**, **Switch off**, **Remove** (yours) and **Details** are on the row. |
+| **Off** | Switched off: never fetched, never counted. |
+| **Not checked yet** | Nothing read yet. |
+
+The signature column says **Signed, verified**, **Bad signature**, **Signed, unknown key** or
+**Not signed**.
+
+**Add a source** and **Edit** open a dialog with **Test**, which reads the address the way BMM
+will: item count, format, signature. If the address is an **index**, the test says how many
+catalogues it lists and **Add the N catalogues** adds the ones that fit at once. A `.bmmbundle`
+needs no address: use *Follow a .bmmbundle* below the list; it is saved for the next start.
+**Remove** asks first, and leaves a line in the history to bring the source back. **Import**
+and **Export** read and write your sources as a JSON file; on import, sources you already
+follow are skipped. **Check all** fetches every source that is on.
+
+An empty or non-web address (the official catalogue lists an empty partner address as a
+placeholder) is skipped, never counted as a failure. With the official catalogue switched off and
+no source on, the page says there is no source and offers to add one.
+
+## A catalogue that carries its apps
+
+Every other kind of BMM catalogue could already be a `.bmmbundle` — a zip with `catalog.json`
+at its root and the payloads beside it. App catalogues were the one kind that could only ever
+point at an address, which meant publishing one always needed a host and following one meant
+that host still being there.
+
+**Sources → Follow a .bmmbundle…** follows one from disk. It is opened before it is followed:
+a file that is not an app catalogue fails there, with the reason, rather than becoming a
+source that quietly contributes nothing.
+
+The two kinds mix inside one document, per entry. A catalogue can carry the three small tools
+and link the 90&nbsp;MB one somebody already hosts.
+
+!!! warning "A bundle is not more trustworthy than a download"
+
+    A payload that travelled inside a bundle goes through the same checksum gate as one
+    fetched over the network — the same `.part` file, the same refusal to rename or run
+    something that fails it. It is not closer to being trusted; it is just closer.
+
+    An entry inside a bundle may only name a **neighbour**: absolute paths, drive letters,
+    UNC paths, `..` segments and every scheme that is not http(s) are refused by the same
+    rule that guards plugin and mod-list bundles.
+
+## Publishing one
+
+In **Create**, an entry takes an address *or* a file. Hand over a file and BMM fills in the
+type from its extension and the size and checksum from its bytes — the two fields nobody can
+produce by hand.
+
+**Publish as one file (.bmmbundle)** stages a folder, copies every handed-over file beside
+the document, rewrites those entries to name their neighbour, and zips it. An entry with an
+address keeps it. An entry with neither is named rather than dropped.
+
+The packed name comes from the entry's id, not the source file's name: two people's installers
+can both be called `setup.exe`, and the id is already unique in the document.
+
+!!! note "Your paths never leave your machine"
+
+    The file you picked is remembered as an absolute path while you are working, and that is
+    stripped from the published document. A catalogue meant for strangers must not carry your
+    home directory or your username.
+
+## Filling one in, in an order
+
+**Create** is four steps, one on screen at a time: **Catalogue** (name and description),
+**Entries**, **Check** and **Publish**. The rail at the top says where you are and whether each
+step is done or needs a look; **Back** and **Next** move along it, and nothing blocks you — it
+is your document. **Check** lists what would go wrong on somebody else's machine, each with a
+**Fix** button, and draws every entry as the card people will see.
+
+The editor behind **Add app** shows that card beside the form, redrawn as you type, and marks
+the fields that are still wrong under the field itself — an id another entry already uses, or
+one with characters an install folder cannot carry, included. It has three parts, in the order
+the answers arrive.
+
+| | |
+|---|---|
+| **1 · What it is** | id and title, both marked as required, then description, category, price and version. |
+| **2 · Where it comes from** | The one decision on the screen. An **address** or a **file on this PC**, asked as a question with two answers; picking one hides the other's field. Then type, size and checksum, with the two probe buttons. |
+| **3 · How it looks in the list** | Tags, requirements, images, documentation link. Marked *all optional*, and moved to the end. |
+
+It used to be fifteen identical inputs in one flat column with two thin grey separators.
+Three of them decide whether the entry works at all and twelve are the author's taste, and
+nothing said which was which — while the one decision sat in the **middle**, under ten
+cosmetic fields.
+
+The footer is sticky and says **what is still missing** as you type. Finding that out used to
+mean saving the entry, closing the editor, and reading a list at the bottom of the page. It is
+the same check the page's own list runs, so the two cannot drift about what "finished" means.
+
+!!! note "Choosing 'an address' drops a file you had picked"
+
+    The row that names the file is gone once you switch, so leaving it attached would save an
+    entry carrying a file the author had just said they did not want — invisibly.
+
+### Two ways out, and they are not peers
+
+The four equal buttons at the bottom are now two choices, because the difference between them
+decides whether you need a web server at all:
+
+- **As one file** — everything in a single `.bmmbundle`, packed files included. Nothing to
+  host, no address to keep alive; send it like any other file.
+- **As a `catalog.json`** — a document you host yourself, and every app in it must already
+  live at an address of its own. Download, copy or preview it.
+
+!!! tip "An entry with a file is not an entry with a problem"
+
+    The page used to report an entry whose source is a **file** as *"no download URL — every
+    reader drops this entry silently"*. That is exactly what the file button is for: the file
+    is packed in at publish time and the address is written then. The warning was alarming,
+    wrong, and unfixable without undoing what the author meant. It now says the true thing
+    instead — a plain `catalog.json` carries no address for that entry.
+
+## Making your own
+
+When you add an app, **Fetch from the URL** reads the file people will actually download and
+fills in the size and the checksum. *From a local file…* does the same for the installer you
+have in front of you and have not uploaded yet — it is the same bytes, so it is the same hash.
+
+Both were free-text fields before, which left two honest outcomes: empty (no integrity check
+at all) or mistyped (every install refused).
+
+**http is allowed, and shown.** Plenty of small catalogues are served from a box without a
+certificate, and refusing them only means the entry never reaches anybody's list. What is
+not acceptable is that being invisible: over plain http whoever is on the path serves what
+they like — including a different installer *and* a checksum that matches it. So an `http`
+address wears an amber `http` marker wherever it appears: in **Sources**, on the browse card,
+and on the entry while you are writing it. The probe says the same thing about a checksum it
+just read over http.
+
+Only `http` and `https` are read at all. `file://` and the rest are refused rather than
+marked — they are not a weaker way of doing this, they are a different thing.
+
+An entry only needs an `id`, a `title` and a download URL. Everything else has a default now —
+`tags` without one used to make serde refuse the entry, which made `fetch_app_catalogs` refuse
+the whole **catalogue**, which the browser only mentioned if *every* source had failed.
+
+> Build a `catalog.json` you can host on GitHub and share with others.
+
+If you maintain a set of tools for a game or a community, this is how you hand them over as one
+list instead of ten links. A catalog is a plain JSON file: catalog-level metadata plus an
+`apps` array, where each app carries an id, title, category, price, tags, and a `download`
+block (URL, file type, optional size and SHA-256). Host the raw file anywhere public and share
+its URL, or host it on BetterCommunity as a public or invite-only catalog.
+
+See the developer reference *app-catalog format* for the full schema and the `file_type`
+behaviour table.

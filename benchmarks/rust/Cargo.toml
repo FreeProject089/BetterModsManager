@@ -1,0 +1,102 @@
+# BMM benchmark crate — isolated from src-tauri so it can NEVER affect the shipped
+# MSI build (tauri-bundler only harvests src-tauri's [[bin]]; this crate is not a
+# workspace member of it). The archive hot-path is the REAL code: src/lib.rs
+# #[path]-includes ../../../src-tauri/src/archive.rs verbatim (it has zero crate::
+# deps), so there is no drift. The FS-scan/copy and repo-JSON benches mirror the
+# real algorithms/schema faithfully (those modules in the app pull in tauri / the
+# whole models graph, which we deliberately keep out of this lightweight crate).
+[package]
+name = "bmm-benchmarks"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "bmm_benchmarks"
+path = "src/lib.rs"
+# Don't let `cargo bench` run the lib's libtest harness — it would choke on
+# Criterion's CLI flags (e.g. --measurement-time). Only the [[bench]] targets run.
+bench = false
+test = false
+
+# Thin CLI so hyperfine can time WHOLE-PROCESS end-to-end cost (startup + a real
+# archive extract / dir scan), complementing Criterion's in-process timings.
+[[bin]]
+name = "bmm-bench-cli"
+path = "src/main.rs"
+bench = false
+test = false
+
+# Resource collector — peak heap + time for the real hot ops (companion to the Criterion
+# time benches). `cargo run --bin bmm-bench-mem --release` → table + results/mem-report.json.
+[[bin]]
+name = "bmm-bench-mem"
+path = "src/bin/mem.rs"
+bench = false
+test = false
+
+[dependencies]
+# ── deps required to compile the REAL archive.rs verbatim ──
+zip = { version = "0.6", features = ["deflate"] }
+tar = "0.4"
+flate2 = "1"
+sevenz-rust2 = "0.23"
+unrar = "0.5"
+# ── deps for the faithful FS / JSON mirrors ──
+jwalk = "0.8"
+walkdir = "2"
+rayon = "1.8"
+sha2 = "0.10"
+blake3 = { version = "1", features = ["rayon", "mmap"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# ── fixtures ──
+tempfile = "3"
+rand = "0.8"
+# ── deps required to compile the REAL creator_v5/keystore.rs verbatim ──
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+hex = "0.4"
+base64 = "0.21"
+zeroize = { version = "1.8", features = ["serde"] }
+aes-gcm = "0.11.1"
+# ── deps required to compile the REAL repo_format.rs verbatim (1.0.2: repo validate / convert
+#    hashing); catalog_format.rs needs nothing beyond serde_json/base64/ed25519-dalek above ──
+chrono = "0.4"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.52", features = ["Win32_Foundation", "Win32_Security_Cryptography"] }
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+# Each bench disables the libtest harness so Criterion owns `fn main`.
+[[bench]]
+name = "archive_extraction"
+harness = false
+
+[[bench]]
+name = "fs_scan_copy"
+harness = false
+
+[[bench]]
+name = "repo_json"
+harness = false
+
+[[bench]]
+name = "creator_key"
+harness = false
+
+# 1.0.2 hot paths: the universal catalogue normaliser (every catalogue BMM reads goes through
+# it) and the repo validate / convert hasher (sha256 + 4 MiB chunk table per file).
+[[bench]]
+name = "catalog_normalize"
+harness = false
+
+[[bench]]
+name = "repo_hash"
+harness = false
+
+# Optimised benches — measuring debug builds would be meaningless.
+[profile.bench]
+opt-level = 3
+lto = "thin"

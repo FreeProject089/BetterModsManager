@@ -1,13 +1,34 @@
+use tauri::Emitter;
 use crate::fs_utils;
-use crate::models::mod_entry::{ModEntry, ModStatus, ConflictReport, ConflictCategory, ConflictStatus};
+use crate::models::mod_entry::{ModEntry, ModStatus, ConflictReport, ConflictCategory, ConflictStatus, derive_content_id, update_content_id_from_hashes};
 use crate::commands::crash::log_line;
 use crate::state::AppState;
 use std::path::PathBuf;
-use tauri::{State, Window};
+use tauri::{State, Window, Manager};
 use std::sync::Mutex;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
+use crate::error::AppError;
+
+#[derive(Serialize, Clone)]
+pub struct ShaStatusPayload {
+    pub mod_id: String,
+    pub status: String,
+    pub is_manual: bool,
+}
+
+#[derive(Serialize, Clone)]
+pub struct HashingStats {
+    pub total_mods: usize,
+    pub hashed_mods: usize,
+    pub missing_mods: usize,
+    pub invalid_mods: usize,
+    pub valid_mods: usize,
+    pub queue_size: usize,
+    pub is_active: bool,
+    pub current_mod_name: Option<String>,
+}
 
 #[derive(Serialize, Clone)]
 struct BenchEventPayload {
@@ -16,6 +37,80 @@ struct BenchEventPayload {
     total_mb: f64,
     limit_mb_s: Option<u64>,
     finished: bool,
+}
+
+/// One mod being turned on or off, as the webview sees it (`bmm://mod-op-progress`). Emitted
+/// for EVERY mod an enable or a disable touches, dependencies included, whoever asked: a card
+/// toggle, "Enable all", an order list, the scheduler. The library cards and the app-wide
+/// activity pill (frontend/src/core/activation-jobs.ts) draw from it, so an activation keeps
+/// showing wherever the user is in BMM.
+///
+/// `phase`: start → copy (bytes, at most `PROGRESS_MAX_PER_SEC` a second) → done | failed |
+/// cancelled. `bytes_total` is the mod's size; `bytes_done` counts what the worker wrote,
+/// backups of the game's originals included, so it is shown clamped to the total.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct ModOpProgress {
+    pub mod_id: String,
+    pub mod_name: String,
+    /// "enable" | "disable"
+    pub op: &'static str,
+    /// "start" | "copy" | "done" | "failed" | "cancelled"
+    pub phase: &'static str,
+    pub bytes_done: u64,
+    pub bytes_total: u64,
+}
+
+pub const MOD_OP_PROGRESS_EVENT: &str = "bmm://mod-op-progress";
+
+/// The ceiling on `copy` events per operation. Ten a second is smooth for a bar and nothing
+/// for the webview; an event per file (thousands for a texture pack) was what made a big
+/// activation stutter the UI it was meant to inform.
+pub const PROGRESS_MAX_PER_SEC: u32 = 10;
+
+/// Decides which byte counts become an event: never two within 1/PROGRESS_MAX_PER_SEC of a
+/// second, and never the same value twice.
+#[derive(Debug)]
+pub(crate) struct ProgressThrottle {
+    min_gap: std::time::Duration,
+    last_at: Option<Instant>,
+    last_value: Option<u64>,
+}
+
+impl ProgressThrottle {
+    pub(crate) fn new() -> Self {
+        Self {
+            min_gap: std::time::Duration::from_millis(1000 / PROGRESS_MAX_PER_SEC as u64),
+            last_at: None,
+            last_value: None,
+        }
+    }
+
+    pub(crate) fn should_emit(&mut self, now: Instant, value: u64) -> bool {
+        if self.last_value == Some(value) { return false; }
+        if let Some(at) = self.last_at {
+            if now.duration_since(at) < self.min_gap { return false; }
+        }
+        self.last_at = Some(now);
+        self.last_value = Some(value);
+        true
+    }
+}
+
+/// The worker's progress line on its stdout: `BMMPROG <bytes written>`. Anything else on that
+/// stream is ignored.
+pub(crate) fn parse_progress_line(line: &str) -> Option<u64> {
+    line.trim().strip_prefix(crate::fs_utils::PROGRESS_PREFIX)?.trim().parse().ok()
+}
+
+fn emit_mod_op(window: &Window, mod_id: &str, mod_name: &str, op: &'static str, phase: &'static str, bytes_done: u64, bytes_total: u64) {
+    let _ = window.emit(MOD_OP_PROGRESS_EVENT, ModOpProgress {
+        mod_id: mod_id.to_string(),
+        mod_name: mod_name.to_string(),
+        op,
+        phase,
+        bytes_done,
+        bytes_total,
+    });
 }
 
 #[derive(Serialize, Clone)]
@@ -33,23 +128,395 @@ pub struct SharedActivation {
 }
 
 lazy_static::lazy_static! {
-    static ref MOD_OP_LOCK: Mutex<()> = Mutex::new(());
+    pub(crate) static ref MOD_OP_LOCK: Mutex<()> = Mutex::new(());
+    /// PID of the currently-running CANCELLABLE mod-IO worker subprocess.
+    /// `cancel_mod_ops` kills this PID for near-instant cancellation.
+    static ref MOD_OP_CHILD_PID: Mutex<Option<u32>> = Mutex::new(None);
 }
 
+/// Set to `true` the moment we taskkill the worker.  Independent of the
+/// global cancel flag — survives the frontend's `clear_mod_op_cancel` race
+/// so the parent always knows "this exit was my doing".  Reset to `false`
+/// before each new cancellable worker spawn.
+static MOD_OP_KILLED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+fn set_mod_op_child_pid(pid: Option<u32>) {
+    *MOD_OP_CHILD_PID.lock().unwrap_or_else(|p| p.into_inner()) = pid;
+}
+
+/// Lightweight per-op resource probe.  Captures current process RSS and
+/// CPU% via `sysinfo`.  Returns `(rss_bytes, cpu_pct)`; falls back to zeros
+/// if the probe fails so logging never blocks an op.
+fn probe_process_stats() -> (u64, f32) {
+    use sysinfo::{System, Pid};
+    let mut sys = System::new();
+    let pid = Pid::from_u32(std::process::id());
+    sys.refresh_process(pid);
+    if let Some(p) = sys.process(pid) {
+        (p.memory(), p.cpu_usage())
+    } else {
+        (0, 0.0)
+    }
+}
+
+/// Spawn the BMM exe in `--mod-worker` mode, wait for it, return the output.
+/// Runs synchronously — callers should put this inside `spawn_blocking`.
+///
+/// `cancellable`:
+///   - `true`  → register the PID for `cancel_mod_ops` to kill, and if
+///                killed, run an inverse-op undo subprocess so any partial
+///                writes are reverted.
+///   - `false` → registered nowhere, cannot be cancelled (used for the
+///                inverse undo itself).
+///
+/// `on_progress`: called with the bytes the worker has written so far, at most
+/// `PROGRESS_MAX_PER_SEC` times a second and only when the count moved. The worker prints them
+/// on its stdout (`fs_utils::PROGRESS_PREFIX`), which is piped only when someone listens.
+fn run_mod_io_worker_with_mode(
+    input: crate::fs_utils::WorkerInput,
+    cancellable: bool,
+    op_label: &str,
+    on_progress: Option<&dyn Fn(u64)>,
+) -> Result<crate::fs_utils::WorkerOutput, String> {
+    use std::process::Stdio;
+    use std::sync::atomic::Ordering;
+    use std::time::Instant;
+
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+
+    // The governor's Deploy ticket for this operation, held while the worker runs: it is what
+    // the dashboard lists, what counts against the Deploy slots, and what "cancel" on the
+    // dashboard reaches (the wait below kills the worker when it is cancelled). The inverse
+    // undo after a cancel (`cancellable == false`) runs under the cancelled op's ticket, still
+    // held by the caller one frame up; taking a second one there could wait forever on a
+    // one-slot preset.
+    let ticket = if cancellable {
+        let subject = input.mod_folder.file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| op_label.to_string());
+        Some(crate::governor::runtime::global().begin(crate::governor::config::OpKind::Deploy, &subject))
+    } else {
+        None
+    };
+    if ticket.as_ref().map(|t| t.is_cancelled()).unwrap_or(false) {
+        return Err(crate::fs_utils::CANCELLED.to_string());
+    }
+    // The worker is another process with its own governor: give it this one's document, so
+    // it copies under the same preset and per-disk rules.
+    let mut input = input;
+    input.io = Some(crate::governor::runtime::global().config());
+
+    let tmpdir = std::env::temp_dir();
+    let uid = uuid::Uuid::new_v4().simple().to_string();
+    let in_path  = tmpdir.join(format!("bmm-mod-worker-in-{}.json",  uid));
+    let out_path = tmpdir.join(format!("bmm-mod-worker-out-{}.json", uid));
+
+    let input_json = serde_json::to_string(&input).map_err(|e| e.to_string())?;
+    std::fs::write(&in_path, input_json).map_err(|e| e.to_string())?;
+
+    let mut cmd = crate::commands::proc::hidden_command(&exe);
+    cmd.arg("--mod-worker")
+        .arg(&in_path)
+        .arg(&out_path)
+        .stdin(Stdio::null())
+        .stdout(if on_progress.is_some() { Stdio::piped() } else { Stdio::null() })
+        .stderr(Stdio::null());
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const BELOW_NORMAL_PRIORITY_CLASS: u32 = 0x0000_4000;
+        const CREATE_NO_WINDOW:            u32 = 0x0800_0000;
+        cmd.creation_flags(BELOW_NORMAL_PRIORITY_CLASS | CREATE_NO_WINDOW);
+    }
+
+    let (rss_before, _) = probe_process_stats();
+    let started = Instant::now();
+
+    // Reset killed flag for the new cancellable op.
+    if cancellable {
+        MOD_OP_KILLED.store(false, Ordering::SeqCst);
+    }
+
+    let mut child = cmd.spawn().map_err(|e| {
+        let _ = std::fs::remove_file(&in_path);
+        format!("Failed to spawn mod worker: {}", e)
+    })?;
+    let pid = child.id();
+    if cancellable {
+        set_mod_op_child_pid(Some(pid));
+    }
+
+    // The worker's progress lines, drained on their own thread: a pipe nobody reads fills up
+    // and would block the worker mid-copy. The reader only keeps the highest count; the wait
+    // loop below decides what becomes an event.
+    let progress = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+    if let Some(out) = child.stdout.take() {
+        let progress = progress.clone();
+        std::thread::spawn(move || {
+            use std::io::BufRead;
+            for line in std::io::BufReader::new(out).lines() {
+                let Ok(line) = line else { break };
+                if let Some(n) = parse_progress_line(&line) {
+                    progress.fetch_max(n, Ordering::Relaxed);
+                }
+            }
+        });
+    }
+    let mut throttle = ProgressThrottle::new();
+    // The batch this worker belongs to (set by the enable / disable closure); None = legacy.
+    let scope = if cancellable { crate::fs_utils::current_cancel_scope() } else { None };
+
+    // Wait for the worker. With a ticket, poll instead of blocking in wait(), so a cancel
+    // from the governor (the dashboard) kills the worker exactly like the Cancel button does.
+    // The nap grows with the elapsed time (1 ms, up to 50 ms), so a short activation is not
+    // made longer by the polling.
+    let status = match &ticket {
+        None => child.wait(),
+        Some(t) => loop {
+            match child.try_wait() {
+                Ok(Some(s)) => break Ok(s),
+                Ok(None) => {}
+                Err(e) => break Err(e),
+            }
+            // The ticket (governor dashboard, a global Cancel-all) or this batch's own scope.
+            let scope_stop = scope.as_ref().map_or(false, |s| s.is_cancelled());
+            if (t.is_cancelled() || scope_stop) && !MOD_OP_KILLED.load(Ordering::SeqCst) {
+                log_line(format!("[MOD] {} cancelled, killing worker PID {}", if scope_stop { "batch" } else { "governor ticket" }, pid));
+                MOD_OP_KILLED.store(true, Ordering::SeqCst);
+                kill_worker_pid(pid);
+            }
+            if let Some(cb) = on_progress {
+                let n = progress.load(Ordering::Relaxed);
+                if n > 0 && throttle.should_emit(Instant::now(), n) { cb(n); }
+            }
+            let nap = (started.elapsed() / 10).clamp(std::time::Duration::from_millis(1), std::time::Duration::from_millis(50));
+            std::thread::sleep(nap);
+        },
+    };
+    if cancellable {
+        set_mod_op_child_pid(None);
+    }
+    let _ = std::fs::remove_file(&in_path);
+
+    let status = match status {
+        Ok(s) => s,
+        Err(e) => {
+            let _ = std::fs::remove_file(&out_path);
+            return Err(format!("Worker wait failed: {}", e));
+        }
+    };
+
+    // Per-op resource log — surfaces in the crash bundle / log file.
+    let elapsed = started.elapsed();
+    let (rss_after, cpu_pct) = probe_process_stats();
+    let rss_delta_kb = (rss_after as i128 - rss_before as i128) / 1024;
+    log_line(format!(
+        "[RESOURCE] {} pid={} dur={}ms exit={:?} rss={}KB Δrss={:+}KB cpu={:.1}%",
+        op_label, pid,
+        elapsed.as_millis(),
+        status.code(),
+        rss_after / 1024,
+        rss_delta_kb,
+        cpu_pct,
+    ));
+
+    let we_killed_it = cancellable && MOD_OP_KILLED.load(Ordering::SeqCst);
+
+    // ── Cancelled path ────────────────────────────────────────────────────
+    // Code 3  → worker noticed cancel flag and exited cleanly.
+    // killed  → parent ran taskkill on the PID.
+    if status.code() == Some(3) || we_killed_it {
+        let _ = std::fs::remove_file(&out_path);
+
+        // Run the inverse op to undo any partial work.  Use a non-cancellable
+        // worker (its child process has its own clean cancellation state, so
+        // it will run to completion).  We deliberately keep the parent's
+        // global cancel flag set so any outer loop (toggle_all_mods, etc.)
+        // still sees the cancel and stops iterating.
+        let undo_input = make_inverse_undo_input(&input);
+        if let Some(u) = undo_input {
+            log_line(format!("[MOD] running inverse undo after cancel ({})", input.op));
+            let _ = run_mod_io_worker_with_mode(u, false, "MOD/undo", None);
+        }
+
+        return Err("CANCELLED".to_string());
+    }
+
+    if !status.success() {
+        let mut err = format!("Worker exited with code {:?}", status.code());
+        if let Ok(s) = std::fs::read_to_string(&out_path) {
+            if let Ok(out) = serde_json::from_str::<crate::fs_utils::WorkerOutput>(&s) {
+                if let Some(e) = out.error { err = e; }
+            }
+        }
+        let _ = std::fs::remove_file(&out_path);
+        return Err(err);
+    }
+
+    let out_str = std::fs::read_to_string(&out_path).map_err(|e| e.to_string())?;
+    let _ = std::fs::remove_file(&out_path);
+    let out: crate::fs_utils::WorkerOutput = serde_json::from_str(&out_str).map_err(|e| e.to_string())?;
+    if let Some(e) = out.error {
+        return Err(e);
+    }
+    Ok(out)
+}
+
+/// Public wrapper — every call from enable/disable goes through here.
+fn run_mod_io_worker(input: crate::fs_utils::WorkerInput, on_progress: Option<&dyn Fn(u64)>) -> Result<crate::fs_utils::WorkerOutput, String> {
+    let label = match input.op.as_str() {
+        "apply"   => "MOD/apply",
+        "unapply" => "MOD/unapply",
+        other     => { log_line(format!("[MOD] unknown op '{}'", other)); "MOD/?" }
+    };
+    run_mod_io_worker_with_mode(input, true, label, on_progress)
+}
+
+/// Builds the inverse-op worker input used for "cancel = undo partial work".
+///   apply  → unapply (delete files we just copied, restore originals)
+///   unapply→ apply   (re-copy mod files we'd started restoring)
+fn make_inverse_undo_input(input: &crate::fs_utils::WorkerInput) -> Option<crate::fs_utils::WorkerInput> {
+    match input.op.as_str() {
+        "apply" => {
+            // What we MIGHT have written = full mod file list
+            let files_to_remove: Vec<String> = crate::fs_utils::list_mod_files(&input.mod_folder)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|p| p.to_string_lossy().to_string())
+                .collect();
+            if files_to_remove.is_empty() { return None; }
+            Some(crate::fs_utils::WorkerInput {
+                op: "unapply".to_string(),
+                mod_folder: input.mod_folder.clone(),
+                game_path: input.game_path.clone(),
+                backup_path: input.backup_path.clone(),
+                other_mods_files: Vec::new(),
+                files_to_remove,
+                other_active_mods: Vec::new(),
+                shared_backup_paths: input.shared_backup_paths.clone(),
+                smart_io: input.smart_io,
+                io: input.io.clone(),
+            })
+        }
+        "unapply" => {
+            if input.mod_folder.as_os_str().is_empty() { return None; }
+            Some(crate::fs_utils::WorkerInput {
+                op: "apply".to_string(),
+                mod_folder: input.mod_folder.clone(),
+                game_path: input.game_path.clone(),
+                backup_path: input.backup_path.clone(),
+                other_mods_files: Vec::new(),
+                files_to_remove: Vec::new(),
+                other_active_mods: Vec::new(),
+                shared_backup_paths: input.shared_backup_paths.clone(),
+                smart_io: input.smart_io,
+                io: input.io.clone(),
+            })
+        }
+        _ => None,
+    }
+}
+
+/// Frontend "cancel" entry-point.  Flips the global cancellation flag AND
+/// kills the worker subprocess if one is running.  Returns instantly.
+///
+/// With `scope`: stops that batch only (an activation job, an order list). Its worker, if it is
+/// the one in flight, is killed by its own wait loop (within 50 ms); the other batches go on.
 #[tauri::command]
-pub fn get_mods(state: State<AppState>) -> Result<Vec<EnrichedMod>, String> {
+pub fn cancel_mod_ops(scope: Option<String>) -> Result<(), String> {
+    use std::sync::atomic::Ordering;
+    if let Some(id) = checked_scope(scope)? {
+        log_line(format!("[MOD] cancel_mod_ops requested for batch {}", id));
+        crate::fs_utils::request_scope_cancel(&id);
+        return Ok(());
+    }
+    log_line("[MOD] cancel_mod_ops requested");
+    crate::fs_utils::request_mod_op_cancel();
+
+    let pid_opt = { MOD_OP_CHILD_PID.lock().unwrap_or_else(|p| p.into_inner()).clone() };
+    if let Some(pid) = pid_opt {
+        // Mark as intentionally killed BEFORE issuing taskkill, so the
+        // wait() in `run_mod_io_worker_with_mode` sees `killed=true`
+        // regardless of how the frontend manipulates the global flag.
+        MOD_OP_KILLED.store(true, Ordering::SeqCst);
+
+        log_line(format!("[MOD] killing worker PID {}", pid));
+        kill_worker_pid(pid);
+    }
+    Ok(())
+}
+
+/// Kill a `--mod-worker` process and its tree. Fire and forget: the waiter sees it exit.
+fn kill_worker_pid(pid: u32) {
+    #[cfg(target_os = "windows")]
+    {
+        // /F = force, /T = kill the whole tree (rayon threads etc.)
+        let _ = crate::commands::proc::hidden_command("taskkill")
+            .args(["/F", "/T", "/PID", &pid.to_string()])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn();
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = crate::commands::proc::hidden_command("kill")
+            .args(["-9", &pid.to_string()])
+            .spawn();
+    }
+}
+
+/// Called by the frontend once all revert work after a cancel is finished,
+/// so the next user-initiated toggle can run normally.
+///
+/// With `scope`: the batch is over, its token is forgotten; the global flag is left alone (it
+/// may be another batch's Stop).
+#[tauri::command]
+pub fn clear_mod_op_cancel(scope: Option<String>) -> Result<(), String> {
+    match checked_scope(scope)? {
+        Some(id) => crate::fs_utils::drop_cancel_scope(&id),
+        None => crate::fs_utils::reset_mod_op_cancel(),
+    }
+    Ok(())
+}
+
+/// "Cancel current op only" — kills the in-flight worker subprocess but
+/// does NOT raise the global cancel flag.  Used by the cancel button's
+/// default click so a running toggle-all batch can continue with the next
+/// mod after the user skips just the current one.
+#[tauri::command]
+pub fn kill_current_mod_op() {
+    use std::sync::atomic::Ordering;
+    log_line("[MOD] kill_current_mod_op (skip current only)");
+    let pid_opt = { MOD_OP_CHILD_PID.lock().unwrap_or_else(|p| p.into_inner()).clone() };
+    if let Some(pid) = pid_opt {
+        MOD_OP_KILLED.store(true, Ordering::SeqCst);
+        kill_worker_pid(pid);
+    }
+}
+
+#[tauri::command(async)]
+pub fn get_mods(state: State<AppState>) -> Result<Vec<EnrichedMod>, AppError> {
     // 1. Ensure cache is populated (Lazy but thread-safe)
     ensure_cache_populated(&state)?;
 
-    let data = state.data.lock().unwrap();
+    let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
     let active_id = match data.active_profile_id.as_ref() {
         Some(id) => id,
         None => return Ok(Vec::new()),
     };
-    let active_profile = data.profiles.iter().find(|p| &p.id == active_id).ok_or("Profil introuvable")?;
+    let active_profile = data.profiles.iter().find(|p| &p.id == active_id).ok_or_else(|| AppError::NotFound("Profil introuvable".to_string()))?;
     
-    // Canonicalize once outside the loop
-    let active_mods_path = active_profile.mods_path.canonicalize().unwrap_or(active_profile.mods_path.clone());
+    // Canonicalize once outside the loop with safe fallback and logging
+    let active_mods_path = match active_profile.mods_path.canonicalize() {
+        Ok(path) => path,
+        Err(e) => {
+            log_line(format!("[MODS] Failed to canonicalize active mods path {:?}: {}. Using original.", active_profile.mods_path, e));
+            active_profile.mods_path.clone()
+        }
+    };
     
     let mut results = Vec::new();
     
@@ -68,12 +535,35 @@ pub fn get_mods(state: State<AppState>) -> Result<Vec<EnrichedMod>, String> {
                 mod_entry: m.clone(),
                 shared_activations: Vec::new(),
             };
-            
+
+            // RAM/IPC trim: the frontend list never reads these large arrays,
+            // so don't ship them across IPC.  They stay intact in `data.mods`
+            // (the source of truth) — we only blank them in the cloned wire
+            // copy here.  Saves potentially hundreds of MB of JS heap on
+            // large libraries (one map entry per file per mod).
+            enriched.mod_entry.cached_files = None;
+            enriched.mod_entry.installed_files = Vec::new();
+            enriched.mod_entry.file_hashes = match &m.file_hashes {
+                Some(h) if !h.is_empty() => {
+                    let mut sentinel = std::collections::HashMap::with_capacity(1);
+                    sentinel.insert("__present__".to_string(), format!("{}", h.len()));
+                    Some(sentinel)
+                }
+                _ => None,
+            };
+
             // Set 'enabled' based on active profile
             enriched.mod_entry.enabled = active_profile.active_mods.contains(&m.id);
             
+            // Set per-profile activation order
+            if enriched.mod_entry.enabled {
+                enriched.mod_entry.activation_order = (active_profile.active_mods.iter().position(|id| id == &m.id).unwrap_or(0) as u32) + 1;
+            } else {
+                enriched.mod_entry.activation_order = 0;
+            }
+
             // Recalculate conflicts using MEMORY CACHE (O(1))
-            enriched.mod_entry.conflicts = calculate_conflicts_from_cache(&m, &data, active_id, &state);
+            enriched.mod_entry.conflicts = calculate_conflicts_from_cache(m, &data, active_id, &state);
 
             // Find shared activations...
             for p in &data.profiles {
@@ -93,32 +583,114 @@ pub fn get_mods(state: State<AppState>) -> Result<Vec<EnrichedMod>, String> {
     Ok(results)
 }
 
-fn ensure_cache_populated(state: &State<AppState>) -> Result<(), String> {
-    let mut last_update = state.last_cache_update.lock().unwrap();
+pub(crate) fn ensure_cache_populated(state: &State<AppState>) -> Result<(), AppError> {
+    // 1. First check if update is needed (read-only check under data lock to ensure ordering)
+    // Actually, we must enforce Data -> LastUpdate -> Cache -> Index
+    let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+    let mut last_update = state.last_cache_update.lock().map_err(|_| AppError::LockError("Failed to lock last_update".to_string()))?;
+    
     if last_update.is_some() { return Ok(()); }
 
     log_line("[CACHE] Populating mod file cache for the first time...");
-    let data = state.data.lock().unwrap();
-    let mut cache = state.mod_files_cache.lock().unwrap();
-    let mut index = state.conflict_index.lock().unwrap();
+    let mut needs_save = false;
+    // Folder mods that need their integrity baseline refreshed. We do NOT hash
+    // them here (that would run under 4 held locks and could freeze the UI on a
+    // big mod); we record them and hash AFTER the locks are released.
+    let mut to_hash: Vec<(String, std::path::PathBuf, Vec<String>)> = Vec::new();
 
-    // Clear existing cache and index to avoid stale data from deleted mods
-    cache.clear();
-    index.clear();
+    {
+        let mut cache = state.mod_files_cache.lock().map_err(|_| AppError::LockError("Failed to lock mod_files_cache".to_string()))?;
+        let mut index = state.conflict_index.lock().map_err(|_| AppError::LockError("Failed to lock conflict_index".to_string()))?;
 
-    for m in &data.mods {
-        if let Ok(files) = crate::fs_utils::list_mod_files(&m.mod_folder_path) {
-            let set: HashSet<PathBuf> = files.into_iter().collect();
+        // Clear existing cache and index to avoid stale data from deleted mods
+        cache.clear();
+        index.clear();
+
+        for m in data.mods.iter_mut() {
+            // Fragile mtime invalidation check (Issue 14 fallback: log metadata failures)
+            let current_mtime = m.mod_folder_path.metadata()
+                .map(|meta| meta.modified().ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0))
+                .unwrap_or_else(|e| {
+                    log_line(format!("[CACHE] Warning: Failed to read metadata for {:?}: {}. Resetting mtime.", m.mod_folder_path, e));
+                    0
+                });
+
+            // IMPORTANT: never EXTRACT an archive here (this runs at startup while
+            // holding the lock — extracting a big .zip froze the UI). For archived
+            // mods we list the entries straight from the archive index (cheap, no
+            // disk writes). Hashing of archived mods is left to on-demand paths.
+            let is_arch = crate::archive::is_archive(&m.mod_folder_path);
+            let files = match &m.cached_files {
+                Some(cached) if m.last_scan_mtime == current_mtime && current_mtime != 0 => cached.clone(),
+                // Root unreachable (external drive unplugged)? A folder mod would list zero
+                // files, blanking its cache and re-queuing a pointless re-hash. Keep whatever
+                // we already had and retry when the drive is back — don't churn state offline.
+                _ if !is_arch && !m.mod_folder_path.exists() => m.cached_files.clone().unwrap_or_default(),
+                _ => {
+                    let f_strings: Vec<String> = if is_arch {
+                        crate::archive::archive_entries(&m.mod_folder_path)
+                            .unwrap_or_default()
+                            .into_iter()
+                            .map(|(rel, _)| rel)
+                            .collect()
+                    } else if let Ok(f_paths) = crate::fs_utils::list_mod_files(&m.mod_folder_path) {
+                        f_paths.into_iter().map(|p| p.to_string_lossy().to_string()).collect()
+                    } else {
+                        Vec::new()
+                    };
+                    m.cached_files = Some(f_strings.clone());
+
+                    // Re-hash folder mods to refresh their integrity baseline — but
+                    // DEFER the actual hashing to after the locks drop (below) so a
+                    // big mod never freezes the UI. content_id is path+size based, so
+                    // it's cheap and stays inline. Archives are hashed on demand.
+                    if m.file_hashes.is_some() && !is_arch {
+                        to_hash.push((m.id.clone(), m.mod_folder_path.clone(), f_strings.clone()));
+                        update_content_id_from_hashes(m);
+                    }
+
+                    m.last_scan_mtime = current_mtime;
+                    needs_save = true;
+                    f_strings
+                }
+            };
+
+            let set: HashSet<PathBuf> = files.into_iter().map(PathBuf::from).collect();
             for f in &set {
-                let f_path: PathBuf = f.clone();
-                index.entry(f_path).or_insert_with(Vec::new).push(m.id.clone());
+                index.entry(f.clone()).or_default().push(m.id.clone());
             }
             cache.insert(m.id.clone(), set);
         }
     }
     
     *last_update = Some(Instant::now());
-    log_line(format!("[CACHE] Cached {} mods and {} unique files.", cache.len(), index.len()));
+
+    // Release every lock BEFORE hashing so no other command blocks while we read
+    // file contents (this is what used to freeze the UI on big mods).
+    drop(last_update);
+    drop(data);
+
+    if !to_hash.is_empty() {
+        // Defer re-hashing to the THROTTLED background queue instead of hashing
+        // everything synchronously here. The background thread hashes one mod at a
+        // time, on the capped hash pool, with a pause between each — so importing
+        // or scanning a profile with many mods no longer freezes the UI.
+        let mut q = state.sha_queue.lock().unwrap_or_else(|p| p.into_inner());
+        for (mod_id, _, _) in &to_hash {
+            if !q.iter().any(|x| x == mod_id) {
+                q.push_back(mod_id.clone());
+            }
+        }
+        log_line(format!("[CACHE] Queued {} mod(s) for throttled background re-hash", to_hash.len()));
+    }
+
+    if needs_save {
+        let _ = state.save();
+    }
+
     Ok(())
 }
 
@@ -135,8 +707,8 @@ fn calculate_conflicts_from_cache(
     };
 
     let target_is_active = current_profile.active_mods.contains(&target_mod.id);
-    let cache = state.mod_files_cache.lock().unwrap();
-    let index = state.conflict_index.lock().unwrap();
+    let cache = state.mod_files_cache.lock().unwrap_or_else(|p| p.into_inner());
+    let index = state.conflict_index.lock().unwrap_or_else(|p| p.into_inner());
 
     let target_files = match cache.get(&target_mod.id) {
         Some(f) => f,
@@ -171,6 +743,8 @@ fn calculate_conflicts_from_cache(
                 let is_active_in_prof = profile.active_mods.contains(&other_id);
                 let status = if target_is_active && is_active_in_prof { ConflictStatus::Active } else { ConflictStatus::Potential };
 
+                let order = (profile.active_mods.iter().position(|id| id == &other_id).unwrap_or(0) as u32) + 1;
+
                 reports.push(ConflictReport {
                     category: if is_same_profile { ConflictCategory::Intra } else { ConflictCategory::Inter },
                     status,
@@ -178,7 +752,7 @@ fn calculate_conflicts_from_cache(
                     other_mod_name: other_mod.name.clone(),
                     other_profile_name: profile.name.clone(),
                     file_count: count,
-                    activation_order: other_mod.activation_order,
+                    activation_order: order,
                 });
             }
         }
@@ -187,83 +761,235 @@ fn calculate_conflicts_from_cache(
     reports
 }
 
+fn get_unique_mod_info(mods_path: &std::path::Path, original_name: &str) -> (String, std::path::PathBuf) {
+    let mut display_name = original_name.to_string();
+    let safe_base = original_name
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' || c == ' ' || c == '.' { c } else { '_' })
+        .collect::<String>();
+        
+    let mut target_dir = mods_path.join(&safe_base);
+    let mut counter = 1;
+
+    while target_dir.exists() {
+        display_name = format!("{} ({})", original_name, counter);
+        let new_safe_item = format!("{}_{}", safe_base, counter);
+        target_dir = mods_path.join(&new_safe_item);
+        counter += 1;
+    }
+    
+    (display_name, target_dir)
+}
+
+/// Returns a map of profile_id -> Vec<{id, name, enabled}> for ALL profiles.
+/// Used by the cross-profile dependency picker in the frontend.
 #[tauri::command]
-pub fn get_all_mods(state: State<AppState>) -> Result<Vec<ModEntry>, String> {
-    let data = state.data.lock().unwrap();
-    Ok(data.mods.clone())
+pub fn get_mods_all_profiles(state: State<AppState>) -> Result<serde_json::Value, String> {
+    let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+    let mut result = serde_json::Map::new();
+    for profile in &data.profiles {
+        let mods_in_profile: Vec<serde_json::Value> = data.mods.iter()
+            .filter(|m| m.mod_folder_path.starts_with(&profile.mods_path)
+                || matches!((m.mod_folder_path.canonicalize(), profile.mods_path.canonicalize()),
+                    (Ok(a), Ok(b)) if a.starts_with(&b)))
+            .map(|m| serde_json::json!({
+                "id": m.id, "name": m.name, "version": m.version, "enabled": m.enabled
+            }))
+            .collect();
+        result.insert(profile.id.clone(), serde_json::json!({
+            "profile_name": profile.name,
+            "mods": mods_in_profile,
+        }));
+    }
+    Ok(serde_json::Value::Object(result))
+}
+
+#[tauri::command]
+pub fn get_all_mods(state: State<AppState>) -> Result<Vec<ModEntry>, AppError> {
+    let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+    // RAM trim: strip the big arrays/maps from the wire copy.  Each mod's
+    // file_hashes map can contain thousands of entries; multiplied by
+    // hundreds of mods, this was responsible for hundreds of MB sitting
+    // in the JS heap permanently as `S.allMods`.  Frontend code that
+    // actually needs the hashes (modpack creator) now uses the dedicated
+    // `get_mod_hashes` command to fetch on demand.
+    let mut out: Vec<ModEntry> = Vec::with_capacity(data.mods.len());
+    for m in &data.mods {
+        let mut slim = m.clone();
+        // Keep a marker so frontend's "missing hashes" check still works:
+        //   None  → missing
+        //   Some(map with a single sentinel entry) → present
+        slim.file_hashes = match &m.file_hashes {
+            Some(h) if !h.is_empty() => {
+                let mut sentinel = std::collections::HashMap::with_capacity(1);
+                sentinel.insert("__present__".to_string(), format!("{}", h.len()));
+                Some(sentinel)
+            }
+            _ => None,
+        };
+        slim.cached_files = None;
+        slim.installed_files = Vec::new();
+        out.push(slim);
+    }
+    Ok(out)
+}
+
+/// Returns the actual file_hashes map for a single mod.  Used by features
+/// that need real hash values (modpack creator hash matching, integrity
+/// verification, etc) without the cost of shipping every mod's hashes.
+#[tauri::command]
+pub fn get_mod_hashes(state: State<AppState>, mod_id: String) -> Result<Option<std::collections::HashMap<String, String>>, AppError> {
+    let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+    Ok(data.mods.iter().find(|m| m.id == mod_id).and_then(|m| m.file_hashes.clone()))
+}
+
+/// Batch-resolve a list of SHA-256 strings to local mod IDs.  Lookup runs
+/// entirely in Rust — frontend doesn't need the full hash maps to do this.
+/// Returns a map: sha → Some(mod_id) | None.
+#[tauri::command]
+pub fn find_local_mods_by_hashes(
+    state: State<AppState>,
+    hashes: Vec<String>,
+) -> Result<std::collections::HashMap<String, Option<String>>, AppError> {
+    let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+    // Build a sha → mod_id index once (cheap, ~O(total_files))
+    let mut sha_index: std::collections::HashMap<&str, &str> = std::collections::HashMap::new();
+    for m in &data.mods {
+        if let Some(h) = &m.file_hashes {
+            for (_, sha) in h.iter() {
+                sha_index.entry(sha.as_str()).or_insert(m.id.as_str());
+            }
+        }
+    }
+    let mut out: std::collections::HashMap<String, Option<String>> = std::collections::HashMap::with_capacity(hashes.len());
+    for sha in hashes {
+        let found = sha_index.get(sha.as_str()).map(|s| s.to_string());
+        out.insert(sha, found);
+    }
+    Ok(out)
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddModPayload {
+    pub name: String,
+    pub mod_folder_path: String,
+    pub author: String,
+    pub description: String,
+    pub version: String,
+    pub tags: Vec<String>,
+    pub download_links: Option<Vec<crate::models::mod_entry::DownloadLink>>,
+    pub dependencies: Vec<String>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateModPayload {
+    pub name: String,
+    pub author: String,
+    pub description: String,
+    pub version: String,
+    pub tags: Vec<String>,
+    pub download_links: Vec<crate::models::mod_entry::DownloadLink>,
+    pub dependencies: Vec<String>,
+}
+
+/// Copy a new mod into the mods folder (`add_mod`), under an Install ticket.
+///
+/// An archive is copied as-is; a folder has its CONTENT copied into `target` (what
+/// `fs_extra::dir::copy` with `content_only` did, empty sub-folders included). Files keep
+/// their dates and attributes, as `fs::copy` kept them. A cancelled install removes what it
+/// had started to write (the target is always a fresh, unique path here) and answers
+/// `CANCELLED`, which the UI treats as the user's choice, not a failure.
+fn install_mod_source(src: &std::path::Path, target: &std::path::Path, src_is_archive: bool) -> Result<(), String> {
+    use crate::governor::config::OpKind;
+    if !src.exists() {
+        return Err(format!("Fichier source introuvable: {}", src.display()));
+    }
+
+    let is_same = match (src.canonicalize(), target.canonicalize()) {
+        (Ok(s), Ok(t)) => s == t,
+        _ => false,
+    };
+    if is_same { return Ok(()); }
+    if !src_is_archive && !src.is_dir() {
+        return Err("Le fichier sélectionné doit être un dossier ou une archive (.zip)".to_string());
+    }
+
+    let subject = target.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    let ticket = crate::governor::runtime::global().begin(OpKind::Install, &subject);
+    let existed = target.exists();
+    let res = if src_is_archive {
+        // Keep the archive file as-is (do NOT unpack).
+        crate::fs_utils::checkpoint(&ticket)
+            .and_then(|_| crate::fs_utils::copy_file_install(OpKind::Install, src, target, Some(&ticket)).map(|_| ()))
+    } else {
+        crate::fs_utils::copy_dir_governed(OpKind::Install, src, target, &ticket).map(|_| ())
+    };
+    match res {
+        Ok(()) => Ok(()),
+        Err(e) if e.to_string() == crate::fs_utils::CANCELLED => {
+            if !existed {
+                if target.is_dir() { let _ = std::fs::remove_dir_all(target); } else { let _ = std::fs::remove_file(target); }
+            }
+            Err(crate::fs_utils::CANCELLED.to_string())
+        }
+        Err(e) => Err(format!("{:#}", e)),
+    }
 }
 
 #[tauri::command]
 pub async fn add_mod(
     state: State<'_, AppState>,
-    name: String,
-    mod_folder_path: String,
-    author: String,
-    description: String,
-    version: String,
-    tags: Vec<String>,
-    download_links: Option<Vec<crate::models::mod_entry::DownloadLink>>,
-    dependencies: Vec<String>,
-) -> Result<ModEntry, String> {
+    payload: AddModPayload,
+) -> Result<ModEntry, AppError> {
+    let AddModPayload {
+        name,
+        mod_folder_path,
+        author,
+        description,
+        version,
+        tags,
+        download_links,
+        dependencies,
+    } = payload;
+    
     log_line(format!("[MOD] Adding mod '{}' from '{}'", name, mod_folder_path));
     let mods_path = {
-        let data = state.data.lock().unwrap();
-        let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
-        let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
+        let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+        let active_id = data.active_profile_id.as_ref().ok_or_else(|| AppError::NotFound("Aucun profil actif".to_string()))?.clone();
+        let p = data.profiles.iter().find(|p| p.id == active_id).ok_or_else(|| AppError::NotFound("Profil introuvable".to_string()))?.clone();
         p.mods_path.clone()
     };
 
-    let safe_name = name
-        .chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' || c == ' ' || c == '.' { c } else { '_' })
-        .collect::<String>();
-        
-    let target_dir = mods_path.join(&safe_name);
+    // Archived mods (.zip …) are STORED zipped: we copy the archive as-is into the
+    // mods folder and never unpack it here. It is only extracted on activation.
+    let src_probe = PathBuf::from(&mod_folder_path);
+    let src_is_archive = crate::archive::is_archive(&src_probe);
+
+    let (final_name, target_dir) = if src_is_archive {
+        let ext = src_probe.extension().and_then(|e| e.to_str()).unwrap_or("zip").to_lowercase();
+        let base = name.trim().trim_end_matches(&format!(".{}", ext)).to_string();
+        let base = if base.is_empty() { "mod".to_string() } else { base };
+        let mut candidate = mods_path.join(format!("{}.{}", base, ext));
+        let mut n = 1;
+        while candidate.exists() {
+            candidate = mods_path.join(format!("{} ({}).{}", base, n, ext));
+            n += 1;
+        }
+        (base, candidate)
+    } else {
+        get_unique_mod_info(&mods_path, &name)
+    };
     let target_dir_clone = target_dir.clone();
     let src = PathBuf::from(&mod_folder_path);
 
     tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
-        if !src.exists() {
-            return Err(format!("Fichier source introuvable: {}", src.display()));
-        }
-
-        let is_same_dir = match (src.canonicalize(), target_dir_clone.canonicalize()) {
-            (Ok(s), Ok(t)) => s == t,
-            _ => false,
-        };
-
-        if !is_same_dir {
-            std::fs::create_dir_all(&target_dir_clone).map_err(|e| e.to_string())?;
-
-            if src.is_file() && src.extension().and_then(|e| e.to_str()).unwrap_or("").eq_ignore_ascii_case("zip") {
-                let file = std::fs::File::open(&src).map_err(|e| e.to_string())?;
-                let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("Erreur Zip: {}", e))?;
-                for i in 0..archive.len() {
-                    let mut f = archive.by_index(i).map_err(|e| e.to_string())?;
-                    let outpath = target_dir_clone.join(f.name());
-                    if f.name().ends_with('/') {
-                        std::fs::create_dir_all(&outpath).ok();
-                    } else {
-                        if let Some(parent) = outpath.parent() {
-                            std::fs::create_dir_all(parent).ok();
-                        }
-                        let mut outfile = std::fs::File::create(&outpath).map_err(|e| e.to_string())?;
-                        std::io::copy(&mut f, &mut outfile).map_err(|e| e.to_string())?;
-                    }
-                }
-            } else if src.is_dir() {
-                let mut options = fs_extra::dir::CopyOptions::new();
-                options.content_only = true;
-                options.overwrite = true;
-                fs_extra::dir::copy(&src, &target_dir_clone, &options).map_err(|e| e.to_string())?;
-            } else {
-                return Err("Le fichier sélectionné doit être un dossier ou un fichier .zip".to_string());
-            }
-        }
-        Ok(())
+        install_mod_source(&src, &target_dir_clone, src_is_archive)
     }).await.map_err(|e| e.to_string())??;
 
-    let mut entry = ModEntry::new(name, target_dir);
+    let mut entry = ModEntry::new(final_name, target_dir);
+    entry.content_id = derive_content_id(&entry.mod_folder_path);
     entry.author = Some(author);
     entry.description = Some(description);
     entry.version = version;
@@ -275,7 +1001,7 @@ pub async fn add_mod(
     
     let result = entry.clone();
     {
-        let mut data = state.data.lock().unwrap();
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         data.mods.push(entry);
     }
     let _ = state.save();
@@ -284,24 +1010,62 @@ pub async fn add_mod(
 }
 
 #[tauri::command]
-pub async fn remove_mod(state: State<'_, AppState>, mod_id: String, delete_files: bool) -> Result<(), String> {
+pub async fn remove_mod(state: State<'_, AppState>, mod_id: String, delete_files: bool) -> Result<(), AppError> {
     log_line(format!("[MOD] Removing mod '{}' (delete_files: {})", mod_id, delete_files));
-    let mod_path = {
-        let mut data = state.data.lock().unwrap();
-        let idx = data.mods.iter().position(|m| m.id == mod_id).ok_or("Mod introuvable")?;
-        let m = &data.mods[idx];
-        if m.enabled {
-            return Err("Désactivez le mod avant de le supprimer.".to_string());
+    let (mod_path, mods_dependent_on_this, active_id, mod_name) = {
+        let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+        let idx = data.mods.iter().position(|m| m.id == mod_id).ok_or_else(|| AppError::NotFound("Mod introuvable".to_string()))?;
+        
+        // Clone needed data before mutable borrow
+        let mod_enabled = data.mods[idx].enabled;
+        let mod_folder_path = data.mods[idx].mod_folder_path.clone();
+        
+        if mod_enabled {
+            return Err(AppError::Internal("Désactivez le mod avant de le supprimer.".to_string()));
         }
-        let p = m.mod_folder_path.clone();
+        
+        let active_id = data.active_profile_id.clone().unwrap_or_default();
+        let mod_name = data.mods[idx].name.clone();
+        
+        // Find all mods that have this mod as a dependency
+        let mut dependent_mods = Vec::new();
+        for other_mod in &data.mods {
+            if other_mod.dependencies.contains(&mod_id) {
+                dependent_mods.push(other_mod.name.clone());
+            }
+        }
+        
+        // Remove this mod from all other mods' dependencies
+        let mut removed_from = Vec::new();
+        for other_mod in data.mods.iter_mut() {
+            if other_mod.dependencies.contains(&mod_id) {
+                other_mod.dependencies.retain(|dep_id| dep_id != &mod_id);
+                removed_from.push(other_mod.name.clone());
+            }
+        }
+        
+        if !removed_from.is_empty() {
+            log_line(format!("[MOD] Removed '{}' from dependencies of: {:?}", mod_id, removed_from));
+        }
+        
         data.mods.remove(idx);
-        p
+        (mod_folder_path, dependent_mods, active_id, mod_name)
     };
 
+    crate::commands::history::log_activity(&state, &active_id, &mod_id, &mod_name, "Deleted", None);
+
     if delete_files {
+        // Not a governor ticket, on purpose (G3b): the user clicked Delete and the UI awaits
+        // the answer. The fitting kind, Maintenance, is BACKGROUND work: it would wait behind
+        // every deploy and for a whole game session. One unlink / remove_dir_all, no copy loop.
         tauri::async_runtime::spawn_blocking(move || {
-            if mod_path.exists() && mod_path.is_dir() {
-                std::fs::remove_dir_all(mod_path).map_err(|e| e.to_string())?;
+            if mod_path.exists() {
+                if mod_path.is_dir() {
+                    std::fs::remove_dir_all(&mod_path).map_err(|e| e.to_string())?;
+                } else {
+                    // Archived mod (.zip …) — it's a single file
+                    std::fs::remove_file(&mod_path).map_err(|e| e.to_string())?;
+                }
             }
             Ok::<(), String>(())
         }).await.map_err(|e| e.to_string())??;
@@ -309,51 +1073,136 @@ pub async fn remove_mod(state: State<'_, AppState>, mod_id: String, delete_files
 
     let _ = state.save();
     invalidate_cache(&state);
+    
+    if !mods_dependent_on_this.is_empty() {
+        return Ok(()); // Silently remove from dependencies
+    }
+    
     Ok(())
 }
 
+
+/// Parse a dependency string which can be:
+///   - `"mod-id"`               → same-profile dep
+///   - `"profile_id::mod-id"`   → cross-profile dep (mod lives in another profile)
+fn parse_dep_ref(dep: &str) -> (Option<String>, String) {
+    if let Some((prof, mid)) = dep.split_once("::") {
+        (Some(prof.to_string()), mid.to_string())
+    } else {
+        (None, dep.to_string())
+    }
+}
 
 fn resolve_dependencies(
     target_id: &String,
     all_mods: &[ModEntry],
     resolved: &mut Vec<String>,
     unresolved: &mut Vec<String>,
+    missing: &mut Vec<String>,
 ) -> Result<(), String> {
     if resolved.contains(target_id) {
         return Ok(());
     }
-    
+
     unresolved.push(target_id.clone());
     resolved.push(target_id.clone());
-    
+
     let target_mod = all_mods.iter().find(|m| &m.id == target_id)
         .ok_or_else(|| format!("Mod introuvable: {}", target_id))?;
-    
-    for dep_id in &target_mod.dependencies {
-        if unresolved.contains(dep_id) {
+
+    for raw_dep in &target_mod.dependencies {
+        let (cross_profile_id, dep_id) = parse_dep_ref(raw_dep);
+
+        // Cross-profile deps are informational only — we cannot enable mods
+        // from other profiles in a single call, so just record if they're missing.
+        if cross_profile_id.is_some() {
+            if !all_mods.iter().any(|m| &m.id == &dep_id) {
+                missing.push(raw_dep.clone());
+            }
+            // Don't recurse — cross-profile deps are checked at the frontend level
+            continue;
+        }
+
+        if unresolved.contains(&dep_id) {
             return Err(format!("Dépendance circulaire détectée: {} -> {}", target_id, dep_id));
         }
-        resolve_dependencies(dep_id, all_mods, resolved, unresolved)?;
+        if !all_mods.iter().any(|m| &m.id == &dep_id) {
+            missing.push(dep_id.clone());
+        } else {
+            resolve_dependencies(&dep_id, all_mods, resolved, unresolved, missing)?;
+        }
     }
-    
-    let pos = unresolved.iter().position(|x| x == target_id).unwrap();
-    unresolved.remove(pos);
+
+    if let Some(pos) = unresolved.iter().position(|x| x == target_id) {
+        unresolved.remove(pos);
+    }
     Ok(())
 }
 
+/// A cancel scope id from the frontend, checked (`fs_utils::valid_scope_id`).
+fn checked_scope(scope: Option<String>) -> Result<Option<String>, String> {
+    match scope {
+        Some(s) if !crate::fs_utils::valid_scope_id(&s) => Err("invalid cancel scope".to_string()),
+        other => Ok(other),
+    }
+}
+
+/// `cancel_scope`: the batch this call belongs to (an activation job's id). Its Stop
+/// (`cancel_mod_ops` with the same scope) reaches this call and no other batch's.
 #[tauri::command]
-pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: String) -> Result<Option<String>, String> {
+pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: String, bypass_sha: Option<bool>, cancel_scope: Option<String>) -> Result<Option<String>, String> {
+    let scope = checked_scope(cancel_scope)?;
+    let out = crate::fs_utils::in_cancel_scope(scope.as_deref(), enable_mod_in(window, state.clone(), mod_id, bypass_sha)).await;
+    after_toggle_pins(&state).await;
+    out
+}
+
+/// Enabling copies the ORDER's winner over every file the mod ships, and disabling restores the
+/// order's next provider: a per-file pin chosen in the conflicts view is put back afterwards.
+/// A failure is logged, not returned: the toggle itself succeeded.
+async fn after_toggle_pins(state: &State<'_, AppState>) {
+    match crate::commands::mod_order::reassert_pins(state).await {
+        Ok(0) => {}
+        Ok(n) => log_line(format!("[ORDER] {} pinned file(s) put back after a toggle", n)),
+        Err(e) => log_line(format!("[ORDER] putting pinned files back failed: {}", e)),
+    }
+}
+
+/// `enable_mod` inside whatever cancel scope is current (a batch calling it keeps its own).
+pub(crate) async fn enable_mod_in(window: Window, state: State<'_, AppState>, mod_id: String, bypass_sha: Option<bool>) -> Result<Option<String>, String> {
+    // NOTE: do NOT clear the cancel flag here — multiple parallel enable_mod
+    // calls would clobber an in-flight cancel.  The frontend explicitly
+    // resets via `clear_mod_op_cancel` once it's done reverting.
+    if crate::fs_utils::is_mod_op_cancelled() {
+        log_line(format!("[MOD] enable_mod '{}' skipped — cancel flag set", mod_id));
+        emit_mod_op(&window, &mod_id, "", "enable", "cancelled", 0, 0);
+        return Ok(None);
+    }
     log_line(format!("[MOD] Enabling mod '{}' (recursive if needed)", mod_id));
     
-    // 1. Resolve full dependency chain
-    let (mod_ids_to_enable, profile_data, warning_settings) = {
-        let data = state.data.lock().unwrap();
+    // 1. Resolve full dependency chain and check for missing dependencies
+    let (mod_ids_to_enable, profile_data, warning_settings, missing_deps, needs_save, smart_io) = {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
         let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
         
         let mut resolved = Vec::new();
         let mut unresolved = Vec::new();
-        resolve_dependencies(&mod_id, &data.mods, &mut resolved, &mut unresolved)?;
+        let mut missing = Vec::new();
+        resolve_dependencies(&mod_id, &data.mods, &mut resolved, &mut unresolved, &mut missing)?;
+        
+        // If there are missing dependencies, remove them from the mod's dependency list
+        let needs_save = if !missing.is_empty() {
+            log_line(format!("[MOD] Found {} missing dependencies for mod '{}': {:?}", missing.len(), mod_id, missing));
+            if let Some(mod_entry) = data.mods.iter_mut().find(|m| m.id == mod_id) {
+                let original_deps = mod_entry.dependencies.clone();
+                mod_entry.dependencies.retain(|dep_id| !missing.contains(dep_id));
+                log_line(format!("[MOD] Removed missing dependencies from mod '{}': {:?}", mod_id, original_deps.iter().filter(|d| missing.contains(d)).collect::<Vec<_>>()));
+            }
+            true
+        } else {
+            false
+        };
         
         // Only enable those not already enabled in this profile
         let to_enable: Vec<String> = resolved.into_iter()
@@ -365,34 +1214,113 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
         let warning_pct = data.settings.storage_warning_space_pct;
         let critical_pct = data.settings.storage_critical_space_pct;
         let alert_enabled = data.settings.storage_alert_enabled;
+        let require_sha = data.settings.require_valid_sha;
+        let smart_io = data.settings.smart_io_enabled;
+        let bypass = bypass_sha.unwrap_or(false);
 
-        (to_enable, p, (warning_pct, critical_pct, alert_enabled))
-    };
-
-    let mut overall_warning: Option<String> = None;
-
-    for mid in mod_ids_to_enable {
-        let (mod_folder, game_path, backup_path, mod_name, other_active_mods) = {
-            let data = state.data.lock().unwrap();
-            let m = data.mods.iter().find(|m| m.id == mid).unwrap().clone();
-            
-            let p = data.profiles.iter().find(|p| p.id == profile_data.id).unwrap();
-            let mut others = Vec::new();
-            for already_active in &p.active_mods {
-                if let Some(om) = data.mods.iter().find(|xm| &xm.id == already_active) {
-                    others.push((om.id.clone(), om.mod_folder_path.clone()));
+        if require_sha && !bypass {
+            for mid in &to_enable {
+                if let Some(m) = data.mods.iter().find(|m| &m.id == mid) {
+                    if m.file_hashes.is_none() || m.file_hashes.as_ref().map_or(true, |h| h.is_empty()) {
+                        return Err(format!("MISSING_SHA|{}|{}", m.id, m.name));
+                    }
                 }
             }
+        }
+
+        (to_enable, p, (warning_pct, critical_pct, alert_enabled), missing, needs_save, smart_io)
+    };
+
+    // Save if dependencies were modified
+    if needs_save {
+        let _ = state.save();
+    }
+
+    // Log warning about missing dependencies (no event to avoid potential crashes)
+    if !missing_deps.is_empty() {
+        log_line(format!("[MOD] Missing dependencies removed from mod '{}': {:?}", mod_id, missing_deps));
+    }
+
+    // Add mod to priority SHA queue if it has no hashes
+    add_mod_to_priority_sha_queue(state.clone(), mod_id.clone());
+
+    ensure_cache_populated(&state)?;
+    // Every file a mod has put in this game folder, whichever profile enabled it: the backup
+    // guard's answer to "is what I am about to overwrite a game original?". A profile that
+    // shares only the game folder (its own mods folder) has its mods' files there too; seen
+    // from this profile alone they were backed up into OUR `_original/` as game files and
+    // later restored "as the original" (mod_order::game_folder_share).
+    let mut active_files_set = HashSet::<PathBuf>::new();
+    {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        let cache = state.mod_files_cache.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some(p) = data.profiles.iter().find(|p| p.id == profile_data.id) {
+            let share = crate::commands::mod_order::game_folder_share(&data.profiles, &p.id);
+            for mid in p.active_mods.iter().chain(share.owners.iter()) {
+                if let Some(files) = cache.get(mid) {
+                    for f in files { active_files_set.insert(f.clone()); }
+                }
+                // What was really deployed, in case the mod folder changed since (or is gone).
+                if let Some(m) = data.mods.iter().find(|m| &m.id == mid) {
+                    for f in &m.installed_files { active_files_set.insert(PathBuf::from(f)); }
+                }
+            }
+        }
+    }
+
+    let mut overall_warning: Option<String> = None;
+    let disks = sysinfo::Disks::new_with_refreshed_list();
+
+    // The chain runs in a block so that ANY way out of it (an error on the third mod after two
+    // went in) still reaches the save below. A `return Err` from inside the loop used to skip
+    // it: the first mods' files were in the game folder and data.json did not know until some
+    // later save happened to carry them.
+    let chain: Result<(), String> = async {
+    for mid in mod_ids_to_enable {
+        if crate::fs_utils::is_mod_op_cancelled() {
+            log_line(format!("[MOD] Enable loop cancelled before mod '{}'", mid));
+            break;
+        }
+        let (mod_folder, game_path, backup_path, mod_name, shared_backup_paths) = {
+            let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+            let m = match data.mods.iter().find(|m| m.id == mid) {
+                Some(m) => m.clone(),
+                None => continue, // mod removed mid-iteration, skip
+            };
+            
+            let p = match data.profiles.iter().find(|p| p.id == profile_data.id) {
+                Some(p) => p,
+                None => return Err("Profil actif introuvable".to_string()),
+            };
 
             // --- Block if already active in another profile on same root ---
+            let game_key = crate::commands::mod_order::game_folder_key(&p.game_path);
             for op in &data.profiles {
                 if op.id == profile_data.id { continue; }
-                if op.game_path == p.game_path && op.active_mods.contains(&mid) {
+                if crate::commands::mod_order::game_folder_key(&op.game_path) == game_key && op.active_mods.contains(&mid) {
                     return Err(format!("Le mod '{}' est déjà actif dans le profil '{}'.", m.name, op.name));
                 }
             }
 
-            (m.mod_folder_path.clone(), p.game_path.clone(), p.backup_path.clone(), m.name, others)
+            // The undo of a cancelled enable restores originals: they may sit in the backup of
+            // another profile on this game folder.
+            let shared = crate::commands::mod_order::game_folder_share(&data.profiles, &p.id).backups;
+            (m.mod_folder_path.clone(), p.game_path.clone(), p.backup_path.clone(), m.name, shared)
+        };
+
+        // Archived mods (.zip …) are kept zipped in the mods folder; extract to a
+        // cache dir and activate FROM that. The copy/backup/conflict/installed_files
+        // logic below is unchanged — it just operates on the extracted view.
+        let mod_folder = if crate::archive::is_archive(&mod_folder) {
+            match crate::archive::materialize(&mod_folder) {
+                Ok(dir) => dir,
+                Err(e) => {
+                    emit_mod_op(&window, &mid, &mod_name, "enable", "failed", 0, 0);
+                    return Err(format!("Failed to extract archive '{}': {}", mod_name, e));
+                }
+            }
+        } else {
+            mod_folder
         };
 
         // --- Space check ---
@@ -405,18 +1333,21 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
             }
         }
 
+        // Shown on the activity panel only: the copy itself follows the disk's governor rule
+        // (the same number, carried over from `disk_limits` and kept in sync by set_disk_limit).
         let game_path_limit = crate::commands::disk::get_limit_for_path(&state, &game_path);
-        let backup_path_limit = crate::commands::disk::get_limit_for_path(&state, &backup_path);
 
         // Perform space check (re-using logic but simplified for brevity in loop)
         let mut check_space = |path: &std::path::Path, label: &str| -> Result<(), String> {
-            let disks = sysinfo::Disks::new_with_refreshed_list();
-            let mut path_str = path.canonicalize().unwrap_or(path.to_path_buf()).to_string_lossy().to_lowercase();
-            if path_str.starts_with(r"\\?\") { path_str = path_str[4..].to_string(); }
+            let path_str = path.canonicalize().unwrap_or(path.to_path_buf()).to_string_lossy().to_lowercase();
+            // The shared strip: taking four characters off a verbatim UNC path leaves
+            // `UNC\server\share`, which matches no mount point - so a mod library on a
+            // NAS never found its disk.
+            let path_str = crate::commands::disk::strip_verbatim(&path_str);
             let mut best = None;
             for disk in disks.iter() {
-                let mut mp = disk.mount_point().to_string_lossy().to_lowercase();
-                if mp.starts_with(r"\\?\") { mp = mp[4..].to_string(); }
+                let mp = disk.mount_point().to_string_lossy().to_lowercase();
+                let mp = crate::commands::disk::strip_verbatim(&mp);
                 if path_str.starts_with(&mp) {
                     let len = mp.len();
                     let best_ref: &Option<(u64,u64,String)> = &best;
@@ -439,8 +1370,11 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
             Ok(())
         };
 
-        check_space(&game_path, "Game")?;
-        check_space(&backup_path, "Backup")?;
+        if let Err(e) = check_space(&game_path, "Game").and_then(|_| check_space(&backup_path, "Backup")) {
+            emit_mod_op(&window, &mid, &mod_name, "enable", "failed", 0, total_bytes);
+            return Err(e);
+        }
+        emit_mod_op(&window, &mid, &mod_name, "enable", "start", 0, total_bytes);
 
         let disk_name = game_path.to_string_lossy().chars().take(3).collect::<String>().to_uppercase();
         let _ = window.emit("benchmark-event", BenchEventPayload {
@@ -451,25 +1385,59 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
             finished: false,
         });
 
-        let result = tauri::async_runtime::spawn_blocking(move || {
-            let _lock = MOD_OP_LOCK.lock().unwrap();
-            fs_utils::apply_mod_stacked(&mod_folder, &game_path, &backup_path, &other_active_mods, game_path_limit, backup_path_limit)
+        let active_files_set_clone = active_files_set.clone();
+        let (pw, pid_, pname) = (window.clone(), mid.clone(), mod_name.clone());
+        let scope = crate::fs_utils::current_cancel_scope();
+        let result: Result<Vec<PathBuf>, String> = tauri::async_runtime::spawn_blocking(move || {
+            let _scope = crate::fs_utils::enter_thread_scope(scope);
+            let _lock = MOD_OP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+            // Re-check cancellation AFTER acquiring the serial lock — if a
+            // cancel landed while we were queued, do not start a new worker.
+            if crate::fs_utils::is_mod_op_cancelled() {
+                return Err("CANCELLED".to_string());
+            }
+            let worker_in = crate::fs_utils::WorkerInput {
+                op: "apply".to_string(),
+                mod_folder,
+                game_path,
+                backup_path,
+                other_mods_files: active_files_set_clone.into_iter().collect(),
+                files_to_remove: Vec::new(),
+                other_active_mods: Vec::new(),
+                shared_backup_paths,
+                smart_io,
+                io: None, // filled in by run_mod_io_worker_with_mode
+            };
+            let on_progress = |n: u64| emit_mod_op(&pw, &pid_, &pname, "enable", "copy", n.min(total_bytes), total_bytes);
+            run_mod_io_worker(worker_in, Some(&on_progress)).map(|out| out.applied)
         }).await.map_err(|e| e.to_string())?;
 
         let _ = window.emit("benchmark-event", BenchEventPayload {
             text: format!("Activated: {}", mod_name), disk_name: "".to_string(), total_mb: 0.0, limit_mb_s: None, finished: true,
         });
 
-        let applied = result.map_err(|e| e.to_string())?;
+        // Cancellation surfaces as an "anyhow" with the literal "CANCELLED" message.
+        // Treat it as a graceful early exit, not an error to bubble to the UI.
+        let applied = match result {
+            Ok(v) => v,
+            Err(e) => {
+                let msg = e.to_string();
+                if msg.contains("CANCELLED") || crate::fs_utils::is_mod_op_cancelled() {
+                    log_line(format!("[MOD] Enable cancelled mid-copy for '{}'", mod_name));
+                    emit_mod_op(&window, &mid, &mod_name, "enable", "cancelled", 0, total_bytes);
+                    break;
+                }
+                emit_mod_op(&window, &mid, &mod_name, "enable", "failed", 0, total_bytes);
+                return Err(msg);
+            }
+        };
 
         {
-            let mut data = state.data.lock().unwrap();
-            let next_order = data.mods.iter().map(|m| m.activation_order).max().unwrap_or(0) + 1;
+            let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
             if let Some(m) = data.mods.iter_mut().find(|m| m.id == mid) {
                 m.enabled = true;
                 m.status = ModStatus::Enabled;
                 m.installed_files = applied.iter().map(|p| p.to_string_lossy().to_string()).collect();
-                m.activation_order = next_order;
             }
             for p in data.profiles.iter_mut() {
                 if p.game_path == profile_data.game_path && p.mods_path == profile_data.mods_path {
@@ -477,49 +1445,89 @@ pub async fn enable_mod(window: Window, state: State<'_, AppState>, mod_id: Stri
                 }
             }
         }
+
+        // The files this mod just placed are "another mod's" for the NEXT one in the chain, so
+        // the next one does not back them up as game originals. Taken from what the worker
+        // reports it wrote, not from `mod_files_cache`: leaving the Library flushes that cache
+        // (flush_mem_caches), and a chain running at that moment saw no files at all, then
+        // backed the previous mod's copies up as the game's own.
+        for f in &applied { active_files_set.insert(f.clone()); }
+
+        emit_mod_op(&window, &mid, &mod_name, "enable", "done", total_bytes, total_bytes);
         log_line(format!("[MOD] Mod '{}' enabled", mod_name));
     }
+    Ok(())
+    }.await;
 
     let _ = state.save();
-    invalidate_cache(&state);
+    // No `invalidate_cache` here: the cache is each mod's file list and the file → mods index,
+    // and neither depends on what is enabled (get_mods reads the active set at query time).
+    // Invalidating it made the NEXT enable rebuild the whole index under the data lock, once per
+    // mod of an "Enable all" or an order list (see `cache_rebuild_cost_bench`).
+    chain?;
     
     // Log history for the primary mod
-    if let Some(m) = { let data = state.data.lock().unwrap(); data.mods.iter().find(|m| m.id == mod_id).cloned() } {
-        crate::commands::history::log_activity(&state, &profile_data.id, &mod_id, &m.name, "Enabled (with dependencies)");
+    if let Some(m) = { let data = state.data.lock().unwrap_or_else(|p| p.into_inner()); data.mods.iter().find(|m| m.id == mod_id).cloned() } {
+        crate::commands::history::log_activity(&state, &profile_data.id, &mod_id, &m.name, "Enabled (with dependencies)", None);
     }
 
     Ok(overall_warning)
 }
 
+/// `cancel_scope`: as for `enable_mod`.
 #[tauri::command]
-pub async fn disable_mod(window: Window, state: State<'_, AppState>, mod_id: String) -> Result<(), String> {
+pub async fn disable_mod(window: Window, state: State<'_, AppState>, mod_id: String, cancel_scope: Option<String>) -> Result<(), String> {
+    let scope = checked_scope(cancel_scope)?;
+    let out = crate::fs_utils::in_cancel_scope(scope.as_deref(), disable_mod_in(window, state.clone(), mod_id)).await;
+    after_toggle_pins(&state).await;
+    out
+}
+
+/// `disable_mod` inside whatever cancel scope is current.
+pub(crate) async fn disable_mod_in(window: Window, state: State<'_, AppState>, mod_id: String) -> Result<(), String> {
+    if crate::fs_utils::is_mod_op_cancelled() {
+        log_line(format!("[MOD] disable_mod '{}' skipped — cancel flag set", mod_id));
+        emit_mod_op(&window, &mod_id, "", "disable", "cancelled", 0, 0);
+        return Ok(());
+    }
     log_line(format!("[MOD] Disabling mod '{}'", mod_id));
-    let (game_path, backup_path, active_id, mod_name, files_to_remove, other_active_mods) = {
-        let data = state.data.lock().unwrap();
+    let (mod_folder, game_path, backup_path, active_id, mod_name, files_to_remove, other_active_mods, shared_backup_paths) = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?.clone();
-        if !m.enabled { return Ok(()); }
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
         let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
-        
-        let mut others = Vec::new();
-        for mid in p.active_mods.iter().rev() {
-            if mid == &mod_id { continue; }
-            if let Some(other_m) = data.mods.iter().find(|om| &om.id == mid) {
-                others.push((other_m.id.clone(), other_m.mod_folder_path.clone()));
-            }
-        }
-        
+        if !p.active_mods.contains(&mod_id) { return Ok(()); }
+
+        // The mods that stay, in ACTIVATION order (oldest first): unapply falls back to the LAST
+        // of them that ships a file, the one directly under this mod. This list used to be built
+        // newest-first and was then walked backwards by unapply, so the OLDEST copy came back —
+        // a layer nobody had seen since the mod above it was enabled (mod_order_tests).
+        //
+        // Mods another profile enabled on the same game folder are providers too (their files
+        // are in that folder; switching profiles moves nothing), BELOW this profile's own stack,
+        // and the original may be in that profile's backup: it was the first to replace it.
+        let leaving: HashSet<String> = [mod_id.clone()].into_iter().collect();
+        let share = crate::commands::mod_order::game_folder_share(&data.profiles, &p.id);
+        let others: Vec<(String, PathBuf)> = crate::commands::mod_order::shared_fallback_order(&share.owners, &p.active_mods, &leaving)
+            .into_iter()
+            .filter_map(|mid| data.mods.iter().find(|om| om.id == mid).map(|om| (om.id.clone(), om.mod_folder_path.clone())))
+            .collect();
+
         // Hybrid cleanup: Tracked files + Current physical files
         let mut unique_files = std::collections::HashSet::new();
         for f in m.installed_files { unique_files.insert(f); }
         if let Ok(scanned) = fs_utils::list_mod_files(&m.mod_folder_path) {
             for s in scanned { unique_files.insert(s.to_string_lossy().to_string()); }
         }
-        
-        (p.game_path.clone(), p.backup_path.clone(), active_id, m.name, unique_files.into_iter().collect::<Vec<String>>(), others)
+
+        (m.mod_folder_path.clone(), p.game_path.clone(), p.backup_path.clone(), active_id, m.name, unique_files.into_iter().collect::<Vec<String>>(), others, share.backups)
     };
 
     let game_path_limit = crate::commands::disk::get_limit_for_path(&state, &game_path);
+    let smart_io = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        data.settings.smart_io_enabled
+    };
 
     let mut total_bytes = 0;
     for p in &files_to_remove {
@@ -537,10 +1545,38 @@ pub async fn disable_mod(window: Window, state: State<'_, AppState>, mod_id: Str
         limit_mb_s: game_path_limit,
         finished: false,
     });
-    
-    let result = tauri::async_runtime::spawn_blocking(move || {
-        let _lock = MOD_OP_LOCK.lock().unwrap();
-        fs_utils::unapply_mod_stacked(&game_path, &backup_path, files_to_remove, &other_active_mods, game_path_limit)
+    emit_mod_op(&window, &mod_id, &mod_name, "disable", "start", 0, total_bytes);
+
+    let (pw, pid_, pname) = (window.clone(), mod_id.clone(), mod_name.clone());
+    let scope = crate::fs_utils::current_cancel_scope();
+    let result: Result<(), String> = tauri::async_runtime::spawn_blocking(move || {
+        let _scope = crate::fs_utils::enter_thread_scope(scope);
+        let _lock = MOD_OP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        if crate::fs_utils::is_mod_op_cancelled() {
+            return Err("CANCELLED".to_string());
+        }
+        // Archived providers are read from their extracted cache (a path inside `Mod.zip` names
+        // nothing, so they used to be skipped and the vanilla file came back instead of their
+        // copy). Only the archives that ship one of these files are extracted.
+        let wanted: HashSet<String> = files_to_remove.iter().map(|f| crate::commands::mod_order::rel_key(f)).collect();
+        let ids: Vec<String> = other_active_mods.iter().map(|(id, _)| id.clone()).collect();
+        let folders: HashMap<String, PathBuf> = other_active_mods.into_iter().collect();
+        let other_active_mods = crate::commands::mod_order::read_roots(&ids, &folders, Some(&wanted));
+        let worker_in = crate::fs_utils::WorkerInput {
+            op: "unapply".to_string(),
+            // Pass mod_folder so a cancel-undo can re-apply the mod files.
+            mod_folder,
+            game_path,
+            backup_path,
+            other_mods_files: Vec::new(),
+            files_to_remove,
+            other_active_mods,
+            shared_backup_paths,
+            smart_io,
+            io: None, // filled in by run_mod_io_worker_with_mode
+        };
+        let on_progress = |n: u64| emit_mod_op(&pw, &pid_, &pname, "disable", "copy", n.min(total_bytes), total_bytes);
+        run_mod_io_worker(worker_in, Some(&on_progress)).map(|_| ())
     }).await.map_err(|e| e.to_string())?;
 
     let _ = window.emit("benchmark-event", BenchEventPayload {
@@ -554,27 +1590,23 @@ pub async fn disable_mod(window: Window, state: State<'_, AppState>, mod_id: Str
         finished: true,
     });
 
-    result.map_err(|e| e.to_string())?;
+    if let Err(msg) = &result {
+        if msg.contains("CANCELLED") || crate::fs_utils::is_mod_op_cancelled() {
+            log_line(format!("[MOD] Disable cancelled mid-copy for '{}'", mod_name));
+            emit_mod_op(&window, &mod_id, &mod_name, "disable", "cancelled", 0, total_bytes);
+            return Ok(());
+        }
+        emit_mod_op(&window, &mod_id, &mod_name, "disable", "failed", 0, total_bytes);
+    }
+    result?;
 
     {
-        let mut data = state.data.lock().unwrap();
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         
-        let removed_order = if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
-            let order = m.activation_order;
+        if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
             m.enabled = false;
             m.status = ModStatus::Disabled;
             m.installed_files.clear();
-            m.activation_order = 0;
-            order
-        } else { 0 };
-
-        // Re-order remaining mods to keep sequence tight
-        if removed_order > 0 {
-            for m in data.mods.iter_mut() {
-                if m.activation_order > removed_order {
-                    m.activation_order -= 1;
-                }
-            }
         }
         
         // Sync with all profiles sharing the same root and mod folder
@@ -592,9 +1624,47 @@ pub async fn disable_mod(window: Window, state: State<'_, AppState>, mod_id: Str
     }
     let _ = state.save();
     
+    emit_mod_op(&window, &mod_id, &mod_name, "disable", "done", total_bytes, total_bytes);
     // Log history
     log_line(format!("[MOD] Mod '{}' disabled successfully", mod_name));
-    crate::commands::history::log_activity(&state, &active_id, &mod_id, &mod_name, "Disabled");
+    crate::commands::history::log_activity(&state, &active_id, &mod_id, &mod_name, "Disabled", None);
+
+    // A1 — cascade disable. Enabling a mod pulls in its dependency chain (see enable_mod); disabling
+    // it must let go of that chain too, or the deps it dragged in stay active forever. We recompute
+    // what the REMAINING active mods still require, then disable this mod's dependencies that nothing
+    // else needs. A dep shared with a different still-enabled mod is in `required` and stays — that is
+    // the whole point of the fix. Recursion carries it down the chain: each disabled dep, in turn,
+    // releases its own now-orphaned deps.
+    let orphans: Vec<String> = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        match data.active_profile_id.clone().and_then(|apid| data.profiles.iter().find(|p| p.id == apid).cloned()) {
+            Some(ap) => {
+                // This mod's DIRECT same-profile dependencies (cross-profile deps are informational
+                // only — enable_mod never activates them, so disable must not chase them either).
+                let direct: Vec<String> = data.mods.iter().find(|m| m.id == mod_id)
+                    .map(|m| m.dependencies.iter().filter_map(|d| {
+                        let (cross, id) = parse_dep_ref(d);
+                        if cross.is_some() { None } else { Some(id) }
+                    }).collect())
+                    .unwrap_or_default();
+                // Everything the still-active set requires (each active mod + its transitive deps).
+                let mut required: Vec<String> = Vec::new();
+                for mid2 in &ap.active_mods {
+                    let (mut resolved, mut unresolved, mut missing) = (Vec::new(), Vec::new(), Vec::new());
+                    let _ = resolve_dependencies(mid2, &data.mods, &mut resolved, &mut unresolved, &mut missing);
+                    for r in resolved { if !required.contains(&r) { required.push(r); } }
+                }
+                // An orphan = a dependency still active but no longer required by anything.
+                direct.into_iter().filter(|d| ap.active_mods.contains(d) && !required.contains(d)).collect()
+            }
+            None => Vec::new(),
+        }
+    };
+    for dep in orphans {
+        if crate::fs_utils::is_mod_op_cancelled() { break; }
+        log_line(format!("[MOD] Cascade: disabling '{}' — pulled in by '{}' and no longer required by any active mod", dep, mod_id));
+        Box::pin(disable_mod_in(window.clone(), state.clone(), dep)).await?;
+    }
     Ok(())
 }
 
@@ -603,28 +1673,60 @@ pub fn path_join(base: std::path::PathBuf, relative: String) -> Result<String, S
     Ok(base.join(relative).to_string_lossy().to_string())
 }
 
+/// Open an http(s) URL in the user's default browser. Used as the guaranteed
+/// fallback for YouTube tutorials: the inline embed can be refused by YouTube
+/// in the WebView (localhost/tauri.localhost origin), but the system browser
+/// always plays it.
+///
+/// NOT through a shell, and that is the whole point of this function's history.
+///
+/// It used to be `cmd /C start "" <url>` on Windows. Rust quotes an argument only when it
+/// contains a space, a tab or a quote — it does not escape cmd.exe's metacharacters, and cmd
+/// re-parses the line it is given. So `https://example.com&<command>` passed the http(s)
+/// check and cmd ran the second half. A space-free payload is enough to be dangerous:
+/// `&\\host\share\payload.exe` is a UNC path Windows will fetch over the network and run.
+///
+/// The URL is not always ours. `community.ts` renders BCWEB blog posts and COMMENTS through
+/// marked and hands every `a[href^=http]` in them to this command when clicked, and marked
+/// keeps `&` verbatim in an href. Anybody who can leave a comment could write the link.
+///
+/// The fix could not be to reject `&` — that is what a query string is made of, and BMM's own
+/// Discord invite carries three. So the shell is gone instead: `open::that` (already used by
+/// `open_external_url` in window.rs, which is why this needs no new dependency) hands the
+/// target to PowerShell through an environment variable, `Start-Process -FilePath
+/// $env:OPEN_RS_TARGET`, where nothing parses it. `open` sets CREATE_NO_WINDOW itself, so the
+/// no-console-flash rule the old hidden_command satisfied is still satisfied.
+#[tauri::command]
+pub fn open_external(url: String) -> Result<(), String> {
+    // The scheme check stays a prefix check, and stays as it was: a string that literally
+    // starts with "https://" has that scheme, and there is no trick in that. The scheme was
+    // never what went wrong here — the shell was.
+    let u = url.trim();
+    if !(u.starts_with("https://") || u.starts_with("http://")) {
+        return Err("refused: only http(s) URLs".into());
+    }
+    open::that(u).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn open_folder(path: String) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
-        use std::process::Command;
-        Command::new("explorer")
+        crate::commands::proc::hidden_command("explorer")
             .arg(path)
             .spawn()
             .map_err(|e| e.to_string())?;
     }
     #[cfg(target_os = "macos")]
     {
-        use std::process::Command;
-        Command::new("open")
+        crate::commands::proc::hidden_command("open")
             .arg(path)
             .spawn()
             .map_err(|e| e.to_string())?;
     }
     #[cfg(target_os = "linux")]
     {
-        use std::process::Command;
-        Command::new("xdg-open")
+        crate::commands::proc::hidden_command("xdg-open")
             .arg(path)
             .spawn()
             .map_err(|e| e.to_string())?;
@@ -636,24 +1738,21 @@ pub fn open_folder(path: String) -> Result<(), String> {
 pub fn open_file(path: String) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
-        use std::process::Command;
-        Command::new("cmd")
-            .args(["/c", "start", "", &path])
-            .spawn()
-            .map_err(|e| e.to_string())?;
+        // open::that, not `cmd /c start` — see open_external above. `&` is a legal
+        // character in a Windows filename, so a mod folder called `thing&payload.exe`
+        // would have run the second half.
+        open::that(&path).map_err(|e| e.to_string())?;
     }
     #[cfg(target_os = "macos")]
     {
-        use std::process::Command;
-        Command::new("open")
+        crate::commands::proc::hidden_command("open")
             .arg(path)
             .spawn()
             .map_err(|e| e.to_string())?;
     }
     #[cfg(target_os = "linux")]
     {
-        use std::process::Command;
-        Command::new("xdg-open")
+        crate::commands::proc::hidden_command("xdg-open")
             .arg(path)
             .spawn()
             .map_err(|e| e.to_string())?;
@@ -665,7 +1764,7 @@ pub fn open_file(path: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn open_mod_folder_at(state: State<'_, AppState>, mod_id: String, relative_path: String) -> Result<(), String> {
     let mod_dir = {
-        let data = state.data.lock().unwrap();
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
         m.mod_folder_path.clone()
     };
@@ -690,7 +1789,7 @@ pub async fn open_mod_folder_at(state: State<'_, AppState>, mod_id: String, rela
 #[tauri::command]
 pub async fn open_mod_file_at(state: State<'_, AppState>, mod_id: String, relative_path: String) -> Result<(), String> {
     let mod_dir = {
-        let data = state.data.lock().unwrap();
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
         m.mod_folder_path.clone()
     };
@@ -708,30 +1807,55 @@ pub async fn open_mod_file_at(state: State<'_, AppState>, mod_id: String, relati
 pub fn update_mod_meta(
     state: State<AppState>,
     mod_id: String,
-    name: String,
-    author: String,
-    description: String,
-    version: String,
-    tags: Vec<String>,
-    download_links: Vec<crate::models::mod_entry::DownloadLink>,
-    dependencies: Vec<String>,
+    payload: UpdateModPayload,
 ) -> Result<(), String> {
+    let UpdateModPayload {
+        name,
+        author,
+        description,
+        version,
+        tags,
+        download_links,
+        dependencies,
+    } = payload;
+    
     log_line(format!("[MOD] Updating metadata for '{}' ({})", name, mod_id));
-    let mod_path = {
-        let mut data = state.data.lock().unwrap();
+    let (mod_path, changes_str) = {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
-            m.name = name;
+            let mut changes = Vec::new();
+            if m.name != name { changes.push(serde_json::json!({"field": "name", "old": m.name, "new": name})); }
+            if m.author.as_deref().unwrap_or("") != author { changes.push(serde_json::json!({"field": "author", "old": m.author.as_deref().unwrap_or(""), "new": author})); }
+            if m.description.as_deref().unwrap_or("") != description { changes.push(serde_json::json!({"field": "description", "old": m.description.as_deref().unwrap_or(""), "new": description})); }
+            if m.version != version { changes.push(serde_json::json!({"field": "version", "old": m.version, "new": version})); }
+            if m.tags != tags { changes.push(serde_json::json!({"field": "tags", "old": m.tags, "new": tags})); }
+            if m.download_links != download_links { changes.push(serde_json::json!({"field": "links", "old": m.download_links, "new": download_links})); }
+            if m.dependencies != dependencies { changes.push(serde_json::json!({"field": "dependencies", "old": m.dependencies, "new": dependencies})); }
+
+            m.name = name.clone();
             m.author = Some(author);
             m.description = Some(description);
             m.version = version;
             m.tags = tags;
             m.download_links = download_links;
             m.dependencies = dependencies;
-            Some((m.clone(), m.mod_folder_path.clone()))
+            
+            let changes_str = if changes.is_empty() { None } else { serde_json::to_string(&changes).ok() };
+            (Some((m.clone(), m.mod_folder_path.clone())), changes_str)
         } else {
-            None
+            (None, None)
         }
     };
+
+    let active_id = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        data.active_profile_id.clone().unwrap_or_default()
+    };
+    if let Some(details) = changes_str {
+        crate::commands::history::log_activity(&state, &active_id, &mod_id, &name, "Modified", Some(details));
+    } else {
+        crate::commands::history::log_activity(&state, &active_id, &mod_id, &name, "Modified", None);
+    }
 
     if let Some((_entry, _path)) = mod_path {
         // Removed as per user request
@@ -741,11 +1865,13 @@ pub fn update_mod_meta(
     Ok(())
 }
 
+#[allow(dead_code)]
 fn save_mod_metadata_file(_mod_folder_path: &std::path::Path, _entry: &crate::models::mod_entry::ModEntry) -> Result<(), String> {
     // Removed as per user request
     Ok(())
 }
 
+#[allow(dead_code)]
 #[tauri::command]
 pub fn check_mod_metadata(_folder_path: String) -> Result<Option<crate::models::mod_entry::ModMetadata>, String> {
     // Removed as per user request
@@ -762,7 +1888,7 @@ pub struct ScanResult {
 pub async fn scan_mods_folder(state: State<'_, AppState>) -> Result<ScanResult, String> {
     log_line("[MOD] Scanning mods folder for new mods...");
     let (mods_path, profile_id) = {
-        let data = state.data.lock().unwrap();
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
         let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
         (p.mods_path.clone(), active_id)
@@ -770,7 +1896,7 @@ pub async fn scan_mods_folder(state: State<'_, AppState>) -> Result<ScanResult, 
 
     // 1. Prune missing mods from the state for this profile
     let removed_count = {
-        let mut data = state.data.lock().unwrap();
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let mut to_remove_ids = Vec::new();
         
         // Collect all valid mods_paths from all profiles to detect orphaned mods
@@ -778,14 +1904,34 @@ pub async fn scan_mods_folder(state: State<'_, AppState>) -> Result<ScanResult, 
             .map(|p| p.mods_path.canonicalize().unwrap_or(p.mods_path.clone()))
             .collect();
 
+        // Profile mods-folders that are reachable RIGHT NOW. Pruning a mod for
+        // "folder missing" is only safe when its owning root is present. If an
+        // external/removable drive is unplugged (or comes back under a different
+        // letter), the whole root is absent and every mod on it would look deleted —
+        // wiping metadata, hashes and active_mods for content that's merely offline.
+        // Guard against that: an absent root means "temporarily unreachable", not "gone".
+        let present_roots: Vec<PathBuf> = data.profiles.iter()
+            .map(|p| p.mods_path.clone())
+            .filter(|p| p.exists())
+            .collect();
+
         data.mods.retain(|m| {
             let mod_p = &m.mod_folder_path;
-            
-            // 1. Prune if folder is gone from disk
+
+            // 1. Prune if folder is gone from disk — but ONLY when its owning root is
+            //    reachable, so an unplugged drive can't masquerade as a mass deletion.
             if !mod_p.exists() {
-                log_line(format!("[MOD-SCAN] Pruning missing mod globally: {:?} (ID: {})", mod_p, m.id));
-                to_remove_ids.push(m.id.clone());
-                return false;
+                let owning_root_present = present_roots.iter().any(|root| mod_p.starts_with(root));
+                if owning_root_present {
+                    log_line(format!("[MOD-SCAN] Pruning missing mod globally: {:?} (ID: {})", mod_p, m.id));
+                    to_remove_ids.push(m.id.clone());
+                    return false;
+                }
+                // Owning root is offline (drive unplugged / re-lettered). Keep the mod
+                // and its activation state so a replug restores everything intact rather
+                // than re-adding it as a brand-new, un-hashed, disabled entry.
+                log_line(format!("[MOD-SCAN] Keeping offline-root mod (drive unplugged?): {:?} (ID: {})", mod_p, m.id));
+                return true;
             }
 
             // 2. Prune if mod doesn't belong to any existing profile's mods_path (Orphan)
@@ -817,25 +1963,37 @@ pub async fn scan_mods_folder(state: State<'_, AppState>) -> Result<ScanResult, 
     }
 
     let existing_paths: Vec<PathBuf> = {
-        let data = state.data.lock().unwrap();
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         data.mods.iter().map(|m| m.mod_folder_path.clone()).collect()
     };
 
     let added: Vec<ModEntry> = tauri::async_runtime::spawn_blocking(move || -> Result<Vec<ModEntry>, String> {
         if !mods_path.exists() {
-            return Err(format!("Dossier mods introuvable: {:?}", mods_path));
+            log_line(format!("[MOD-SCAN] Mods folder does not exist: {:?}. Skipping scan.", mods_path));
+            return Ok(Vec::new());
         }
 
+        // A Scan ticket for the walk (G3b): listed on the dashboard, one of the kind's slots,
+        // and a checkpoint per entry so a pause or a cancel takes effect between mods. A
+        // cancelled scan adds nothing (the prune above is already saved).
+        let ticket = crate::governor::runtime::global()
+            .begin(crate::governor::config::OpKind::Scan, &format!("scan {}", mods_path.display()));
         let mut discovered = Vec::new();
-        let entries = std::fs::read_dir(&mods_path).map_err(|e| e.to_string())?;
+        let entries = std::fs::read_dir(&mods_path).map_err(|e| {
+            log_line(format!("[MOD-SCAN] Failed to read mods folder {:?}: {}", mods_path, e));
+            e.to_string()
+        })?;
 
         for entry in entries.flatten() {
+            fs_utils::checkpoint(&ticket).map_err(|e| e.to_string())?;
             let path = entry.path();
             log_line(format!("[MOD-SCAN] Checking: {:?}", path));
             let is_dir = path.is_dir();
-            let is_zip = path.is_file() && path.extension().and_then(|s| s.to_str()).unwrap_or("").eq_ignore_ascii_case("zip");
-            
-            if !is_dir && !is_zip { continue; }
+            // Archive mods (.zip/.tar/.tar.gz/.7z) are detected as mods too — kept
+            // compressed, extracted only on activation.
+            let is_arch = crate::archive::is_archive(&path);
+
+            if !is_dir && !is_arch { continue; }
 
             // Check if already in BMM list (global check)
             let is_already_added = existing_paths.iter().any(|ep| {
@@ -852,15 +2010,20 @@ pub async fn scan_mods_folder(state: State<'_, AppState>) -> Result<ScanResult, 
                 .to_string();
 
             let mut mod_name = folder_name.clone();
-            if is_zip && mod_name.to_lowercase().ends_with(".zip") {
-                mod_name = mod_name[..mod_name.len() - 4].to_string();
+            if is_arch {
+                // Strip the archive extension for a clean display name.
+                let low = mod_name.to_lowercase();
+                for ext in [".tar.gz", ".tgz", ".zip", ".tar", ".7z", ".rar"] {
+                    if low.ends_with(ext) {
+                        mod_name = mod_name[..mod_name.len() - ext.len()].to_string();
+                        break;
+                    }
+                }
             }
 
             let mut entry = ModEntry::new(mod_name.clone(), path.clone());
             let _has_meta = entry.load_metadata();
-            
-            // If no metadata file and it's a folder, create one with default info
-            // REMOVED: let _ = save_mod_metadata_file(&path, &entry);
+            entry.content_id = derive_content_id(&path);
 
             discovered.push(entry);
         }
@@ -870,7 +2033,7 @@ pub async fn scan_mods_folder(state: State<'_, AppState>) -> Result<ScanResult, 
     let added_count = added.len();
     if added_count > 0 {
         log_line(format!("[MOD] Scan discovered {} new mod(s)", added_count));
-        let mut data = state.data.lock().unwrap();
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         data.mods.extend(added);
         drop(data);
         let _ = state.save();
@@ -891,70 +2054,145 @@ pub async fn download_mod(
     state: State<'_, AppState>,
     url: String,
     mod_name: String,
+    profile_id: Option<String>,
 ) -> Result<ModEntry, String> {
     log_line(format!("[MOD] Downloading mod '{}' from '{}'", mod_name, url));
     let mods_path = {
-        let data = state.data.lock().unwrap();
-        let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
-        let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        let target_id = profile_id.or_else(|| data.active_profile_id.clone()).ok_or("Aucun profil actif")?;
+        let p = data.profiles.iter().find(|p| p.id == target_id).ok_or("Profil introuvable")?.clone();
         p.mods_path.clone()
     };
 
-    let safe_name = mod_name
-        .chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' || c == ' ' || c == '.' { c } else { '_' })
-        .collect::<String>();
-    
-    let target_dir = mods_path.join(&safe_name);
+    let (final_name, target_dir) = get_unique_mod_info(&mods_path, &mod_name);
+    let target_dir_for_thread = target_dir.clone();
 
-    tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
-        std::fs::create_dir_all(&target_dir).map_err(|e| e.to_string())?;
+    let ticket_subject = final_name.clone();
+    let downloaded = tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
+        // The Download ticket, held through the transfer AND the unpacking: one operation to
+        // the user, one line on the dashboard, one thing to cancel.
+        let ticket = crate::governor::runtime::global().begin(crate::governor::config::OpKind::Download, &ticket_subject);
+        crate::fs_utils::checkpoint(&ticket).map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(&target_dir_for_thread).map_err(|e| e.to_string())?;
 
-        let response = reqwest::blocking::get(&url)
+        let mut response = reqwest::blocking::get(&url)
             .map_err(|e| format!("Download failed: {}", e))?;
 
         if !response.status().is_success() {
             return Err(format!("HTTP error: {}", response.status()));
         }
 
-        let bytes = response.bytes().map_err(|e| format!("Read failed: {}", e))?;
-        let is_zip = bytes.len() >= 4 && bytes[0] == 0x50 && bytes[1] == 0x4B;
+        // STREAM to disk. This used to be `response.bytes()`, which held the WHOLE download in
+        // memory — with no size cap and no Content-Length check — and then kept that buffer alive
+        // while extracting the zip from a Cursor over it, so peak RSS was the archive size plus
+        // the extraction overhead. A multi-GB mod (and this is reachable straight from a
+        // `bmm://install` link) could exhaust memory before a single byte reached the disk.
+        // The repo-sync path already streams with .chunk(); this one now matches it.
+        let tmp_path = target_dir_for_thread.join(".bmm-download.part");
+        {
+            let mut out = std::fs::File::create(&tmp_path)
+                .map_err(|e| format!("Cannot open the download file: {}", e))?;
+            // Chunked under the ticket (pause / cancel between chunks, bytes on the dashboard),
+            // and stopped at 4 GiB however long the server keeps sending (fs_utils::DownloadCap).
+            if let Err(e) = crate::fs_utils::DownloadCap::new().check_announced(response.content_length()) {
+                drop(out);
+                let _ = std::fs::remove_file(&tmp_path);
+                return Err(e);
+            }
+            let mut capped = crate::fs_utils::CappedReader::new(&mut response);
+            if let Err(e) = crate::fs_utils::copy_reader_ticketed(&mut capped, &mut out, &ticket) {
+                drop(out);
+                let _ = std::fs::remove_file(&tmp_path);
+                if e.to_string() == crate::fs_utils::CANCELLED { return Err(e.to_string()); }
+                if e.to_string() == crate::fs_utils::DOWNLOAD_TOO_LARGE { return Err(e.to_string()); }
+                return Err(format!("Read failed: {}", e));
+            }
+            std::io::Write::flush(&mut out).map_err(|e| e.to_string())?;
+        }
+        // Sniff the magic from the file rather than from a RAM buffer.
+        let is_zip = {
+            let mut head = [0u8; 4];
+            let mut f = std::fs::File::open(&tmp_path).map_err(|e| e.to_string())?;
+            match std::io::Read::read(&mut f, &mut head) {
+                Ok(n) => n >= 4 && head[0] == 0x50 && head[1] == 0x4B,
+                Err(_) => false,
+            }
+        };
+
+        // Anything that leaves early from here on must not leave the .part file behind.
+        let cleanup = |p: &std::path::Path| { let _ = std::fs::remove_file(p); };
 
         if is_zip {
-            let cursor = std::io::Cursor::new(&bytes);
-            let mut archive = zip::ZipArchive::new(cursor)
-                .map_err(|e| format!("Zip error: {}", e))?;
-
-            for i in 0..archive.len() {
-                let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
-                let outpath = target_dir.join(file.name());
-                if file.name().ends_with('/') {
-                    std::fs::create_dir_all(&outpath).ok();
-                } else {
-                    if let Some(parent) = outpath.parent() {
-                        std::fs::create_dir_all(parent).ok();
+            // Extraction runs in its own closure so the .part file is removed on EVERY exit —
+            // a mid-loop error used to be able to leave it sitting in the mod folder, where the
+            // scanner would then pick it up as an unrecognised file.
+            let extract = || -> Result<(), String> {
+                let file = std::fs::File::open(&tmp_path).map_err(|e| e.to_string())?;
+                let zip_len = file.metadata().map(|m| m.len()).unwrap_or(0);
+                let mut archive = zip::ZipArchive::new(std::io::BufReader::new(file))
+                    .map_err(|e| format!("Zip error: {}", e))?;
+                // The size caps of archive.rs (security summary §9): declared, then streamed.
+                crate::archive::check_zip_declared(&mut archive, zip_len).map_err(|e| e.to_string())?;
+                let budget = crate::archive::ExtractBudget::for_archive(zip_len);
+                for i in 0..archive.len() {
+                    crate::fs_utils::checkpoint(&ticket).map_err(|e| e.to_string())?;
+                    let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
+                    // CWE-22 Zip Slip: use enclosed_name() (None ⇒ entry escapes → skip).
+                    let safe = match file.enclosed_name() { Some(p) => p.to_path_buf(), None => continue };
+                    let outpath = target_dir_for_thread.join(&safe);
+                    if file.name().ends_with('/') {
+                        std::fs::create_dir_all(&outpath).ok();
+                    } else {
+                        if let Some(parent) = outpath.parent() {
+                            std::fs::create_dir_all(parent).ok();
+                        }
+                        let mut outfile = budget.writer(std::fs::File::create(&outpath).map_err(|e| e.to_string())?);
+                        if let Err(e) = crate::fs_utils::copy_reader_ticketed(&mut file, &mut outfile, &ticket) {
+                            drop(outfile);
+                            let _ = std::fs::remove_file(&outpath);
+                            return Err(e.to_string());
+                        }
                     }
-                    let mut outfile = std::fs::File::create(&outpath).map_err(|e| e.to_string())?;
-                    std::io::copy(&mut file, &mut outfile).map_err(|e| e.to_string())?;
                 }
-            }
+                Ok(())
+            };
+            let extracted = extract();
+            cleanup(&tmp_path);
+            extracted?;
         } else {
-            let filename = url.split('/').last().unwrap_or("mod_file");
-            let filepath = target_dir.join(filename);
-            std::fs::write(&filepath, &bytes).map_err(|e| e.to_string())?;
+            // Not an archive: keep the streamed file, just give it its real name. A rename beats
+            // read-then-write — it never puts the payload back in memory.
+            let filename = url.split('/').next_back().unwrap_or("mod_file");
+            // CWE-22: the name comes from a URL, so it must not climb out of the mod folder.
+            let safe = std::path::Path::new(filename)
+                .file_name()
+                .map(|s| s.to_string_lossy().to_string())
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| "mod_file".to_string());
+            let filepath = target_dir_for_thread.join(safe);
+            if let Err(e) = std::fs::rename(&tmp_path, &filepath) {
+                cleanup(&tmp_path);
+                return Err(format!("Cannot store the download: {}", e));
+            }
         }
         Ok(())
-    }).await.map_err(|e| e.to_string())??;
+    }).await.map_err(|e| e.to_string())?;
+    // Cancelled (from the dashboard): the mod folder was created by this call, under a name
+    // nobody else had; remove what was written rather than leave half a mod to be scanned in.
+    if let Err(e) = downloaded {
+        if e == crate::fs_utils::CANCELLED { let _ = std::fs::remove_dir_all(&target_dir); }
+        return Err(e);
+    }
 
-    let target_dir_clone = mods_path.join(&safe_name);
-    let mut entry = ModEntry::new(safe_name.clone(), target_dir_clone);
-    entry.name = mod_name;
+    let mut entry = ModEntry::new(final_name, target_dir);
+    entry.content_id = derive_content_id(&entry.mod_folder_path);
     let result = entry.clone();
     {
-        let mut data = state.data.lock().unwrap();
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         data.mods.push(entry);
     }
     let _ = state.save();
+    invalidate_cache(&state);
     Ok(result)
 }
 
@@ -967,9 +2205,13 @@ struct DownloadProgress {
     status: String,
 }
 
+/// Stop a list install. With the run's token (commands/modlist.rs `runs`), that run only, and
+/// the copy or download it is in stops at its next block. Without one (an older caller),
+/// every list install. It no longer sets `install_cancelled`: that flag belongs to the repo
+/// installs too, and cancelling a list used to stop a repo sync running beside it.
 #[tauri::command]
-pub fn cancel_install_from_modlist(state: State<AppState>) {
-    state.install_cancelled.store(true, std::sync::atomic::Ordering::SeqCst);
+pub fn cancel_install_from_modlist(run_id: Option<String>) -> usize {
+    crate::commands::modlist::runs::cancel("install", run_id.as_deref())
 }
 
 #[tauri::command]
@@ -979,17 +2221,41 @@ pub async fn install_from_modlist(
     modlist_json: String,
     create_profile: bool,
     github_token: Option<String>,
+    // The screen's cancel token: see cancel_install_from_modlist.
+    run_id: Option<String>,
 ) -> Result<Vec<String>, String> {
-    state.install_cancelled.store(false, std::sync::atomic::Ordering::SeqCst);
+    let run = crate::commands::modlist::runs::begin("install", run_id);
+    let run_key = run.key();
     let modlist: crate::models::modlist::ModList =
         serde_json::from_str(&modlist_json).map_err(|e| format!("Invalid modlist: {}", e))?;
 
+    // The tags the list refers to, before anything is installed.
+    //
+    // Every entry carries tag IDs, and the installer writes them onto the new mods. Without
+    // the definitions those ids resolve to nothing and the screen draws no chip — a shared
+    // list arrived with its tags silently gone. An id already known here WINS: the local
+    // definition is the user's, and a list must not repaint somebody's tags.
+    let mut added_tag_ids: Vec<String> = Vec::new();
+    {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        for def in &modlist.tag_defs {
+            if !data.custom_tags.iter().any(|t| t.id == def.id) {
+                data.custom_tags.push(def.clone());
+                added_tag_ids.push(def.id.clone());
+            }
+        }
+    }
+
     let mut newly_created_profile_id: Option<String> = None;
     let mut newly_added_mod_ids: Vec<String> = Vec::new();
+    // Library entries THIS run created, the ones a cancel takes back. `newly_added_mod_ids`
+    // also holds mods that were already in the library ("already present"): a cancel removed
+    // those from the library too, so cancelling a list could lose mods you had before it.
+    let mut created_mod_ids: Vec<String> = Vec::new();
     let mut newly_added_mod_folders: Vec<PathBuf> = Vec::new();
 
     let (mods_path, _profile_id_for_mods) = {
-        let mut data = state.data.lock().unwrap();
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         if create_profile {
             let new_id = uuid::Uuid::new_v4().to_string();
             let game_path = PathBuf::from(&modlist.game_path_hint);
@@ -1026,7 +2292,7 @@ pub async fn install_from_modlist(
     let total_mods = modlist.mods.len();
 
     for (idx, entry) in modlist.mods.iter().enumerate() {
-        if state.install_cancelled.load(std::sync::atomic::Ordering::SeqCst) {
+        if run.cancelled() {
             results.push("❌ Installation annulée par l'utilisateur".to_string());
             break;
         }
@@ -1048,7 +2314,7 @@ pub async fn install_from_modlist(
 
         // Check if already present
         if target_dir.exists() {
-            let mut data = state.data.lock().unwrap();
+            let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
             let exists = data.mods.iter().any(|m| m.mod_folder_path == target_dir);
             if !exists {
                 let mut new_mod = ModEntry::new(safe_name.clone(), target_dir.clone());
@@ -1057,10 +2323,19 @@ pub async fn install_from_modlist(
                 new_mod.author = entry.author.clone();
                 new_mod.description = entry.description.clone();
                 new_mod.tags = entry.tags.clone();
+                new_mod.update_sources = entry.update_sources.clone();
+                // Provenance, so the mod keeps updating itself on the machine it lands on.
+                // Written unconditionally: the mod was just created, so there is nothing
+                // local to overwrite — and a list whose mods arrive with no source is a
+                // list of mods that will never update again.
+                new_mod.source_repo = entry.source_repo.clone();
+                new_mod.repo_mod_id = entry.repo_mod_id.clone();
+                new_mod.update_url = entry.update_url.clone();
                 new_mod.install_notes = entry.install_notes.clone();
                 let mid = new_mod.id.clone();
                 let _mod_folder = new_mod.mod_folder_path.clone();
                 data.mods.push(new_mod.clone());
+                created_mod_ids.push(mid.clone());
                 newly_added_mod_ids.push(mid);
                 // let _ = save_mod_metadata_file(&mod_folder, &new_mod);
             } else {
@@ -1078,7 +2353,7 @@ pub async fn install_from_modlist(
 
         // Try local copy first
         let source_path = {
-            let data = state.data.lock().unwrap();
+            let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
             data.mods.iter()
                 .find(|m| m.name == entry.name && m.mod_folder_path.exists())
                 .map(|m| m.mod_folder_path.clone())
@@ -1089,6 +2364,7 @@ pub async fn install_from_modlist(
             let t_dir = target_dir.clone();
             let w = window.clone();
             let n = entry.name.clone();
+            let rk = run_key.clone();
             let res = tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
                 let _ = w.emit("bmm://mod-download-progress", crate::commands::mods::DownloadProgress {
                     mod_index: idx,
@@ -1097,29 +2373,54 @@ pub async fn install_from_modlist(
                     progress: 50.0,
                     status: "Copie locale...".to_string(),
                 });
-                std::fs::create_dir_all(&t_dir).map_err(|e| e.to_string())?;
-                let mut options = fs_extra::dir::CopyOptions::new();
-                options.content_only = true;
-                fs_extra::dir::copy(&src, &t_dir, &options).map_err(|e| e.to_string())?;
-                Ok(())
+                // Install ticket; the governed folder copy (fs_extra's `content_only` semantics).
+                // Tied to the run: the list's Cancel cancels the ticket, and the copy stops at
+                // its next block instead of finishing the folder first.
+                let ticket = crate::governor::runtime::global().begin(crate::governor::config::OpKind::Install, &t_dir.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default());
+                crate::commands::modlist::runs::attach(&rk, ticket.id());
+                let r = (|| {
+                    std::fs::create_dir_all(&t_dir).map_err(|e| e.to_string())?;
+                    crate::fs_utils::copy_dir_governed(crate::governor::config::OpKind::Install, &src, &t_dir, &ticket)
+                        .map_err(|e| if e.to_string() == crate::fs_utils::CANCELLED { e.to_string() } else { format!("{:#}", e) })
+                        .map(|_| ())
+                })();
+                crate::commands::modlist::runs::detach(&rk, ticket.id());
+                r
             }).await.map_err(|e| e.to_string())?;
+            // A cancel from the governor stops the whole list, like the list's own Cancel.
+            if matches!(&res, Err(e) if e == crate::fs_utils::CANCELLED) {
+                run.cancel();
+            }
 
             if res.is_ok() {
-                let mut data = state.data.lock().unwrap();
+                let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
                 let mut new_mod = ModEntry::new(safe_name.clone(), target_dir.clone());
+                new_mod.content_id = derive_content_id(&target_dir);
                 new_mod.name = entry.name.clone();
                 new_mod.version = entry.version.clone();
                 new_mod.author = entry.author.clone();
                 new_mod.tags = entry.tags.clone();
+                new_mod.update_sources = entry.update_sources.clone();
+                // Provenance, so the mod keeps updating itself on the machine it lands on.
+                // Written unconditionally: the mod was just created, so there is nothing
+                // local to overwrite — and a list whose mods arrive with no source is a
+                // list of mods that will never update again.
+                new_mod.source_repo = entry.source_repo.clone();
+                new_mod.repo_mod_id = entry.repo_mod_id.clone();
+                new_mod.update_url = entry.update_url.clone();
                 new_mod.install_notes = entry.install_notes.clone();
                 let mid = new_mod.id.clone();
                 data.mods.push(new_mod);
-                
+
+                created_mod_ids.push(mid.clone());
                 newly_added_mod_ids.push(mid);
                 results.push(format!("✅ {} — Copié localement", entry.name));
                 success = true;
             }
         }
+
+        // A cancel during the local copy: do not fall through to a download.
+        if run.cancelled() { break; }
 
         // If not copied, try download
         if !success {
@@ -1128,11 +2429,22 @@ pub async fn install_from_modlist(
                 let t_dir = target_dir.clone();
                 let w = window.clone();
                 let n = entry.name.clone();
-                let cancel_flag = state.install_cancelled.clone();
+                let cancel_flag = run.flag.clone();
                 let pat_clone = github_token.clone();
+                let rk = run_key.clone();
 
                 let res = tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
                     let github_token = pat_clone;
+                    // Download ticket, held through the transfer and the unpacking. Cancelling
+                    // it is the same as the list's Cancel button: "Cancelled". Tied to the run,
+                    // so that button also stops a big file mid-extraction.
+                    let ticket = crate::governor::runtime::global().begin(crate::governor::config::OpKind::Download, &n);
+                    crate::commands::modlist::runs::attach(&rk, ticket.id());
+                    struct Detach<'a>(&'a str, u64);
+                    impl Drop for Detach<'_> { fn drop(&mut self) { crate::commands::modlist::runs::detach(self.0, self.1); } }
+                    let _detach = Detach(&rk, ticket.id());
+                    let cancelled = || cancel_flag.load(std::sync::atomic::Ordering::SeqCst) || ticket.checkpoint().is_err();
+                    if cancelled() { return Err("Cancelled".to_string()); }
                     // Build a client with optional GitHub auth header
                     let client = reqwest::blocking::Client::new();
                     let is_github = url.contains("github.com") || url.contains("raw.githubusercontent.com");
@@ -1147,6 +2459,9 @@ pub async fn install_from_modlist(
                     }
                     let mut response = req.send().map_err(|e| e.to_string())?;
                     let total = response.content_length().unwrap_or(0);
+                    // Held in memory until it is unpacked: the 4 GiB cap matters twice here.
+                    let mut cap = crate::fs_utils::DownloadCap::new();
+                    cap.check_announced(response.content_length())?;
                     let mut bytes = Vec::new();
                     let mut buffer = [0; 8192];
                     let mut downloaded: u64 = 0;
@@ -1157,12 +2472,14 @@ pub async fn install_from_modlist(
                     while let Ok(c) = response.read(&mut buffer) {
                         if c == 0 { break; }
                         // Check for cancellation during download
-                        if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) {
+                        if cancelled() {
                             return Err("Cancelled".to_string());
                         }
 
+                        cap.add(c as u64)?;
                         bytes.extend_from_slice(&buffer[..c]);
                         downloaded += c as u64;
+                        ticket.add_bytes(c as u64, 0);
                         if total > 0 {
                             let p = (downloaded as f32 / total as f32) * 80.0;
                             let _ = w.emit("bmm://mod-download-progress", crate::commands::mods::DownloadProgress {
@@ -1175,7 +2492,7 @@ pub async fn install_from_modlist(
                         }
                     }
 
-                    if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) {
+                    if cancelled() {
                         return Err("Cancelled".to_string());
                     }
 
@@ -1189,37 +2506,63 @@ pub async fn install_from_modlist(
 
                     let is_zip = bytes.len() > 4 && &bytes[0..2] == b"PK";
                     if is_zip {
+                        let zip_len = bytes.len() as u64;
                         let cursor = std::io::Cursor::new(bytes);
                         let mut archive = zip::ZipArchive::new(cursor).map_err(|e| e.to_string())?;
+                        // The size caps of archive.rs (security summary §9): declared, then streamed.
+                        crate::archive::check_zip_declared(&mut archive, zip_len).map_err(|e| e.to_string())?;
+                        let budget = crate::archive::ExtractBudget::for_archive(zip_len);
                         for i in 0..archive.len() {
-                            if cancel_flag.load(std::sync::atomic::Ordering::SeqCst) {
+                            if cancelled() {
                                 return Err("Cancelled".to_string());
                             }
                             let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
-                            let outpath = t_dir.join(file.name());
+                            // CWE-22 Zip Slip: use enclosed_name() (None ⇒ escape → skip).
+                            let safe = match file.enclosed_name() { Some(p) => p.to_path_buf(), None => continue };
+                            let outpath = t_dir.join(&safe);
                             if file.name().ends_with('/') {
                                 std::fs::create_dir_all(&outpath).ok();
                             } else {
                                 if let Some(p) = outpath.parent() { std::fs::create_dir_all(p).ok(); }
-                                let mut outfile = std::fs::File::create(&outpath).map_err(|e| e.to_string())?;
-                                std::io::copy(&mut file, &mut outfile).map_err(|e| e.to_string())?;
+                                let mut outfile = budget.writer(std::fs::File::create(&outpath).map_err(|e| e.to_string())?);
+                                if let Err(e) = crate::fs_utils::copy_reader_ticketed(&mut file, &mut outfile, &ticket) {
+                                    drop(outfile);
+                                    let _ = std::fs::remove_file(&outpath);
+                                    return Err(if e.to_string() == crate::fs_utils::CANCELLED { "Cancelled".to_string() } else { e.to_string() });
+                                }
                             }
                         }
                     } else {
-                        let fname = url.split('/').last().unwrap_or("mod.file");
+                        let fname = url.split('/').next_back().unwrap_or("mod.file");
+                        // CWE-22: the name comes from the list's URL. On Windows a backslash is a
+                        // separator, so a last segment such as `..\..\x.dll` joined raw would land
+                        // outside the mod folder; keep its last component only (as download_mod does).
+                        let fname = std::path::Path::new(fname).file_name()
+                            .map(|s| s.to_string_lossy().to_string())
+                            .filter(|s| !s.is_empty())
+                            .unwrap_or_else(|| "mod.file".to_string());
                         std::fs::write(t_dir.join(fname), bytes).map_err(|e| e.to_string())?;
                     }
                     Ok(())
                 }).await.map_err(|e| e.to_string())?;
 
                 if let Ok(_) = res {
-                    let mut data = state.data.lock().unwrap();
+                    let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
                     let mut new_mod = ModEntry::new(safe_name.clone(), target_dir.clone());
+                    new_mod.content_id = derive_content_id(&target_dir);
                     new_mod.name = entry.name.clone();
                     new_mod.version = entry.version.clone();
                     new_mod.author = entry.author.clone();
                     new_mod.description = entry.description.clone();
                     new_mod.tags = entry.tags.clone();
+                new_mod.update_sources = entry.update_sources.clone();
+                // Provenance, so the mod keeps updating itself on the machine it lands on.
+                // Written unconditionally: the mod was just created, so there is nothing
+                // local to overwrite — and a list whose mods arrive with no source is a
+                // list of mods that will never update again.
+                new_mod.source_repo = entry.source_repo.clone();
+                new_mod.repo_mod_id = entry.repo_mod_id.clone();
+                new_mod.update_url = entry.update_url.clone();
                     new_mod.install_notes = entry.install_notes.clone();
                     new_mod.download_links = entry.download_links.iter().map(|l| crate::models::mod_entry::DownloadLink {
                         url: l.url.clone(),
@@ -1227,9 +2570,10 @@ pub async fn install_from_modlist(
                         label: l.label.clone(),
                     }).collect();
                     let mid = new_mod.id.clone();
-                    let mod_folder = new_mod.mod_folder_path.clone();
+                    let _mod_folder = new_mod.mod_folder_path.clone();
                     data.mods.push(new_mod.clone());
                     
+                    created_mod_ids.push(mid.clone());
                     newly_added_mod_ids.push(mid);
                     // let _ = save_mod_metadata_file(&mod_folder, &new_mod);
                     results.push(format!("✅ {} — Téléchargé", entry.name));
@@ -1243,6 +2587,8 @@ pub async fn install_from_modlist(
                     });
                 } else if let Err(e) = res {
                     if e == "Cancelled" {
+                        // Cancelled from the governor rather than the list's button: stop the list too.
+                        run.cancel();
                         // Folder will be cleaned up by the main loop break
                     } else {
                         results.push(format!("❌ {} — {}", entry.name, e));
@@ -1255,9 +2601,12 @@ pub async fn install_from_modlist(
     }
 
     // --- CLEANUP IF CANCELLED ---
-    if state.install_cancelled.load(std::sync::atomic::Ordering::SeqCst) {
-        let mut data = state.data.lock().unwrap();
-        data.mods.retain(|m| !newly_added_mod_ids.contains(&m.id));
+    // Back to where the list found things: the library entries and folders this run created,
+    // the profile it created, the tag definitions it added. Mods that were already here stay.
+    if run.cancelled() {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        data.mods.retain(|m| !created_mod_ids.contains(&m.id));
+        data.custom_tags.retain(|t| !added_tag_ids.contains(&t.id));
         if let Some(pid) = newly_created_profile_id {
             if let Some(idx) = data.profiles.iter().position(|p| p.id == pid) {
                 data.profiles.remove(idx);
@@ -1279,19 +2628,64 @@ pub async fn install_from_modlist(
 
 
 
+    // ── What the list said BESIDE the mods ────────────────────────────────────────
+    //
+    // Dependencies and modpacks both travel as NAMES, because an id from somebody else's
+    // install resolves to nothing here. They are applied last, once every mod in the list
+    // has an id on this machine — a dependency written while half the list was still being
+    // installed would point at a mod that did not exist yet.
+    {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        let id_of: HashMap<String, String> = data.mods.iter()
+            .map(|m| (m.name.clone(), m.id.clone()))
+            .collect();
+
+        for entry in &modlist.mods {
+            let Some(mid) = id_of.get(&entry.name) else { continue };
+            let resolved: Vec<String> = entry.dependencies.iter()
+                .filter_map(|name| id_of.get(name).cloned())
+                .collect();
+            if resolved.is_empty() { continue; }
+            if let Some(m) = data.mods.iter_mut().find(|m| &m.id == mid) {
+                for d in resolved {
+                    if !m.dependencies.contains(&d) { m.dependencies.push(d); }
+                }
+            }
+        }
+
+        // A pack whose mods are not ALL here is skipped rather than added half-empty: it
+        // would install nine of its twelve mods and look like the pack is broken.
+        for pack in &modlist.modpacks {
+            let mut remapped = pack.clone();
+            let mut missing = false;
+            for r in remapped.mods.iter_mut() {
+                match id_of.get(&r.mod_name) {
+                    Some(id) => r.mod_id = id.clone(),
+                    None => { missing = true; break; }
+                }
+            }
+            if missing { continue; }
+            // A pack id already present is somebody's own pack; the imported one is added
+            // under a fresh id rather than overwriting it.
+            if data.modpacks.iter().any(|p| p.id == remapped.id) {
+                remapped.id = uuid::Uuid::new_v4().to_string();
+            }
+            data.modpacks.push(remapped);
+        }
+    }
+
     let _ = state.save();
     Ok(results)
 }
 
 #[tauri::command]
 pub async fn verify_integrity(state: State<'_, AppState>) -> Result<Vec<String>, String> {
-    log_line("[INTEGRITY] Running integrity check on active mods...");
-    let enabled_mods = {
-        let data = state.data.lock().unwrap();
-        let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
-        let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
+    let (mods_to_check, game_path) = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?;
+        let p = data.profiles.iter().find(|p| &p.id == active_id).ok_or("Profil introuvable")?.clone();
         
-        let mut enabled = Vec::new();
+        let mut check_list = Vec::new();
         for m in &data.mods {
             let mod_p = &m.mod_folder_path;
             let prof_p = &p.mods_path;
@@ -1304,53 +2698,133 @@ pub async fn verify_integrity(state: State<'_, AppState>) -> Result<Vec<String>,
             };
 
             if m.enabled && is_in_profile {
-                enabled.push((m.name.clone(), m.mod_folder_path.clone(), p.game_path.clone()));
+                check_list.push(m.clone());
             }
         }
-        enabled
+        (check_list, p.game_path.clone())
     };
 
-    let altered = tauri::async_runtime::spawn_blocking(move || -> Result<Vec<String>, String> {
+    let result = tauri::async_runtime::spawn_blocking(move || -> Result<(Vec<String>, Vec<String>), String> {
+        // A Hash ticket for the whole check (G3b), a checkpoint per file: it steps aside while
+        // a deploy writes the game folder it is reading, and pauses / cancels between files.
+        // Same files, same comparison, same order as before.
+        let ticket = crate::governor::runtime::global()
+            .begin(crate::governor::config::OpKind::Hash, "verify integrity (profile)");
         let mut altered = Vec::new();
-        for (mod_name, mod_folder, game_path) in enabled_mods {
-            let mod_dir = PathBuf::from(&mod_folder);
-            let game_dir = PathBuf::from(&game_path);
-            if let Ok(files) = crate::fs_utils::list_mod_files(&mod_dir) {
-                for rel in files {
+        let mut invalid_mod_ids = Vec::new();
+
+        for m in mods_to_check {
+            fs_utils::checkpoint(&ticket).map_err(|e| e.to_string())?;
+            // Archived mods: compare against the extracted cache view so the report
+            // doesn't wrongly flag every file as "missing in library".
+            let mod_dir = crate::archive::mod_read_root(&m.mod_folder_path);
+            let mod_dir = &mod_dir;
+            let game_dir = std::path::PathBuf::from(&game_path);
+            let mut mod_has_issues = false;
+            
+            if let Some(hashes) = &m.file_hashes {
+                // SHA256 Deep Scan for this mod
+                for (rel_str, old_hash) in hashes {
+                    fs_utils::checkpoint(&ticket).map_err(|e| e.to_string())?;
+                    let rel = std::path::PathBuf::from(rel_str);
                     let src = mod_dir.join(&rel);
                     let dst = game_dir.join(&rel);
                     
-                    let src_meta = std::fs::metadata(&src).ok();
-                    let dst_meta = std::fs::metadata(&dst).ok();
-                    
-                    match (src_meta, dst_meta) {
-                        (Some(s), Some(d)) => {
-                            if s.len() != d.len() {
-                                altered.push(format!("[{}] {}", mod_name, rel.display()));
+                    if !src.exists() {
+                        altered.push(format!("[{}] {} (Manquant dans biblio)", m.name, rel.display()));
+                        mod_has_issues = true;
+                    } else if !dst.exists() {
+                        altered.push(format!("[{}] {} (Manquant dans jeu)", m.name, rel.display()));
+                        mod_has_issues = true;
+                    } else if !crate::fs_utils::file_matches_hash(&dst, old_hash) {
+                        // Algorithm-aware: BLAKE3 (`b3:`) or legacy SHA-256 baselines.
+                        altered.push(format!("[{}] {} (Modifié/Corrompu)", m.name, rel.display()));
+                        mod_has_issues = true;
+                    }
+                }
+                
+                // Check for unexpected files in mod dir
+                if let Ok(current_files) = crate::fs_utils::list_mod_files(mod_dir) {
+                    for f in current_files {
+                        let rel_str = f.to_string_lossy().to_string();
+                        if !hashes.contains_key(&rel_str) {
+                             altered.push(format!("[{}] {} (Fichier inattendu)", m.name, rel_str));
+                             mod_has_issues = true;
+                        }
+                    }
+                }
+            } else {
+                // Compatibility Scan (Size + Existence)
+                if let Ok(files) = crate::fs_utils::list_mod_files(mod_dir) {
+                    for rel in files {
+                        let src = mod_dir.join(&rel);
+                        let dst = game_dir.join(&rel);
+                        
+                        let src_meta = std::fs::metadata(&src).ok();
+                        let dst_meta = std::fs::metadata(&dst).ok();
+                        
+                        match (src_meta, dst_meta) {
+                            (Some(s), Some(d)) => {
+                                if s.len() != d.len() {
+                                    altered.push(format!("[{}] {}", m.name, rel.display()));
+                                    mod_has_issues = true;
+                                }
+                            },
+                            _ => {
+                                altered.push(format!("[{}] {} (Manquant)", m.name, rel.display()));
+                                mod_has_issues = true;
                             }
-                        },
-                        _ => {
-                            altered.push(format!("[{}] {} (Manquant/Missing)", mod_name, rel.display()));
                         }
                     }
                 }
             }
+            
+            if mod_has_issues {
+                invalid_mod_ids.push(m.id.clone());
+            }
         }
-        Ok(altered)
+        Ok((altered, invalid_mod_ids))
     }).await.map_err(|e| e.to_string())??;
 
-    log_line(format!("[INTEGRITY] Check complete: {} issue(s) found", altered.len()));
-    Ok(altered)
+    let (altered_list, invalid_ids) = result;
+
+    // Update state with invalid flags
+    {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        for m in &mut data.mods {
+            if invalid_ids.contains(&m.id) {
+                m.file_hashes_invalid = Some(true);
+            } else {
+                // If we checked it and it had no issues, clear the flag
+                // (Only for mods that were actually checked, i.e. enabled and in profile)
+                // Wait, for simplicity, we only set it to true here. 
+                // Setting to false is done by background worker after successful hashing.
+            }
+        }
+    }
+
+    log_line(format!("[INTEGRITY] Profile check complete: {} issue(s) found", altered_list.len()));
+    Ok(altered_list)
 }
 #[tauri::command]
-pub async fn toggle_all_mods(window: Window, state: State<'_, AppState>, enable: bool) -> Result<(), String> {
+pub async fn toggle_all_mods(
+    window: Window,
+    state: State<'_, AppState>,
+    enable: bool,
+    bypass_sha: Option<bool>,
+    // Where the newly enabled mods go in the activation order: top | bottom | keep; None =
+    // the `order_bulk_mode` setting (commands/order_share.rs). Only the mods this call turned
+    // on move: an order the user built is never reshuffled by "turn the rest on".
+    order_mode: Option<String>,
+) -> Result<(), String> {
+    crate::fs_utils::reset_mod_op_cancel();
     log_line(format!("[MOD] Toggle all mods: {}", if enable { "ENABLE" } else { "DISABLE" }));
-    let mod_ids = {
-        let data = state.data.lock().unwrap();
+    let (mod_ids, active_before) = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?;
         let active_profile = data.profiles.iter().find(|p| &p.id == active_id).ok_or("Profil introuvable")?;
-        
-        data.mods.iter()
+        let before: HashSet<String> = active_profile.active_mods.iter().cloned().collect();
+        let ids = data.mods.iter()
             .filter(|m| {
                 let mod_p = &m.mod_folder_path;
                 let prof_p = &active_profile.mods_path;
@@ -1361,23 +2835,186 @@ pub async fn toggle_all_mods(window: Window, state: State<'_, AppState>, enable:
                 }
             })
             .map(|m| m.id.clone())
-            .collect::<Vec<String>>()
+            .collect::<Vec<String>>();
+        (ids, before)
     };
 
-    for id in mod_ids {
+    for id in mod_ids.iter().cloned() {
+        if crate::fs_utils::is_mod_op_cancelled() {
+            log_line("[MOD] toggle_all_mods aborted by cancel flag");
+            break;
+        }
+        // We have to re-prime per iteration because enable_mod/disable_mod
+        // reset the cancel flag on entry.  Check before the call.
         if enable {
-            let _ = enable_mod(window.clone(), state.clone(), id).await;
+            let _ = enable_mod_in(window.clone(), state.clone(), id, bypass_sha).await;
         } else {
-            let _ = disable_mod(window.clone(), state.clone(), id).await;
+            let _ = disable_mod_in(window.clone(), state.clone(), id).await;
+        }
+        if crate::fs_utils::is_mod_op_cancelled() { break; }
+    }
+    if enable && !crate::fs_utils::is_mod_op_cancelled() {
+        // Newly enabled = active now and not before, in the order they were enabled (plus the
+        // dependencies enable_mod pulled in along the way).
+        let now: Vec<String> = {
+            let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+            let pid = data.active_profile_id.clone();
+            data.profiles.iter().find(|p| Some(&p.id) == pid.as_ref()).map(|p| p.active_mods.clone()).unwrap_or_default()
+        };
+        let newly: Vec<String> = now.into_iter().filter(|id| !active_before.contains(id)).collect();
+        if !newly.is_empty() {
+            if let Err(e) = crate::commands::order_share::arrange_for(&state, None, &newly, order_mode.as_deref()).await {
+                log_line(format!("[ORDER] enable all: placing the new mods failed: {}", e));
+            }
         }
     }
+    after_toggle_pins(&state).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn disable_mods_for_profiles(
+    _window: Window,
+    state: State<'_, AppState>,
+    profile_ids: Vec<String>,
+    // `mod_ids`: restrict to these mods; None = every active mod in the listed profiles.
+    //
+    // This is what makes "disable the mods I selected" possible at all. The Profiles screen
+    // used to do it by calling `disable_mod` once per mod, which acts ON THE ACTIVE PROFILE
+    // and returns Ok immediately for a mod that is not in it — so selecting mods belonging to
+    // another profile, right-clicking, and choosing "Disable selected" reported success and
+    // disabled nothing. One command, both jobs: whole profiles, or named mods.
+    mod_ids: Option<Vec<String>>,
+) -> Result<(), String> {
+    let wanted: Option<HashSet<String>> = mod_ids.map(|v| v.into_iter().collect());
+    log_line(format!(
+        "[MOD] Bulk disabling {} for {} profile(s)",
+        wanted.as_ref().map_or("all mods".to_string(), |w| format!("{} mod(s)", w.len())),
+        profile_ids.len()
+    ));
+
+    // 1. Group mods by (game_path, backup_path) to minimize physical IO
+    let mut tasks: HashMap<(PathBuf, PathBuf), HashSet<String>> = HashMap::new();
+    // Which profiles are actually touched. With no profile list and a mod list, that means
+    // "every profile where these mods are active" — the question the global list asks.
+    let mut touched: HashSet<String> = HashSet::new();
+
+    {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        for p in data.profiles.iter() {
+            let listed = profile_ids.iter().any(|id| id == &p.id);
+            if !profile_ids.is_empty() && !listed { continue; }
+            if p.active_mods.is_empty() { continue; }
+            // Without an explicit profile list, only a profile holding one of the wanted mods
+            // is touched; an empty list with no mod filter would mean "every profile", which
+            // no caller asks for and which would be a spectacular thing to do by accident.
+            if profile_ids.is_empty() && wanted.is_none() { continue; }
+            let mine: Vec<String> = p.active_mods.iter()
+                .filter(|mid| wanted.as_ref().map_or(true, |w| w.contains(*mid)))
+                .cloned()
+                .collect();
+            if mine.is_empty() { continue; }
+            touched.insert(p.id.clone());
+            let key = (p.game_path.clone(), p.backup_path.clone());
+            let entry = tasks.entry(key).or_default();
+            for mid in mine { entry.insert(mid); }
+        }
+    }
+
+    if tasks.is_empty() { 
+        return Ok(()); 
+    }
+
+    let smart_io = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        data.settings.smart_io_enabled
+    };
+
+    for ((game_path, backup_path), mod_ids) in tasks {
+        // ONE unapply per game folder for the whole batch (mod_order::plan_batch_disable): the
+        // union of the leaving mods' files, falling back to the mods that STAY, in order.
+        // Unapplying each mod in turn either put a batch member's copy back (it still counted
+        // as active until the loop ended) or, once they were excluded, freed the vanilla backup
+        // on the first pass and deleted the game's own file on the second.
+        let (files_to_remove, remaining, folders, shared_backups) = {
+            let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+            let game_key = crate::commands::mod_order::game_folder_key(&game_path);
+            let on_root: Vec<&crate::models::profile::Profile> = data.profiles.iter()
+                .filter(|p| crate::commands::mod_order::game_folder_key(&p.game_path) == game_key)
+                .collect();
+            let root_orders: Vec<Vec<String>> = on_root.iter().map(|p| p.active_mods.clone()).collect();
+            // The originals may be in any of these profiles' backups (the one that replaced a
+            // file first holds it), not only in the one this task is keyed by.
+            let backup_key = crate::commands::mod_order::game_folder_key(&backup_path);
+            let mut seen_b: HashSet<String> = [backup_key].into_iter().collect();
+            let shared_backups: Vec<PathBuf> = on_root.iter()
+                .filter(|p| seen_b.insert(crate::commands::mod_order::game_folder_key(&p.backup_path)))
+                .map(|p| p.backup_path.clone())
+                .collect();
+            let files_of = |id: &str| -> Vec<String> {
+                let Some(m) = data.mods.iter().find(|m| m.id == id) else { return Vec::new() };
+                let mut v = m.installed_files.clone();
+                if let Ok(scanned) = fs_utils::list_mod_files(&m.mod_folder_path) {
+                    for sc in scanned { v.push(sc.to_string_lossy().to_string()); }
+                }
+                v
+            };
+            let plan = crate::commands::mod_order::plan_batch_disable(&root_orders, &mod_ids, &files_of);
+            let folders: HashMap<String, PathBuf> = data.mods.iter()
+                .filter(|m| plan.remaining.contains(&m.id))
+                .map(|m| (m.id.clone(), m.mod_folder_path.clone()))
+                .collect();
+            (plan.files, plan.remaining, folders, shared_backups)
+        };
+        if files_to_remove.is_empty() { continue; }
+
+        let gp = game_path.clone();
+        let bp = backup_path.clone();
+
+        let _ = tauri::async_runtime::spawn_blocking(move || {
+            let _lock = MOD_OP_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+            let wanted: HashSet<String> = files_to_remove.iter().map(|f| crate::commands::mod_order::rel_key(f)).collect();
+            let other_active_mods = crate::commands::mod_order::read_roots(&remaining, &folders, Some(&wanted));
+            // Takes its own Deploy ticket (in this process: no worker here).
+            fs_utils::unapply_mod_stacked_shared(&gp, &bp, &shared_backups, files_to_remove, &other_active_mods, smart_io)
+        }).await.map_err(|e| e.to_string())?;
+    }
+
+    {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        for p_id in &touched {
+            if let Some(p) = data.profiles.iter_mut().find(|prof| &prof.id == p_id) {
+                match &wanted {
+                    // Only what was asked for. Clearing the list here is what made this
+                    // command unusable for a selection: it emptied the profile.
+                    Some(w) => p.active_mods.retain(|mid| !w.contains(mid)),
+                    None => p.active_mods.clear(),
+                }
+            }
+        }
+        
+        let all_active_mod_ids: HashSet<String> = data.profiles.iter()
+            .flat_map(|p| p.active_mods.iter().cloned())
+            .collect();
+
+        for m in data.mods.iter_mut() {
+            if !all_active_mod_ids.contains(&m.id) {
+                m.enabled = false;
+                m.status = ModStatus::Disabled;
+                m.installed_files.clear();
+            }
+        }
+    }
+
+    let _ = state.save();
+    invalidate_cache(&state);
     Ok(())
 }
 
 #[tauri::command]
 pub async fn check_conflicts(state: State<'_, AppState>, mod_id: String) -> Result<Vec<String>, String> {
     let (mod_folder, active_mods_data) = {
-        let data = state.data.lock().unwrap();
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let target_mod = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
         
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?;
@@ -1411,22 +3048,52 @@ pub async fn check_conflicts(state: State<'_, AppState>, mod_id: String) -> Resu
 #[tauri::command]
 pub async fn list_mod_files_recursive(state: State<'_, AppState>, mod_id: String) -> Result<Vec<String>, String> {
     let mod_folder = {
-        let data = state.data.lock().unwrap();
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
         m.mod_folder_path.clone()
     };
-    
+    // Archived mods: list from the extracted cache view (file explorer parity).
+    let mod_folder = crate::archive::mod_read_root(&mod_folder);
+
     let files = fs_utils::list_mod_files(&mod_folder).map_err(|e| e.to_string())?;
     Ok(files.into_iter().map(|p| p.to_string_lossy().to_string()).collect())
 }
 
+/// One file of a mod and its size in bytes, for the mapper's final preview (total size and
+/// per-folder sizes). A file that cannot be stat-ed counts as 0 rather than failing the list.
+#[derive(Serialize)]
+pub struct SizedModFile {
+    pub path: String,
+    pub size: u64,
+}
+
+/// `list_mod_files_recursive` with sizes. Same root resolution (archived mods are read from
+/// the extracted cache view), same order.
+#[tauri::command(async)]
+pub async fn list_mod_files_sized(state: State<'_, AppState>, mod_id: String) -> Result<Vec<SizedModFile>, String> {
+    let mod_folder = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
+        m.mod_folder_path.clone()
+    };
+    let mod_folder = crate::archive::mod_read_root(&mod_folder);
+    let files = fs_utils::list_mod_files(&mod_folder).map_err(|e| e.to_string())?;
+    Ok(files
+        .into_iter()
+        .map(|p| {
+            let size = std::fs::metadata(mod_folder.join(&p)).map(|m| m.len()).unwrap_or(0);
+            SizedModFile { path: p.to_string_lossy().to_string(), size }
+        })
+        .collect())
+}
 
 
-#[tauri::command]
+
+#[tauri::command(async)]
 pub fn get_mod_conflicts(state: State<AppState>, mod_id: String) -> Result<Vec<ConflictReport>, String> {
     ensure_cache_populated(&state)?;
     
-    let data = state.data.lock().unwrap();
+    let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
     let target_mod = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
     
     // 1. Try active profile first
@@ -1458,14 +3125,95 @@ pub fn get_mod_conflicts(state: State<AppState>, mod_id: String) -> Result<Vec<C
     Ok(Vec::new())
 }
 
+/// Batched conflict computation for EVERY mod in a single call.
+///
+/// The frontend used to call `get_mod_conflicts` once per mod (in batches of 5),
+/// which on a big library meant hundreds of IPC round-trips + lock acquisitions
+/// on every refresh/import — the main source of UI lag. This computes them all
+/// behind one lock pass and returns a `mod_id -> conflicts` map (mods with no
+/// conflict are omitted to keep the payload small).
+#[tauri::command(async)]
+pub fn get_all_mod_conflicts(state: State<AppState>) -> Result<std::collections::HashMap<String, Vec<ConflictReport>>, String> {
+    ensure_cache_populated(&state)?;
+
+    let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+
+    // Pre-canonicalize each profile's mods_path ONCE (instead of per-mod, per-profile)
+    // so the owner-profile resolution below is cheap even for thousands of mods.
+    let prof_canon: Vec<(&String, std::path::PathBuf)> = data.profiles.iter()
+        .map(|p| (&p.id, p.mods_path.canonicalize().unwrap_or_else(|_| p.mods_path.clone())))
+        .collect();
+    let active_canon = data.active_profile_id.as_ref().and_then(|aid|
+        prof_canon.iter().find(|(pid, _)| *pid == aid).map(|(pid, path)| (*pid, path.clone())));
+
+    let mut out: std::collections::HashMap<String, Vec<ConflictReport>> = std::collections::HashMap::new();
+    for m in &data.mods {
+        let mod_p_can = m.mod_folder_path.canonicalize().unwrap_or_else(|_| m.mod_folder_path.clone());
+
+        // Resolve the profile that owns this mod: active first, then any owner,
+        // then fall back to the active profile (mirrors get_mod_conflicts).
+        let mut prof_id: Option<&String> = None;
+        if let Some((aid, apath)) = &active_canon {
+            if mod_p_can.starts_with(apath) { prof_id = Some(*aid); }
+        }
+        if prof_id.is_none() {
+            for (pid, ppath) in &prof_canon {
+                if mod_p_can.starts_with(ppath) { prof_id = Some(*pid); break; }
+            }
+        }
+        if prof_id.is_none() { prof_id = data.active_profile_id.as_ref(); }
+
+        if let Some(pid) = prof_id {
+            let reports = calculate_conflicts_from_cache(m, &data, pid, &state);
+            if !reports.is_empty() { out.insert(m.id.clone(), reports); }
+        }
+    }
+
+    Ok(out)
+}
+
 pub fn invalidate_cache(state: &State<AppState>) {
-    let mut last_update = state.last_cache_update.lock().unwrap();
+    let mut last_update = state.last_cache_update.lock().unwrap_or_else(|p| p.into_inner());
     *last_update = None; // Force re-population on next call
 }
 
+/// Aggressively trim in-memory caches to reclaim RAM during idle periods.
+/// Frontend can call this when nav-switching away from heavy views.
 #[tauri::command]
-pub fn get_conflict_file_tree(state: State<AppState>, mod_id: String, other_mod_id: String) -> Result<Vec<String>, String> {
-    let data = state.data.lock().unwrap();
+pub fn flush_mem_caches(state: State<AppState>) {
+    log_line("[MEM] Flushing in-memory caches");
+    {
+        let mut cache = state.mod_files_cache.lock().unwrap_or_else(|p| p.into_inner());
+        cache.clear();
+        cache.shrink_to_fit();
+    }
+    {
+        let mut index = state.conflict_index.lock().unwrap_or_else(|p| p.into_inner());
+        index.clear();
+        index.shrink_to_fit();
+    }
+    {
+        let mut last_update = state.last_cache_update.lock().unwrap_or_else(|p| p.into_inner());
+        *last_update = None;
+    }
+}
+
+/// Overlapping-file list for ONE pair, capped. The frontend renders a DOM row per entry, so an
+/// uncapped list is three costs at once: the JSON payload, the HTML string built from it, and
+/// the nodes themselves. Two mods can legitimately share tens of thousands of paths, which is
+/// how this ends as a webview out-of-memory rather than a long list. `total` lets the UI say
+/// how many were found even when it only received the first slice.
+#[derive(serde::Serialize)]
+pub struct ConflictFileTree {
+    pub files: Vec<String>,
+    pub total: usize,
+    pub truncated: bool,
+}
+const CONFLICT_TREE_MAX: usize = 2000;
+
+#[tauri::command]
+pub fn get_conflict_file_tree(state: State<AppState>, mod_id: String, other_mod_id: String) -> Result<ConflictFileTree, String> {
+    let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
     let m1 = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod 1 introuvable")?;
     let m2 = data.mods.iter().find(|m| m.id == other_mod_id).ok_or("Mod 2 introuvable")?;
 
@@ -1476,43 +3224,73 @@ pub fn get_conflict_file_tree(state: State<AppState>, mod_id: String, other_mod_
         .collect();
 
     let mut overlap = Vec::new();
+    let mut total = 0usize;
     for f in files1 {
         if files2.contains(&f) {
-            overlap.push(f.to_string_lossy().to_string());
+            total += 1;
+            if overlap.len() < CONFLICT_TREE_MAX {
+                overlap.push(f.to_string_lossy().to_string());
+            }
         }
     }
-    Ok(overlap)
+    Ok(ConflictFileTree { truncated: total > overlap.len(), total, files: overlap })
 }
 
 #[tauri::command]
 pub async fn open_mod_active_folder(state: State<'_, AppState>, mod_id: String) -> Result<(), String> {
-    let (game_path, installed_files) = {
-        let data = state.data.lock().unwrap();
+    let (game_path, mod_folder, installed_files, enabled) = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
         let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
-        (p.game_path.clone(), m.installed_files.clone())
+        let enabled = m.enabled || p.active_mods.contains(&m.id);
+        (p.game_path.clone(), m.mod_folder_path.clone(), m.installed_files.clone(), enabled)
     };
 
-    if installed_files.is_empty() {
+    // Disabled mod → there's no deployment; open its own library folder.
+    if !enabled {
+        return if mod_folder.exists() {
+            open_folder(mod_folder.to_string_lossy().to_string())
+        } else {
+            open_folder(game_path.to_string_lossy().to_string())
+        };
+    }
+
+    // Enabled → open where the files were deployed in the game directory. Use the
+    // tracked installed_files; if that list wasn't recorded (some activation paths),
+    // fall back to the mod's own file layout — the deploy mirrors it 1:1.
+    let mut rels = installed_files;
+    if rels.is_empty() {
+        let read_root = crate::archive::mod_read_root(&mod_folder);
+        if let Ok(files) = fs_utils::list_mod_files(&read_root) {
+            rels = files.iter().map(|p| p.to_string_lossy().to_string()).collect();
+        }
+    }
+    if rels.is_empty() {
         return open_folder(game_path.to_string_lossy().to_string());
     }
 
-    // Calculate common parent directory of all installed files
-    let common_prefix = get_common_path(&installed_files);
-    let target_dir = game_path.join(common_prefix);
-    
-    if target_dir.exists() {
-        open_folder(target_dir.to_string_lossy().to_string())
-    } else {
-        open_folder(game_path.to_string_lossy().to_string())
+    // Deepest existing directory under the game path that contains the mod's files:
+    // start at the common prefix and walk UP until we hit a real folder (handles
+    // multi-root mods, where the common prefix may be empty → game root).
+    let common = get_common_path(&rels);
+    let mut prefix = if common.is_absolute() {
+        common.strip_prefix("/").unwrap_or(&common).to_path_buf()
+    } else { common };
+    loop {
+        let cand = game_path.join(&prefix);
+        if cand.is_dir() {
+            return open_folder(cand.to_string_lossy().to_string());
+        }
+        if !prefix.pop() { break; }
     }
+    open_folder(game_path.to_string_lossy().to_string())
 }
 
 #[tauri::command]
 pub async fn open_mod_backup_folder(state: State<'_, AppState>, _mod_id: String) -> Result<(), String> {
     let backup_path = {
-        let data = state.data.lock().unwrap();
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
         let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
         p.backup_path.clone()
@@ -1525,16 +3303,37 @@ pub async fn open_mod_backup_folder(state: State<'_, AppState>, _mod_id: String)
     }
 }
 
+/// Open the active profile's game directory (where mods are deployed).
+#[tauri::command]
+pub async fn open_active_game_folder(state: State<'_, AppState>) -> Result<(), String> {
+    let game_path = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        let active_id = data.active_profile_id.as_ref().ok_or("Aucun profil actif")?.clone();
+        let p = data.profiles.iter().find(|p| p.id == active_id).ok_or("Profil introuvable")?.clone();
+        p.game_path.clone()
+    };
+
+    if game_path.exists() {
+        open_folder(game_path.to_string_lossy().to_string())
+    } else {
+        Err("Dossier de destination introuvable".to_string())
+    }
+}
+
 fn get_common_path(paths: &[String]) -> PathBuf {
     if paths.is_empty() { return PathBuf::new(); }
     
-    // Split the first path into components
-    let mut common: Vec<&str> = paths[0].split(|c| c == '/' || c == '\\').collect();
+    // Split the first path into components, filtering out empty ones (like leading slashes)
+    let mut common: Vec<&str> = paths[0]
+        .split(|c| c == '/' || c == '\\')
+        .filter(|s| !s.is_empty())
+        .collect();
+        
     // Remove the filename (last component)
     if !common.is_empty() { common.pop(); }
 
     for path in paths.iter().skip(1) {
-        let parts: Vec<&str> = path.split(|c| c == '/' || c == '\\').collect();
+        let parts: Vec<&str> = path.split(|c| c == '/' || c == '\\').filter(|s| !s.is_empty()).collect();
         let mut new_common = Vec::new();
         for (i, part) in parts.iter().enumerate() {
             if i < common.len() && part == &common[i] {
@@ -1552,3 +3351,822 @@ fn get_common_path(paths: &[String]) -> PathBuf {
     }
     res
 }
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IntegrityReport {
+    pub mod_id: String,
+    pub missing: Vec<String>,
+    pub modified: Vec<String>,
+    pub added: Vec<String>,
+    pub total: usize,
+    pub is_valid: bool,
+}
+
+/// What `get_mod_integrity` found, computed off the async runtime under a Hash ticket.
+enum IntegrityWork {
+    /// No baseline existed: this is the new one.
+    Baseline { total: usize, hashes: std::collections::HashMap<String, String> },
+    Checked { total: usize, missing: Vec<String>, modified: Vec<String>, added: Vec<String> },
+}
+
+/// The ticket subject for a mod: its folder / archive name.
+fn mod_subject(p: &std::path::Path) -> String {
+    p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| p.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub async fn get_mod_integrity(state: State<'_, AppState>, mod_id: String) -> Result<IntegrityReport, String> {
+    let (mod_path, cached_hashes, needs_baseline) = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
+        (m.mod_folder_path.clone(), m.file_hashes.clone(), m.file_hashes.is_none())
+    };
+
+    // The reading and hashing run on a blocking thread under a Hash ticket (G3b). They ran on
+    // the async runtime's own worker before, and nothing could pause or cancel them.
+    let work = tauri::async_runtime::spawn_blocking(move || -> Result<IntegrityWork, String> {
+        let gov = crate::governor::runtime::global();
+        let ticket = gov.begin(crate::governor::config::OpKind::Hash, &format!("integrity {}", mod_subject(&mod_path)));
+        fs_utils::checkpoint(&ticket).map_err(|e| e.to_string())?;
+        // Archived mods: read files from the extracted cache view so integrity matches.
+        let mod_path = crate::archive::mod_read_root(&mod_path);
+        let current_files = fs_utils::list_mod_files(&mod_path).map_err(|e| e.to_string())?;
+
+        if needs_baseline {
+            // Auto-initialize baseline hashes if missing
+            let items: Vec<(String, std::path::PathBuf)> = current_files.iter()
+                .map(|f| (f.to_string_lossy().to_string(), mod_path.join(f)))
+                .collect();
+            let hashes = fs_utils::compute_file_hash_bulk_ticketed(gov, &items, &ticket)
+                .map_err(|e| e.to_string())?.into_iter().collect();
+            return Ok(IntegrityWork::Baseline { total: current_files.len(), hashes });
+        }
+
+        let mut missing = Vec::new();
+        let mut modified = Vec::new();
+        let mut added = Vec::new();
+        let hashes = cached_hashes.unwrap_or_default();
+
+        // Check for missing or modified
+        for (rel_path, old_hash) in &hashes {
+            fs_utils::checkpoint(&ticket).map_err(|e| e.to_string())?;
+            let full_path = mod_path.join(rel_path);
+            if !full_path.exists() {
+                missing.push(rel_path.clone());
+            } else if !fs_utils::file_matches_hash(&full_path, old_hash) {
+                // Algorithm-aware: BLAKE3 (`b3:`) or legacy SHA-256 baselines.
+                modified.push(rel_path.clone());
+            }
+        }
+
+        // Check for added
+        for f in &current_files {
+            let rel_str = f.to_string_lossy().to_string();
+            if !hashes.contains_key(&rel_str) {
+                added.push(rel_str);
+            }
+        }
+        Ok(IntegrityWork::Checked { total: current_files.len(), missing, modified, added })
+    }).await.map_err(|e| e.to_string())??;
+
+    match work {
+        IntegrityWork::Baseline { total, hashes } => {
+            {
+                let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+                if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
+                    m.file_hashes = Some(hashes);
+                    update_content_id_from_hashes(m);
+                }
+            }
+            let _ = state.save();
+
+            Ok(IntegrityReport {
+                mod_id,
+                missing: Vec::new(),
+                modified: Vec::new(),
+                added: Vec::new(),
+                total,
+                is_valid: true,
+            })
+        }
+        IntegrityWork::Checked { total, missing, modified, added } => {
+            let is_valid = missing.is_empty() && modified.is_empty() && added.is_empty();
+
+            // Persist invalid status to ModEntry so UI can show the warning icon
+            {
+                let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+                if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
+                    m.file_hashes_invalid = Some(!is_valid);
+                }
+            }
+            let _ = state.save();
+
+            Ok(IntegrityReport {
+                mod_id,
+                missing,
+                modified,
+                added,
+                total,
+                is_valid,
+            })
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn update_mod_hashes(state: State<'_, AppState>, mod_id: String) -> Result<(), String> {
+    let mod_path = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        let m = data.mods.iter().find(|m| m.id == mod_id).ok_or("Mod introuvable")?;
+        m.mod_folder_path.clone()
+    };
+
+    // Off the async runtime, under a Hash ticket (G3b); a cancelled rehash keeps the old
+    // baseline rather than storing half of a new one.
+    let new_hashes: std::collections::HashMap<String, String> = tauri::async_runtime::spawn_blocking(move || -> Result<_, String> {
+        let gov = crate::governor::runtime::global();
+        let ticket = gov.begin(crate::governor::config::OpKind::Hash, &format!("rehash {}", mod_subject(&mod_path)));
+        fs_utils::checkpoint(&ticket).map_err(|e| e.to_string())?;
+        let mod_path = crate::archive::mod_read_root(&mod_path);
+        let current_files = fs_utils::list_mod_files(&mod_path).map_err(|e| e.to_string())?;
+        let items: Vec<(String, std::path::PathBuf)> = current_files.iter()
+            .map(|f| (f.to_string_lossy().to_string(), mod_path.join(f)))
+            .collect();
+        Ok(fs_utils::compute_file_hash_bulk_ticketed(gov, &items, &ticket)
+            .map_err(|e| e.to_string())?.into_iter().collect())
+    }).await.map_err(|e| e.to_string())??;
+
+    {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
+            m.file_hashes = Some(new_hashes);
+            update_content_id_from_hashes(m);
+        }
+    }
+
+    let _ = state.save();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn delete_mod_hashes(app_handle: tauri::AppHandle, state: State<AppState>, mod_id: String) -> Result<(), String> {
+    {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some(m) = data.mods.iter_mut().find(|m| m.id == mod_id) {
+            m.file_hashes = None;
+            m.file_hashes_timestamp = None;
+            m.file_hashes_invalid = None;
+        }
+    }
+    let _ = state.save();
+    
+    // Emit event for UI update
+    let _ = app_handle.emit("sha-status-changed", ShaStatusPayload {
+        mod_id: mod_id,
+        status: "missing".to_string(),
+        is_manual: true,
+    });
+    
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_hashing_stats(state: State<AppState>, profile_id: Option<String>) -> Result<HashingStats, String> {
+    let (total_mods, hashed_mods, missing_mods, invalid_mods, valid_mods, current_mod_name) = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        
+        let target_mods = match profile_id {
+            Some(pid) => {
+                if let Some(profile) = data.profiles.iter().find(|p| p.id == pid) {
+                    data.mods.iter().filter(|m| m.mod_folder_path.starts_with(&profile.mods_path)).collect::<Vec<_>>()
+                } else {
+                    data.mods.iter().collect::<Vec<_>>()
+                }
+            },
+            None => data.mods.iter().collect::<Vec<_>>()
+        };
+
+        let total = target_mods.len();
+        let mut hashed = 0;
+        let mut missing = 0;
+        let mut invalid = 0;
+        let mut valid = 0;
+        
+        for m in target_mods {
+            let is_missing = m.file_hashes.is_none() || m.file_hashes.as_ref().map_or(true, |h| h.is_empty());
+            let is_invalid = m.file_hashes_invalid.unwrap_or(false);
+            
+            if is_missing {
+                missing += 1;
+            } else if is_invalid {
+                invalid += 1;
+                hashed += 1; // It has hashes, just invalid ones
+            } else {
+                valid += 1;
+                hashed += 1; // Valid hashes
+            }
+        }
+        
+        let current_name = {
+            let current_id_lock = state.current_sha_mod_id.lock().unwrap();
+            if let Some(id) = &*current_id_lock {
+                data.mods.iter().find(|m| &m.id == id).map(|m| m.name.clone())
+            } else {
+                None
+            }
+        };
+        (total, hashed, missing, invalid, valid, current_name)
+    };
+    
+    let queue_size = state.sha_queue.lock().unwrap_or_else(|p| p.into_inner()).len() + 
+                     state.sha_queue_priority.lock().unwrap_or_else(|p| p.into_inner()).len();
+    
+    let is_active = state.sha_calculation_active.load(std::sync::atomic::Ordering::SeqCst);
+    
+    Ok(HashingStats {
+        total_mods,
+        hashed_mods,
+        missing_mods,
+        invalid_mods,
+        valid_mods,
+        queue_size,
+        is_active,
+        current_mod_name,
+    })
+}
+
+/// One mod's integrity state without its hash map: what the Integrity dialog lists. The map
+/// itself stays in Rust (a library ships thousands of entries per mod); `get_mod_hashes` reads
+/// one mod's when its row is opened.
+#[derive(Serialize)]
+pub struct HashOverviewRow {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub enabled: bool,
+    /// Files in the baseline (0 = no baseline).
+    pub files: usize,
+    pub hashed_at: Option<String>,
+    /// None = never checked against the files, Some(true) = the last check found a difference.
+    pub invalid: Option<bool>,
+    pub content_id: Option<String>,
+}
+
+/// Read only. The same profile filter as `get_hashing_stats` (None, or an unknown id: every mod).
+#[tauri::command]
+pub fn get_hash_overview(state: State<AppState>, profile_id: Option<String>) -> Result<Vec<HashOverviewRow>, String> {
+    let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+    let root = profile_id
+        .as_ref()
+        .and_then(|pid| data.profiles.iter().find(|p| &p.id == pid))
+        .map(|p| p.mods_path.clone());
+    Ok(data
+        .mods
+        .iter()
+        .filter(|m| root.as_ref().map_or(true, |r| m.mod_folder_path.starts_with(r)))
+        .map(|m| HashOverviewRow {
+            id: m.id.clone(),
+            name: m.name.clone(),
+            version: m.version.clone(),
+            enabled: m.enabled,
+            files: m.file_hashes.as_ref().map_or(0, |h| h.len()),
+            hashed_at: m.file_hashes_timestamp.clone(),
+            invalid: m.file_hashes_invalid,
+            content_id: m.content_id.clone(),
+        })
+        .collect())
+}
+
+#[tauri::command]
+pub fn recalculate_all_hashes(state: State<'_, AppState>, profile_id: Option<String>, only_missing: bool) -> Result<(), String> {
+    let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+    let mut queue = state.sha_queue.lock().unwrap_or_else(|p| p.into_inner());
+    
+    let mod_ids: Vec<String> = if let Some(pid) = profile_id {
+        let profile = data.profiles.iter().find(|p| p.id == pid).ok_or("Profil introuvable")?;
+        data.mods.iter()
+            .filter(|m| m.mod_folder_path.starts_with(&profile.mods_path))
+            .filter(|m| !only_missing || m.file_hashes.is_none() || m.file_hashes.as_ref().map_or(true, |h| h.is_empty()))
+            .map(|m| m.id.clone())
+            .collect()
+    } else {
+        data.mods.iter()
+            .filter(|m| !only_missing || m.file_hashes.is_none() || m.file_hashes.as_ref().map_or(true, |h| h.is_empty()))
+            .map(|m| m.id.clone())
+            .collect()
+    };
+    
+    for id in mod_ids {
+        if !queue.contains(&id) {
+            queue.push_back(id);
+        }
+    }
+    
+    Ok(())
+}
+
+pub fn populate_sha_queue(state: tauri::State<'_, AppState>) {
+    let data_shared = state.data.clone();
+    let sha_queue = state.sha_queue.clone();
+    
+    std::thread::spawn(move || {
+        let (unhashed_mods, enabled) = {
+            let data = data_shared.lock().unwrap_or_else(|p| p.into_inner());
+            if !data.settings.enable_lazy_sha_calculation {
+                return;
+            }
+            let mods = data.mods.iter()
+                .filter(|m| {
+                    let missing = m.file_hashes.is_none() || m.file_hashes.as_ref().map_or(true, |h| h.is_empty());
+                    let invalid = m.file_hashes_invalid.unwrap_or(false);
+                    missing && !invalid
+                })
+                .map(|m| m.id.clone())
+                .collect::<Vec<String>>();
+            (mods, data.settings.enable_lazy_sha_calculation)
+        };
+
+        if !enabled { return; }
+
+        let unhashed_mods_to_add = {
+            let queue = sha_queue.lock().unwrap_or_else(|p| p.into_inner());
+            let existing_ids: std::collections::HashSet<String> = queue.iter().cloned().collect();
+            unhashed_mods.into_iter()
+                .filter(|id| !existing_ids.contains(id))
+                .collect::<Vec<String>>()
+        };
+
+        if !unhashed_mods_to_add.is_empty() {
+            let mut queue = sha_queue.lock().unwrap_or_else(|p| p.into_inner());
+            let count = unhashed_mods_to_add.len();
+            for id in unhashed_mods_to_add {
+                queue.push_back(id);
+            }
+            crate::commands::crash::log_line(format!("[SHA-CALC] Background population done: added {} mods", count));
+        }
+    });
+}
+
+pub fn start_sha_calculation_background(app_handle: tauri::AppHandle) {
+    let (sha_queue, sha_queue_priority, sha_calculation_active, current_sha_mod_id, data_shared, data_path) = {
+        let state = app_handle.state::<AppState>();
+        (
+            state.sha_queue.clone(),
+            state.sha_queue_priority.clone(),
+            state.sha_calculation_active.clone(),
+            state.current_sha_mod_id.clone(),
+            state.data.clone(),
+            state.data_path.clone(),
+        )
+    };
+    
+    std::thread::Builder::new()
+        .name("bmm-sha-bg".into())
+        .stack_size(512 * 1024)
+        .spawn(move || {
+        // Drop this thread's CPU + IO priority so SHA hashing never competes
+        // with the UI thread for disk bandwidth or scheduler time.  Read-only
+        // IO so we don't need a separate process — just lower priority.
+        #[cfg(target_os = "windows")]
+        unsafe {
+            extern "system" {
+                fn GetCurrentThread() -> *mut std::ffi::c_void;
+                fn SetThreadPriority(h: *mut std::ffi::c_void, n: i32) -> i32;
+            }
+            // THREAD_MODE_BACKGROUND_BEGIN = 0x00010000
+            // Drops both CPU and IO priority class for the calling thread.
+            let _ = SetThreadPriority(GetCurrentThread(), 0x0001_0000);
+        }
+        log_line("[SHA-CALC] Background SHA calculation thread started (background priority)");
+
+        // Initial delay to let the app settle at startup
+        std::thread::sleep(std::time::Duration::from_secs(5));
+        
+        let mut processed_since_save = 0;
+        
+        loop {
+            // Check if already running (redundant but safe)
+            if sha_calculation_active.load(std::sync::atomic::Ordering::SeqCst) {
+                std::thread::sleep(std::time::Duration::from_millis(500));
+                continue;
+            }
+
+            // Check if lazy calculation is disabled
+            let (lazy_enabled, priority_empty) = {
+                let data = data_shared.lock().unwrap_or_else(|p| p.into_inner());
+                let priority_queue = sha_queue_priority.lock().unwrap_or_else(|p| p.into_inner());
+                (data.settings.enable_lazy_sha_calculation, priority_queue.is_empty())
+            };
+
+            if !lazy_enabled && priority_empty {
+                // If we have unsaved changes, save them before sleeping
+                if processed_since_save > 0 {
+                    let data_to_save = {
+                        let data_lock = data_shared.lock().unwrap_or_else(|e| e.into_inner());
+                        (*data_lock).clone()
+                    };
+                    if let Ok(json) = serde_json::to_string_pretty(&data_to_save) {
+                        let _ = crate::state::atomic_write_bytes(&*data_path, json.as_bytes());
+                        log_line("[SHA-CALC] Lazy disabled, saved final changes outside lock");
+                    }
+                    processed_since_save = 0;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(1000));
+                continue;
+            }
+            
+            // Get next mod from priority queue or normal queue
+            let id_opt = {
+                let mut priority_queue = match sha_queue_priority.lock() {
+                    Ok(g) => g,
+                    Err(p) => p.into_inner(),
+                };
+                if let Some(id) = priority_queue.pop_front() {
+                    Some((id, true))
+                } else {
+                    let mut normal_queue = match sha_queue.lock() {
+                        Ok(g) => g,
+                        Err(p) => p.into_inner(),
+                    };
+                    normal_queue.pop_front().map(|id| (id, false))
+                }
+            };
+            
+            if let Some((id, is_manual)) = id_opt {
+                // Set current mod ID for stats (only for background worker)
+                if !is_manual {
+                    if let Ok(mut current_id_lock) = current_sha_mod_id.lock() {
+                        *current_id_lock = Some(id.clone());
+                    }
+                }
+                
+                sha_calculation_active.store(true, std::sync::atomic::Ordering::SeqCst);
+                
+                process_single_mod_hashing(&id, is_manual, &app_handle, &data_shared, &data_path);
+                
+                if !is_manual {
+                    processed_since_save += 1;
+                    if processed_since_save >= 10 {
+                         let data_to_save = {
+                            let data_lock = data_shared.lock().unwrap_or_else(|e| e.into_inner());
+                            (*data_lock).clone()
+                        };
+                        if let Ok(json) = serde_json::to_string_pretty(&data_to_save) {
+                            let _ = crate::state::atomic_write_bytes(&*data_path, json.as_bytes());
+                        }
+                        processed_since_save = 0;
+                    }
+                }
+
+                sha_calculation_active.store(false, std::sync::atomic::Ordering::SeqCst);
+                
+                if !is_manual {
+                    if let Ok(mut current_id_lock) = current_sha_mod_id.lock() {
+                        *current_id_lock = None;
+                    }
+                }
+                
+                // Throttle: wait between mods to avoid CPU/disk saturation
+                std::thread::sleep(std::time::Duration::from_millis(500));
+            } else {
+                // No mods in queue, save if we have pending changes
+                if processed_since_save > 0 {
+                    let data_to_save = {
+                        let data_lock = data_shared.lock().unwrap_or_else(|e| e.into_inner());
+                        (*data_lock).clone()
+                    };
+                    if let Ok(json) = serde_json::to_string_pretty(&data_to_save) {
+                        let _ = crate::state::atomic_write_bytes(&*data_path, json.as_bytes());
+                        log_line(format!("[SHA-CALC] Queue empty, saved pending {} mods outside lock", processed_since_save));
+                    }
+                    processed_since_save = 0;
+                }
+                // No mods in queue, sleep longer
+                std::thread::sleep(std::time::Duration::from_millis(1000));
+            }
+        }
+    }).expect("Failed to spawn SHA background thread");
+}
+
+pub fn add_mod_to_priority_sha_queue(state: tauri::State<'_, AppState>, mod_id: String) {
+    // Only add if lazy calculation is enabled OR if it's a manual action (this function is usually called on auto-activation)
+    {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        if !data.settings.enable_lazy_sha_calculation {
+            return;
+        }
+    }
+
+    let mut priority_queue = state.sha_queue_priority.lock().unwrap_or_else(|p| p.into_inner());
+    
+    // Check if mod already needs hashing
+    let needs_hash = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        data.mods.iter().find(|m| m.id == mod_id)
+            .map_or(false, |m| {
+                let missing = m.file_hashes.is_none() || m.file_hashes.as_ref().map_or(true, |h| h.is_empty());
+                let invalid = m.file_hashes_invalid.unwrap_or(false);
+                missing && !invalid
+            })
+    };
+    
+    if needs_hash {
+        // Remove from normal queue if present
+        {
+            let mut normal_queue = state.sha_queue.lock().unwrap_or_else(|p| p.into_inner());
+            normal_queue.retain(|id| id != &mod_id);
+        }
+        
+        // Add to priority queue
+        priority_queue.push_back(mod_id.clone());
+        log_line(format!("[SHA-CALC] Added mod {} to priority SHA queue", mod_id));
+    }
+}
+
+fn process_single_mod_hashing(
+    id: &str,
+    is_manual: bool,
+    app_handle: &tauri::AppHandle,
+    data_shared: &std::sync::Arc<std::sync::Mutex<crate::state::AppData>>,
+    data_path: &std::path::PathBuf,
+) {
+    let _ = app_handle.emit("sha-status-changed", ShaStatusPayload {
+        mod_id: id.to_string(),
+        status: "calculating".to_string(),
+        is_manual,
+    });
+    
+    log_line(format!("[SHA-CALC] Calculating hashes for mod: {} (manual: {})", id, is_manual));
+    
+    // Get mod path from managed state
+    // The mod's name too: the Storage Manager's live queue shows the ticket's subject, and an
+    // id there ("hash 44105b94-…") told the user nothing.
+    let (mod_path_opt, mod_name) = {
+        let data_lock = data_shared.lock().unwrap_or_else(|e| e.into_inner());
+        let m = data_lock.mods.iter().find(|m| m.id == id);
+        (m.map(|m| m.mod_folder_path.clone()), m.map(|m| m.name.clone()).unwrap_or_else(|| id.to_string()))
+    };
+    
+    // One Hash ticket per MOD (G3b), never one for the background loop's whole life: the loop
+    // yields between mods, and inside a mod between files (a deploy running, game mode, a
+    // pause). The first checkpoint comes before the archive extraction too, so held
+    // background hashing does not unpack anything either.
+    let gov = crate::governor::runtime::global();
+    let ticket = gov.begin(crate::governor::config::OpKind::Hash, &format!("hash {}", mod_name));
+    let mod_path_opt = if fs_utils::checkpoint(&ticket).is_err() {
+        log_line(format!("[SHA-CALC] Mod {} cancelled before it started; hashes unchanged", id));
+        None
+    } else { mod_path_opt };
+
+    if let Some(mod_path) = mod_path_opt {
+        // For archived mods, hash the CONTENT of the archive (its extracted view),
+        // not the .zip file itself. This runs on the background SHA thread, so the
+        // one-time extraction is off the UI thread; the resulting hashes match the
+        // unzipped twin (content_id parity + correct integrity).
+        let read_root = crate::archive::mod_read_root(&mod_path);
+        if let Ok(current_files) = fs_utils::list_mod_files(&read_root) {
+          // An unreachable root (external drive unplugged) lists zero files. Overwriting a
+          // real hash baseline with an empty map would silently wipe the integrity record,
+          // so bail out and keep the existing hashes when the folder itself is gone.
+          if current_files.is_empty() && !read_root.exists() {
+            log_line(format!("[SHA-CALC] Skipping mod {} — root unreachable ({:?}); keeping existing hashes", id, read_root));
+          } else {
+            let mut tracker = crate::commands::resource_tracker::OpTracker::start("BLAKE3/compute")
+                .with_subject(id);
+            let items: Vec<(String, std::path::PathBuf)> = current_files.iter()
+                .map(|f| (f.to_string_lossy().to_string(), read_root.join(f)))
+                .collect();
+            let bytes_total: u64 = items.iter()
+                .filter_map(|(_, p)| std::fs::metadata(p).ok().map(|m| m.len()))
+                .sum();
+            // Hash this mod's files on the governor's Hash pool (bounded cores) so
+            // even a big mod leaves headroom for the UI. The bg loop also pauses
+            // between mods, so a freshly imported profile hashes without freezing.
+            // A cancelled mod keeps its old hashes: half a baseline is not a baseline.
+            let new_hashes: std::collections::HashMap<String, String> =
+                match fs_utils::compute_file_hash_bulk_ticketed(gov, &items, &ticket) {
+                    Ok(v) => v.into_iter().collect(),
+                    Err(_) => {
+                        log_line(format!("[SHA-CALC] Mod {} cancelled; hashes unchanged", id));
+                        let _ = app_handle.emit("sha-status-changed", ShaStatusPayload {
+                            mod_id: id.to_string(),
+                            status: "done".to_string(),
+                            is_manual,
+                        });
+                        return;
+                    }
+                };
+            let calculated = new_hashes.len();
+            tracker.set("files", calculated as u64);
+            tracker.set("bytes_read", bytes_total);
+            tracker.finish();
+
+            let timestamp = chrono::Local::now().to_rfc3339();
+            
+            // Update managed state
+            let data_to_save = {
+                let mut data_lock = data_shared.lock().unwrap_or_else(|e| e.into_inner());
+                if let Some(m) = data_lock.mods.iter_mut().find(|m| m.id == id) {
+                    m.file_hashes = Some(new_hashes);
+                    m.file_hashes_timestamp = Some(timestamp);
+                    m.file_hashes_invalid = Some(false);
+                    update_content_id_from_hashes(m);
+                }
+                
+                if is_manual {
+                    Some((*data_lock).clone())
+                } else {
+                    None
+                }
+            };
+            
+            // Perform the slow serialization and I/O outside the lock!
+            if let Some(data) = data_to_save {
+                if let Ok(json) = serde_json::to_string_pretty(&data) {
+                    let _ = crate::state::atomic_write_bytes(data_path, json.as_bytes());
+                    log_line(format!("[SHA-CALC] Saved manual hash for mod {}", id));
+                }
+            }
+            
+            log_line(format!("[SHA-CALC] Completed mod {} ({} files)", id, calculated));
+          }
+        } else {
+            log_line(format!("[SHA-CALC] Failed to list mod files for mod: {}", id));
+        }
+    }
+    
+    let _ = app_handle.emit("sha-status-changed", ShaStatusPayload {
+        mod_id: id.to_string(),
+        status: "done".to_string(),
+        is_manual,
+    });
+}
+
+#[tauri::command]
+pub fn recalculate_mod_sha(app_handle: tauri::AppHandle, state: tauri::State<'_, AppState>, mod_id: String) -> Result<(), String> {
+    // 1. Remove from all queues first
+    {
+        let mut priority_queue = state.sha_queue_priority.lock().unwrap_or_else(|p| p.into_inner());
+        priority_queue.retain(|id| id != &mod_id);
+    }
+    {
+        let mut normal_queue = state.sha_queue.lock().unwrap_or_else(|p| p.into_inner());
+        normal_queue.retain(|id| id != &mod_id);
+    }
+    
+    // 2. Check if mod is ALREADY being hashed by background worker
+    {
+        let current_id_lock = state.current_sha_mod_id.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(current_id) = &*current_id_lock {
+            if current_id == &mod_id {
+                log_line(format!("[SHA-CALC] Mod {} is already being hashed by background worker, ignoring manual request", mod_id));
+                return Ok(());
+            }
+        }
+    }
+
+    // 3. Spawn a direct thread for parallel manual calculation
+    let data_shared = state.data.clone();
+    let data_path = state.data_path.clone();
+    
+    crate::commands::crash::log_line(format!("[SHA-CALC] Manually triggered PARALLEL hash calculation for mod {}", mod_id));
+
+    std::thread::spawn(move || {
+        process_single_mod_hashing(&mod_id, true, &app_handle, &data_shared, &data_path);
+    });
+    
+    Ok(())
+}
+
+#[tauri::command]
+pub fn trigger_sha_background_population(state: tauri::State<'_, AppState>) {
+    populate_sha_queue(state);
+}
+
+/// Background worker that lazily fills `content_id` for mods that still have `None`.
+/// Processes one mod at a time with a 200ms pause between each to stay non-intrusive.
+pub fn start_content_id_background(app_handle: tauri::AppHandle) {
+    let data_shared = app_handle.state::<AppState>().data.clone();
+    let data_path   = app_handle.state::<AppState>().data_path.clone();
+
+    std::thread::Builder::new()
+        .name("bmm-content-id-bg".into())
+        .stack_size(512 * 1024)
+        .spawn(move || {
+        #[cfg(target_os = "windows")]
+        unsafe {
+            extern "system" {
+                fn GetCurrentThread() -> *mut std::ffi::c_void;
+                fn SetThreadPriority(h: *mut std::ffi::c_void, n: i32) -> i32;
+            }
+            let _ = SetThreadPriority(GetCurrentThread(), 0x0001_0000); // THREAD_MODE_BACKGROUND_BEGIN
+        }
+        log_line("[CONTENT-ID] Background fill thread started (background priority)");
+        // Let the app fully settle before starting
+        std::thread::sleep(std::time::Duration::from_secs(8));
+
+        loop {
+            // Find one mod that needs a content_id (lock held briefly, read-only)
+            let target = {
+                let data = data_shared.lock().unwrap_or_else(|p| p.into_inner());
+                data.mods.iter()
+                    .find(|m| m.content_id.is_none() && m.mod_folder_path.exists())
+                    .map(|m| (m.id.clone(), m.mod_folder_path.clone(), m.name.clone()))
+            };
+
+            match target {
+                None => {
+                    // Nothing left to fill — check again in 60s in case new mods were added
+                    std::thread::sleep(std::time::Duration::from_secs(60));
+                }
+                Some((id, folder_path, name)) => {
+                    // One Maintenance ticket per mod (G3b), held for the walk and the save:
+                    // it waits while a deploy runs or a game is being played, between mods.
+                    // A cancel skips this round; the next one, a minute later, retries.
+                    let ticket = crate::governor::runtime::global()
+                        .begin(crate::governor::config::OpKind::Maintenance, &format!("content id {}", name));
+                    if fs_utils::checkpoint(&ticket).is_err() {
+                        drop(ticket);
+                        std::thread::sleep(std::time::Duration::from_secs(60));
+                        continue;
+                    }
+                    // Compute outside the lock (file walk, no content reads)
+                    let cid = crate::models::mod_entry::derive_content_id(&folder_path);
+
+                    // Write back, lock held only for the map update
+                    {
+                        let mut data = data_shared.lock().unwrap_or_else(|p| p.into_inner());
+                        if let Some(m) = data.mods.iter_mut().find(|m| m.id == id) {
+                            m.content_id = cid;
+                        }
+                    }
+
+                    // Save outside the lock
+                    {
+                        let data = data_shared.lock().unwrap_or_else(|p| p.into_inner());
+                        if let Ok(json) = serde_json::to_string_pretty(&*data) {
+                            let _ = crate::state::atomic_write_bytes(&*data_path, json.as_bytes());
+                        }
+                    }
+
+                    log_line(format!("[CONTENT-ID] Filled content_id for mod {}", id));
+                    // Lazy: 200ms between each mod
+                    std::thread::sleep(std::time::Duration::from_millis(200));
+                }
+            }
+        }
+    }).expect("Failed to spawn content-id background thread");
+}
+
+/// Phase G3a: adding a mod is an Install operation on the governor.
+#[cfg(test)]
+mod governed_install_tests {
+    use super::install_mod_source;
+    use crate::governor::config::OpKind;
+    use crate::governor::queue::TicketState;
+    use std::time::{Duration, Instant};
+
+    /// The proof that `add_mod` asks the governor: with every Install slot taken, it WAITS
+    /// (listed as a waiting Install ticket named after the mod, nothing written yet), and it
+    /// runs as soon as a slot frees.
+    #[test]
+    fn adding_a_mod_holds_an_install_ticket() {
+        let root = std::env::temp_dir().join(format!("bmm_g3a_add_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let src = root.join("src");
+        std::fs::create_dir_all(src.join("Data")).unwrap();
+        std::fs::write(src.join("Data/a.pak"), b"payload").unwrap();
+        let target = root.join("mods").join("G3a Install Probe");
+
+        let q = crate::governor::runtime::global().queue();
+        let mut held = Vec::new();
+        while let Some(t) = q.try_begin(OpKind::Install, "test: fill the Install slots") { held.push(t); }
+        assert!(!held.is_empty());
+
+        let (s2, t2) = (src.clone(), target.clone());
+        let h = std::thread::spawn(move || install_mod_source(&s2, &t2, false));
+
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut seen = None;
+        while Instant::now() < deadline {
+            seen = q.snapshot().into_iter().find(|v| v.subject == "G3a Install Probe");
+            if seen.is_some() { break; }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        let seen = seen.expect("the install is listed in the governor's queue");
+        assert_eq!(seen.kind, OpKind::Install);
+        assert_eq!(seen.state, TicketState::Waiting, "no free Install slot: it waits");
+        assert!(!target.exists(), "and writes nothing while it waits");
+
+        drop(held);
+        assert_eq!(h.join().unwrap(), Ok(()));
+        assert_eq!(std::fs::read(target.join("Data/a.pak")).unwrap(), b"payload");
+        assert!(!q.snapshot().iter().any(|v| v.subject == "G3a Install Probe"), "the ticket ends with the install");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+}
+
+#[cfg(test)]
+#[path = "mod_op_progress_tests.rs"]
+mod mod_op_progress_tests;

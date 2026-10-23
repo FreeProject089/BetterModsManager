@@ -1,0 +1,595 @@
+// Unit tests for the pure parts of the release tool. Run: node --test tools/release/test/
+import { test, describe } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, writeFileSync, readFileSync, mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { deflateSync } from 'node:zlib';
+
+import { parseVersion, compareVersions, bumpVersion, previousVersion, VERSION_FILES, writeVersions, readVersions } from '../lib/version.mjs';
+import { classifyCommit, groupCommits, renderCommitsMd, cleanSubject } from '../lib/commits.mjs';
+import { formatSums, parseSums, sumsFilter, sumsTable } from '../lib/checksums.mjs';
+import { updateReadme, readmeVersion } from '../lib/readme.mjs';
+import { renderGithubRelease, ghCommand, assetProblems, orderAssets, changelogBody, GENERATED_MARK, publishProblems, publishCommands, stripComments, replaceSumsTable, RESIGN_BELOW_DAYS } from '../lib/notes.mjs';
+import { cardText, cardSpecs, cardFile, textProblems } from '../media/cards-text.mjs';
+import { verdict, compareSummaries, tally, fmtNs } from '../bench/compare.mjs';
+import { packBits, writePsd, literalPack, readPsd, layerNames } from '../lib/psd.mjs';
+import { decodePng } from '../lib/png.mjs';
+import { prefixLog, mergeLogs, secondsPerDay } from '../media/gource.mjs';
+
+const unpackBits = (b) => { const out = []; for (let i = 0; i < b.length;) { const n = b[i++]; if (n < 128) { for (let k = 0; k <= n; k++) out.push(b[i++]); } else if (n > 128) { const v = b[i++]; for (let k = 0; k < 257 - n; k++) out.push(v); } } return out; };
+
+describe('version', () => {
+  test('parse', () => {
+    assert.deepEqual(parseVersion('1.2.3'), { major: 1, minor: 2, patch: 3, pre: null });
+    assert.deepEqual(parseVersion('v1.0.3-beta.2'), { major: 1, minor: 0, patch: 3, pre: 'beta.2' });
+    assert.equal(parseVersion('1.2'), null);
+    assert.equal(parseVersion('1.2.3.4'), null);
+  });
+  test('compare: release beats its pre-releases, numeric parts compare as numbers', () => {
+    assert.equal(compareVersions('1.0.10', '1.0.9'), 1);
+    assert.equal(compareVersions('1.1.0', '1.1.0-beta.1'), 1);
+    assert.equal(compareVersions('1.1.0-beta.10', '1.1.0-beta.2'), 1);
+    assert.equal(compareVersions('1.0.2', 'v1.0.2'), 0);
+  });
+  test('bump', () => {
+    assert.equal(bumpVersion('1.0.2', 'patch'), '1.0.3');
+    assert.equal(bumpVersion('1.0.2', 'minor'), '1.1.0');
+    assert.equal(bumpVersion('1.0.2', 'major'), '2.0.0');
+    assert.equal(bumpVersion('1.0.2', 'pre'), '1.0.3-beta.1');
+    assert.equal(bumpVersion('1.0.3-beta.1', 'pre'), '1.0.3-beta.2');
+    assert.equal(bumpVersion('1.0.3-beta.2', 'release'), '1.0.3');
+    assert.equal(bumpVersion('1.0.2', '1.4.0'), '1.4.0');
+    assert.throws(() => bumpVersion('1.0.2', 'sideways'));
+  });
+  test('previous version', () => {
+    assert.equal(previousVersion(['0.9.11', '1.0.1', '1.0.2', '1.0.3', 'laya-model-1'], '1.0.2'), '1.0.1');
+    assert.equal(previousVersion(['1.0.2'], '1.0.2'), null);
+  });
+  test('rewrites touch only the version, CRLF kept', () => {
+    const f = Object.fromEntries(VERSION_FILES.map((x) => [x.file, x]));
+    const cargo = '[package]\r\nname = "better-mods-manager"\r\nversion = "1.0.2"\r\nedition = "2021"\r\n\r\n[dependencies]\r\nfoo = { version = "1.0.2" }\r\n';
+    const out = f['src-tauri/Cargo.toml'].write(cargo, '1.0.3');
+    assert.equal(out, cargo.replace('version = "1.0.2"\r\nedition', 'version = "1.0.3"\r\nedition'));
+    assert.match(out, /foo = \{ version = "1\.0\.2" \}/);
+    const lock = '{\n  "name": "x",\n  "version": "1.0.2",\n  "packages": {\n    "": {\n      "name": "x",\n      "version": "1.0.2",\n      "license": "GPL"\n    },\n    "node_modules/a": {\n      "version": "1.0.2"\n    }\n  }\n}\n';
+    const l2 = f['package-lock.json'].write(lock, '1.0.3');
+    assert.equal((l2.match(/1\.0\.3/g) || []).length, 2);
+    assert.match(l2, /"node_modules\/a": \{\n {6}"version": "1\.0\.2"/);
+    const toml = '[app]\nid = "com.bettermm.desktop"\nversion = "1.0.2"\n[update]\nversion = "9"\n';
+    assert.equal(f['BetterInstaller/examples/bmm/installer.toml'].read(f['BetterInstaller/examples/bmm/installer.toml'].write(toml, '2.0.0')), '2.0.0');
+    assert.match(f['BetterInstaller/examples/bmm/installer.toml'].write(toml, '2.0.0'), /\[update\]\nversion = "9"/);
+  });
+  test('writeVersions: every file, no BOM, accents intact', () => {
+    const d = mkdtempSync(join(tmpdir(), 'bmm-ver-'));
+    mkdirSync(join(d, 'src-tauri')); mkdirSync(join(d, 'BetterInstaller/examples/bmm'), { recursive: true });
+    writeFileSync(join(d, 'package.json'), '﻿{\n  "name": "b",\n  "version": "1.0.2",\n  "description": "Gestionnaire de mods — été"\n}\n');
+    writeFileSync(join(d, 'src-tauri/tauri.conf.json'), '{\n  "productName": "Better Mod Manager",\n  "version": "1.0.2"\n}\n');
+    writeFileSync(join(d, 'src-tauri/Cargo.toml'), '[package]\nname = "better-mods-manager"\nversion = "1.0.2"\ndescription = "Gestionnaire — déjà"\n');
+    writeFileSync(join(d, 'BetterInstaller/examples/bmm/installer.toml'), '[app]\nversion = "1.0.2"\n');
+    const res = writeVersions(d, '1.0.3');
+    assert.ok(res.find((r) => r.file === 'package.json').hadBom);
+    for (const v of readVersions(d)) if (!v.missing) { assert.equal(v.version, '1.0.3', v.file); assert.equal(v.bom, false, v.file); }
+    const pkg = readFileSync(join(d, 'package.json'));
+    assert.notEqual(pkg[0], 0xef);
+    assert.match(pkg.toString('utf8'), /Gestionnaire de mods — été/);
+    assert.match(readFileSync(join(d, 'src-tauri/Cargo.toml'), 'utf8'), /déjà/);
+  });
+});
+
+describe('commits', () => {
+  test('classification', () => {
+    assert.equal(classifyCommit('feat(ui): activity centre'), 'features');
+    assert.equal(classifyCommit('fix: crash on start'), 'fixes');
+    assert.equal(classifyCommit('CI: Gitleaks false positive allowlisted; quinn-proto 0.11.19 (RUSTSEC-2026-0338)'), 'security');
+    assert.equal(classifyCommit('CI: Gitleaks false positive allowlisted by fingerprint'), 'ci');
+    assert.equal(classifyCommit('In-app docs: the site home is unwrapped to plain markdown'), 'docs');
+    assert.equal(classifyCommit('Library: the selection bar no longer closes itself'), 'fixes');
+    assert.equal(classifyCommit('Add a duplicate finder to BMM Tools'), 'features');
+    assert.equal(classifyCommit('npm dependencies: cheerio removed, bump DOMPurify'), 'chore');
+    assert.equal(classifyCommit('Sidebar spacing'), 'other');
+  });
+  test('grouping keeps the GROUPS order and drops empty groups', () => {
+    const g = groupCommits([{ subject: 'Sidebar spacing' }, { subject: 'fix: x' }, { subject: 'feat: y' }]);
+    assert.deepEqual(g.map((x) => x.id), ['features', 'fixes', 'other']);
+  });
+  test('render: hashes, dates, names, escaping, sub repos, FR heading', () => {
+    const cm = (h, s) => ({ hash: h.repeat(40).slice(0, 40), short: h.repeat(8).slice(0, 8), date: '2026-10-13T10:00:00+02:00', author: 'Dev', subject: s });
+    const md = renderCommitsMd({ version: '1.0.3', previous: '1.0.2', main: { from: 'a'.repeat(40), to: 'b'.repeat(40), fromLabel: 'tag v1.0.2', commits: [cm('c', 'fix: <script> | pipes'), cm('d', 'feat: new tool')], repoUrl: 'https://github.com/o/r' },
+      subs: [{ name: 'BMM Docs', from: 'e'.repeat(40), to: 'f'.repeat(40), commits: [cm('1', 'docs: page')] }, { name: 'BCW', commits: [], note: 'pointer unchanged' }] });
+    assert.match(md, /^# Commits in 1\.0\.3 \/ Commits de la 1\.0\.3/);
+    assert.match(md, /\[`cccccccc`\]\(https:\/\/github\.com\/o\/r\/commit\/c{40}\) 2026-10-13 fix: &lt;script&gt;/);
+    assert.match(md, /## Fixes \/ Corrections/);
+    assert.match(md, /### BMM Docs/);
+    assert.match(md, /\*pointer unchanged\*/);
+    assert.doesNotMatch(md, /@/);
+  });
+  test('long subjects are trimmed', () => {
+    assert.ok(cleanSubject('x '.repeat(300)).length <= 222);
+  });
+});
+
+describe('checksums', () => {
+  const h = (ch) => ch.repeat(64);
+  test('format sorts, uses the binary marker and forward slashes', () => {
+    const t = formatSums([{ path: 'media\\b.png', sha256: h('b') }, { path: 'BMM-Setup.exe', sha256: h('a') }]);
+    assert.equal(t, `${h('a')} *BMM-Setup.exe\n${h('b')} *media/b.png\n`);
+    assert.deepEqual(parseSums(t), [{ sha256: h('a'), path: 'BMM-Setup.exe' }, { sha256: h('b'), path: 'media/b.png' }]);
+  });
+  test('rejects bad hashes and duplicates', () => {
+    assert.throws(() => formatSums([{ path: 'a', sha256: 'xyz' }]));
+    assert.throws(() => formatSums([{ path: 'a', sha256: h('a') }, { path: 'a', sha256: h('b') }]));
+  });
+  test('filter skips logs and the list itself', () => {
+    assert.equal(sumsFilter('SHA256SUMS.txt'), false);
+    assert.equal(sumsFilter('logs/x.log'), false);
+    assert.equal(sumsFilter('media/gifs/.chrome-profile/Default/LOCK'), false);
+    assert.equal(sumsFilter('media/gifs/.frames/0001.png'), false);
+    assert.equal(sumsFilter('bench/BENCHMARK.md'), true);
+    assert.match(sumsTable([{ path: 'a', sha256: h('a') }]), /\| `a` \| `a{64}` \|/);
+  });
+});
+
+describe('readme', () => {
+  const md = '<img src=".github/screenshots/hero.png" alt="Better Mod Manager 1.0.2" />\n![Version](https://img.shields.io/badge/version-1.0.2-blue.svg)\n[What\'s new in 1.0.2](Update/changelog_v1.0.2_EN.md)\n## What\'s new in 1.0.2\nThe full list is in the [1.0.2 changelog](Update/changelog_v1.0.2_EN.md).\n**Activity centre** (new in 1.0.2)\n';
+  test('moves only the version-dependent parts', () => {
+    const r = updateReadme(md, readmeVersion(md), '1.0.3');
+    assert.match(r.text, /badge\/version-1\.0\.3-blue/);
+    assert.match(r.text, /alt="Better Mod Manager 1\.0\.3"/);
+    assert.match(r.text, /## What's new in 1\.0\.3/);
+    assert.match(r.text, /\[1\.0\.3 changelog\]\(Update\/changelog_v1\.0\.3_EN\.md\)/);
+    assert.match(r.text, /\(new in 1\.0\.2\)/);
+  });
+  test('CRLF files keep their lines (the heading regex once ate the line breaks)', () => {
+    const crlf = md.replace(/\n/g, '\r\n');
+    const r = updateReadme(crlf, '1.0.2', '1.0.3');
+    assert.equal(r.text.split('\r\n').length, crlf.split('\r\n').length);
+    assert.match(r.text, /## What's new in 1\.0\.3\r\nThe full list/);
+  });
+  test('without a changelog, links stay', () => {
+    const r = updateReadme(md, '1.0.2', '1.0.3', { changelog: false });
+    assert.match(r.text, /changelog_v1\.0\.2_EN/);
+    assert.match(r.text, /version-1\.0\.3/);
+  });
+  test('French wording', () => {
+    const fr = '[Nouveautés de la 1.0.2](Update/changelog_v1.0.2_FR.md)\n## Nouveautés de la 1.0.2\n[journal des modifications 1.0.2](Update/changelog_v1.0.2_FR.md)\n';
+    const r = updateReadme(fr, '1.0.2', '1.1.0');
+    assert.doesNotMatch(r.text, /1\.0\.2/);
+  });
+});
+
+describe('notes', () => {
+  const assets = [{ name: 'BMM-Setup.exe', sha256: 'a'.repeat(64), size: 1 }, { name: 'bmm.bpkg', sha256: 'b'.repeat(64), size: 1 }];
+  test('asset rules of 0.9.11', () => {
+    assert.deepEqual(assetProblems(['BMM-Setup.exe', 'bmm.bpkg']), []);
+    assert.equal(assetProblems(['BMM-Setup.exe', 'x.msi']).length, 1);
+    assert.equal(assetProblems(['bmm-setup.EXE']).length, 1);
+    assert.equal(assetProblems(['BMM-Setup.exe', 'a.zip']).length, 1);
+    assert.deepEqual(orderAssets(['links.json', 'update.json', 'BMM-Setup.exe', 'lang-en.json']), ['BMM-Setup.exe', 'update.json', 'lang-en.json', 'links.json']);
+  });
+  test('render: mark, maintainer block, body, checksums', () => {
+    const md = renderGithubRelease({ version: '1.0.3', assets, changelog: '# Changelog v1.0.3\n\nBody text.\n', expires: { 'update.json': '2026-10-21T00:00:00Z' } });
+    assert.ok(md.startsWith(GENERATED_MARK));
+    assert.match(md, /MAINTAINER NOTES/);
+    assert.match(md, /# Better Mods Manager 1\.0\.3\n\nBody text\./);
+    assert.match(md, /\| `BMM-Setup\.exe` \| `a{64}` \|/);
+    assert.match(md, /update\.json 2026-10-21/);
+    assert.equal(changelogBody('# T\n\nx'), 'x');
+    assert.equal(ghCommand('1.0.3', ['BMM-Setup.exe'], 'n.md'), 'gh release create v1.0.3 "Release/1.0.3/BMM-Setup.exe" --title "Better Mods Manager 1.0.3" --latest --notes-file "n.md"');
+  });
+  test('the public body has no comment: neither the generated mark nor the maintainer notes', () => {
+    const md = renderGithubRelease({ version: '1.0.4', assets, changelog: '# Changelog v1.0.4\n\nBody text.\n' });
+    const body = stripComments(md);
+    assert.ok(!body.includes('<!--') && !body.includes('-->'), body.slice(0, 200));
+    assert.ok(!/MAINTAINER NOTES/.test(body));
+    assert.ok(body.startsWith('# Better Mods Manager 1.0.4'));
+    assert.equal(stripComments('<!-- a -->\n<!--\nb\n-->\n\nText <!-- c --> end'), 'Text end');
+  });
+  test('publish: the upload list rules (one BMM-Setup.exe, no extras/, no .msi/.zip, every required asset)', () => {
+    const eight = ['BMM-Setup.exe', 'bmm.bpkg', 'update.json', 'update-manifest.json', 'lang-en.json', 'lang-fr.json', 'lang-template.json', 'links.json'];
+    assert.deepEqual(publishProblems(eight), []);
+    assert.ok(publishProblems([...eight, 'extras/BMM-1.0.4-classic-msi.msi']).length >= 2, 'extras and a second installer');
+    assert.ok(publishProblems([...eight, 'extras/README.txt']).some((p) => /top-level/.test(p)));
+    assert.ok(publishProblems([...eight, 'Better Mod Manager_1.0.4_x64-setup.exe']).some((p) => /exactly one installer/.test(p)));
+    assert.ok(publishProblems([...eight, 'bmm.zip']).some((p) => /\.zip/.test(p)));
+    assert.ok(publishProblems(eight.filter((n) => n !== 'update-manifest.json')).some((p) => /missing from the upload: update-manifest\.json/.test(p)));
+    assert.equal(RESIGN_BELOW_DAYS, 14);
+  });
+  test('publish: tag, push, then gh release create with the body file', () => {
+    const cmds = publishCommands('1.0.4', ['BMM-Setup.exe', 'bmm.bpkg'], 'Release/1.0.4/github-release.body.md');
+    assert.deepEqual(cmds.map((x) => x.text.split(' ').slice(0, 3).join(' ')), ['git tag v1.0.4', 'git push origin', 'gh release create']);
+    assert.deepEqual(cmds[0].args, ['tag', 'v1.0.4']);
+    assert.deepEqual(cmds[1].args, ['push', 'origin', 'v1.0.4']);
+    assert.deepEqual(cmds[2].args, ['release', 'create', 'v1.0.4', 'Release/1.0.4/BMM-Setup.exe', 'Release/1.0.4/bmm.bpkg', '--title', 'Better Mods Manager 1.0.4', '--latest', '--notes-file', 'Release/1.0.4/github-release.body.md']);
+    assert.equal(cmds[2].text, ghCommand('1.0.4', ['BMM-Setup.exe', 'bmm.bpkg'], 'Release/1.0.4/github-release.body.md'));
+  });
+  test('publish: the SHA-256 table is replaced in place, the rest kept (CRLF too)', () => {
+    const md = ['# Title', '', 'Hand-written words.', '', '### Checksums (SHA-256)', '', '| File | SHA-256 |', '|---|---|', `| \`BMM-Setup.exe\` | \`${'0'.repeat(64)}\` |`, '', '## Links', ''].join('\r\n');
+    const out = replaceSumsTable(md, [{ path: 'BMM-Setup.exe', sha256: 'a'.repeat(64) }, { path: 'bmm.bpkg', sha256: 'b'.repeat(64) }]);
+    assert.ok(out.includes('Hand-written words.') && out.includes('## Links'));
+    assert.ok(out.includes(`| \`BMM-Setup.exe\` | \`${'a'.repeat(64)}\` |\r\n| \`bmm.bpkg\` | \`${'b'.repeat(64)}\` |\r\n\r\n## Links`));
+    assert.ok(!out.includes('0'.repeat(64)));
+    assert.equal(replaceSumsTable('# no table', []), null);
+  });
+  test('publish is a step only by name: never in --all or the menu « a »', async () => {
+    const { STEPS } = await import('../steps.mjs');
+    const p = STEPS.find((s) => s.id === 'publish');
+    assert.ok(p && p.manual === true, 'publish exists and is manual');
+    assert.equal(STEPS.filter((s) => s.manual).map((s) => s.id).join(), 'publish');
+    const src = readFileSync(new URL('../release.mjs', import.meta.url), 'utf8');
+    assert.match(src, /const ALL = STEPS\.filter\(\(s\) => !s\.manual\)/);
+    assert.match(src, /if \(opts\.all\) steps = ALL;/);
+    assert.match(src, /if \(\/\^a\/i\.test\(a\)\) steps = ALL;/);
+    assert.match(src, /case '--yes-publish': o\.yesPublish = true;/);
+    const steps = readFileSync(new URL('../steps.mjs', import.meta.url), 'utf8');
+    assert.match(steps, /if \(!ctx\.opts\.yesPublish\) \{/, 'the commands run only with --yes-publish');
+  });
+});
+
+describe('card text', () => {
+  test('version is always the argument', () => {
+    const t = cardText('2.0.0', 'en', { en: { whatsNew: 'New in {version}' } });
+    assert.equal(t.version, '2.0.0');
+    assert.equal(t.whatsNew, 'New in 2.0.0');
+    assert.equal(t.generic, false);
+    assert.equal(cardText('2.0.0', 'fr').whatsNew, 'Les nouveautés de la 2.0.0');
+    assert.equal(cardText('2.0.0', 'fr').generic, true);
+  });
+  test('specs: five formats × EN/FR, one family, version in every name', () => {
+    const s = cardSpecs('3.1.4');
+    assert.equal(s.length, 10);
+    const files = s.map((x) => cardFile(x));
+    assert.equal(new Set(files).size, 10);
+    for (const f of files) assert.match(f, /^bmm-3\.1\.4-[a-z-]+-\d+(x\d+)?(\.fr)?$/);
+    assert.ok(files.includes('bmm-3.1.4-social-1200x630.fr'));
+    assert.ok(files.includes('bmm-3.1.4-square-1080'));
+    for (const x of s) {
+      assert.ok(x.safe.x >= 0 && x.safe.y >= 0 && x.safe.x + x.safe.w <= x.w && x.safe.y + x.safe.h <= x.h, x.base);
+    }
+  });
+  test('an older cards file (sub, features) still reads', () => {
+    const t = cardText('1.0.3', 'en', { en: { sub: 'S', features: [['A', 'a'], ['B', 'b'], ['C', 'c'], ['D', 'd']] } });
+    assert.equal(t.subline, 'S');
+    assert.deepEqual(t.highlights.map((h) => h.title), ['A', 'B', 'C']);
+  });
+  test('1.0.4 wording keeps the owner limits (headline ≤ 6 words, subline ≤ 12, three highlights ≤ 5) and fits every box', async () => {
+    const custom = JSON.parse(readFileSync(new URL('../media/cards.1.0.4.json', import.meta.url), 'utf8'));
+    assert.deepEqual(textProblems(custom), []);
+    assert.deepEqual(textProblems({ en: { headline: 'one two three four five six seven', subline: 'x', highlights: [] } }), ['en headline: 7 words (6 at most)']);
+    const { overflowReport } = await import('../media/cards.mjs');
+    assert.deepEqual(overflowReport('1.0.4', custom), []);
+    // French typography: no plain space before « : ; ? ! », curly apostrophes.
+    for (const s of JSON.stringify(custom.fr).match(/"[^"]*"/g)) { assert.doesNotMatch(s, / [:;?!]/, s); assert.doesNotMatch(s, /\w'\w/, s); }
+  });
+});
+
+describe('card drawing', () => {
+  test('text wrap: no-break spaces hold, \\n breaks, balanced lines, fit shrinks then fails', async () => {
+    const { wrapText, fitText, textWidth } = await import('../media/metrics.mjs');
+    assert.deepEqual(wrapText('liste : groupes', 20, 'seg500', 60), ['liste :', 'groupes']);
+    assert.deepEqual(wrapText('a b\nc', 20, 'seg700', 999), ['a b', 'c']);
+    const bal = wrapText('one two three four five six', 40, 'seg700', 420, 0, true);
+    assert.equal(bal.length, 2);
+    assert.ok(Math.abs(textWidth(bal[0], 40) - textWidth(bal[1], 40)) < textWidth('three', 40) * 1.6);
+    const f = fitText('A short line', { maxW: 200, maxLines: 1, size: 60, min: 10 });
+    assert.ok(f.fits && f.size < 60 && f.width <= 200);
+    assert.equal(fitText('x'.repeat(200), { maxW: 50, maxLines: 1, size: 20, min: 18 }).fits, false);
+  });
+  test('the distorted grid is the same for the same seed, different for another', async () => {
+    const { warpedGrid } = await import('../media/cards.mjs');
+    const a = warpedGrid(400, 300, { seed: 7 }), b = warpedGrid(400, 300, { seed: 7 }), c = warpedGrid(400, 300, { seed: 8 });
+    assert.deepEqual(a, b);
+    assert.notDeepEqual(a, c);
+    assert.ok(a.length > 10 && a.every((d) => /^M[-\d.]+ [-\d.]+(L[-\d.]+ [-\d.]+)+$/.test(d)));
+  });
+  test('card type: both brand faces are embedded with their OFL licence, every text face is measured, the tag sits on the lockup line', async () => {
+    const { FONT_FILES, backgroundLayers, badge, lockup, tagAfter, TYPE } = await import('../media/cards.mjs');
+    const { ADVANCE } = await import('../media/metrics.mjs');
+    const fonts = new URL('../media/fonts/', import.meta.url);
+    for (const [fam, , file] of FONT_FILES) {
+      assert.ok(readFileSync(new URL(file, fonts)).length > 10000, file);
+      const ofl = readFileSync(new URL(file.replace(/-latin\.woff2$/, '-OFL.txt'), fonts), 'utf8');
+      assert.match(ofl, /SIL Open Font License/, `${fam} licence`);
+    }
+    const bg = backgroundLayers(400, 300)[0].body;
+    for (const [fam] of FONT_FILES) assert.ok(bg.includes(`font-family:'${fam}'`), `${fam} embedded`);
+    for (const face of Object.values(TYPE)) for (const ch of 'éèàçôœ«»’') assert.ok(ADVANCE[face][ch] > 0, `${face} ${ch}`);
+    const lk = lockup(0, 100, 40);
+    const tg = tagAfter(lk, 0, 30, '1.0.4');
+    const rect = tg.svg.match(/<rect x="[\d.]+" y="([\d.]+)" width="\d+" height="30"/);
+    assert.ok(rect && Math.abs(+rect[1] + 15 - lk.cy) < 0.6, 'tag centred on the lockup');
+    assert.match(badge(0, 0, 30, '1.0.4').svg, />Version <\/text>[\s\S]*>1\.0\.4<\/text>/);
+  });
+  test("what's new: every tile has a vignette inside its screenshot, a title and a one-line description; no subline", async () => {
+    const { VIGNETTES, vignetteOf } = await import('../media/vignettes.mjs');
+    const { cardLayout } = await import('../media/cards.mjs');
+    const custom = JSON.parse(readFileSync(new URL('../media/cards.1.0.4.json', import.meta.url), 'utf8'));
+    for (const name of Object.keys(VIGNETTES)) {
+      const v = vignetteOf(name);
+      for (const p of v.pieces) {
+        const [x, y, w, h] = p.crop;
+        assert.ok(x >= 0 && y >= 0 && x + w <= 1640 && y + h <= 1040, `${name} crop ${p.crop}`);
+        assert.ok(p.x >= -1 && p.y >= -1 && p.x + w * p.s <= v.w + 1 && p.y + h * p.s <= v.h + 1, `${name} piece ${p.crop} inside its vignette`);
+        assert.ok(p.s >= 1, `${name}: pieces are zoomed in, not shrunk`);
+      }
+    }
+    assert.deepEqual(textProblems({ en: { headline: 'a', subline: 'b', highlights: [{ title: 'x', desc: 'one two three four five six seven eight nine' }] } }), ['en description « one two three four five six seven eight nine »: 9 words (8 at most)']);
+    const shot = { src: 'data:image/png;base64,', w: 1640, h: 1040 };
+    for (const lang of ['en', 'fr']) {
+      const t = cardText('1.0.4', lang, custom);
+      for (const hl of t.highlights) { assert.ok(hl.desc, `${lang} ${hl.title}: description`); assert.ok(VIGNETTES[hl.shot], `${lang} ${hl.title}: vignette`); }
+      const lay = cardLayout(cardSpecs('1.0.4').find((s) => s.layout === 'whatsnew' && s.lang === lang), t, new Proxy({}, { get: () => shot }));
+      assert.ok(!lay.layers.some((l) => l.id === 'subline'), "no subline on the what's new card");
+      assert.ok(lay.layers.find((l) => l.id === 'meta').body.includes(lang === 'fr' ? 'Gratuit' : 'Free'));
+      const tiles = lay.layers.find((l) => l.id === 'tiles').body;
+      for (const hl of t.highlights) assert.ok(tiles.includes(hl.desc), `${lang} ${hl.desc}`);
+    }
+  });
+  test('layouts: groups, text in the safe zone, Flow editor in front of the Library, no shot under the text', async () => {
+    const { cardLayout, VIEW } = await import('../media/cards.mjs');
+    const itemBox = (it) => ({ x: it.x, y: it.y, r: it.x + it.w, b: it.y + it.w * (it.crop.h / it.crop.w) });
+    const { textWidth } = await import('../media/metrics.mjs');
+    const custom = JSON.parse(readFileSync(new URL('../media/cards.1.0.4.json', import.meta.url), 'utf8'));
+    const shot = { src: 'data:image/png;base64,', w: 1640, h: 1040 };
+    const shots = new Proxy({}, { get: () => shot });
+    const unesc = (s) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+    const boxes = (svg) => [...svg.matchAll(/<text font-family="([^"]*)" font-weight="(\d+)" font-size="([\d.]+)"[^>]*>([\s\S]*?)<\/text>/g)].flatMap(([, fam, wt, fs, inner]) =>
+      [...inner.matchAll(/<tspan x="([\d.]+)" y="([\d.]+)">([\s\S]*?)<\/tspan>/g)].map(([, x, y, s]) => {
+        const size = +fs, face = /^'Bricolage/.test(fam) ? `bg${wt}` : /^'Atkinson/.test(fam) ? `ahn${wt}` : wt === '700' ? 'seg700' : wt === '600' ? 'seg600' : 'seg500';
+        return { x: +x, y: +y - size * 0.8, r: +x + textWidth(unesc(s), size, face), b: +y + size * 0.25, s };
+      }));
+    for (const spec of cardSpecs('1.0.4')) {
+      const t = cardText('1.0.4', spec.lang, custom);
+      const lay = cardLayout(spec, t, shots);
+      assert.deepEqual(lay.layers.slice(0, 2).map((l) => `${l.group}/${l.label}`), ['Background/Field and glow', 'Background/Grid']);
+      for (const l of lay.layers) assert.ok(['Background', 'Product shot', 'Brand', 'Text', 'Screenshots'].includes(l.group), `${spec.base} ${l.label}`);
+      assert.ok(!lay.layers.some((l) => /tasky/i.test(l.label)), 'no Tasky on the cards');
+      const text = lay.layers.filter((x) => x.group === 'Text' || x.group === 'Brand');
+      for (const l of text) {
+        for (const m of l.body.matchAll(/<tspan x="([\d.]+)" y="([\d.]+)"/g)) {
+          const [x, y] = [+m[1], +m[2]];
+          assert.ok(x >= spec.safe.x - 0.5 && x <= spec.safe.x + spec.safe.w && y >= spec.safe.y && y <= spec.safe.y + spec.safe.h + 1, `${spec.base} ${spec.lang} ${l.label} at ${x},${y}`);
+        }
+      }
+      if (spec.layout === 'whatsnew') { assert.equal(lay.items.length, 0); continue; }
+      // The product shots: the Flow editor in front (the editor panel only, no dimmed backdrop), the
+      // Library behind where there is one; large and allowed to run off the right / bottom edge, never under text.
+      assert.ok(lay.items.length >= 1, spec.base);
+      const front = lay.items.at(-1);
+      assert.deepEqual(front.crop, VIEW.flow, `${spec.base}: the Flow editor leads`);
+      if (lay.items.length === 2) assert.deepEqual(lay.items[0].crop, VIEW.window, `${spec.base}: the Library window behind`);
+      for (const it of lay.items) {
+        const b = itemBox(it);
+        for (const l of text) for (const bx of boxes(l.body)) assert.ok(bx.r <= b.x || bx.x >= b.r || bx.b <= b.y || bx.y >= b.b, `${spec.base} ${spec.lang}: ${it.id} over « ${bx.s} »`);
+      }
+    }
+  });
+  test('stage: a floating window comes back to where it started (the loop closes)', async () => {
+    const { itemTransform, stageHtml, stageLayerIds } = await import('../media/stage.mjs');
+    const it = { id: 'w', rotate: { x: 3, y: -8, z: 0 }, float: { amp: 10, rot: 0.4, phase: 0.3 }, z: 0 };
+    assert.equal(itemTransform(it, 0, 6), itemTransform(it, 6, 6));
+    assert.notEqual(itemTransform(it, 0, 6), itemTransform(it, 1.5, 6));
+    const st = { w: 100, h: 50, under: '<svg/>', over: '<svg/>', items: [{ ...it, src: 'data:,', srcW: 10, srcH: 10, crop: { x: 0, y: 0, w: 10, h: 10 }, x: 0, y: 0, w: 50 }] };
+    assert.deepEqual(stageLayerIds(st).map((x) => x.id), ['under', 'w', 'over']);
+    assert.ok(stageHtml(st).includes('data-item="w"'));
+  });
+});
+
+describe('screenshots and hero', () => {
+  test('scenes: library-light is gone, the new pages are there, names unique', async () => {
+    const { scenes } = await import('../screenshots/scenes.mjs');
+    const names = scenes.map((s) => s.name);
+    assert.equal(new Set(names).size, names.length);
+    assert.ok(!names.includes('library-light'));
+    for (const n of ['mod-details', 'conflicts', 'notifications', 'automations-flow', 'laya', 'translation-studio', 'theme-editor', 'modpacks', 'modpack-wizard', 'history', 'catalogue-builder', 'settings-interface']) assert.ok(names.includes(n), n);
+    const { HERO3D_SHOTS } = await import('../screenshots/hero3d.mjs');
+    for (const n of Object.values(HERO3D_SHOTS)) assert.ok(names.includes(n), `hero needs ${n}`);
+    const custom = JSON.parse(readFileSync(new URL('../media/cards.1.0.4.json', import.meta.url), 'utf8'));
+    for (const n of [...Object.values(custom.shots).flat(), ...custom.en.highlights.map((h) => h.shot)]) assert.ok(names.includes(n), `cards need ${n}`);
+  });
+  test('hero: the Library behind, the Flow editor in front, then the text', async () => {
+    const { heroItems, heroTextLayers } = await import('../screenshots/hero3d.mjs');
+    const { VIEW } = await import('../media/cards.mjs');
+    const shot = { src: 'data:,', w: 1640, h: 1040 };
+    const items = heroItems({ library: shot, 'automations-flow': shot });
+    assert.deepEqual(items.map((i) => i.id), ['window-back', 'window-front']);
+    assert.deepEqual(items[1].crop, VIEW.flow);
+    assert.deepEqual(items[0].crop, VIEW.window);
+    const t = heroTextLayers('1.0.4', 'en');
+    assert.deepEqual(t.under.map((l) => l.label), ['Field and glow', 'Grid']);
+    assert.ok(t.over.some((l) => l.id === 'version' && /Version 1\.0\.4/.test(l.body.replace(/<[^>]+>/g, ''))));
+  });
+});
+
+describe('psd / png', () => {
+  test('PackBits round-trips', () => {
+    for (const row of [[0, 0, 0, 0, 1, 2, 3, 3], Array(300).fill(7), Array.from({ length: 500 }, (_, i) => (i * 37) % 251), [5]]) {
+      assert.deepEqual(unpackBits(packBits(Uint8Array.from(row))), row);
+    }
+    const r = Uint8Array.from(Array.from({ length: 300 }, (_, i) => i % 256));
+    for (const p of [3, 4, 300]) assert.deepEqual(unpackBits(literalPack(r, p)), [...r]);
+    assert.equal(literalPack(r, 4).length, 304);
+  });
+  test('layered PSD: signature, size, layer count, even channel data', () => {
+    const w = 5, h = 3;
+    const a = new Uint8Array(w * h * 4).fill(255);
+    const b = new Uint8Array(w * h * 4); b.set([10, 20, 30, 255], (1 * w + 2) * 4);
+    const psd = writePsd({ width: w, height: h, layers: [{ name: 'background', rgba: a }, { name: 'dot', rgba: b }], composite: a });
+    assert.equal(psd.toString('ascii', 0, 4), '8BPS');
+    assert.equal(psd.readUInt16BE(4), 1);
+    assert.equal(psd.readUInt32BE(14), h);
+    assert.equal(psd.readUInt32BE(18), w);
+    const lmi = 26 + 4 + 4; // after empty colour mode data and image resources
+    assert.equal(psd.readInt16BE(lmi + 8), 2);
+    // first record bounds: full canvas; second: the single dot
+    assert.deepEqual([psd.readInt32BE(lmi + 10), psd.readInt32BE(lmi + 14), psd.readInt32BE(lmi + 18), psd.readInt32BE(lmi + 22)], [0, 0, h, w]);
+  });
+  test('grouped PSD with an sRGB profile reads back: size, groups, names, profile, composite', async () => {
+    const { srgbProfile } = await import('../lib/icc.mjs');
+    const { compareComposite } = await import('../media/sources.mjs');
+    const w = 7, h = 4;
+    const bg = new Uint8Array(w * h * 4); for (let i = 0; i < w * h; i++) bg.set([6, 9, 18, 255], i * 4);
+    const dot = new Uint8Array(w * h * 4); dot.set([250, 190, 36, 255], (2 * w + 3) * 4);
+    const comp = bg.slice(); comp.set([250, 190, 36, 255], (2 * w + 3) * 4);
+    const icc = srgbProfile();
+    assert.equal(icc.readUInt32BE(0), icc.length);
+    assert.equal(icc.toString('ascii', 36, 40), 'acsp');
+    const buf = writePsd({ width: w, height: h, layers: [
+      { name: 'Field and glow', group: 'Background', rgba: bg }, { name: 'Grid', group: 'Background', rgba: dot },
+      { name: 'Tasky', group: 'Tasky', rgba: dot }, { name: 'Headline « é »', group: 'Text', rgba: dot }, { name: 'loose', rgba: dot },
+    ], composite: comp, icc });
+    const r = readPsd(buf);
+    assert.deepEqual([r.width, r.height, r.depth, r.mode], [w, h, 8, 3]);
+    assert.ok(r.icc.equals(icc));
+    assert.deepEqual(layerNames(r), ['Background / Field and glow', 'Background / Grid', 'Tasky / Tasky', 'Text / Headline « é »', 'loose']);
+    assert.equal(r.layers.filter((l) => l.divider === 1).length, 3);
+    assert.deepEqual([r.layers[2].top, r.layers[2].left, r.layers[2].bottom, r.layers[2].right], [2, 3, 3, 4]);
+    assert.deepEqual(compareComposite(r, { width: w, height: h, data: comp }), { mean: 0, max: 0, pixels: w * h });
+  });
+  test('PNG decoder reads RGBA with every filter type', () => {
+    const w = 3, h = 5;
+    const rows = [];
+    for (let y = 0; y < h; y++) { rows.push(y % 5); for (let x = 0; x < w * 4; x++) rows.push(0); }
+    // filter bytes 0..4 on zero data decode to zero regardless of the filter
+    const chunk = (t, d) => { const l = Buffer.alloc(4); l.writeUInt32BE(d.length); return Buffer.concat([l, Buffer.from(t), d, Buffer.alloc(4)]); };
+    const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 6;
+    const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(Buffer.from(rows))), chunk('IEND', Buffer.alloc(0))]);
+    const d = decodePng(png);
+    assert.equal(d.width, w); assert.equal(d.height, h); assert.equal(d.data.length, w * h * 4);
+    // a « Sub » row: each byte adds the one 4 bytes to its left
+    const sub = [1, 1, 2, 3, 4, 1, 1, 1, 1, 0, 0, 0, 0];
+    const png2 = Buffer.concat([png.subarray(0, 8), chunk('IHDR', (() => { const x = Buffer.from(ihdr); x.writeUInt32BE(1, 4); return x; })()), chunk('IDAT', deflateSync(Buffer.from(sub))), chunk('IEND', Buffer.alloc(0))]);
+    assert.deepEqual([...decodePng(png2).data], [1, 2, 3, 4, 2, 3, 4, 5, 2, 3, 4, 5]);
+  });
+});
+
+describe('gource log', () => {
+  test('prefix, merge by time, speed', () => {
+    const a = prefixLog('100|Ann|A|/src/a.ts\n300|Ann|M|/src/a.ts\nbroken line\n', 'BMM');
+    const b = prefixLog('200|Bob|A|/docs/x.md\n', 'BMM Docs');
+    assert.deepEqual(a, ['100|Ann|A|/BMM/src/a.ts', '300|Ann|M|/BMM/src/a.ts']);
+    assert.deepEqual(mergeLogs([a, b]).map((l) => l.split('|')[0]), ['100', '200', '300']);
+    assert.equal(secondsPerDay(0, 86400 * 100, 75), 0.75);
+    assert.ok(!mergeLogs([a, b]).join('\n').includes('@'));
+  });
+});
+
+describe('usage clips (gifs)', () => {
+  test('each frame is held until the next one, the last one until the end plus the hold', async () => {
+    const { writeConcat } = await import('../screenshots/gifs.mjs');
+    const dir = mkdtempSync(join(tmpdir(), 'bmm-gifs-'));
+    const list = readFileSync(writeConcat(dir, [{ file: 'a.jpg', ts: 10 }, { file: 'b.jpg', ts: 10.5 }], 12, 0.6), 'utf8').trim().split('\n');
+    assert.deepEqual(list, ['ffconcat version 1.0', "file 'a.jpg'", 'duration 0.5000', "file 'b.jpg'", 'duration 2.1000', "file 'b.jpg'"]);
+  });
+  test('every scene has a unique file name, a title, a description and a run', async () => {
+    const { gifScenes } = await import('../screenshots/gif-scenes.mjs');
+    const names = gifScenes.map((s) => s.name);
+    assert.equal(new Set(names).size, names.length);
+    for (const s of gifScenes) {
+      assert.match(s.name, /^[a-z0-9-]+$/);
+      assert.ok(s.title && s.desc, s.name);
+      assert.ok(s.skip || typeof s.run === 'function', s.name);
+    }
+  });
+});
+
+describe('story clips (stories)', () => {
+  test('every story is well formed: unique names, EN and FR titles, steps with ids and a run', async () => {
+    const { stories } = await import('../screenshots/stories/index.mjs');
+    const { storyProblems } = await import('../screenshots/stories.mjs');
+    const names = stories.map((s) => s.name);
+    assert.equal(new Set(names).size, names.length);
+    for (const s of stories) assert.deepEqual(storyProblems(s), [], s.name);
+  });
+  test('a malformed story is reported', async () => {
+    const { storyProblems } = await import('../screenshots/stories.mjs');
+    const p = storyProblems({ name: 'Bad Name', title: { en: 'x' }, desc: { en: 'x', fr: 'x' }, steps: [{ id: 'a', title: { en: 'a', fr: 'a' } }, { id: 'a', title: { en: 'a' }, run() {} }] });
+    assert.ok(p.some((x) => /bad name/.test(x)));
+    assert.ok(p.some((x) => /title needs en and fr/.test(x)));
+    assert.ok(p.some((x) => /no run/.test(x)));
+    assert.ok(p.some((x) => /duplicate step/.test(x)));
+  });
+  test('an explainer page exists for every explainer step and has __play', async () => {
+    const { stories } = await import('../screenshots/stories/index.mjs');
+    const { EXPLAINERS } = await import('../screenshots/gifs.mjs');
+    for (const s of stories) for (const st of s.steps.filter((x) => x.explainer)) {
+      const html = readFileSync(join(EXPLAINERS, st.explainer), 'utf8');
+      assert.match(html, /window\.__play\s*=/, `${s.name}/${st.id}`);
+    }
+  });
+  test('replay images are shrunk only when they get smaller, other text is untouched', async () => {
+    const { shrinkReplayImages } = await import('../screenshots/replay.mjs');
+    const big = `data:image/png;base64,${'A'.repeat(50000)}`;
+    const fake = { evaluate: async () => 'data:image/webp;base64,BBBB' };
+    const out = await shrinkReplayImages(fake, JSON.stringify({ a: big, b: big, c: 'data:image/png;base64,AAAA', d: 'text' }));
+    assert.deepEqual(JSON.parse(out), { a: 'data:image/webp;base64,BBBB', b: 'data:image/webp;base64,BBBB', c: 'data:image/png;base64,AAAA', d: 'text' });
+    const same = await shrinkReplayImages({ evaluate: async () => big + 'x' }, JSON.stringify({ a: big }));
+    assert.equal(JSON.parse(same).a, big);
+  });
+});
+
+describe('contrast (WCAG AA)', () => {
+  test('ratio math', async () => {
+    const { ratio, blend } = await import('../lib/contrast.mjs');
+    assert.equal(+ratio('#000000', '#ffffff').toFixed(2), 21);
+    assert.equal(+ratio('#777777', '#ffffff').toFixed(2), 4.48);
+    assert.equal(blend('#ffffff', '#000000', 0.5), '#808080');
+  });
+  test('release cards: every text pair is AAA (7:1)', async () => {
+    const { cardContrast } = await import('../media/cards.mjs');
+    const c = cardContrast();
+    assert.ok(c.min >= 7, JSON.stringify(c.rows.filter((r) => !r.ok)));
+  });
+  test('README hero: every text pair is AA', async () => {
+    const { HERO_PAIRS } = await import('../screenshots/hero.mjs');
+    const { ratio } = await import('../lib/contrast.mjs');
+    for (const [what, fg, bg] of HERO_PAIRS) assert.ok(ratio(fg, bg) >= 4.5, what);
+  });
+  test('benchmark charts and report: text AA, data marks 3:1, in both themes', async () => {
+    const { THEME } = await import('../bench/charts.mjs');
+    const { ratio } = await import('../lib/contrast.mjs');
+    for (const [mode, t] of Object.entries(THEME)) {
+      const page = mode === 'light' ? '#f9f9f7' : '#0d0d0d';
+      for (const k of ['ink', 'ink2', 'muted', 'bad', 'goodText']) for (const bg of [t.surface, page]) assert.ok(ratio(t[k], bg) >= 4.5, `${mode} ${k} on ${bg}`);
+      for (const k of ['prev', 'cur', 'same', 'good']) assert.ok(ratio(t[k], t.surface) >= 3, `${mode} ${k}`);
+    }
+  });
+  test('PDF palette: body, links, code tokens, tables, callouts, cover are AA', async () => {
+    const { paletteProblems } = await import('../docs/print-style.mjs');
+    assert.deepEqual(paletteProblems(), []);
+  });
+});
+
+describe('release order and media freshness', () => {
+  test('gource (credits video) runs before build, so the installer ships the new video', async () => {
+    const { STEPS } = await import('../steps.mjs');
+    const ids = STEPS.map((s) => s.id);
+    assert.ok(ids.indexOf('gource') < ids.indexOf('build'), ids.join(','));
+    assert.ok(ids.indexOf('build') < ids.indexOf('verify'));
+  });
+  test('gource has no captions and shows file names', () => {
+    const src = readFileSync(new URL('../media/gource.mjs', import.meta.url), 'utf8');
+    assert.ok(!/--caption/.test(src) && !/versionCaptions/.test(src));
+    assert.ok(!/'--hide',\s*'[^']*filenames/.test(src));
+    assert.match(src, /--file-font-size/);
+    assert.match(src, /--logo/);
+  });
+  test('staleOutputs: a missing or older compiled file is reported', async () => {
+    const { staleOutputs } = await import('../lib/fresh.mjs');
+    const { utimesSync } = await import('node:fs');
+    const d = mkdtempSync(join(tmpdir(), 'bmm-fresh-'));
+    const src = join(d, 'src'), out = join(d, 'js');
+    mkdirSync(join(src, 'a'), { recursive: true }); mkdirSync(join(out, 'a'), { recursive: true });
+    writeFileSync(join(src, 'a', 'x.ts'), 'export {}'); writeFileSync(join(src, 'y.ts'), 'export {}');
+    writeFileSync(join(out, 'a', 'x.js'), '');
+    utimesSync(join(out, 'a', 'x.js'), new Date(Date.now() - 60000), new Date(Date.now() - 60000));
+    const s = staleOutputs(src, out);
+    assert.deepEqual(s.map((x) => x.why).sort(), ['not compiled', 'older than its source']);
+    utimesSync(join(out, 'a', 'x.js'), new Date(), new Date()); writeFileSync(join(out, 'y.js'), '');
+    assert.deepEqual(staleOutputs(src, out), []);
+  });
+  test('the pictures refuse a version the sources do not say', async () => {
+    const { assertSourceVersion } = await import('../lib/fresh.mjs');
+    assert.throws(() => assertSourceVersion('9.9.9'), /sources do not/);
+  });
+});

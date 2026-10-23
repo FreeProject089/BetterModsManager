@@ -1,0 +1,1070 @@
+/* Server Repo — the page frame (features/repo/repo-page.ts links this file).
+ *
+ * The title and the Sync/Host tab strip share one sticky wrapper (.rp-sticky, built at runtime
+ * from the existing nodes). At rest it looks as it always did; once the page scrolls under it
+ * (.is-stuck) the tab cards fold to one line so the header costs ~110px, not ~180px, while
+ * still saying which tab you are on, whether your server runs and which repo you joined.
+ * Tokens only: every colour below is a theme variable or a mix of two. */
+
+/* ── Sticky frame ──────────────────────────────────────────────────────────────────────── */
+#view-repo .rp-sentinel { height: 1px; margin-bottom: -1px; }
+#view-repo .rp-sticky {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    margin: 0 -8px 22px;
+    padding: 0 8px;
+    background: var(--bmm-bg-base);
+    transition: box-shadow 0.18s ease, padding 0.18s ease;
+}
+#view-repo .rp-sticky > .view-header { margin-bottom: 18px !important; gap: 16px; flex-wrap: wrap; align-items: flex-end; }
+#view-repo .rp-sticky > .repo-tabs { margin-bottom: 0; }
+#view-repo .rp-sticky.is-stuck {
+    padding-top: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--bmm-border);
+    box-shadow: 0 8px 18px -12px color-mix(in srgb, var(--bmm-bg-base) 40%, transparent);
+}
+#view-repo .rp-sticky.is-stuck > .view-header { margin-bottom: 10px !important; }
+#view-repo .rp-sticky.is-stuck .view-subtitle { display: none; }
+#view-repo .rp-sticky.is-stuck .view-title { font-size: 18px; }
+/* Stuck: each tab card becomes a one-line pill (icon + title). */
+#view-repo .rp-sticky.is-stuck .repo-tab-btn { padding: 7px 12px; border-radius: 10px; gap: 10px; }
+#view-repo .rp-sticky.is-stuck .repo-tab-ic { width: 28px; height: 28px; border-radius: 8px; }
+#view-repo .rp-sticky.is-stuck .repo-tab-sub { display: none; }
+#view-repo .rp-sticky.is-stuck .repo-tab-btn:hover { transform: none; }
+
+/* ── Tabs: a visible keyboard focus, and the selected one is unmistakable ─────────────── */
+#view-repo .repo-tab-btn:focus-visible,
+#view-repo .repo-method-pill:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--bmm-accent) 75%, transparent);
+    outline-offset: 2px;
+}
+#view-repo .repo-tab-btn[aria-selected="true"] .repo-tab-title { color: var(--bmm-text-primary); }
+#view-repo .repo-tab-btn[aria-selected="false"] .repo-tab-title { color: var(--bmm-text-secondary); }
+
+/* ── Status + main actions (the header's right side) ──────────────────────────────────── */
+#view-repo .rp-head-slot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px 14px;
+    min-width: 0;
+    margin-left: auto;
+}
+#view-repo .rp-status, #view-repo .rp-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+#view-repo .rp-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 280px;
+    min-width: 0;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-s03);
+    color: var(--bmm-text-secondary);
+    font-size: 11.5px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+#view-repo .rp-chip svg { flex: none; opacity: 0.8; }
+#view-repo .rp-chip-txt { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+#view-repo .rp-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--bmm-text-muted); }
+#view-repo .rp-chip--on {
+    border-color: color-mix(in srgb, var(--bmm-success) 45%, var(--bmm-border));
+    background: color-mix(in srgb, var(--bmm-success) 10%, transparent);
+    color: color-mix(in srgb, var(--bmm-success) 60%, var(--bmm-text-primary));
+}
+#view-repo .rp-chip--on .rp-dot { background: var(--bmm-success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bmm-success) 22%, transparent); }
+#view-repo .rp-chip--repo {
+    border-color: color-mix(in srgb, var(--bmm-accent) 40%, var(--bmm-border));
+    background: color-mix(in srgb, var(--bmm-accent) 9%, transparent);
+    color: color-mix(in srgb, var(--bmm-accent) 65%, var(--bmm-text-primary));
+}
+#view-repo .rp-chip--muted { color: var(--bmm-text-muted); }
+#view-repo .rp-act { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+
+/* ── Step headers: the "Learn more" link sits at the end of the row ───────────────────── */
+#view-repo .repo-group-h { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; }
+#view-repo .repo-group-h > .lm-link { margin-left: auto; align-self: center; }
+
+/* ── Empty states in the export lists: what to do next, and a way there ──────────────── */
+#view-repo .rp-empty-a { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; margin-top: 10px; }
+
+@media (max-width: 900px) {
+    #view-repo .rp-head-slot { justify-content: flex-start; margin-left: 0; width: 100%; }
+}
+
+/* ── Readable secondary text ───────────────────────────────────────────────────────────
+   The page's hints, sub-titles, field labels and inactive pills come from main.css with
+   --text-muted: 2.3-2.6:1 on this page in the dark themes (measured), below what a label you
+   must read to fill the form can be. The light themes already lift them (main.css, the
+   body.bmm-theme-light block); this does the same for every theme, on this page only, with
+   the house rule: anything that must be READ gets --text-secondary. States keep their own
+   colours: the active pill and the active tab are excluded or already lighter. */
+#view-repo .view-subtitle,
+#view-repo .repo-tab-btn:not(.active) .repo-tab-sub,
+#view-repo .repo-group-sub,
+#view-repo .rp-chip--muted,
+#view-repo .repo-method-pill:not(.active):not(:hover),
+#view-repo .src-access-label,
+#view-repo .src-access-hint,
+#view-repo .ssh-src-label,
+#view-repo .ssh-src-hint,
+#view-repo .repo-host-lede-alt,
+#view-repo .repo-host-lede-x:not(:hover),
+#view-repo .mm-creds-note,
+#view-repo .ssh-action-empty { color: var(--bmm-text-secondary); }
+/* The rest of the page's hints are static markup in index.html with an INLINE
+   `color:var(--text-muted)` — only an !important rule reaches them from here. Scoped to this
+   page and to that exact inline colour. Owner: dropping those inline colours in index.html
+   (the file is part of a change in flight, so it was not edited) makes this block unnecessary. */
+#view-repo [style*="color:var(--text-muted)"],
+#view-repo [style*="color: var(--text-muted)"],
+#view-repo .badge-server-tag { color: var(--bmm-text-secondary) !important; }
+
+/* ── Tab panels fill their column ─────────────────────────────────────────────────────────
+   The panel is a flex column (main.css forces display:flex on the active one) whose children
+   shrink-wrapped: on the Host tab the intro was 708px, "Produce the repo.json" 599px and
+   "Serve it" 868px, three left edges and a ragged right side. One width for every block. */
+#view-repo .repo-tab-body .repo-tab-panel.active { align-items: stretch; }
+#view-repo .repo-tab-body .repo-tab-panel.active > * { max-width: 100%; }
+
+/* ── The local server: start/stop button and status dot (repo-server.ts toggles the classes) ──
+   They were painted with inline hex colours (#2ecc71, #e74c3c, #555) that no theme could
+   reach, and a green dot glowed next to the words "Server offline" when the state and the
+   label drifted apart. Stopped = a green START (the thing to do), a neutral dot; running = a
+   red STOP and a green dot. Tokens only. */
+#view-repo .rp-srv-toggle {
+    width: 100%;
+    justify-content: center;
+    min-height: 40px;
+    background: var(--bmm-success-dim);
+    border: 1px solid color-mix(in srgb, var(--bmm-success) 40%, var(--bmm-border));
+    color: color-mix(in srgb, var(--bmm-success) 60%, var(--bmm-text-primary));
+}
+#view-repo .rp-srv-toggle:hover { background: color-mix(in srgb, var(--bmm-success) 22%, transparent); }
+#view-repo .rp-srv-toggle.is-running {
+    background: var(--bmm-danger-dim);
+    border-color: color-mix(in srgb, var(--bmm-danger) 40%, var(--bmm-border));
+    color: color-mix(in srgb, var(--bmm-danger) 60%, var(--bmm-text-primary));
+}
+#view-repo .rp-srv-toggle.is-running:hover { background: color-mix(in srgb, var(--bmm-danger) 22%, transparent); }
+#view-repo .rp-srv-dot { background: var(--bmm-text-secondary); opacity: 0.6; }
+#view-repo .rp-srv-dot.is-running { background: var(--bmm-success); opacity: 1; box-shadow: 0 0 0 3px color-mix(in srgb, var(--bmm-success) 25%, transparent); }
+#view-repo .repo-status-bar { gap: 10px; }
+
+/* A bare `.btn btn-sm` (Show, Browse in the Remote card) has no variant and painted the UA's
+   light button face: a white slab in a dark card. It gets the secondary look of its
+   neighbours. */
+#view-repo .btn.btn-sm:not(.btn-primary):not(.btn-secondary):not(.btn-ghost):not(.btn-danger):not(.btn-success):not(.btn-warning):not(.btn-outline):not(.btn-icon) {
+    background: var(--bmm-s05);
+    border: 1px solid var(--bmm-border-hover);
+    color: var(--bmm-text-primary);
+}
+#view-repo .btn.btn-sm:not(.btn-primary):not(.btn-secondary):not(.btn-ghost):not(.btn-danger):not(.btn-success):not(.btn-warning):not(.btn-outline):not(.btn-icon):hover { background: var(--bmm-s08); }
+
+/* Cards: one rhythm. The step cards had 13px/16px padding and a header wash nearly the colour
+   of the body; the header is now a distinct band and the body breathes a little more. */
+#view-repo .repo-card { border-color: var(--bmm-border-hover); background: var(--bmm-s02); }
+#view-repo .repo-card-header { padding: 14px 18px; background: var(--bmm-s03); border-bottom-color: var(--bmm-border); }
+#view-repo .repo-card-body { padding: 18px; }
+#view-repo .repo-card-header h3 { font-size: 14px; }
+#view-repo .repo-method-tabs { background: var(--bmm-s04); border-color: var(--bmm-border); }
+#view-repo .repo-method-pill.active {
+    background: var(--bmm-accent);
+    border-color: var(--bmm-accent);
+    color: var(--bmm-text-on-accent);
+}
+#view-repo .repo-host-group + .repo-host-group { margin-top: 32px; }
+
+/* ══ Oct 2026 pass: one vocabulary for the whole page ═════════════════════════════════════
+   Everything below replaces inline styles that index.html and repo-sync.ts used to carry:
+   white/black washes that vanished or punched holes under BMM White, hex greens and reds no
+   theme could reach, and seven sizes of 9-11px uppercase labels. Tokens only. */
+
+/* Tones: one custom property, read by every state-bearing block (signature, notes, tiles). */
+.rp-tone--ok   { --rp-tone: var(--bmm-success); }
+.rp-tone--warn { --rp-tone: var(--bmm-warning); }
+.rp-tone--bad  { --rp-tone: var(--bmm-danger); }
+.rp-tone--info { --rp-tone: var(--bmm-accent); }
+
+/* ── Tab rail: a count or a live state on each tab ────────────────────────────────────── */
+#view-repo .repo-tab-btn .rp-tab-badge {
+    margin-left: auto;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 9px;
+    border-radius: 999px;
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-s04);
+    color: var(--bmm-text-secondary);
+    font-size: 11px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+#view-repo .repo-tab-btn .rp-tab-badge--live {
+    border-color: color-mix(in srgb, var(--bmm-success) 45%, var(--bmm-border));
+    background: color-mix(in srgb, var(--bmm-success) 12%, transparent);
+    color: color-mix(in srgb, var(--bmm-success) 60%, var(--bmm-text-primary));
+}
+#view-repo .repo-tab-btn .rp-tab-badge--live .rp-dot { background: var(--bmm-success); }
+#view-repo .rp-sticky.is-stuck .rp-tab-badge { padding: 1px 7px; }
+/* Both tabs share one active look (main.css .repo-tab-btn.active): Host no longer has a blue
+   of its own. */
+#view-repo .repo-card--green::before { background: var(--bmm-success); }
+
+/* ── Shared small parts ───────────────────────────────────────────────────────────────── */
+#view-repo .rp-lede { font-size: 12.5px; line-height: 1.6; color: var(--bmm-text-secondary); margin: 0 0 14px; }
+#view-repo .rp-hint-t { display: block; font-size: 11.5px; line-height: 1.5; color: var(--bmm-text-secondary); margin: 6px 0 0; }
+#view-repo .rp-hint-t:empty { display: none; }
+#view-repo .rp-lbl { display: block; font-size: 12px; font-weight: 600; color: var(--bmm-text-secondary); margin-bottom: 6px; }
+#view-repo .rp-inline-pick { display: flex; gap: 8px; min-width: 0; }
+#view-repo .rp-inline-pick > .form-input { flex: 1; min-width: 0; }
+#view-repo .rp-inline-pick > .btn { flex: none; }
+#view-repo .rp-well {
+    max-height: 140px;
+    overflow-y: auto;
+    padding: 6px;
+    border-radius: 8px;
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-s03);
+    margin-bottom: 8px;
+}
+#view-repo .rp-result {
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--bmm-text-secondary);
+    padding: 10px 12px;
+    margin: 10px 0;
+    border-radius: 8px;
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-s03);
+    overflow-wrap: anywhere;
+}
+#view-repo .rp-grow { flex: 1 1 0; justify-content: center; min-height: 38px; }
+#view-repo .rp-mono, #view-repo .rp-addr, #view-repo .rp-addr-input { font-family: var(--font-mono); }
+#view-repo .rp-mono { font-size: 12px; resize: vertical; }
+#view-repo .rp-sub-h {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--bmm-text-primary);
+    margin: 0 0 10px;
+}
+#view-repo .rp-sub-h--rule { padding-top: 14px; margin-top: 14px; border-top: 1px solid var(--bmm-border); }
+#view-repo .rp-check-row { margin-bottom: 12px; font-size: 12.5px; color: var(--bmm-text-secondary); }
+#view-repo .rp-count {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: var(--bmm-s05);
+    border: 1px solid var(--bmm-border);
+    color: var(--bmm-text-secondary);
+    font-size: 11px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    flex: none;
+}
+
+/* ── Sync: the URL row. Fetch acts on the field; the three icon buttons go elsewhere ──── */
+#view-repo .rp-url-row { gap: 6px; flex-wrap: nowrap; }
+#view-repo .rp-url-row > .form-input { min-width: 0; }
+#view-repo .rp-url-row > .btn { flex: none; height: 38px; }
+#view-repo .rp-fetch { padding-inline: 18px; font-weight: 700; }
+#view-repo .rp-icon-btn { width: 38px; padding: 0; justify-content: center; color: var(--bmm-text-secondary); }
+#view-repo .rp-icon-btn:hover { color: var(--bmm-text-primary); }
+#view-repo #btn-browse-repos { margin-inline-start: 4px; }
+
+/* ── Sync: the fetched repo ───────────────────────────────────────────────────────────── */
+#view-repo .rp-joined {
+    margin-top: 14px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    border: 1px solid var(--bmm-border-hover);
+    background: var(--bmm-s03);
+}
+#view-repo .rp-joined-top { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; min-width: 0; }
+#view-repo .rp-joined-game {
+    font-size: 11px; font-weight: 600; color: var(--bmm-text-secondary);
+    text-transform: uppercase; letter-spacing: 0.04em;
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+#view-repo .rp-joined-x { margin-left: auto; flex: none; color: var(--bmm-text-secondary); }
+/* « Follow » sits at the right with the ×, which then no longer pushes itself away. */
+#view-repo .rp-joined-follow { margin-left: auto; flex: none; }
+#view-repo .rp-joined-follow + .rp-joined-x { margin-left: 0; }
+#view-repo .rp-joined-name { font-size: 16px; font-weight: 700; color: var(--bmm-text-primary); overflow-wrap: anywhere; }
+#view-repo .rp-joined-author { font-size: 12px; color: var(--bmm-text-secondary); margin: 2px 0 8px; }
+#view-repo .rp-joined-desc { font-size: 12.5px; line-height: 1.55; color: var(--bmm-text-secondary); }
+#view-repo .rp-joined-desc:empty { display: none; }
+#view-repo .rp-joined-picks { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--bmm-border); display: flex; flex-direction: column; gap: 10px; }
+#view-repo .rp-joined-picks:empty { display: none; }
+#view-repo .rp-joined-total { font-size: 12px; font-weight: 600; color: var(--bmm-text-secondary); text-align: right; margin: 10px 0 0; }
+#view-repo .rp-joined-total:empty { display: none; }
+#view-repo .rp-joined-opts { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--bmm-border); }
+
+/* The signature: a chip on the card, a panel saying what the sync will do and why. Not scoped
+   to the page: the verification dialog (modal-repo-verify-detail) uses the same panel. */
+.rp-sig-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--rp-tone, var(--bmm-text-secondary)) 45%, var(--bmm-border));
+    background: color-mix(in srgb, var(--rp-tone, var(--bmm-text-secondary)) 12%, transparent);
+    color: color-mix(in srgb, var(--rp-tone, var(--bmm-text-secondary)) 62%, var(--bmm-text-primary));
+    font-size: 11.5px;
+    font-weight: 700;
+    cursor: pointer;
+    flex: none;
+}
+.rp-sig-chip:empty { display: none; }
+.rp-sig-chip:focus-visible { outline: 2px solid color-mix(in srgb, var(--bmm-accent) 75%, transparent); outline-offset: 2px; }
+.rp-sig {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid color-mix(in srgb, var(--rp-tone, var(--bmm-border)) 40%, var(--bmm-border));
+    background: color-mix(in srgb, var(--rp-tone, transparent) 8%, transparent);
+}
+.rp-sig-ic { flex: none; display: inline-flex; margin-top: 1px; color: color-mix(in srgb, var(--rp-tone, var(--bmm-text-secondary)) 70%, var(--bmm-text-primary)); }
+.rp-sig-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.rp-sig-t { display: block; font-size: 12.5px; font-weight: 700; color: color-mix(in srgb, var(--rp-tone, var(--bmm-text-primary)) 55%, var(--bmm-text-primary)); }
+.rp-sig-d { display: block; font-size: 12px; line-height: 1.5; color: var(--bmm-text-secondary); }
+.rp-sig-more { flex: none; align-self: center; }
+.rp-vd-state { font-weight: 700; color: color-mix(in srgb, var(--rp-tone, var(--bmm-text-secondary)) 60%, var(--bmm-text-primary)); }
+#view-repo .rp-blocked-note {
+    display: flex; align-items: center; gap: 6px;
+    margin: 8px 0 0;
+    font-size: 12px; font-weight: 600;
+    color: color-mix(in srgb, var(--bmm-danger) 60%, var(--bmm-text-primary));
+}
+#view-repo .rp-blocked-note svg { flex: none; }
+
+/* The profile picker the card draws (repo-sync.ts). */
+#view-repo .rp-pick-h { font-size: 12px; font-weight: 700; color: var(--bmm-text-primary); }
+#view-repo .rp-pick {
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-s02);
+}
+#view-repo .rp-pick-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; min-width: 0; }
+#view-repo .rp-pick-name { display: inline-flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; font-weight: 700; color: var(--bmm-text-primary); overflow-wrap: anywhere; }
+#view-repo .rp-pick-name svg { flex: none; color: var(--bmm-text-secondary); }
+#view-repo .rp-pick-meta { flex: none; font-size: 11.5px; color: var(--bmm-text-secondary); font-variant-numeric: tabular-nums; }
+#view-repo .rp-pick-opts { display: flex; flex-direction: column; gap: 6px; }
+#view-repo .rp-pick-opt { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12.5px; color: var(--bmm-text-primary); }
+#view-repo .rp-pick-other { display: flex; align-items: center; gap: 8px; margin-top: 2px; min-width: 0; }
+#view-repo .rp-pick-other-l { flex: none; font-size: 12px; color: var(--bmm-text-secondary); }
+#view-repo .rp-pick-other .form-input { flex: 1; min-width: 0; width: auto; }
+#view-repo .rp-pick-mods { margin-top: 10px; }
+#view-repo .rp-pick-mods-h {
+    display: flex; align-items: center; gap: 8px;
+    cursor: pointer; user-select: none;
+    font-size: 12px; font-weight: 600; color: var(--bmm-text-secondary);
+    padding: 4px 0;
+}
+#view-repo .rp-pick-mods-h:hover { color: var(--bmm-text-primary); }
+#view-repo .rp-pick-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+#view-repo .rp-find {
+    flex: 1 1 160px; min-width: 0;
+    display: flex; align-items: center; gap: 6px;
+    height: 28px; padding: 0 8px;
+    border-radius: 8px; border: 1px solid var(--bmm-border); background: var(--bmm-s04);
+    color: var(--bmm-text-secondary);
+}
+#view-repo .rp-find:focus-within { border-color: var(--bmm-accent); }
+#view-repo .rp-find svg { flex: none; }
+#view-repo .rp-find input { flex: 1; min-width: 0; border: 0; outline: none; background: none; color: var(--bmm-text-primary); font-size: 12px; }
+#view-repo .rp-find-n { flex: none; font-size: 11px; font-family: var(--font-mono); color: var(--bmm-text-secondary); }
+#view-repo .rp-pick-list { display: flex; flex-direction: column; gap: 2px; max-height: 200px; overflow-y: auto; padding-right: 4px; }
+#view-repo .rp-pick-row { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 6px; cursor: pointer; min-width: 0; }
+#view-repo .rp-pick-row:hover { background: var(--bmm-s04); }
+#view-repo .rp-pick-row[hidden] { display: none; }
+#view-repo .rp-pick-row-n { flex: 1; min-width: 0; font-size: 12px; color: var(--bmm-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#view-repo .rp-pick-row-s { flex: none; font-size: 11px; color: var(--bmm-text-secondary); font-variant-numeric: tabular-nums; }
+#view-repo .rp-pick-none { font-size: 12px; color: var(--bmm-text-secondary); padding: 8px 6px; }
+#view-repo .rp-pick-none[hidden] { display: none; }
+
+/* Sync run: the paused badge and the file log. */
+#view-repo .rp-paused {
+    padding: 2px 8px; border-radius: 999px;
+    background: var(--bmm-warning-dim);
+    color: color-mix(in srgb, var(--bmm-warning) 62%, var(--bmm-text-primary));
+    font-size: 10.5px; font-weight: 800; letter-spacing: 0.04em;
+}
+#view-repo .rp-log {
+    margin-top: 8px; padding: 6px 8px;
+    max-height: 90px; overflow-y: auto;
+    border-radius: 6px; border: 1px solid var(--bmm-border); background: var(--bmm-s03);
+    font-family: var(--font-mono); font-size: 11px; line-height: 1.7;
+    color: var(--bmm-text-secondary); word-break: break-all;
+}
+
+/* ── Host: the local server ───────────────────────────────────────────────────────────── */
+#view-repo .rp-srv-status { background: var(--bmm-s03); border-color: var(--bmm-border); }
+#view-repo .rp-srv-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; transition: background 0.2s, box-shadow 0.2s; }
+#view-repo .rp-srv-label { font-size: 12.5px; font-weight: 600; color: var(--bmm-text-primary); min-width: 0; }
+#view-repo .rp-upnp { margin-left: auto; padding: 2px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 800; letter-spacing: 0.04em; }
+#view-repo .rp-stats { flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+#view-repo .rp-stat {
+    flex: 1 1 140px; min-width: 0;
+    display: flex; flex-direction: column; gap: 2px;
+    padding: 10px 12px; border-radius: 10px;
+    border: 1px solid var(--bmm-border); background: var(--bmm-s03);
+}
+#view-repo .rp-stat-l { font-size: 11.5px; font-weight: 600; color: var(--bmm-text-secondary); }
+#view-repo .rp-stat-v { font-size: 18px; font-weight: 800; color: var(--bmm-text-primary); font-variant-numeric: tabular-nums; }
+#view-repo .rp-note {
+    display: flex; align-items: flex-start; gap: 10px;
+    margin-bottom: 12px; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid color-mix(in srgb, var(--rp-tone) 40%, var(--bmm-border));
+    background: color-mix(in srgb, var(--rp-tone) 8%, transparent);
+    font-size: 12px; line-height: 1.5; color: var(--bmm-text-secondary);
+}
+#view-repo .rp-note > svg { flex: none; margin-top: 2px; color: color-mix(in srgb, var(--rp-tone) 65%, var(--bmm-text-primary)); }
+#view-repo .rp-note-txt b { display: block; color: var(--bmm-text-primary); margin-bottom: 2px; }
+#view-repo .rp-srv-tools { margin-top: 10px; }
+#view-repo .rp-indeterminate { height: 3px; margin-top: 8px; border-radius: 2px; overflow: hidden; background: var(--bmm-s10); }
+#view-repo .rp-indeterminate > span {
+    display: block; height: 100%; width: 100%;
+    background: var(--bmm-accent);
+    transform-origin: left;
+    /* The old inline bar named a keyframes `indeterminate` that no stylesheet defines: it sat
+       still, a full blue line that read as "done". */
+    animation: rp-indeterminate 1.6s infinite ease-in-out;
+}
+@keyframes rp-indeterminate {
+    0%   { transform: translateX(-100%) scaleX(0.35); }
+    50%  { transform: translateX(30%) scaleX(0.5); }
+    100% { transform: translateX(100%) scaleX(0.35); }
+}
+@media (prefers-reduced-motion: reduce) {
+    #view-repo .rp-indeterminate > span { animation: none; opacity: 0.6; }
+}
+/* Addresses and the creator id: monospace, selectable, a copy button beside each. */
+#view-repo .rp-urls { flex-direction: column; gap: 12px; margin-top: 14px; }
+#view-repo .rp-url-l { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+#view-repo .rp-url-l svg { color: var(--bmm-text-secondary); }
+#view-repo .rp-addr-input { font-size: 12.5px; color: var(--bmm-text-primary); background: var(--bmm-s03); }
+#view-repo .rp-copy { flex: none; width: 38px; padding: 0; justify-content: center; }
+#view-repo .rp-idbox {
+    margin-top: 14px; padding: 12px 14px; border-radius: 12px;
+    border: 1px solid color-mix(in srgb, var(--bmm-purple) 30%, var(--bmm-border));
+    background: color-mix(in srgb, var(--bmm-purple) 6%, transparent);
+}
+#view-repo .rp-idbox-h { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+#view-repo .rp-idbox-ic {
+    width: 30px; height: 30px; border-radius: 8px; flex: none;
+    display: grid; place-items: center;
+    background: color-mix(in srgb, var(--bmm-purple) 14%, transparent);
+    color: color-mix(in srgb, var(--bmm-purple) 65%, var(--bmm-text-primary));
+}
+#view-repo .rp-idbox-txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+#view-repo .rp-idbox-t { font-size: 13px; font-weight: 700; color: var(--bmm-text-primary); }
+#view-repo .rp-idbox-sub, #view-repo .rp-idbox-foot { font-size: 11.5px; color: var(--bmm-text-secondary); }
+#view-repo .rp-idbox-foot { margin-top: 8px; }
+#view-repo .rp-addr-row { display: flex; align-items: stretch; gap: 6px; min-width: 0; }
+#view-repo .rp-addr {
+    flex: 1; min-width: 0;
+    padding: 8px 11px; border-radius: 8px;
+    border: 1px solid var(--bmm-border); background: var(--bmm-s03);
+    font-size: 12px; color: var(--bmm-text-primary);
+    word-break: break-all; user-select: all; cursor: text;
+}
+#view-repo .rp-wait { opacity: 0.5; animation: pulse-text 1.5s infinite; }
+
+/* Mini-server: a form grid, then the switches. */
+#view-repo .rp-form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 12px 14px;
+    margin-bottom: 12px;
+}
+#view-repo .rp-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+#view-repo .rp-field > .form-label { margin: 0; }
+#view-repo .rp-pw { display: flex; align-items: center; gap: 6px; min-width: 0; }
+#view-repo .rp-pw .form-input { flex: 1; min-width: 0; }
+#view-repo .rp-checks {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 8px 14px;
+    padding: 12px; margin-bottom: 14px;
+    border-radius: 10px; border: 1px solid var(--bmm-border); background: var(--bmm-s02);
+    font-size: 12.5px; color: var(--bmm-text-primary);
+}
+#view-repo .rp-sub-opt { grid-column: 1 / -1; max-width: 240px; }
+#view-repo #btn-generate-mini-server { flex: 1; justify-content: center; min-height: 38px; }
+
+/* ── The sync result dialog (modal-repo-sync-summary) ─────────────────────────────────── */
+.rp-sum { padding: 12px 14px; margin-bottom: 10px; border-radius: 12px; border: 1px solid var(--bmm-border); background: var(--bmm-s02); }
+.rp-sum-h { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 13.5px; font-weight: 700; color: var(--bmm-text-primary); }
+.rp-sum-h svg { color: var(--bmm-text-secondary); flex: none; }
+.rp-sum-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+.rp-sum-tile {
+    display: flex; flex-direction: column; gap: 2px;
+    padding: 8px 10px; border-radius: 8px;
+    border: 1px solid color-mix(in srgb, var(--rp-tone, var(--bmm-border)) 30%, var(--bmm-border));
+    background: var(--bmm-s03);
+}
+.rp-sum-tile b { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; color: color-mix(in srgb, var(--rp-tone, var(--bmm-text-primary)) 55%, var(--bmm-text-primary)); }
+.rp-sum-tile span { font-size: 11.5px; color: var(--bmm-text-secondary); }
+#view-repo .rp-form-grid { align-items: end; }
+
+/* ══ Host: the guided flow (repo-host-flow.ts) ════════════════════════════════════════════
+   Folder → manifest → start → share, painted from the real state. One design for the card:
+   the steps on top, then the folder (with its manifest's format), then ONE start/stop button,
+   then the running server, then everything optional folded. Tokens only. */
+#view-repo .rp-flow {
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+    margin: 0 0 18px;
+    padding: 0;
+}
+#view-repo .rp-flow-step {
+    display: flex; align-items: center; gap: 8px;
+    min-width: 0;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-s02);
+    color: var(--bmm-text-secondary);
+    font-size: 12px; font-weight: 600;
+}
+#view-repo .rp-flow-n {
+    flex: none;
+    width: 22px; height: 22px; border-radius: 50%;
+    display: grid; place-items: center;
+    border: 1px solid var(--bmm-border-hover);
+    background: var(--bmm-s04);
+    font-size: 11px; font-weight: 800; font-variant-numeric: tabular-nums;
+}
+#view-repo .rp-flow-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#view-repo .rp-flow-step.is-current {
+    border-color: color-mix(in srgb, var(--bmm-accent) 55%, var(--bmm-border));
+    background: color-mix(in srgb, var(--bmm-accent) 9%, transparent);
+    color: var(--bmm-text-primary);
+}
+#view-repo .rp-flow-step.is-current .rp-flow-n { background: var(--bmm-accent); border-color: var(--bmm-accent); color: var(--bmm-text-on-accent); }
+#view-repo .rp-flow-step.is-done { color: var(--bmm-text-primary); }
+#view-repo .rp-flow-step.is-done .rp-flow-n {
+    background: color-mix(in srgb, var(--bmm-success) 18%, transparent);
+    border-color: color-mix(in srgb, var(--bmm-success) 50%, var(--bmm-border));
+    color: color-mix(in srgb, var(--bmm-success) 65%, var(--bmm-text-primary));
+}
+#view-repo .rp-flow-step.is-blocked .rp-flow-n {
+    background: var(--bmm-danger-dim);
+    border-color: color-mix(in srgb, var(--bmm-danger) 50%, var(--bmm-border));
+    color: color-mix(in srgb, var(--bmm-danger) 65%, var(--bmm-text-primary));
+}
+@media (max-width: 760px) {
+    #view-repo .rp-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+#view-repo .rp-hstep + .rp-hstep { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--bmm-border); }
+
+/* The folder's repo.json, summarised. */
+#view-repo .rp-meta {
+    margin-bottom: 12px; padding: 10px 12px;
+    border-radius: 10px; border: 1px solid var(--bmm-border); background: var(--bmm-s03);
+    font-size: 12px; line-height: 1.55; color: var(--bmm-text-secondary);
+    overflow-wrap: anywhere;
+}
+#view-repo .rp-meta-name { font-size: 14px; font-weight: 700; color: var(--bmm-text-primary); margin-bottom: 2px; }
+#view-repo .rp-meta-line b { font-weight: 600; color: var(--bmm-text-primary); }
+#view-repo .rp-meta-size { margin-top: 4px; font-family: var(--font-mono); }
+#view-repo .rp-meta-err { color: color-mix(in srgb, var(--bmm-danger) 65%, var(--bmm-text-primary)); }
+
+/* The manifest's format: a badge, one sentence, and Convert when it applies. */
+#view-repo .rp-fmt-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 0 0 4px; }
+#view-repo .rp-fmt-row[hidden] { display: none; }
+#view-repo .rp-fmt {
+    display: inline-flex; align-items: center; gap: 6px; flex: none;
+    padding: 3px 10px; border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--rp-tone, var(--bmm-text-secondary)) 45%, var(--bmm-border));
+    background: color-mix(in srgb, var(--rp-tone, var(--bmm-text-secondary)) 12%, transparent);
+    color: color-mix(in srgb, var(--rp-tone, var(--bmm-text-secondary)) 62%, var(--bmm-text-primary));
+    font-size: 11.5px; font-weight: 700;
+}
+#view-repo .rp-fmt-why { flex: 1 1 220px; min-width: 0; font-size: 12px; line-height: 1.5; color: var(--bmm-text-secondary); }
+#view-repo .rp-fmt-go { flex: none; display: inline-flex; align-items: center; gap: 6px; }
+
+/* The running server: one panel, shown only while it runs. (.rp-live, not .rp-run alone: the
+   validate tool's progress box is also an .rp-run and its display:flex further down used to
+   win over this display:none, so « Your server » showed with the server stopped.) */
+#view-repo .rp-live {
+    display: none;
+    margin-top: 14px; padding: 14px;
+    border-radius: 12px;
+    border: 1px solid color-mix(in srgb, var(--bmm-success) 35%, var(--bmm-border));
+    background: color-mix(in srgb, var(--bmm-success) 5%, transparent);
+}
+#view-repo .rp-live.is-on { display: block; }
+#view-repo .rp-live > .rp-urls { margin-top: 0; }
+#view-repo .rp-live .rp-srv-tools { margin-top: 14px; }
+
+/* Folds: the session's activity, and the optional settings. */
+#view-repo .rp-fold { margin-top: 14px; }
+#view-repo .rp-fold-h {
+    display: flex; align-items: center; gap: 8px;
+    cursor: pointer; user-select: none;
+    font-size: 12.5px; font-weight: 700; color: var(--bmm-text-primary);
+    padding: 6px 0;
+}
+#view-repo .rp-fold-h:hover { color: var(--bmm-accent); }
+#view-repo .rp-fold-sub { font-size: 11.5px; font-weight: 500; color: var(--bmm-text-secondary); }
+#view-repo .rp-adv { padding-top: 10px; border-top: 1px solid var(--bmm-border); }
+#view-repo .rp-adv-body { padding-top: 10px; }
+#view-repo .rp-actlog { list-style: none; max-height: 160px; margin: 6px 0 0; }
+#view-repo .rp-actlog:empty { display: none; }
+#view-repo .rp-act-time { color: var(--bmm-text-secondary); }
+#view-repo .rp-act--done .rp-act-txt { color: color-mix(in srgb, var(--bmm-success) 55%, var(--bmm-text-secondary)); }
+
+/* The convert dialog (repo-format.ts): content only, the shell is the house one. */
+.rp-cv .rp-cv-lead { margin: 0 0 12px; font-size: 13px; line-height: 1.55; color: var(--bmm-text-primary); }
+.rp-cv .rp-sum-grid { margin-bottom: 12px; }
+.rp-cv .rp-note {
+    display: flex; align-items: flex-start; gap: 10px;
+    margin-bottom: 10px; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid color-mix(in srgb, var(--rp-tone) 40%, var(--bmm-border));
+    background: color-mix(in srgb, var(--rp-tone) 8%, transparent);
+    font-size: 12px; line-height: 1.5; color: var(--bmm-text-secondary);
+}
+.rp-cv .rp-note > svg { flex: none; margin-top: 2px; color: color-mix(in srgb, var(--rp-tone) 65%, var(--bmm-text-primary)); }
+.rp-cv .rp-note-txt b { display: block; color: var(--bmm-text-primary); margin-bottom: 2px; }
+.rp-cv .rp-cv-notes { margin: 0 0 10px; padding-left: 18px; font-size: 12px; line-height: 1.6; color: var(--bmm-text-secondary); }
+.rp-cv .rp-check-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12.5px; color: var(--bmm-text-primary); }
+.rp-cv .rp-fold-h { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12.5px; font-weight: 700; color: var(--bmm-text-primary); padding: 6px 0; }
+.rp-cv .rp-count {
+    display: inline-flex; padding: 1px 8px; border-radius: 999px;
+    background: var(--bmm-s05); border: 1px solid var(--bmm-border);
+    color: var(--bmm-text-secondary); font-size: 11px; font-weight: 700;
+}
+.rp-cv .rp-cv-list {
+    list-style: none; margin: 6px 0 0; padding: 6px 8px;
+    max-height: 260px; overflow-y: auto;
+    border-radius: 8px; border: 1px solid var(--bmm-border); background: var(--bmm-s03);
+    font-size: 11.5px; line-height: 1.7;
+}
+.rp-cv .rp-cv-row { display: flex; flex-wrap: wrap; gap: 4px 10px; min-width: 0; }
+.rp-cv .rp-cv-kind { flex: none; min-width: 120px; font-weight: 700; color: var(--bmm-text-secondary); }
+.rp-cv .rp-cv-path { min-width: 0; font-family: var(--font-mono); color: var(--bmm-text-primary); overflow-wrap: anywhere; }
+.rp-cv .rp-cv-val { min-width: 0; font-family: var(--font-mono); color: var(--bmm-text-secondary); overflow-wrap: anywhere; }
+.rp-cv .rp-cv-hash_changed .rp-cv-kind, .rp-cv .rp-cv-signature_removed .rp-cv-kind { color: color-mix(in srgb, var(--bmm-warning) 65%, var(--bmm-text-primary)); }
+.rp-cv .rp-cv-file_missing .rp-cv-kind { color: color-mix(in srgb, var(--bmm-danger) 65%, var(--bmm-text-primary)); }
+.rp-cv .rp-cv-more { color: var(--bmm-text-secondary); font-style: italic; }
+/* A flex summary loses the browser's disclosure marker: draw one, turned when open. */
+#view-repo .rp-fold-h::-webkit-details-marker, .rp-cv .rp-fold-h::-webkit-details-marker { display: none; }
+#view-repo .rp-fold-h::before, .rp-cv .rp-fold-h::before {
+    content: "";
+    flex: none;
+    width: 6px; height: 6px;
+    margin: 0 2px 0 1px;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(-45deg);
+    transition: transform 0.15s ease;
+    opacity: 0.7;
+}
+#view-repo details[open] > .rp-fold-h::before, .rp-cv details[open] > .rp-fold-h::before { transform: rotate(45deg); }
+
+/* ══ Simple by default, the rest one click away (repo-advanced.ts, repo-tools.ts) ══════════
+   Each tab: its everyday path as plain content (no card chrome), then one « Advanced tools »
+   fold holding every other tool as a row: icon, title, one line, opened in place. Rows and
+   rules rather than boxes in boxes; the house search field (page-head.css .pg-search). */
+#view-repo .rp-plain { border: 0; background: none; box-shadow: none; backdrop-filter: none; }
+#view-repo .rp-plain::before { display: none; }
+#view-repo .rp-plain > .repo-card-body { padding: 4px 0 0; }
+#view-repo .rp-simple + .rp-advanced,
+#view-repo .repo-card + .rp-advanced { margin-top: 28px; }
+
+#view-repo .rp-advanced { border-top: 1px solid var(--bmm-border); }
+#view-repo .rp-advanced [hidden] { display: none !important; }
+#view-repo .rp-advanced-h {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 6px; cursor: pointer; list-style: none;
+    border-radius: 10px;
+}
+#view-repo .rp-advanced-h::-webkit-details-marker { display: none; }
+#view-repo .rp-advanced-h:hover { background: var(--bmm-s03); }
+#view-repo .rp-advanced-h:focus-visible,
+#view-repo .rp-tool-h:focus-visible { outline: 2px solid color-mix(in srgb, var(--bmm-accent) 75%, transparent); outline-offset: 2px; }
+#view-repo .rp-advanced-ic {
+    flex: none; display: inline-grid; place-items: center;
+    width: 32px; height: 32px; border-radius: 9px;
+    background: var(--bmm-s04); color: var(--bmm-text-secondary);
+}
+#view-repo .rp-advanced-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+#view-repo .rp-advanced-t { font-size: 14px; font-weight: 700; color: var(--bmm-text-primary); }
+#view-repo .rp-advanced-sub { font-size: 12px; line-height: 1.45; color: var(--bmm-text-secondary); }
+#view-repo .rp-advanced-h::after,
+#view-repo .rp-tool-h::after {
+    content: ""; flex: none;
+    width: 7px; height: 7px; margin: 0 6px 0 4px;
+    border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+    color: var(--bmm-text-secondary);
+    transform: rotate(45deg); transition: transform 0.15s ease;
+}
+#view-repo .rp-advanced[open] > .rp-advanced-h::after,
+#view-repo .rp-tool[open] > .rp-tool-h::after { transform: rotate(-135deg); }
+#view-repo .rp-advanced-body { padding: 4px 0 8px; }
+#view-repo .rp-advanced-find { max-width: 360px; margin: 4px 0 14px; }
+#view-repo .rp-advanced-none { margin: 0 0 12px; }
+
+#view-repo .rp-tool-group + .rp-tool-group { margin-top: 22px; }
+#view-repo .rp-tool-group-h {
+    margin: 0 0 4px; padding: 0 6px;
+    font-size: 12px; font-weight: 700; letter-spacing: 0.02em;
+    color: var(--bmm-text-secondary);
+}
+#view-repo .rp-tool { border-bottom: 1px solid var(--bmm-border); }
+#view-repo .rp-tool-h {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 6px; cursor: pointer; list-style: none; border-radius: 8px;
+}
+#view-repo .rp-tool-h::-webkit-details-marker { display: none; }
+#view-repo .rp-tool-h:hover { background: var(--bmm-s03); }
+#view-repo .rp-tool-ic { flex: none; display: inline-flex; color: var(--bmm-text-secondary); }
+#view-repo .rp-tool[open] > .rp-tool-h .rp-tool-ic { color: var(--bmm-text-primary); }
+#view-repo .rp-tool-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+#view-repo .rp-tool-t { font-size: 13px; font-weight: 600; color: var(--bmm-text-primary); }
+#view-repo .rp-tool-d { font-size: 12px; line-height: 1.45; color: var(--bmm-text-secondary); }
+#view-repo .rp-tool-body { padding: 6px 6px 20px 34px; min-width: 0; }
+#view-repo .rp-tool-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+#view-repo .rp-tool-body > .rp-hint-t:first-child { margin: 0 0 10px; }
+@media (max-width: 700px) { #view-repo .rp-tool-body { padding-left: 6px; } }
+
+/* The shared folder of the « check » tools. */
+#view-repo .rp-tools-dir { padding: 6px 6px 12px; }
+
+/* Step 1's « No repo yet? » line. */
+#view-repo .rp-qc { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0 0 12px; font-size: 12.5px; color: var(--bmm-text-secondary); }
+#view-repo .rp-qc-btn { color: var(--bmm-text-primary); text-decoration: underline; text-underline-offset: 3px; padding-inline: 6px; }
+#view-repo .rp-howto { margin-top: 10px; color: var(--bmm-text-secondary); gap: 6px; }
+#view-repo .rp-tool-body > .rp-howto:first-child { margin: 0 0 10px; }
+
+/* Tool forms. */
+#view-repo .rp-quick-path { margin-bottom: 12px; }
+#view-repo .rp-version-now { margin: 0 0 10px; font-size: 12.5px; color: var(--bmm-text-secondary); }
+#view-repo .rp-version-now b { color: var(--bmm-text-primary); margin-left: 6px; }
+#view-repo .rp-version-pick { flex-wrap: wrap; }
+#view-repo .rp-version-pick > .form-input { flex: 1 1 180px; }
+#view-repo .rp-share-custom { margin-top: 8px; }
+#view-repo #repo-share-text { margin-top: 10px; width: 100%; resize: vertical; }
+#view-repo .rp-notes { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 12px; line-height: 1.45; color: var(--bmm-text-secondary); }
+#view-repo .rp-notes:empty { display: none; }
+#view-repo .rp-notes li { display: flex; gap: 8px; align-items: flex-start; }
+#view-repo .rp-notes li svg { flex: none; margin-top: 2px; }
+#view-repo .rp-result[class*="rp-tone--"] { border-color: color-mix(in srgb, var(--rp-tone) 35%, var(--bmm-border)); }
+#view-repo .rp-result > svg { vertical-align: -2px; color: color-mix(in srgb, var(--rp-tone, var(--bmm-text-secondary)) 70%, var(--bmm-text-primary)); }
+
+/* The validation report: one line per check, the verdict first. */
+#view-repo .rp-report { margin-top: 12px; }
+#view-repo .rp-checklist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+#view-repo .rp-ck { display: flex; align-items: flex-start; gap: 10px; padding: 9px 4px; border-bottom: 1px solid var(--bmm-border); min-width: 0; }
+#view-repo .rp-ck:first-child { padding-top: 2px; font-size: 13.5px; }
+#view-repo .rp-ck:last-child { border-bottom: 0; }
+#view-repo .rp-ck-ic { flex: none; display: inline-flex; margin-top: 2px; color: color-mix(in srgb, var(--rp-tone) 70%, var(--bmm-text-primary)); }
+#view-repo .rp-ck-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; color: var(--bmm-text-primary); overflow-wrap: anywhere; }
+#view-repo .rp-ck-txt b { font-weight: 600; }
+#view-repo .rp-ck-txt span { font-size: 12px; color: var(--bmm-text-secondary); line-height: 1.45; }
+#view-repo .rp-ck > .btn { flex: none; align-self: center; }
+
+/* The preview reuses the joined-repo card of the Sync tab: the same thing a subscriber sees. */
+#view-repo .rp-preview { margin-top: 12px; }
+#view-repo .rp-preview-card .rp-chip { border-color: color-mix(in srgb, var(--rp-tone) 35%, var(--bmm-border)); }
+/* Brought into view under the sticky title and tab strip, not behind them. */
+#view-repo .rp-advanced, #view-repo .rp-tool { scroll-margin-top: 170px; }
+#view-repo .rp-tool-body > .rp-joined-opts { margin-top: 0; padding-top: 0; border-top: 0; }
+
+/* A running check: what it is doing, how far, the file it is on, and a way out. Determinate
+   bar once the file count is known; the indeterminate sweep before that. */
+#view-repo .rp-run:not(.rp-live) {
+    margin-top: 10px; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid var(--bmm-border); background: var(--bmm-s03);
+    display: flex; flex-direction: column; gap: 8px;
+}
+#view-repo .rp-run-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
+#view-repo .rp-run-phase { font-weight: 600; color: var(--bmm-text-primary); }
+#view-repo .rp-run-count { margin-left: auto; font-size: 12px; color: var(--bmm-text-secondary); white-space: nowrap; }
+#view-repo .rp-run-bar { height: 6px; border-radius: 3px; overflow: hidden; background: var(--bmm-s10); }
+#view-repo .rp-run-bar > span { display: block; height: 100%; width: 0; background: var(--bmm-accent); transition: width 0.15s linear; }
+#view-repo .rp-run-bar.is-indeterminate > span { width: 100%; transform-origin: left; animation: rp-indeterminate 1.6s infinite ease-in-out; }
+#view-repo .rp-run-file { font-size: 11.5px; color: var(--bmm-text-secondary); min-height: 1em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#view-repo .rp-tool-actions .rp-check-row { margin-right: auto; }
+#view-repo .rp-ck-more { font-size: 12px; color: var(--bmm-text-secondary); }
+#view-repo .rp-ck-list { margin: 4px 0 0; padding-left: 16px; font-size: 11.5px; max-height: 160px; overflow: auto; }
+@media (prefers-reduced-motion: reduce) {
+    #view-repo .rp-run-bar.is-indeterminate > span { animation: none; opacity: 0.6; }
+}
+
+/* Followed repos (features/repo/repo-follow.ts): one row per repo, the switch and the name on
+   the left, interval / action / buttons on the right; wraps under the name when narrow. */
+#view-repo .rp-follow { margin-top: 28px; }
+#view-repo .rp-follow-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+#view-repo .rp-follow-t { font-size: 14px; font-weight: 700; color: var(--bmm-text-primary); margin-right: auto; }
+#view-repo .rp-follow-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+#view-repo .rp-follow-row {
+    display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap;
+    padding: 12px 14px; border-radius: 10px; border: 1px solid var(--bmm-border); background: var(--bmm-s02);
+}
+#view-repo .rp-follow-row.is-off .rp-follow-id { opacity: 0.6; }
+#view-repo .rp-follow-main { display: flex; align-items: center; gap: 12px; flex: 1 1 260px; min-width: 0; }
+#view-repo .rp-follow-id { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+#view-repo .rp-follow-name { font-weight: 600; color: var(--bmm-text-primary); }
+#view-repo .rp-follow-ver { font-size: 11px; font-weight: 500; color: var(--bmm-text-secondary); }
+#view-repo .rp-follow-url { font-size: 11.5px; color: var(--bmm-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#view-repo .rp-follow-st { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--bmm-text-secondary); }
+#view-repo .rp-follow-st.rp-tone--ok { color: var(--bmm-success); }
+#view-repo .rp-follow-st.rp-tone--warn { color: var(--bmm-warning); }
+#view-repo .rp-follow-st.rp-tone--bad { color: var(--bmm-danger); }
+#view-repo .rp-follow-ctl { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+#view-repo .rp-follow-field { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--bmm-text-secondary); }
+#view-repo .rp-follow-field .form-input { min-width: 150px; padding-top: 5px; padding-bottom: 5px; }
+#view-repo .rp-follow-btns { display: flex; align-items: center; gap: 6px; }
+#view-repo .rp-follow-empty {
+    display: flex; align-items: center; gap: 10px; padding: 14px; border-radius: 10px;
+    border: 1px dashed var(--bmm-border); color: var(--bmm-text-secondary); font-size: 12.5px;
+}
+
+/* ══ Oct 14 visual pass: one surface per path, numbered steps, a status card, tool rows ══════
+   The plain pass took the card chrome off everything, and the page read as one long column
+   of fields with nothing saying where a task starts or ends. Now: each tab's everyday path is
+   ONE surface (.rp-main) with numbered step headings (.rp-step-h, data-step) that carry the
+   flow's state on the Host tab (repo-host-flow.ts paints is-current / is-done on the blocks);
+   the running server is a status card; Advanced tools is a card of rows, each with an icon
+   tile. Tokens only; the accent is a fill (with --bmm-text-on-accent) or a tint, never ink. */
+
+/* ── Surfaces ─────────────────────────────────────────────────────────────────────────── */
+#view-repo .repo-card.rp-main,
+#view-repo .repo-card.rp-follow {
+    border: 1px solid var(--bmm-border);
+    border-radius: 14px;
+    background: var(--bmm-s02);
+    box-shadow: none;
+}
+#view-repo .repo-card.rp-main:hover,
+#view-repo .repo-card.rp-follow:hover { border-color: var(--bmm-border); box-shadow: none; }
+#view-repo .repo-card.rp-main > .repo-card-body { padding: 20px 22px 22px; }
+#view-repo .repo-card.rp-follow > .repo-card-body { padding: 16px 18px 18px; }
+
+/* Section titles above the surface: a title and its one line, no underline bar. */
+#view-repo .repo-group-h { border-bottom: 0; padding-bottom: 0; margin-bottom: 12px; align-items: center; }
+#view-repo .repo-group-t { font-size: 16px; padding-bottom: 0; }
+#view-repo .repo-group-t::after { display: none; }
+#view-repo .repo-host-group { gap: 0; }
+
+/* ── Numbered step headings ───────────────────────────────────────────────────────────── */
+#view-repo .rp-step-h,
+#view-repo .form-label.rp-step-h {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 10px;
+    font-size: 13.5px;
+    font-weight: 700;
+    line-height: 1.3;
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--bmm-text-primary);
+}
+#view-repo .rp-step-h::before {
+    content: attr(data-step);
+    flex: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: inline-grid;
+    place-items: center;
+    font-size: 12px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    border: 1px solid color-mix(in srgb, var(--bmm-accent) 40%, var(--bmm-border));
+    background: color-mix(in srgb, var(--bmm-accent) 14%, transparent);
+    color: var(--bmm-text-primary);
+}
+#view-repo .rp-step-h--rule { padding-top: 18px; margin-top: 18px; border-top: 1px solid var(--bmm-border); }
+/* Host: the block's state, painted from the real one. */
+#view-repo .rp-hstep .rp-step-h::before {
+    border-color: var(--bmm-border-hover);
+    background: var(--bmm-s04);
+    color: var(--bmm-text-secondary);
+}
+#view-repo .rp-hstep.is-current .rp-step-h::before {
+    border-color: var(--bmm-accent);
+    background: var(--bmm-accent);
+    color: var(--bmm-text-on-accent);
+}
+#view-repo .rp-hstep.is-done .rp-step-h::before {
+    content: "\2713";
+    border-color: color-mix(in srgb, var(--bmm-success) 50%, var(--bmm-border));
+    background: color-mix(in srgb, var(--bmm-success) 18%, transparent);
+    color: color-mix(in srgb, var(--bmm-success) 60%, var(--bmm-text-primary));
+}
+#view-repo .rp-hstep + .rp-hstep { margin-top: 18px; padding-top: 18px; }
+#view-repo .rp-hstep .form-group { gap: 0; }
+
+/* The step strip: a done step shows a tick, not its number. */
+#view-repo .rp-flow { margin-bottom: 22px; }
+#view-repo .rp-flow-step { padding: 9px 10px; }
+#view-repo .rp-flow-step.is-done .rp-flow-n { font-size: 0; }
+#view-repo .rp-flow-step.is-done .rp-flow-n::before { content: "\2713"; font-size: 12px; }
+
+/* ── Sync: the address row and its two folds ──────────────────────────────────────────── */
+#view-repo .sync-fold { align-self: flex-start; }
+#view-repo #btn-start-repo-sync { min-height: 42px; font-weight: 700; gap: 8px; }
+#view-repo #btn-discover-server { margin-top: 12px; }
+#view-repo .repo-tab-body { container-type: inline-size; }
+/* Container, not viewport: .view keeps a 840px floor (main.css), so a viewport query fires while
+   the page is still wide. These answer to the panel's real width. */
+@container (max-width: 560px) {
+    #view-repo .rp-url-row { flex-wrap: wrap; }
+    #view-repo .rp-url-row > .form-input { flex: 1 1 100%; }
+    #view-repo .rp-url-row > .rp-fetch { flex: 1 1 auto; }
+}
+
+/* ── The running server: a status card ────────────────────────────────────────────────── */
+#view-repo .rp-live {
+    margin-top: 18px;
+    padding: 16px 18px;
+    border-radius: 14px;
+    border: 1px solid color-mix(in srgb, var(--bmm-success) 35%, var(--bmm-border));
+    background: color-mix(in srgb, var(--bmm-success) 6%, transparent);
+}
+#view-repo .rp-live-h { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; font-size: 14px; }
+#view-repo .rp-live-dot {
+    flex: none;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--bmm-success);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--bmm-success) 22%, transparent);
+    animation: rp-live-pulse 2.2s ease-in-out infinite;
+}
+@keyframes rp-live-pulse {
+    50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--bmm-success) 0%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) { #view-repo .rp-live-dot { animation: none; } }
+#view-repo .rp-live .rp-stat { background: var(--bmm-s03); }
+#view-repo .rp-live .rp-urls { gap: 14px; }
+
+/* ── Advanced tools: one card of rows ─────────────────────────────────────────────────── */
+#view-repo .rp-advanced {
+    border: 1px solid var(--bmm-border);
+    border-radius: 14px;
+    background: var(--bmm-s02);
+    padding: 0 12px;
+}
+#view-repo .rp-advanced-h { margin: 0 -12px; padding: 14px 18px; border-radius: 13px; }
+#view-repo .rp-advanced[open] > .rp-advanced-h {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-bottom: 1px solid var(--bmm-border);
+    margin-bottom: 14px;
+}
+#view-repo .rp-advanced-ic { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--bmm-border); }
+#view-repo .rp-advanced-body { padding: 0 0 12px; }
+#view-repo .rp-advanced-find { margin: 0 4px 16px; }
+#view-repo .rp-tool-group-h { padding: 0 10px; margin: 0 0 6px; }
+#view-repo .rp-tools-dir { padding: 4px 10px 12px; }
+#view-repo .rp-tool {
+    border: 1px solid transparent;
+    border-radius: 12px;
+    margin: 2px 0;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+#view-repo .rp-tool[open] { border-color: var(--bmm-border); background: var(--bmm-s02); margin: 8px 0; }
+#view-repo .rp-tool-h { padding: 10px; border-radius: 11px; }
+#view-repo .rp-tool-ic {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    display: inline-grid;
+    place-items: center;
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-s04);
+}
+#view-repo .rp-tool[open] > .rp-tool-h .rp-tool-ic {
+    border-color: color-mix(in srgb, var(--bmm-accent) 40%, var(--bmm-border));
+    background: color-mix(in srgb, var(--bmm-accent) 14%, transparent);
+}
+#view-repo .rp-tool[open] > .rp-tool-h { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+#view-repo .rp-tool-body { padding: 6px 16px 18px 54px; }
+@container (max-width: 700px) {
+    #view-repo .rp-tool-body { padding-left: 14px; }
+    #view-repo .repo-card.rp-main > .repo-card-body { padding: 16px; }
+}
+
+/* ── Followed repos: the same surface; its empty state centred ────────────────────────── */
+#view-repo .rp-follow { margin-top: 22px; }
+#view-repo .rp-follow-h { margin-bottom: 4px; }
+#view-repo .rp-follow-empty { justify-content: center; text-align: center; padding: 18px 14px; }
+#view-repo .rp-simple + .rp-advanced,
+#view-repo .repo-card + .rp-advanced { margin-top: 22px; }
+
+/* The orientation note: the same radius as the surfaces below it. */
+#view-repo .repo-host-lede { border-radius: 14px; margin-bottom: 22px; }
+
+/* ══ Oct 15 pass: the two tabs, one structure ══════════════════════════════════════════════
+   Sync and Host now read the same way: a section title, then ONE surface holding the step strip
+   (painted from the real state by repo-host-flow.ts), one line of explanation, the numbered
+   steps, and the tab's main action as the one filled button; Advanced tools folded below.
+   Tokens only; nothing blue that a theme cannot reach. */
+
+/* Tab rail: a quieter resting card, the active one carries the accent (main.css). */
+#view-repo .repo-tab-btn { background: var(--bmm-s02); border-color: var(--bmm-border); }
+#view-repo .repo-tab-btn:not(.active):hover { background: var(--bmm-s03); border-color: var(--bmm-border-hover); }
+#view-repo .repo-tab-btn:not(.active) .repo-tab-ic { background: var(--bmm-s04); border-color: var(--bmm-border); color: var(--bmm-text-secondary); }
+
+/* The step strip: Sync has three steps, Host four. */
+#view-repo .rp-flow--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@container (max-width: 560px) {
+    #view-repo .rp-flow, #view-repo .rp-flow--3 { grid-template-columns: minmax(0, 1fr); }
+}
+#view-repo .rp-flow-step { transition: border-color 0.15s ease, background 0.15s ease; }
+
+/* A step that follows content which is not a step (the fetched repo, the inspect button). */
+#view-repo .rp-hstep--rule { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--bmm-border); }
+#view-repo .rp-hstep.form-group { display: block; }
+
+/* Host: the explanation is a line inside the surface (it was a framed box above the section),
+   with its close button at the end of the line. */
+#view-repo .repo-host-lede.rp-lede {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 0; margin: 0 0 18px;
+    border: 0; border-radius: 0; background: none;
+}
+#view-repo .repo-host-lede.rp-lede[hidden] { display: none; }
+#view-repo .repo-host-lede.rp-lede .repo-host-lede-p { flex: 1; min-width: 0; margin: 0; font-size: 12.5px; line-height: 1.6; color: var(--bmm-text-secondary); }
+#view-repo .repo-host-lede.rp-lede .repo-host-lede-x { position: static; flex: none; margin-top: -1px; }
+
+/* The main action of each tab is the one filled button: « Synchronize » already was; the
+   server's start button now matches it (accent fill, on-accent ink). Running, it is a quiet
+   outlined Stop, because stopping is not what the screen is for. */
+#view-repo .rp-srv-toggle {
+    margin-top: 12px;
+    min-height: 42px;
+    font-weight: 700;
+    background: var(--bmm-accent);
+    border-color: var(--bmm-accent);
+    color: var(--bmm-text-on-accent);
+}
+#view-repo .rp-srv-toggle:hover { background: color-mix(in srgb, var(--bmm-accent) 88%, var(--bmm-text-primary)); }
+#view-repo .rp-srv-toggle.is-running {
+    background: transparent;
+    border-color: color-mix(in srgb, var(--bmm-danger) 45%, var(--bmm-border));
+    color: color-mix(in srgb, var(--bmm-danger) 70%, var(--bmm-text-primary));
+}
+#view-repo .rp-srv-toggle.is-running:hover { background: var(--bmm-danger-dim); }
+#view-repo #btn-start-repo-sync { margin-top: 2px; }

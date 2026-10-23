@@ -1,0 +1,13 @@
+{
+  "format": "bmm-catalog",
+  "format_version": 1,
+  "name": "Broken",
+  "items": [
+    { "kind": "plugin", "name": "No id", "download": { "url": "https://example.org/x.bmmplug", "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" } },
+    { "kind": "rocket", "id": "r", "name": "Unknown kind", "download": { "url": "https://example.org/r" } },
+    { "kind": "plugin", "id": "evil", "name": "Evil", "download": { "url": "javascript:alert(1)", "sha256": "XYZ" } },
+    { "kind": "plugin", "id": "EVIL", "name": "Dup", "download": { "url": "https://example.org/e.bmmplug", "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" } },
+    { "kind": "preset", "id": "nothing", "name": "Nothing", "name_i18n": { "fr": 3 } }
+  ],
+  "catalogs": [ { "kind": "theme", "url": "file:///C:/themes.json" } ]
+}

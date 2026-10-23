@@ -1,0 +1,164 @@
+/* ── A mod's details: the house dialog over the library (features/mods/mod-detail-view.ts) ──
+   The shell (overlay, card, header, toolbar, body, footer) is css/modal-shell.css, size lg with
+   a fixed height (modal--tall) so switching tabs never makes the card jump. This file styles
+   the CONTENT only: the meta line, the actions and tabs band, the panes. The library under it
+   never moves: nothing here touches .app-shell. One surface: sections inside a pane are spacing
+   and hairlines, never a framed box inside the dialog. */
+
+/* Header: the name on one line, the meta under it, ‹ › before the ×. */
+.mod-detail .mdd-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mod-detail .mdd-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.mod-detail .mdd-ver { font-family: var(--font-mono); font-size: 11.5px; }
+.mod-detail .mdd-dot { color: var(--text-muted); }
+.mod-detail .mdd-state { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; }
+.mod-detail .mdd-state::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted); }
+.mod-detail .mdd-state.is-on { color: color-mix(in srgb, var(--success) 60%, var(--text-primary)); }
+.mod-detail .mdd-state.is-on::before { background: var(--success); }
+.mod-detail .mdd-state.is-off { color: var(--text-secondary); }
+.mod-detail .mdd-nav { flex: none; gap: 2px; flex-wrap: nowrap; }
+.mod-detail .mdd-icon-btn {
+    display: inline-grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+.mod-detail .mdd-icon-btn:hover:not(:disabled) { background: var(--bmm-s06); color: var(--text-primary); }
+.mod-detail .mdd-icon-btn:disabled { opacity: 0.35; cursor: default; }
+.mod-detail .mdd-icon-btn.mdd-danger:hover:not(:disabled) { color: var(--danger); }
+
+/* The band under the header: the actions on the left, the tabs on the right; they stack when
+   the window is narrow. */
+.mod-detail .mdd-bar { justify-content: space-between; }
+.mod-detail .mdd-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.mod-detail .mdd-actions .btn,
+.mod-detail .mdd-goto,
+.mod-detail .mdd-files-acts .btn,
+.mod-detail .mdd-inline-acts .btn,
+.mod-detail #btn-add-link,
+.mod-detail #btn-ai-suggest,
+.mod-detail .modal-footer .btn { display: inline-flex; align-items: center; gap: 6px; }
+.mod-detail .mdd-tab-n:empty { display: none; }
+.mod-detail .mdd-tab-n {
+    min-width: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--warning) 22%, transparent);
+    color: color-mix(in srgb, var(--warning) 60%, var(--text-primary));
+    font-size: 10.5px;
+    line-height: 17px;
+    text-align: center;
+}
+.mod-detail .mdd-tab[aria-selected="true"] .mdd-tab-n { background: color-mix(in srgb, var(--bmm-text-on-accent) 22%, transparent); color: var(--bmm-text-on-accent); }
+
+/* Body: one pane at a time. */
+.mod-detail .mdd-pane { display: none; }
+.mod-detail .mdd-pane.is-active { display: block; }
+.mod-detail .mdd-muted { color: var(--text-secondary); font-size: 12px; }
+.mod-detail .mdd-link { padding: 0; border: 0; background: none; color: var(--bms-accent-ink); font: inherit; cursor: pointer; text-decoration: underline; }
+.mod-detail .mdd-hint { margin: 4px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--text-secondary); }
+.mod-detail .mdd-sub {
+    margin: 20px 0 8px;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+/* Overview */
+.mod-detail .mdd-desc { font-size: 13.5px; line-height: 1.6; color: var(--text-primary); overflow-wrap: anywhere; }
+.mod-detail .mdd-desc > :first-child { margin-top: 0; }
+.mod-detail .mdd-desc > :last-child { margin-bottom: 0; }
+.mod-detail .mdd-desc h1, .mod-detail .mdd-desc h2, .mod-detail .mdd-desc h3 { font-size: 14.5px; margin: 14px 0 6px; }
+.mod-detail .mdd-desc img { max-width: 100%; height: auto; }
+.mod-detail .mdd-desc pre { overflow-x: auto; }
+.mod-detail .mdd-facts {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 9px 20px;
+    margin: 18px 0 14px;
+    padding-top: 16px;
+    border-top: 1px solid var(--bmm-s06);
+    font-size: 12.5px;
+}
+.mod-detail .mdd-facts dt { color: var(--text-secondary); }
+.mod-detail .mdd-facts dd { margin: 0; min-width: 0; color: var(--text-primary); overflow-wrap: anywhere; }
+.mod-detail .mdd-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.mod-detail .mdd-chip { padding: 1px 8px; border-radius: 6px; background: var(--bmm-s06); font-size: 11.5px; color: var(--text-primary); }
+
+/* Details: the form. Two columns where the dialog is wide enough. */
+.mod-detail .mdd-field { margin-bottom: 14px; }
+.mod-detail .mdd-label {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+.mod-detail .mdd-count { font-weight: 400; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.mod-detail .mdd-field .input-field { width: 100%; box-sizing: border-box; font-size: 12.5px; }
+.mod-detail #detail-desc { min-height: 110px; resize: vertical; line-height: 1.5; }
+.mod-detail .mdd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.mod-detail #detail-tags-list:not(:empty),
+.mod-detail #detail-deps-list:not(:empty) { margin-bottom: 6px; }
+.mod-detail .mdd-tag { display: inline-flex; align-items: center; gap: 2px; }
+.mod-detail .mdd-tag-x { display: inline-grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--text-secondary); cursor: pointer; }
+.mod-detail .mdd-tag-x:hover { color: var(--danger); background: var(--bmm-s06); }
+.mod-detail .mdd-picker { position: relative; }
+.mod-detail .mdd-picker-btn { display: flex; align-items: center; justify-content: space-between; gap: 6px; text-align: left; cursor: pointer; color: var(--text-secondary); }
+.mod-detail .mdd-suggest { position: absolute; z-index: 100; width: 100%; max-height: 180px; overflow-y: auto; margin-top: 4px; border: 1px solid var(--border); border-radius: 8px; }
+
+/* Files */
+.mod-detail .mdd-rows { display: flex; flex-direction: column; }
+.mod-detail .mdd-row { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-top: 1px solid var(--bmm-s06); }
+.mod-detail .mdd-row:first-child { padding-top: 0; border-top: 0; }
+.mod-detail .mdd-row-main { flex: 1; min-width: 0; }
+.mod-detail .mdd-row-title { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.mod-detail .mdd-row-desc { margin-top: 2px; font-size: 11.5px; line-height: 1.45; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mod-detail .mdd-mono { font-family: var(--font-mono); font-size: 11px; }
+.mod-detail .mdd-row-ctl { flex: none; display: flex; gap: 2px; }
+.mod-detail .mdd-status { font-size: 11px; font-weight: 600; }
+.mod-detail .mdd-status.is-ok { color: color-mix(in srgb, var(--success) 60%, var(--text-primary)); }
+.mod-detail .mdd-status.is-warn { color: color-mix(in srgb, var(--warning) 60%, var(--text-primary)); }
+.mod-detail .mdd-status.is-bad { color: color-mix(in srgb, var(--danger) 60%, var(--text-primary)); }
+.mod-detail .mdd-status.is-none { color: var(--text-secondary); }
+.mod-detail .mdd-files-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin: 16px 0 6px; padding-top: 14px; border-top: 1px solid var(--bmm-s06); }
+.mod-detail .mdd-files-head .mdd-label { margin: 0; }
+.mod-detail .mdd-files-acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.mod-detail .mdd-files {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+.mod-detail .mdd-files li { padding: 3px 0; border-top: 1px solid var(--bmm-s04); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mod-detail .mdd-files li:first-child { border-top: 0; }
+
+/* Conflicts & order. The order box is its own framed card elsewhere; in a dialog it is a band
+   (no frame inside a modal: modal-shell.css). */
+.mod-detail .mdd-order-slot .lib-order-box { margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.mod-detail .mdd-conflicts { display: flex; flex-direction: column; gap: 6px; }
+
+/* Updates & links */
+.mod-detail .mdd-inline-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.mod-detail .mdd-links { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+.mod-detail .mdd-link-row { display: grid; grid-template-columns: 110px minmax(0, 1fr) 140px 30px; gap: 6px; align-items: center; }
+.mod-detail .mdd-link-row .input-field { width: 100%; box-sizing: border-box; padding: 5px 7px; font-size: 11.5px; }
+.mod-detail .detail-repo-link { margin-top: 8px; }
+
+/* Footer: what is unsaved, in the warning ink. */
+.mod-detail .modal-footer.is-dirty .mdd-foot-status { color: color-mix(in srgb, var(--warning) 60%, var(--text-primary)); font-weight: 600; }
+
+@media (max-width: 640px) {
+    .mod-detail .mdd-grid { grid-template-columns: 1fr; }
+    .mod-detail .mdd-link-row { grid-template-columns: 1fr 1fr; }
+}

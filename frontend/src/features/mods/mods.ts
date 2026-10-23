@@ -1,0 +1,490 @@
+// @ts-nocheck
+import { invoke, listenFileDrop, pickFolder, pickFile } from '../../core/api.js';
+import { toast } from '../../ui/app.js';
+import { updateDiscordStatus } from '../settings/settings.js';
+import { renderProfiles } from '../profiles/profiles.js';
+import { t, applyTranslations } from '../../core/i18n.js';
+import { escHtml, escAttr } from '../../core/utils.js';
+import { isPackIcon, renderPackIcon, ensurePacksFor } from '../../ui/icon-pack.js';
+import { appState } from '../../core/state.js';
+
+// Sub-modules
+import { 
+  renderModList,
+  updateCardState,
+  updateBadge,
+  updateSubtitle,
+  updateToggleAllBtn,
+  ensureModCancelContextMenu,
+  revealMod,
+  visibleMods
+} from './mods-list.js';
+import { initLibSelect } from './lib-select.js';
+import { 
+  checkAllConflicts, 
+  restoreConflictCache 
+} from './mods-conflicts.js';
+import {
+  openAddModModal,
+  confirmAddMod,
+  toggleAllMods,
+  scanModsFolder,
+  verifyIntegrity,
+  requestCancelModOps,
+  requestCancelCurrentOnly
+} from './mods-actions.js';
+import { 
+  selectMod, 
+  closeModDetail, 
+  renderModDetail 
+} from './mods-details.js';
+import { openQuickApplyModal } from './modpack-creator.js';
+import { initLibOrder } from './lib-order.js';
+import { initCardActivityAnimation } from './mods-job-anim.js';
+import { setAddModSource, takeDrop } from './add-mod.js';
+import { uiIcon } from '../../ui/icons.js';
+import { initHistory } from './history.js';
+
+const S = new Proxy(appState.state, {
+  get(target, prop) { return target[prop]; },
+  set(target, prop, value) { appState.set(prop, value); return true; }
+});
+
+let refreshTimeout = null;
+let _lastAutoScan = 0;   // timestamp of the last auto-scan (for the configurable interval)
+
+// The mod list is built from template literals in ui/components.ts, so every label on
+// a card is baked at render time — applyTranslations() cannot reach any of it, because
+// none of it carries a data-i18n attribute. The cards therefore kept the language they
+// were drawn in until something else happened to redraw them.
+//
+// components.ts cannot subscribe to this itself: it owns no container, it only returns
+// HTML strings. The subscription belongs to whoever renders them, which is here.
+let _langWired = false;
+function wireLangRerender(): void {
+    if (_langWired) return;
+    _langWired = true;
+    document.addEventListener('langChanged', () => {
+        // Re-render only; no re-fetch. The data did not change, the words did — and
+        // re-reading the disk on a language switch would make a free action expensive.
+        try { renderModList(true); } catch { /* view not mounted */ }
+        try { if (S.selectedModId) renderModDetail(S.selectedModId); } catch { /* no detail open */ }
+    });
+}
+
+export async function initMods() {
+    wireLangRerender();
+  window._refreshModsFn = refreshMods;
+  ensureModCancelContextMenu();
+  initCardActivityAnimation(updateCardState);
+  initLibOrder(toast);
+  // Selection mode, bulk enable / disable and the list's keyboard (lib-select.ts).
+  initLibSelect({
+    visible: () => visibleMods(),
+    reveal: (id) => revealMod(id),
+    redraw: () => { renderModList(true); },
+    open: (id) => selectMod(id),
+  });
+  // Filter and sort menus: one glyph per choice, so the menus scan like the tag menu does.
+  const decorate = (id: string, map: Record<string, Parameters<typeof uiIcon>[0]>) => {
+    const sel = document.getElementById(id) as HTMLSelectElement | null;
+    sel?.querySelectorAll('option').forEach((o) => { const n = map[o.value]; if (n) o.dataset.icon = uiIcon(n, 14); });
+  };
+  decorate('mod-status-filter', { all: 'layers', enabled: 'success', disabled: 'power' });
+  decorate('mod-sort', { name_asc: 'move-down', name_desc: 'move-up', status: 'power', activation_order: 'list-ordered' });
+  // "No mod matches": one button puts the search and every filter back to "all".
+  document.getElementById('btn-lib-clear-filters')?.addEventListener('click', () => {
+    const search = document.getElementById('mod-search') as HTMLInputElement | null;
+    if (search && search.value) { search.value = ''; search.dispatchEvent(new Event('input')); }
+    for (const id of ['mod-status-filter', 'mod-tag-filter']) {
+      const sel = document.getElementById(id) as HTMLSelectElement | null;
+      if (sel && sel.value !== 'all') { sel.value = 'all'; sel.dispatchEvent(new Event('change')); }
+    }
+    renderModList(true);
+  });
+
+  // --- Core Listeners ---
+  document.getElementById('btn-add-mod')?.addEventListener('click', openAddModModal);
+  document.getElementById('btn-quick-apply-modpack')?.addEventListener('click', openQuickApplyModal);
+  document.getElementById('btn-confirm-add-mod')?.addEventListener('click', confirmAddMod);
+  document.getElementById('btn-enable-all')?.addEventListener('click', () => toggleAllMods());
+  document.getElementById('btn-disable-all-alt')?.addEventListener('click', () => toggleAllMods(false));
+  document.getElementById('btn-scan-mods')?.addEventListener('click', scanModsFolder);
+  document.getElementById('btn-verify-integrity')?.addEventListener('click', verifyIntegrity);
+  document.getElementById('btn-close-detail')?.addEventListener('click', closeModDetail);
+  // Main click = cancel CURRENT op only (lets queued/batch ops continue).
+  // Hover dropdown exposes "Cancel all" which fully reverts.
+  document.getElementById('btn-cancel-mod-ops')?.addEventListener('click', (e) => {
+    // Skip the click if the user clicked while the dropdown is open and
+    // they're really targeting a menu item (the menu items are absolutely
+    // positioned siblings, so we just guard against bubble from them).
+    const target = e.target as HTMLElement;
+    if (target && target.closest('.cancel-ops-item')) return;
+    requestCancelCurrentOnly();
+  });
+  document.getElementById('btn-cancel-current-only')?.addEventListener('click', requestCancelCurrentOnly);
+  document.getElementById('btn-cancel-all-ops')?.addEventListener('click', requestCancelModOps);
+
+
+  // ── Sticky header toggle ──────────────────────────────────────────────────
+  _initStickyToggle();
+
+  // Add Mod folder picker
+  document.getElementById('btn-pick-mod-folder')?.addEventListener('click', async () => {
+    try {
+      const folder = await pickFolder();
+      // The path, a name and version guessed from it, and the preview (add-mod.ts).
+      if (folder) setAddModSource(folder);
+    } catch (error) {
+      console.error('Error picking folder:', error);
+      toast((window.t ? window.t('common.error') : 'Error'), 'error');
+    }
+  });
+
+  // Add a zipped mod (.zip) — stored zipped, extracted only on activation
+  document.getElementById('btn-pick-mod-archive')?.addEventListener('click', async () => {
+    try {
+      const file = await pickFile([{ name: 'Mod archive', extensions: ['zip', 'rar', '7z', 'tar', 'gz', 'tgz'] }]);
+      if (file) setAddModSource(file);
+    } catch (error) {
+      console.error('Error picking archive:', error);
+      toast((window.t ? window.t('common.error') : 'Error'), 'error');
+    }
+  });
+
+  const viewBtn = document.getElementById('btn-view-mode');
+  const modlist = document.getElementById('mod-list');
+  const scrollContainer = document.querySelector('.content-area'); // Fixed selector typo (Issue 21)
+
+  if (S.isCompact && modlist) modlist.classList.add('compact');
+  if (S.isCompact && viewBtn) viewBtn.classList.add('is-compact');
+
+  // React to state changes with debouncing
+  let stateChangeTimeout = null;
+  const debouncedRender = () => {
+    if (stateChangeTimeout) {
+      clearTimeout(stateChangeTimeout);
+    }
+    stateChangeTimeout = setTimeout(() => {
+      renderModList(true);
+      stateChangeTimeout = null;
+    }, 50); // 50ms debounce for better performance
+  };
+
+  appState.subscribe('isCompact', (val) => {
+    if (modlist) modlist.classList.toggle('compact', val);
+    if (viewBtn) viewBtn.classList.toggle('is-compact', val);
+    debouncedRender();
+  });
+  appState.subscribe('currentFilter', debouncedRender);
+  appState.subscribe('currentSort', debouncedRender);
+
+  viewBtn?.addEventListener('click', () => {
+    S.isCompact = !S.isCompact;
+    localStorage.setItem('bmm-view-compact', S.isCompact);
+  });
+
+  // Mod-action dropdown (enable-all / disable-all)
+  const modActionTrigger = document.getElementById('btn-mod-actions');
+  const modActionMenu = document.getElementById('mod-action-menu');
+  const modActionContainer = document.getElementById('enable-all-container');
+  modActionTrigger?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isOpen = modActionMenu?.style.display !== 'none';
+    if (modActionMenu) modActionMenu.style.display = isOpen ? 'none' : 'flex';
+    modActionContainer?.classList.toggle('open', !isOpen);
+  });
+  document.addEventListener('click', (e) => {
+    if (modActionMenu && !modActionContainer?.contains(e.target as Node)) {
+      modActionMenu.style.display = 'none';
+      modActionContainer?.classList.remove('open');
+    }
+  });
+  // Close dropdown after an action is chosen
+  document.getElementById('btn-enable-all')?.addEventListener('click', () => {
+    if (modActionMenu) modActionMenu.style.display = 'none';
+    modActionContainer?.classList.remove('open');
+  }, true);
+  document.getElementById('btn-disable-all-alt')?.addEventListener('click', () => {
+    if (modActionMenu) modActionMenu.style.display = 'none';
+    modActionContainer?.classList.remove('open');
+  }, true);
+
+  if (scrollContainer) {
+    let scrollTimeout = null;
+    scrollContainer.addEventListener('scroll', () => {
+        // Throttle scroll events to improve performance
+        if (scrollTimeout) {
+            cancelAnimationFrame(scrollTimeout);
+        }
+        scrollTimeout = requestAnimationFrame(() => renderModList(false));
+    }, { passive: true });
+  }
+
+  // Filter buttons
+  // Status filter is now a dropdown (#mod-status-filter), consistent with the
+  // tag/sort selects. (Legacy .filter-btn pills handler kept harmless in case any remain.)
+  const statusFilterEl = document.getElementById('mod-status-filter') as HTMLSelectElement | null;
+  statusFilterEl?.addEventListener('change', async () => {
+    S.currentFilter = statusFilterEl.value || 'all';
+    renderModList(true);
+    try {
+      const settings = await invoke('get_settings');
+      settings.current_filter = S.currentFilter;
+      await invoke('update_settings', { settings });
+    } catch (e) {}
+  });
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      (e.currentTarget as HTMLElement).classList.add('active');
+      S.currentFilter = (e.currentTarget as HTMLElement).dataset.filter as string;
+      renderModList(true);
+      try {
+        const settings = await invoke('get_settings');
+        settings.current_filter = S.currentFilter;
+        await invoke('update_settings', { settings });
+      } catch (e) {}
+    });
+  });
+
+  // Search
+  const searchInput = document.getElementById('mod-search');
+  searchInput?.addEventListener('input', e => {
+    S.searchQuery = e.target.value.toLowerCase();
+    renderModList(true);
+  });
+  // « Smart » toggle beside the box (features/ai/ai-ask.ts), loaded after the list is up.
+  if (searchInput) setTimeout(() => { void import('../ai/ai-ask.js').then((m) => m.mountSmartSearch(searchInput as HTMLInputElement, () => renderModList(true))).catch(() => {}); }, 0);
+  // « Analyser la bibliothèque » (features/ai/ai-library.ts): an icon beside « Check for updates ».
+  // Suggestions for many mods at once; nothing is written until the user applies, mod by mod.
+  setTimeout(() => {
+    void import('../ai/ai-library.js').then((m) => m.mountAnalyzeButton({
+      getMods: () => appState.state.allMods || [],
+      tagName: (id: string) => (appState.state.userTags || []).find((x: any) => x.id === id)?.name || id,
+      onApplied: (u: any) => {
+        const mod = (appState.state.allMods || []).find((x: any) => x.id === u?.id);
+        if (mod && u) Object.assign(mod, { name: u.name, version: u.version, author: u.author, description: u.description, tags: u.tags, download_links: u.download_links });
+        appState.set('allMods', [...(appState.state.allMods || [])]);
+        renderModList(true);
+      },
+    })).catch(() => {});
+  }, 0);
+
+  // Sort
+  const sortSelect = document.getElementById('mod-sort');
+  sortSelect?.addEventListener('change', async e => {
+    S.currentSort = (e.target as HTMLSelectElement).value;
+    renderModList(true);
+    try {
+      const settings = await invoke('get_settings') as any;
+      settings.current_sort_by = S.currentSort;
+      await invoke('update_settings', { settings });
+    } catch (e) {}
+  });
+
+  // Tag Filter
+  const tagFilterSelect = document.getElementById('mod-tag-filter');
+  tagFilterSelect?.addEventListener('change', e => {
+    S.currentTagFilter = (e.target as HTMLSelectElement).value;
+    renderModList(true);
+  });
+
+  // History: one timeline of what changed (history.ts).
+  initHistory();
+
+  // File / folder drop → pre-fill the Add Mod modal. Works for BOTH a mod folder
+  // and a mod archive (.zip/.rar/.7z/.tar/.gz) — the backend detects which from
+  // the path; the `mod-folder` field holds either.
+  listenFileDrop(async paths => {
+    // Dropped on the open Add dialog: it becomes that dialog's source.
+    if (takeDrop(paths)) return;
+    const libView = document.getElementById('view-library');
+    if (!libView || !libView.classList.contains('active')) return;
+    if (document.querySelector('.modal-overlay.open')) return;
+    if (!paths || paths.length === 0) return;
+
+    openAddModModal();
+    setAddModSource(paths[0]);
+  });
+
+  // Initial Data Load
+  try {
+    const settings = await invoke('get_settings').catch(() => null);
+    if (settings) {
+      S.currentFilter = (settings as any).current_filter || 'all';
+      // An older or unknown value (e.g. "name") left the sort select blank: fall back to A-Z.
+      const savedSort = (settings as any).current_sort_by;
+      S.currentSort = ['name_asc', 'name_desc', 'status', 'activation_order'].includes(savedSort) ? savedSort : 'name_asc';
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', (b as HTMLElement).dataset.filter === S.currentFilter));
+      const statusSel = document.getElementById('mod-status-filter') as HTMLSelectElement | null;
+      if (statusSel) statusSel.value = S.currentFilter;
+      const sortSelect = document.getElementById('mod-sort') as HTMLSelectElement;
+      if (sortSelect) sortSelect.value = S.currentSort;
+
+    }
+    S.userTags = await invoke('get_tags').catch(() => []);
+    // Tag icons come from the lazy packs. Fire-and-forget: awaiting here put a pack
+    // fetch in front of get_mods on the app's hottest path (initMods at startup,
+    // refreshMods on every toggle), and the renderer already tolerates a miss — it
+    // draws the name and the next render finds the glyph.
+    void import('../../ui/icon-pack.js')
+        .then(ip => ip.ensurePacksFor((S.userTags || []).map((tg: any) => tg.icon)))
+        .catch(() => { /* icons are decoration */ });
+    S.allMods = await invoke('get_mods');
+    updateTagFilterUI();
+    renderModList();
+  } catch (err) { S.allMods = []; }
+
+  updateBadge();
+  updateSubtitle();
+  restoreConflictCache();
+
+  if (S.selectedModId) {
+    const m = S.allMods.find(mod => mod.id === S.selectedModId);
+    if (m) renderModDetail(m.id);
+    else closeModDetail();
+  }
+
+  checkAllConflicts();
+}
+
+export async function refreshMods(autoScan = false, immediate = false) {
+  if (refreshTimeout) { clearTimeout(refreshTimeout); refreshTimeout = null; }
+
+  const doRefresh = async () => {
+    // The Library header says it when the active profile's game folder needs BMM elevated
+    // (Program Files): features/mods/protected-folder.ts.
+    void import('./protected-folder.js').then((m) => m.paintLibraryProtectedHint(S.activeProfileId || S.cachedActiveProfileId)).catch(() => {});
+    if (autoScan && S.processingMods.size === 0) {
+      // Throttle automatic scans by the user-configured interval (settings →
+      // "Auto-scan interval", localStorage `bmm_scan_interval_sec`, default 0).
+      // The last-scan timestamp is persisted so the interval limits scan
+      // frequency ACROSS app launches/focus, not just within one session
+      // (otherwise it reset every start and felt like it had no effect).
+      // 0 (or unset) means "use the default gap" rather than scanning every time.
+      const DEFAULT_SCAN_SEC = 30;
+      let secs = DEFAULT_SCAN_SEC;
+      try { const v = Math.max(0, parseInt(localStorage.getItem('bmm_scan_interval_sec') || '0', 10) || 0); secs = v === 0 ? DEFAULT_SCAN_SEC : v; } catch {}
+      const minGapMs = secs * 1000;
+      let last = _lastAutoScan;
+      try { last = parseInt(localStorage.getItem('bmm_last_auto_scan') || '0', 10) || _lastAutoScan; } catch {}
+      const now = Date.now();
+      if (now - last >= minGapMs) {
+        const activeId = S.cachedActiveProfileId || await invoke('get_active_profile_id').catch(() => null);
+        if (activeId) {
+          await invoke('scan_mods_folder').catch(() => {});
+          _lastAutoScan = now;
+          try { localStorage.setItem('bmm_last_auto_scan', String(now)); } catch {}
+        }
+      }
+    }
+    try {
+      S.userTags = await invoke('get_tags').catch(() => []);
+    // Tag icons come from the lazy packs. Fire-and-forget: awaiting here put a pack
+    // fetch in front of get_mods on the app's hottest path (initMods at startup,
+    // refreshMods on every toggle), and the renderer already tolerates a miss — it
+    // draws the name and the next render finds the glyph.
+    void import('../../ui/icon-pack.js')
+        .then(ip => ip.ensurePacksFor((S.userTags || []).map((tg: any) => tg.icon)))
+        .catch(() => { /* icons are decoration */ });
+      S.allMods = await invoke('get_mods').catch(() => []);
+      S.cachedActiveProfileId = await invoke('get_active_profile_id').catch(() => null);
+    } catch (err) { S.allMods = []; }
+
+    updateBadge();
+    updateSubtitle();
+    updateToggleAllBtn();
+    try { renderProfiles(); } catch (e) {}
+    updateTagFilterUI();
+    renderModList(true); 
+
+    if (S.selectedModId) renderModDetail(S.selectedModId);
+    checkAllConflicts();
+
+    // Notify other features (mapper, modpack-creator) that mods list changed
+    window.dispatchEvent(new CustomEvent('bmm:mods-updated', { detail: { mods: S.allMods } }));
+  };
+
+  if (immediate) return await doRefresh();
+  return new Promise(resolve => {
+    refreshTimeout = setTimeout(async () => { await doRefresh(); refreshTimeout = null; resolve(); }, 200);
+  });
+}
+
+function updateTagFilterUI() {
+  const select = document.getElementById('mod-tag-filter') as HTMLSelectElement | null;
+  if (!select) return;
+  const currentVal = S.currentTagFilter || 'all';
+  let html = `<option value="all" data-i18n="lib.tagFilterAll">${t('lib.tagFilterAll') || 'All tags'}</option>`;
+  if (S.userTags && S.userTags.length > 0) {
+    const sortedTags = [...S.userTags].sort((a:any, b:any) => a.name.localeCompare(b.name));
+    // Each row wears the tag's colour (and its icon when it has one), as the chips do.
+    // data-icon is rendered as markup by the custom select: only a checked colour goes in.
+    const hex = (c: any) => (typeof c === 'string' && /^#[0-9a-f]{3,8}$/i.test(c) ? c : '');
+    let missingPack = false;
+    sortedTags.forEach((tag:any) => {
+      const c = hex(tag.color), c2 = hex(tag.color2);
+      let ic = '';
+      if (isPackIcon(tag.icon)) { ic = renderPackIcon(tag.icon, 14, c || undefined); if (!ic) missingPack = true; }
+      // The icon already wears the tag's colour: a dot beside it says it twice.
+      const dot = c && !ic ? `<span class="lib-tag-dot" style="background:${c2 ? `linear-gradient(135deg,${c},${c2})` : c}"></span>` : '';
+      const deco = dot || ic ? ` data-icon="${escAttr(`<span class="lib-tag-opt">${dot}${ic}</span>`)}"` : '';
+      html += `<option value="${escAttr(String(tag.id))}"${deco}>${escHtml(tag.name)}</option>`;
+    });
+    // An icon pack still loading renders nothing: load it, then draw the menu again.
+    if (missingPack) void ensurePacksFor(sortedTags.map((x: any) => x.icon)).then(() => updateTagFilterUI());
+  }
+  select.innerHTML = html;
+  select.value = currentVal;
+}
+
+// ── Sticky header toggle ──────────────────────────────────────────────────────
+function _initStickyToggle() {
+  const STORAGE_KEY = 'bmm-lib-sticky';
+  const view  = document.getElementById('view-library');
+  const btn   = document.getElementById('btn-toggle-lib-sticky') as HTMLButtonElement | null;
+  if (!view || !btn) return;
+
+  // Restore persisted preference (default: sticky ON)
+  const stored = localStorage.getItem(STORAGE_KEY);
+  let isSticky = stored === null ? true : stored === '1';
+  _applyStickyState(view, btn, isSticky);
+
+  btn.addEventListener('click', () => {
+    isSticky = !isSticky;
+    localStorage.setItem(STORAGE_KEY, isSticky ? '1' : '0');
+    _applyStickyState(view, btn, isSticky);
+  });
+
+  // Pixel-perfect docking: the filter shell must stick at EXACTLY the action
+  // pill's height (the `top: 40px` magic number drifted once the pill's real
+  // height changed with the toolbar density / window width). Measure it and feed
+  // the value into a CSS var, kept live via a ResizeObserver + window resize.
+  _syncStickyOffset(view);
+  const tab = view.querySelector('.lib-actions-tab') as HTMLElement | null;
+  if (tab && 'ResizeObserver' in window) {
+    new ResizeObserver(() => _syncStickyOffset(view)).observe(tab);
+  }
+  window.addEventListener('resize', () => _syncStickyOffset(view));
+}
+
+function _syncStickyOffset(view: HTMLElement) {
+  const tab = view.querySelector('.lib-actions-tab') as HTMLElement | null;
+  if (!tab) return;
+  const h = Math.round(tab.getBoundingClientRect().height);
+  if (h > 0) view.style.setProperty('--lib-actions-h', h + 'px');
+}
+
+function _applyStickyState(view: HTMLElement, btn: HTMLButtonElement, isSticky: boolean) {
+  view.classList.toggle('lib-sticky-header', isSticky);
+  btn.classList.toggle('pinned', isSticky);
+  btn.style.opacity = isSticky ? '1' : '0.45';
+  btn.style.color   = isSticky ? 'var(--accent)' : '';
+  // Update the onmouseenter so Tasky shows the right label
+  const taskyKey = isSticky ? 'lib.stickyHeaderOn' : 'lib.stickyHeaderOff';
+  btn.dataset.tasky = taskyKey;
+  btn.dataset.taskyIcon = 'icon-pin';
+}
+
+export { selectMod, closeModDetail, renderModDetail };

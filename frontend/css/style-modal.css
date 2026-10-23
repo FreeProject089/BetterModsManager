@@ -1,0 +1,74 @@
+/* The Style modal — theme tiles + doors into Settings (src/ui/style-modal.ts), and the
+   first-run file-access question (src/ui/security-modal.ts), both on the house shell.
+   Tokens throughout: this screen exists to change the theme, so it is the last place a
+   fixed wash could hide (it would look right on exactly one of the things it sells). */
+
+/* The card is the house shell (openModal, .modal--lg): title + subtitle in the header, the
+   tiles in the body, the doors in the footer. Only the tiles are styled here. */
+
+.style-modal-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+    gap: 10px;
+}
+
+.style-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 6px;
+    background: none;
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: border-color 0.12s, transform 0.12s;
+}
+.style-tile:hover { border-color: var(--bmm-border-hover, var(--border)); transform: translateY(-1px); }
+/* The chosen one wears its OWN accent, not the app's — the ring should look like the
+   theme it marks. */
+.style-tile.on { border-color: var(--tile-accent); }
+
+/* The miniature window. Painted entirely from the theme's four colours in TS. */
+.style-tile-win {
+    position: relative;
+    display: block;
+    height: 74px;
+    border-radius: 6px;
+    overflow: hidden;
+}
+.style-tile-bar  { position: absolute; inset: 0 0 auto 0; height: 12px; }
+.style-tile-side { position: absolute; left: 0; top: 12px; bottom: 0; width: 26px; }
+.style-tile-card { position: absolute; left: 32px; right: 6px; top: 18px; bottom: 6px; border-radius: 4px; }
+.style-tile-line { position: absolute; left: 6px; top: 7px; width: 60%; height: 4px; border-radius: 2px; opacity: 0.85; }
+.style-tile-line.short { top: 16px; width: 38%; opacity: 0.35; }
+.style-tile-btn  { position: absolute; left: 6px; bottom: 6px; width: 26px; height: 9px; border-radius: 3px; }
+
+.style-tile-name {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--bmm-text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.style-tile.on .style-tile-name { color: var(--bmm-text-primary); }
+
+
+
+/* ── The first-run file-access question (src/ui/security-modal.ts) ─────────────────────────
+   House shell, sm; two radio cards — the same pair as the launch deck's file-access step. */
+.secm-body { display: flex; flex-direction: column; gap: 14px; }
+.secm-choices { display: flex; flex-direction: column; gap: 8px; }
+.secm-choice {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 12px 14px; border-radius: 12px;
+    border: 1px solid var(--bmm-border); background: var(--bmm-s02);
+    cursor: pointer; transition: background var(--bmm-transition-fast), border-color var(--bmm-transition-fast);
+}
+.secm-choice:hover { background: var(--bmm-s05); }
+.secm-choice.is-on { border-color: var(--bmm-accent); background: color-mix(in srgb, var(--bmm-accent) 8%, var(--bmm-s05)); }
+.secm-choice input { accent-color: var(--bmm-accent); margin: 3px 0 0; flex-shrink: 0; }
+.secm-choice-txt { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.secm-choice-name { font-size: 13.5px; font-weight: 650; color: var(--bmm-text-primary); }
+.secm-choice-desc { font-size: 12px; line-height: 1.5; color: var(--bmm-text-secondary); }
+.secm-error { margin: 0; font-size: 12px; color: var(--bmm-danger); }

@@ -1,52 +1,462 @@
+use tauri::Manager;
 use crate::state::AppState;
 use crate::fs_utils::{resolve_path, get_lang_dir};
 use tauri::State;
+use crate::error::AppError;
+use tracing::{info, warn};
 
-#[tauri::command]
-pub fn export_app_data(state: State<AppState>, dest_path: String) -> Result<(), String> {
-    let _ = state.save(); // Save current memory to disk first
-    std::fs::copy(&state.data_path, dest_path).map_err(|e| e.to_string())?;
-    Ok(())
+#[derive(serde::Deserialize)]
+pub struct ExportOptions {
+    pub profiles: bool,
+    pub mods: bool,
+    pub settings: bool,
+    pub custom_tags: bool,
+    pub disk_limits: bool,
+    // Extended sections (all optional → default false for old callers)
+    #[serde(default)] pub plugins: bool,
+    #[serde(default)] pub modpacks: bool,
+    #[serde(default)] pub launch_packs: bool,
+    #[serde(default)] pub themes: bool,
+    #[serde(default)] pub translations: bool,
+    #[serde(default)] pub apps: bool,
 }
 
+/// Factory reset — wipe BMM back to a fresh install. The current data.json is
+/// preserved as `data.before-reset-<ts>.json` (and the rolling .bak), so this is
+/// recoverable. The caller should prompt the user to restart afterwards.
 #[tauri::command]
-pub fn import_app_data(state: State<AppState>, src_path: String) -> Result<(), String> {
-    std::fs::copy(src_path, &state.data_path).map_err(|e| e.to_string())?;
-    // Reload state into memory
-    let new_state = AppState::load(state.data_path.clone());
-    let mut data = state.data.lock().unwrap();
-    let new_data = new_state.data.lock().unwrap();
-    *data = crate::state::AppData {
-        profiles: new_data.profiles.clone(),
-        mods: new_data.mods.clone(),
-        active_profile_id: new_data.active_profile_id.clone(),
-        custom_tags: new_data.custom_tags.clone(),
-        disk_limits: new_data.disk_limits.clone(),
-        settings: new_data.settings.clone(),
-    };
-    Ok(())
-}
-
-#[tauri::command]
-pub fn get_settings(state: State<AppState>) -> crate::state::AppSettings {
-    let data = state.data.lock().unwrap();
-    data.settings.clone()
-}
-
-#[tauri::command]
-pub fn update_settings(state: State<AppState>, settings: crate::state::AppSettings) -> Result<(), String> {
+pub fn factory_reset(state: State<AppState>, app: tauri::AppHandle) -> Result<(), String> {
+    let dir = app.path().app_data_dir().ok().unwrap_or_default();
+    let data_path = dir.join("data.json");
+    if data_path.exists() {
+        let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        let _ = std::fs::copy(&data_path, dir.join(format!("data.before-reset-{}.json", ts)));
+    }
+    // Reset the live state to factory defaults and persist atomically.
     {
-        let mut data = state.data.lock().unwrap();
-        data.settings = settings;
+        let mut d = state.data.lock().map_err(|e| e.to_string())?;
+        *d = crate::state::AppData::default();
     }
     state.save().map_err(|e| e.to_string())?;
+    // Best-effort removal of sidecar config files (harmless if absent).
+    for f in ["bans.json", "whitelist.json", "analytics_sent.json", "analytics_queue.json", "active_theme.txt", "discord_rpc.json"] {
+        let _ = std::fs::remove_file(dir.join(f));
+    }
+    crate::commands::crash::log_line("[RESET] Factory reset performed — previous data backed up (data.before-reset-*.json).".to_string());
+    Ok(())
+}
+
+// ── Helpers for the file-based data dirs ──────────────────────────────────────
+fn data_dir(app: &tauri::AppHandle) -> std::path::PathBuf {
+    app.path().app_data_dir().ok().unwrap_or_default()
+}
+/// Read every *.json in a dir into a { filename: parsed-json } map.
+fn read_json_dir(dir: &std::path::Path) -> serde_json::Map<String, serde_json::Value> {
+    let mut out = serde_json::Map::new();
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for e in entries.flatten() {
+            let p = e.path();
+            if p.extension().and_then(|s| s.to_str()) == Some("json") {
+                if let (Some(name), Ok(txt)) = (p.file_name().and_then(|s| s.to_str()), std::fs::read_to_string(&p)) {
+                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&txt) {
+                        out.insert(name.to_string(), v);
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+fn write_json_dir(dir: &std::path::Path, files: &serde_json::Map<String, serde_json::Value>) {
+    let _ = std::fs::create_dir_all(dir);
+    for (name, val) in files {
+        // Guard against path traversal in the embedded filename.
+        if name.contains('/') || name.contains('\\') || name.contains("..") { continue; }
+        if let Ok(txt) = serde_json::to_string_pretty(val) {
+            let _ = std::fs::write(dir.join(name), txt);
+        }
+    }
+}
+
+#[tauri::command]
+pub fn export_app_data(state: State<AppState>, app_handle: tauri::AppHandle, dest_path: String, options: Option<ExportOptions>, extras: Option<serde_json::Value>) -> Result<(), AppError> {
+    let _ = state.save(); // Save current memory to disk first
+    let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?.clone();
+    export_to_file(&data, &data_dir(&app_handle), &get_lang_dir(&app_handle), &dest_path, options, extras)
+}
+
+impl ExportOptions {
+    /// Every section: what an unattended backup writes, and what a call without options gets.
+    pub fn everything() -> Self {
+        Self {
+            profiles: true, mods: true, settings: true, custom_tags: true, disk_limits: true,
+            plugins: true, modpacks: true, launch_packs: true, themes: true, translations: true, apps: true,
+        }
+    }
+}
+
+/// Write an export of `data` to `dest`.
+///
+/// No options used to mean a RAW copy of `data.json`: the API token, the scheduler key, the
+/// plugin tokens and the GitHub token went into every unattended backup (the scheduler's, the
+/// API's `data/export-auto`), often to a NAS (security summary §9, exports). It now means
+/// every section, through the same builder as a manual export, so the same secrets are
+/// stripped whichever path wrote the file.
+pub(crate) fn export_to_file(
+    data: &crate::state::AppData,
+    dir: &std::path::Path,
+    lang_dir: &std::path::Path,
+    dest: &str,
+    options: Option<ExportOptions>,
+    extras: Option<serde_json::Value>,
+) -> Result<(), AppError> {
+    let opts = options.unwrap_or_else(ExportOptions::everything);
+    let root = export_document(data, &opts, extras, dir, lang_dir)?;
+    std::fs::write(dest, serde_json::to_string_pretty(&root)?)?;
+    Ok(())
+}
+
+/// The same document, RETURNED rather than written.
+///
+/// The `.DATABMM` bundle needs this content inside its archive. Returning it here rather than
+/// re-deciding what "profiles" or "plugins" means over there is the whole point: two exporters
+/// that each read the options would disagree the first time either changed.
+#[tauri::command]
+pub fn export_app_data_json(state: State<AppState>, app_handle: tauri::AppHandle, options: ExportOptions, extras: Option<serde_json::Value>) -> Result<String, AppError> {
+    let root = build_export_json(&state, &app_handle, &options, extras)?;
+    Ok(serde_json::to_string(&root)?)
+}
+
+fn build_export_json(state: &State<AppState>, app_handle: &tauri::AppHandle, opts: &ExportOptions, extras: Option<serde_json::Value>) -> Result<serde_json::Value, AppError> {
+    let _ = state.save(); // Save current memory to disk first
+    let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?.clone();
+    export_document(&data, opts, extras, &data_dir(app_handle), &get_lang_dir(app_handle))
+}
+
+/// The export document, from a copy of the data and the two folders it reads files from.
+fn export_document(
+    data: &crate::state::AppData,
+    opts: &ExportOptions,
+    extras: Option<serde_json::Value>,
+    dir: &std::path::Path,
+    lang_dir: &std::path::Path,
+) -> Result<serde_json::Value, AppError> {
+    let mut export_data = crate::state::AppData::default();
+    if opts.profiles { export_data.profiles = data.profiles.clone(); export_data.active_profile_id = data.active_profile_id.clone(); }
+    if opts.mods { export_data.mods = data.mods.clone(); }
+    // The resource governor's presets and rules are settings kept outside `settings` (see
+    // state.rs); the raw copy of data.json carried them, so the settings section does too.
+    if opts.settings { export_data.settings = data.settings.clone(); export_data.resources = data.resources.clone(); }
+    if opts.custom_tags { export_data.custom_tags = data.custom_tags.clone(); }
+    if opts.disk_limits { export_data.disk_limits = data.disk_limits.clone(); }
+    if opts.plugins { export_data.installed_plugins = data.installed_plugins.clone(); export_data.plugin_permissions = data.plugin_permissions.clone(); }
+    if opts.modpacks { export_data.modpacks = data.modpacks.clone(); }
+    if opts.launch_packs { export_data.launch_packs = data.launch_packs.clone(); }
+
+    // Versioned wrapper so we can carry file-based data + frontend extras alongside AppData.
+    let mut root = serde_json::Map::new();
+    root.insert("_bmm_backup".into(), serde_json::json!(2));
+    let mut app_data_json = serde_json::to_value(&export_data)?;
+    // This machine's API token, scheduler key, plugin tokens, CORS and tunnel-host lists, and
+    // the user's GitHub token, never travel: an import keeps the local ones anyway
+    // (state::LOCAL_ONLY_SETTINGS), so all a copy in the file could do is leak them to
+    // whoever the backup is shared with.
+    crate::state::strip_local_only_settings(&mut app_data_json);
+    root.insert("app_data".into(), app_data_json);
+
+    if opts.themes {
+        let themes = read_json_dir(&dir.join("themes"));
+        if !themes.is_empty() { root.insert("themes".into(), serde_json::Value::Object(themes)); }
+    }
+    if opts.translations {
+        let langs = read_json_dir(lang_dir);
+        if !langs.is_empty() { root.insert("translations".into(), serde_json::Value::Object(langs)); }
+    }
+    if opts.apps {
+        let mut apps = serde_json::Map::new();
+        if let Ok(t) = std::fs::read_to_string(dir.join("apps_state.json")) {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&t) { apps.insert("apps_state.json".into(), v); }
+        }
+        if let Ok(t) = std::fs::read_to_string(dir.join("apps-catalog.json")) {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&t) { apps.insert("apps-catalog.json".into(), v); }
+        }
+        if !apps.is_empty() { root.insert("apps".into(), serde_json::Value::Object(apps)); }
+    }
+    // Frontend-only data (e.g. server-repo favourites from localStorage)
+    if let Some(ex) = extras { if !ex.is_null() { root.insert("extras".into(), ex); } }
+
+    Ok(serde_json::Value::Object(root))
+}
+
+#[cfg(test)]
+mod export_secret_tests {
+    use super::*;
+
+    const GH: &str = "ghp_EXPORTTESTabcdefghijklmnopqrstuvwxyz01";
+
+    fn data() -> crate::state::AppData {
+        let mut d = crate::state::AppData::default();
+        d.settings.github_token = GH.into();
+        d.settings.api_token = "api-token-export-test".into();
+        d.settings.language = "fr".into();
+        d.profiles.push(crate::models::profile::Profile::new(
+            "Game".into(), "Game".into(), "C:/g".into(), "C:/g/mods".into(), "C:/g/bak".into(),
+        ));
+        d
+    }
+
+    /// The unattended export (no options) is a built export, not a raw copy of data.json.
+    #[test]
+    fn an_unattended_export_carries_no_token_and_keeps_the_data() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dest = tmp.path().join("auto.json");
+        export_to_file(&data(), tmp.path(), tmp.path(), &dest.to_string_lossy(), None, None).unwrap();
+        let text = std::fs::read_to_string(&dest).unwrap();
+        assert!(!text.contains(GH), "the GitHub token was exported");
+        assert!(!text.contains("api-token-export-test"), "the API token was exported");
+        let v: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(v["_bmm_backup"], 2, "built by the export builder");
+        assert_eq!(v["app_data"]["settings"]["language"], "fr", "the settings are still there");
+        assert_eq!(v["app_data"]["profiles"].as_array().map(|a| a.len()), Some(1));
+    }
+
+    /// The activation order is `Profile.active_mods`, and a modpack's order is its `mods`
+    /// list: both must come back from an export in the same order, or a restore would silently
+    /// change which mod wins every shared file.
+    #[test]
+    fn the_activation_order_and_a_modpack_order_survive_export_and_restore() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut d = data();
+        d.profiles[0].active_mods = vec!["c".into(), "a".into(), "b".into()];
+        let refs: Vec<serde_json::Value> = ["z", "x", "y"].iter().map(|id| serde_json::json!({
+            "mod_id": id, "mod_name": id, "mod_version": "1", "profile_id": null, "profile_name": null,
+            "sha256": "", "file_manifest": [], "include_dependencies": false,
+            "download_link": null, "fallback_link": null, "fallback_type": null
+        })).collect();
+        let pack: crate::models::modpack::LocalModpack = serde_json::from_value(serde_json::json!({
+            "id": "pk", "name": "Pack", "description": null, "created_at": "", "updated_at": "",
+            "multi_profile": false, "dependency_mode": "none", "sr_link": null, "game_name": null,
+            "mods": refs
+        })).unwrap();
+        d.modpacks.push(pack);
+        let v = export_document(&d, &ExportOptions::everything(), None, tmp.path(), tmp.path()).unwrap();
+        let back: crate::state::AppData = serde_json::from_value(v["app_data"].clone()).unwrap();
+        assert_eq!(back.profiles[0].active_mods, vec!["c".to_string(), "a".into(), "b".into()]);
+        let ids: Vec<&str> = back.modpacks[0].mods.iter().map(|m| m.mod_id.as_str()).collect();
+        assert_eq!(ids, vec!["z", "x", "y"]);
+    }
+
+    #[test]
+    fn every_manual_export_drops_the_github_token() {
+        let tmp = tempfile::tempdir().unwrap();
+        let v = export_document(&data(), &ExportOptions::everything(), None, tmp.path(), tmp.path()).unwrap();
+        assert!(!v.to_string().contains(GH));
+        assert!(v["app_data"]["settings"].get("github_token").is_none());
+    }
+}
+
+/// Automated data export — picks the destination path itself from a target folder,
+/// a filename template ({date} {time} {datetime}) and an increment policy if the
+/// file already exists. Used by the scheduler / API so a backup can run unattended
+/// (no save dialog). Returns the path it wrote to.
+#[tauri::command]
+pub fn export_app_data_auto(
+    state: State<AppState>, app_handle: tauri::AppHandle,
+    dir: String, name: Option<String>, increment: Option<String>,
+) -> Result<String, String> {
+    let dest = backup_dest_path(dir, name, increment, None)?;
+    export_app_data(state, app_handle, dest.clone(), Some(ExportOptions::everything()), None).map_err(|e| e.to_string())?;
+    Ok(dest)
+}
+
+/// Where an unattended backup goes: the template resolved, the name made legal, and the
+/// collision policy applied.
+///
+/// Split out and exposed as a command because there are now TWO unattended backups — the
+/// old `.json` one and the `.DATABMM` bundle a scheduled task writes — and they must agree
+/// about what `{date}` means and about what happens when the file is already there. Written
+/// twice, they would drift, and the drift would show up as a backup silently overwriting
+/// yesterday's instead of sitting beside it.
+///
+/// `ext` defaults to `json` so the original caller behaves exactly as it did.
+#[tauri::command]
+pub fn backup_dest_path(
+    dir: String,
+    name: Option<String>,
+    increment: Option<String>,
+    ext: Option<String>,
+) -> Result<String, String> {
+    let folder = std::path::Path::new(&dir);
+    if !folder.is_dir() {
+        return Err(format!("Not a folder: {}", dir));
+    }
+    let ext = ext.filter(|e| !e.trim().is_empty()).unwrap_or_else(|| "json".into());
+    let ext = ext.trim_start_matches('.').to_string();
+
+    let now = chrono::Local::now();
+    let tmpl = name.unwrap_or_default();
+    let tmpl = if tmpl.trim().is_empty() { "bmm-backup-{date}".to_string() } else { tmpl };
+    let raw = tmpl
+        .replace("{datetime}", &now.format("%Y-%m-%d_%H%M%S").to_string())
+        .replace("{date}", &now.format("%Y-%m-%d").to_string())
+        .replace("{time}", &now.format("%H%M%S").to_string());
+    // Strip a trailing extension the template already carries, and any illegal filename
+    // characters. Case-insensitively: somebody who types `{date}.DATABMM` must not get
+    // `{date}.DATABMM.DATABMM`.
+    let lowered = raw.to_lowercase();
+    let suffix = format!(".{}", ext.to_lowercase());
+    let raw = if lowered.ends_with(&suffix) { raw[..raw.len() - suffix.len()].to_string() } else { raw };
+    let base: String = raw
+        .chars()
+        .map(|c| if "<>:\"/\\|?*".contains(c) { '_' } else { c })
+        .collect();
+    let base = base.trim().to_string();
+
+    let policy = increment.unwrap_or_else(|| "paren".into());
+    let mut candidate = folder.join(format!("{base}.{ext}"));
+    if candidate.exists() {
+        match policy.as_str() {
+            "overwrite" => {}
+            "timestamp" => { candidate = folder.join(format!("{base}_{}.{ext}", now.timestamp())); }
+            "underscore" => {
+                let mut i = 1;
+                while folder.join(format!("{base}_{i}.{ext}")).exists() && i < 9999 { i += 1; }
+                candidate = folder.join(format!("{base}_{i}.{ext}"));
+            }
+            _ => { // "paren" (default): name (1).ext, name (2).ext …
+                let mut i = 1;
+                while folder.join(format!("{base} ({i}).{ext}")).exists() && i < 9999 { i += 1; }
+                candidate = folder.join(format!("{base} ({i}).{ext}"));
+            }
+        }
+    }
+    Ok(candidate.to_string_lossy().to_string())
+}
+
+#[cfg(test)]
+mod backup_naming_tests {
+    use super::*;
+
+    #[test]
+    fn the_extension_is_honoured_and_not_doubled() {
+        let d = tempfile::tempdir().unwrap();
+        let dir = d.path().to_string_lossy().to_string();
+        let p = backup_dest_path(dir.clone(), Some("nightly".into()), None, Some("DATABMM".into())).unwrap();
+        assert!(p.ends_with("nightly.DATABMM"), "{}", p);
+        // A template that already carries the extension must not gain a second one — the
+        // save dialog puts one there, so people type it out of habit.
+        let p2 = backup_dest_path(dir.clone(), Some("nightly.DATABMM".into()), None, Some("DATABMM".into())).unwrap();
+        assert!(p2.ends_with("nightly.DATABMM"), "{}", p2);
+        assert!(!p2.to_lowercase().contains(".databmm.databmm"), "{}", p2);
+    }
+
+    #[test]
+    fn a_name_already_taken_does_not_overwrite_by_default() {
+        let d = tempfile::tempdir().unwrap();
+        let dir = d.path().to_string_lossy().to_string();
+        std::fs::write(d.path().join("nightly.DATABMM"), b"yesterday").unwrap();
+        let p = backup_dest_path(dir, Some("nightly".into()), None, Some("DATABMM".into())).unwrap();
+        assert!(p.ends_with("nightly (1).DATABMM"), "{}", p);
+        // Yesterday's is still there. A backup that quietly replaced the previous one is the
+        // failure nobody notices until they need the previous one.
+        assert_eq!(std::fs::read(d.path().join("nightly.DATABMM")).unwrap(), b"yesterday");
+    }
+
+    #[test]
+    fn overwrite_is_available_but_has_to_be_asked_for() {
+        let d = tempfile::tempdir().unwrap();
+        let dir = d.path().to_string_lossy().to_string();
+        std::fs::write(d.path().join("nightly.DATABMM"), b"yesterday").unwrap();
+        let p = backup_dest_path(dir, Some("nightly".into()), Some("overwrite".into()), Some("DATABMM".into())).unwrap();
+        assert!(p.ends_with("nightly.DATABMM"), "{}", p);
+    }
+
+    #[test]
+    fn illegal_characters_become_underscores_rather_than_a_failed_write() {
+        let d = tempfile::tempdir().unwrap();
+        let dir = d.path().to_string_lossy().to_string();
+        let p = backup_dest_path(dir, Some("before:after?".into()), None, Some("json".into())).unwrap();
+        assert!(p.ends_with("before_after_.json"), "{}", p);
+    }
+
+    #[test]
+    fn a_folder_that_is_not_there_is_refused_rather_than_created() {
+        // Creating it would turn a typo in a scheduled task into a stray folder that fills
+        // up nightly somewhere nobody looks.
+        let err = backup_dest_path("Z:/definitely/not/here".into(), None, None, None).unwrap_err();
+        assert!(err.starts_with("Not a folder"), "{}", err);
+    }
+}
+
+/// Import a backup. Returns the `extras` object (frontend localStorage data) so the
+/// caller can restore it before reloading. Supports both the v2 wrapper format and
+/// the legacy flat AppData file.
+#[tauri::command]
+pub fn import_app_data(state: State<AppState>, app_handle: tauri::AppHandle, src_path: String) -> Result<Option<serde_json::Value>, AppError> {
+    let raw = std::fs::read_to_string(&src_path)?;
+    let parsed: serde_json::Value = serde_json::from_str(&raw)
+        .map_err(|e| AppError::Internal(format!("Invalid backup file: {}", e)))?;
+
+    // v2 wrapper vs legacy flat AppData
+    let (app_data_val, extras) = if parsed.get("_bmm_backup").is_some() {
+        let dir = data_dir(&app_handle);
+        if let Some(serde_json::Value::Object(themes)) = parsed.get("themes") {
+            write_json_dir(&dir.join("themes"), themes);
+        }
+        if let Some(serde_json::Value::Object(langs)) = parsed.get("translations") {
+            write_json_dir(&get_lang_dir(&app_handle), langs);
+        }
+        if let Some(serde_json::Value::Object(apps)) = parsed.get("apps") {
+            for (name, val) in apps {
+                if name == "apps_state.json" || name == "apps-catalog.json" {
+                    if let Ok(txt) = serde_json::to_string_pretty(val) { let _ = std::fs::write(dir.join(name), txt); }
+                }
+            }
+        }
+        (parsed.get("app_data").cloned().unwrap_or(serde_json::Value::Null), parsed.get("extras").cloned())
+    } else {
+        (parsed, None)
+    };
+
+    if let Ok(mut new_data) = serde_json::from_value::<crate::state::AppData>(app_data_val) {
+        let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+        // The file's settings, except the ones that are keys to THIS machine (CWE-15).
+        new_data.keep_local_only_settings(&data);
+        *data = new_data;
+        drop(data);
+        state.save()?;
+        // An imported telemetry "yes" is kept only if THIS install holds a receipt for it;
+        // otherwise it is reset and asked again (consent_ledger.rs `after_import`).
+        crate::commands::consent_ledger::after_import(&state, &app_handle);
+    }
+    Ok(extras)
+}
+
+#[tauri::command]
+pub fn get_settings(state: State<AppState>) -> Result<crate::state::AppSettings, AppError> {
+    let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+    Ok(data.settings.clone())
+}
+
+#[tauri::command]
+pub fn update_settings(state: State<AppState>, settings: crate::state::AppSettings) -> Result<(), AppError> {
+    {
+        let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+        data.settings = settings;
+    }
+    state.save()?;
     Ok(())
 }
 
 #[tauri::command]
-pub fn reset_app_data(state: State<AppState>) -> Result<(), String> {
+pub fn apply_fs_security_mode_command(app: tauri::AppHandle) {
+    crate::apply_fs_security_mode(app);
+}
+
+#[tauri::command]
+pub fn reset_app_data(state: State<AppState>) -> Result<(), AppError> {
     {
-        let mut data = state.data.lock().unwrap();
+        let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
         *data = crate::state::AppData::default();
     }
     let _ = state.save();
@@ -54,18 +464,26 @@ pub fn reset_app_data(state: State<AppState>) -> Result<(), String> {
 }
 
 
+/// True only for a debug build (`tauri dev` / `cargo run`), false for release
+/// (`tauri build`). Used to allow the WebView2 right-click "Inspect" + F12 in dev
+/// while blocking them in production — independent of the app.cfg `prod` flag.
+#[tauri::command]
+pub fn is_dev_build() -> bool {
+    cfg!(debug_assertions)
+}
+
 #[tauri::command]
 pub fn is_debug_mode(app_handle: tauri::AppHandle) -> bool {
     if let Some(path) = resolve_path(&app_handle, "app.cfg") {
         if let Ok(content) = std::fs::read_to_string(&path) {
             let normalized = content.to_lowercase();
             let is_debug = normalized.contains("prod=false");
-            println!("[DEBUG_SYSTEM] Resolution: {:?}, is_debug: {}", path, is_debug);
+            info!("[DEBUG_SYSTEM] Resolution: {:?}, is_debug: {}", path, is_debug);
             return is_debug;
         }
     }
     
-    println!("[DEBUG_SYSTEM] app.cfg could not be resolved.");
+    warn!("[DEBUG_SYSTEM] app.cfg could not be resolved.");
     false
 }
 #[tauri::command]
@@ -99,6 +517,158 @@ pub fn get_license_text(app_handle: tauri::AppHandle) -> Result<String, String> 
 }
 
 #[tauri::command]
+pub fn get_eula_text(app_handle: tauri::AppHandle, lang: String) -> Result<String, String> {
+    // Terms of Service (formerly EULA). Try TOS_{LANG}.md, then default TOS.md.
+    // Legacy EULA*.md names are kept as a fallback for older installs.
+    let candidates = [
+        format!("TOS_{}.md", lang.to_uppercase()),
+        "TOS.md".to_string(),
+        format!("EULA_{}.md", lang.to_uppercase()),
+        "EULA.md".to_string(),
+    ];
+    for name in &candidates {
+        if let Some(path) = resolve_path(&app_handle, name) {
+            if let Ok(text) = std::fs::read_to_string(&path) {
+                return Ok(text);
+            }
+        }
+    }
+    Err("TOS.md not found".to_string())
+}
+
+#[tauri::command]
+pub fn get_privacy_text(app_handle: tauri::AppHandle, lang: String) -> Result<String, String> {
+    // Try PRIVACY_{LANG}.md, then default PRIVACY.md
+    let specific = format!("PRIVACY_{}.md", lang.to_uppercase());
+    if let Some(path) = resolve_path(&app_handle, &specific) {
+        if let Ok(text) = std::fs::read_to_string(&path) {
+            return Ok(text);
+        }
+    }
+    if let Some(path) = resolve_path(&app_handle, "PRIVACY.md") {
+        return std::fs::read_to_string(path).map_err(|e| e.to_string());
+    }
+    Err("PRIVACY.md not found".to_string())
+}
+
+
+/// A fingerprint of the legal documents as they are on this machine, right now.
+///
+/// The problem this solves: acceptance used to be a bare `true` in localStorage, so terms
+/// accepted in 2024 counted as accepted for every version that followed, including ones
+/// with different terms.
+///
+/// The simple answer is to record WHAT was accepted rather than THAT something was. A hash
+/// of the document text is that record, and it is simpler than a version field: nobody has
+/// to remember to bump it, and it changes exactly when — and only when — the text changes.
+///
+/// Two details that would otherwise make it fire when nothing changed:
+///
+///  - The CANONICAL files only, never `TOS_FR.md`. The per-language copies say the same
+///    thing in another language; hashing the one currently displayed would mean switching
+///    language re-opened the terms, which is nonsense.
+///  - Line endings are normalised and trailing whitespace trimmed. The installer hashes the
+///    document inside the package (LF) while this reads it back off disk, where a checkout
+///    or an editor may have made it CRLF. Same words, different bytes, and the user would be
+///    asked to re-accept a document that never changed.
+///
+/// Missing file → `None` for that document, which the caller reads as "cannot verify" and
+/// leaves the existing acceptance alone rather than nagging about a file we failed to find.
+pub fn fingerprint_text(text: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let normalized: String = text
+        .replace("\r\n", "\n")
+        .lines()
+        .map(|l| l.trim_end())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut h = Sha256::new();
+    h.update(normalized.trim().as_bytes());
+    // 16 hex characters. This is a change detector, not a security boundary — the document
+    // sits next to the binary, and anyone who can rewrite it can rewrite this code too.
+    hex::encode(h.finalize())[..16].to_string()
+}
+
+fn hash_doc(app_handle: &tauri::AppHandle, name: &str) -> Option<String> {
+    let path = resolve_path(app_handle, name)?;
+    let text = std::fs::read_to_string(&path).ok()?;
+    Some(fingerprint_text(&text))
+}
+
+#[cfg(test)]
+mod legal_fingerprint_tests {
+    use super::fingerprint_text;
+
+    /// The trap this guards: the installer hashes the document inside the package (LF) and
+    /// BMM hashes it back off disk, where a checkout may have made it CRLF. Same words,
+    /// different bytes — without normalising, every user would be asked to re-accept terms
+    /// that never changed.
+    #[test]
+    fn line_endings_and_trailing_space_do_not_count_as_a_change() {
+        let lf = "# Terms\n\nYou agree.\n";
+        assert_eq!(fingerprint_text(lf), fingerprint_text("# Terms\r\n\r\nYou agree.\r\n"));
+        assert_eq!(fingerprint_text(lf), fingerprint_text("# Terms  \n\nYou agree.   \n\n\n"));
+    }
+
+    /// And the thing it must still catch.
+    #[test]
+    fn changed_words_change_the_fingerprint() {
+        assert_ne!(fingerprint_text("You agree."), fingerprint_text("You also agree."));
+        // One character, deep in the text.
+        assert_ne!(fingerprint_text("Retention is 30 days."), fingerprint_text("Retention is 90 days."));
+    }
+
+    #[test]
+    fn it_is_short_and_hex() {
+        let f = fingerprint_text("anything");
+        assert_eq!(f.len(), 16);
+        assert!(f.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+}
+
+#[tauri::command]
+pub fn legal_fingerprint(app_handle: tauri::AppHandle) -> serde_json::Value {
+    serde_json::json!({
+        "tos": hash_doc(&app_handle, "TOS.md").or_else(|| hash_doc(&app_handle, "EULA.md")),
+        "privacy": hash_doc(&app_handle, "PRIVACY.md"),
+    })
+}
+
+/// Which build this is, in one answer.
+///
+/// The version was reachable (`/api/status`), the channel was reachable (`is_ptb_mode`) and
+/// the build date was reachable from nowhere at all — so "which BMM produced this" could not
+/// be answered by a task, by a script, or by anything driving the API, which is exactly the
+/// question a bug report is trying to answer.
+///
+/// `channel` is a NAME, not a flag: an automation branching on `= "PTB"` reads, and one
+/// branching on `ptb = 1` has to be remembered. `Release` is the ordinary build.
+#[tauri::command]
+pub fn app_build_info(app_handle: tauri::AppHandle) -> serde_json::Value {
+    let ptb = is_ptb_mode(app_handle.clone());
+    // FTB is the in-house build: the debug menu exists and updates are off, which is not a
+    // thing a release ever is. Read from the same app.cfg the rest of the flags come from,
+    // so a build cannot describe itself one way here and behave another way elsewhere.
+    let cfg = resolve_path(&app_handle, "app.cfg")
+        .and_then(|p| std::fs::read_to_string(&p).ok())
+        .unwrap_or_default()
+        .to_lowercase();
+    let ftb = cfg.contains("ftb=true");
+    serde_json::json!({
+        "version": app_handle.package_info().version.to_string(),
+        "channel": if ftb { "FTB" } else if ptb { "PTB" } else { "Release" },
+        "ptb": ptb,
+        "ftb": ftb,
+        // Stamped by build.rs at compile time. `env!` would be the compiler's own build, and
+        // an installed copy would report the day its SOURCE was written rather than the day
+        // the binary somebody is running was made.
+        "built": option_env!("BMM_BUILD_DATE").unwrap_or("unknown"),
+        "target": std::env::consts::OS,
+        "arch": std::env::consts::ARCH,
+    })
+}
+
+#[tauri::command]
 pub fn is_ptb_mode(app_handle: tauri::AppHandle) -> bool {
     if let Some(path) = resolve_path(&app_handle, "app.cfg") {
         if let Ok(content) = std::fs::read_to_string(&path) {
@@ -120,6 +690,148 @@ pub fn is_update_disabled(app_handle: tauri::AppHandle) -> bool {
     false
 }
 
+#[tauri::command]
+pub fn is_auto_eula_enabled(app_handle: tauri::AppHandle) -> bool {
+    if let Some(path) = resolve_path(&app_handle, "app.cfg") {
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            let normalized = content.to_lowercase();
+            return normalized.contains("autoeula_on_first_start=true");
+        }
+    }
+    false
+}
+
+
+#[derive(serde::Serialize)]
+pub struct BcConfig {
+    pub test_mode: bool,
+    pub base_url: String,
+    /// `BCApiVersion=v2`: the calls that have a BetterCommunity v2 adapter (feedback, consent
+    /// receipts, signed catalogue feeds) go to the v2 API. Anything else, or no line: `v1`,
+    /// today's behaviour. See Update/Documentation/BC-v2-readiness.md.
+    pub api_version: String,
+    /// `BCv2Base=https://host[:port]`: where BetterCommunity v2 lives while it runs beside v1
+    /// (staging). Empty = the same root as v1 (after the cut-over, one domain serves both).
+    pub v2_base: String,
+    /// True when app.cfg carries a `BCApiVersion` line at all. app.cfg wins over links.json
+    /// (`bc_api`), so an explicit `BCApiVersion=v1` pins this install to v1 whatever the remote
+    /// switch says; without the line the remote switch may select v2 (bc_v2.rs `pick_switch`).
+    pub api_version_set: bool,
+}
+
+/// `BCApiVersion` as written: `v2` / `2` (any case) is v2, everything else v1.
+pub fn bc_api_version_of(v: &str) -> &'static str {
+    let v = v.trim().to_ascii_lowercase();
+    if v == "v2" || v == "2" { "v2" } else { "v1" }
+}
+
+/// BetterCommunity blog/community test mode + base URL, read from `app.cfg`:
+///   BCTestMode=true|false        — when true, the in-app blog/community hits BCTestBase
+///   BCTestBase=http://host[:port] — the staging/local base (with OR without a port)
+/// When BCTestMode is false the app falls back to the production `bettercommunity` link
+/// from links-config.ts (resolved on the frontend). Mirrors the other app.cfg flags.
+#[tauri::command]
+pub fn get_bc_config(app_handle: tauri::AppHandle) -> BcConfig {
+    let mut test_mode = false;
+    let mut base_url = String::new();
+    let mut api_version = "v1";
+    let mut v2_base = String::new();
+    let mut api_version_set = false;
+    if let Some(path) = resolve_path(&app_handle, "app.cfg") {
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            for line in content.lines() {
+                if let Some((k, v)) = line.trim().split_once('=') {
+                    match k.trim().to_lowercase().as_str() {
+                        "bctestmode" => test_mode = v.trim().eq_ignore_ascii_case("true"),
+                        "bctestbase" => base_url = v.trim().to_string(),
+                        "bcapiversion" => {
+                            api_version = bc_api_version_of(v);
+                            api_version_set = !v.trim().is_empty();
+                        }
+                        "bcv2base" => v2_base = v.trim().to_string(),
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+    info!("[BC] test_mode={}, base_url='{}', api={}, v2_base='{}'", test_mode, base_url, api_version, v2_base);
+    BcConfig { test_mode, base_url, api_version: api_version.to_string(), v2_base, api_version_set }
+}
+
+/// `DocsReplays=false` (or `off`) in app.cfg: Help & Other shows no session replay
+/// (.bmmreplay) at all. Line-parsed like `BCTestMode` — key case-insensitive, spaces around
+/// `=` allowed — and NOT a substring search, so `#DocsReplays=false` does not count (a line
+/// starting with `#` is a key named `#docsreplays`, which nothing reads). Anything else, a
+/// missing line or a missing file leaves replays ON: a file nobody wrote must not hide content.
+pub fn docs_replays_from_cfg(content: &str) -> bool {
+    let mut on = true;
+    for line in content.lines() {
+        if let Some((k, v)) = line.trim().split_once('=') {
+            if k.trim().eq_ignore_ascii_case("docsreplays") {
+                let v = v.trim();
+                on = !(v.eq_ignore_ascii_case("false") || v.eq_ignore_ascii_case("off"));
+            }
+        }
+    }
+    on
+}
+
+/// Whether the in-app documentation shows `.bmmreplay` embeds. Read by docs/doc-replays.ts.
+#[tauri::command]
+pub fn docs_replays_enabled(app_handle: tauri::AppHandle) -> bool {
+    resolve_path(&app_handle, "app.cfg")
+        .and_then(|p| std::fs::read_to_string(&p).ok())
+        .map(|c| docs_replays_from_cfg(&c))
+        .unwrap_or(true)
+}
+
+#[cfg(test)]
+mod docs_replays_cfg_tests {
+    use super::docs_replays_from_cfg;
+
+    #[test]
+    fn replays_are_on_unless_the_file_says_otherwise() {
+        assert!(docs_replays_from_cfg(""));
+        assert!(docs_replays_from_cfg("Prod=true\nPTB=true\n"));
+        assert!(docs_replays_from_cfg("DocsReplays=true"));
+        assert!(docs_replays_from_cfg("DocsReplays=maybe"));
+    }
+
+    #[test]
+    fn false_or_off_hides_them_whatever_the_spelling() {
+        assert!(!docs_replays_from_cfg("DocsReplays=false"));
+        assert!(!docs_replays_from_cfg("docsreplays=OFF"));
+        assert!(!docs_replays_from_cfg("Prod=true\r\n  DocsReplays = False  \r\nPTB=true"));
+    }
+
+    #[test]
+    fn a_commented_line_is_not_read_and_the_last_line_wins() {
+        assert!(docs_replays_from_cfg("#DocsReplays=false"));
+        assert!(docs_replays_from_cfg("DocsReplays=false\nDocsReplays=true"));
+        // A key that merely CONTAINS the name is another key.
+        assert!(docs_replays_from_cfg("NoDocsReplays=false"));
+    }
+}
+
+#[derive(serde::Serialize)]
+pub struct QuickLinksConfig {
+    pub card1_disabled: bool,
+    pub card2_disabled: bool,
+}
+
+#[tauri::command]
+pub fn get_quicklinks_config(app_handle: tauri::AppHandle) -> QuickLinksConfig {
+    let mut cfg = QuickLinksConfig { card1_disabled: false, card2_disabled: false };
+    if let Some(path) = resolve_path(&app_handle, "app.cfg") {
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            let normalized = content.to_lowercase();
+            cfg.card1_disabled = normalized.contains("quicklink1_disabled=true");
+            cfg.card2_disabled = normalized.contains("quicklink2_disabled=true");
+        }
+    }
+    cfg
+}
 
 #[tauri::command]
 pub fn get_available_languages(app_handle: tauri::AppHandle) -> Vec<String> {
@@ -151,22 +863,382 @@ pub fn get_available_languages(app_handle: tauri::AppHandle) -> Vec<String> {
 pub fn get_language_content(app_handle: tauri::AppHandle, lang: String) -> Result<String, String> {
     let lang_dir = get_lang_dir(&app_handle);
     let file_path = lang_dir.join(format!("{}.json", lang));
-    
+
     if !file_path.exists() {
         return Err(format!("Language file not found: {}.json", lang));
     }
-    
+
     std::fs::read_to_string(file_path).map_err(|e| e.to_string())
 }
+
+#[derive(serde::Serialize)]
+pub struct I18nUsage {
+    pub file: String,
+    pub line: u32,
+    pub snippet: String,
+}
+
+/// Searches the shipped frontend source (compiled JS + index.html) for occurrences
+/// of an i18n key, so the Translation Sandbox can show WHERE a key is used.
 #[tauri::command]
-pub fn import_language(app_handle: tauri::AppHandle) -> Result<String, String> {
-    use tauri::api::dialog::blocking::FileDialogBuilder;
+pub fn find_i18n_usages(app_handle: tauri::AppHandle, key: String) -> Result<Vec<I18nUsage>, String> {
+    if key.trim().is_empty() { return Ok(vec![]); }
+    // frontend dir = parent of Lang/
+    let lang_dir = get_lang_dir(&app_handle);
+    let frontend_dir = lang_dir.parent().map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+
+    let mut results: Vec<I18nUsage> = Vec::new();
+    let key_q1 = format!("'{}'", key);          // t('key')
+    let key_q2 = format!("\"{}\"", key);        // t("key") / data-i18n="key"
+    let key_bare = key.clone();
+
+    // Walk frontend dir, scan .js and .html files (skip Lang/, node_modules, maps)
+    for entry in jwalk::WalkDir::new(&frontend_dir).into_iter().flatten() {
+        let path = entry.path();
+        if !path.is_file() { continue; }
+        let p_str = path.to_string_lossy().replace('\\', "/");
+        // Skip the compiled /js/ mirror (duplicates every src/*.ts hit), Lang/,
+        // node_modules, assets and source maps — so "Used in" is fast and shows
+        // each usage once (the real .ts source), not twice.
+        if p_str.contains("/Lang/") || p_str.contains("/node_modules/")
+            || p_str.contains("/js/") || p_str.contains("/assets/")
+            || p_str.ends_with(".map") { continue; }
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        // Source-first: .ts + .html. Only fall back to .js when no src/ exists
+        // (e.g. a production build that bundled js but not ts).
+        let has_src = frontend_dir.join("src").is_dir();
+        if has_src { if ext != "ts" && ext != "html" { continue; } }
+        else if ext != "js" && ext != "html" { continue; }
+        // Prefer .ts source over compiled .js when both exist? Keep both but de-dup later by content.
+        let content = match std::fs::read_to_string(&path) { Ok(c) => c, Err(_) => continue };
+        if !content.contains(&key_q1) && !content.contains(&key_q2) { continue; }
+        let rel = path.strip_prefix(&frontend_dir).unwrap_or(&path).to_string_lossy().replace('\\', "/");
+        for (i, line) in content.lines().enumerate() {
+            if line.contains(&key_q1) || line.contains(&key_q2) {
+                // require the key appears as a near-standalone token to avoid prefix collisions
+                let trimmed = line.trim();
+                let snippet = if trimmed.len() > 160 { format!("{}…", &trimmed[..160]) } else { trimmed.to_string() };
+                results.push(I18nUsage { file: rel.clone(), line: (i as u32) + 1, snippet });
+                if results.len() >= 200 { return Ok(results); }
+            }
+        }
+    }
+    let _ = key_bare;
+    Ok(results)
+}
+
+#[derive(serde::Serialize)]
+pub struct HardcodedString {
+    pub file: String,
+    pub line: u32,
+    pub text: String,
+    pub snippet: String,
+    pub kind: String, // "html" | "toast" | "js"
+}
+
+/// Heuristically scans the shipped frontend source for human-readable text that
+/// is NOT going through i18n (no data-i18n / no t(...)). Lets the sandbox surface
+/// hardcoded strings with their exact file + line so a key can be added easily.
+#[tauri::command]
+pub fn find_hardcoded_strings(app_handle: tauri::AppHandle, filter: Option<String>) -> Result<Vec<HardcodedString>, String> {
+    let lang_dir = get_lang_dir(&app_handle);
+    let frontend_dir = lang_dir.parent().map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    let needle = filter.unwrap_or_default().to_lowercase();
+
+    // True if a string looks like human-facing copy (has letters + a space or is a real word),
+    // not a css value, path, identifier, svg data, etc.
+    fn looks_human(s: &str) -> bool {
+        let s = s.trim();
+        if s.len() < 2 || s.len() > 200 { return false; }
+        // must contain at least 2 letters
+        let letters = s.chars().filter(|c| c.is_alphabetic()).count();
+        if letters < 2 { return false; }
+        // reject obvious non-copy
+        let low = s.to_lowercase();
+        if s.starts_with('#') || s.starts_with('.') || s.starts_with('/') || s.starts_with('@') { return false; }
+        if low.contains("px") && s.chars().any(|c| c.is_ascii_digit()) && !s.contains(' ') { return false; }
+        if s.contains("://") || s.contains("data-i18n") { return false; }
+        if low.starts_with("var(") || low.starts_with("rgba") || low.starts_with("0x") { return false; }
+        // mostly symbols / svg path like "M12 3l4 4"
+        let symbolic = s.chars().filter(|c| !c.is_alphanumeric() && !c.is_whitespace()).count();
+        if symbolic * 2 > s.len() { return false; }
+        // single camelCase/snake token w/o spaces → likely an identifier
+        if !s.contains(' ') && (s.contains('_') || s.contains('-')) && !s.ends_with(['.', '!', '?']) { return false; }
+        true
+    }
+
+    let mut out: Vec<HardcodedString> = Vec::new();
+    for entry in jwalk::WalkDir::new(&frontend_dir).into_iter().flatten() {
+        let path = entry.path();
+        if !path.is_file() { continue; }
+        let p_str = path.to_string_lossy().replace('\\', "/");
+        if p_str.contains("/Lang/") || p_str.contains("/node_modules/") || p_str.ends_with(".map") { continue; }
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        // Scan index.html + scripts. Prefer .ts source (dev); fall back to .js so this
+        // ALSO works in production where only compiled .js ships. To avoid duplicates in
+        // dev, skip a .js when a sibling .ts exists.
+        if ext != "html" && ext != "ts" && ext != "js" { continue; }
+        if ext == "js" && path.with_extension("ts").exists() { continue; }
+        let is_html = ext == "html";
+        let content = match std::fs::read_to_string(&path) { Ok(c) => c, Err(_) => continue };
+        let rel = path.strip_prefix(&frontend_dir).unwrap_or(&path).to_string_lossy().replace('\\', "/");
+
+        for (i, raw_line) in content.lines().enumerate() {
+            let line = raw_line.trim();
+            if line.is_empty() || line.starts_with("//") || line.starts_with('*') { continue; }
+            let line_no = (i as u32) + 1;
+            let trimmed_snip = if line.chars().count() > 160 {
+                format!("{}…", line.chars().take(160).collect::<String>())
+            } else { line.to_string() };
+
+            if is_html {
+                // Text between > and < on this line, when no data-i18n present on the line.
+                if line.contains("data-i18n") { continue; }
+                if line.contains("<svg") || line.contains("<path") || line.contains("<script") || line.contains("<style") { continue; }
+                let bytes = line.as_bytes();
+                let mut idx = 0;
+                while let Some(gt) = line[idx..].find('>') {
+                    let start = idx + gt + 1;
+                    if start >= bytes.len() { break; }
+                    if let Some(lt) = line[start..].find('<') {
+                        let text = &line[start..start + lt];
+                        if looks_human(text) && (needle.is_empty() || text.to_lowercase().contains(&needle)) {
+                            out.push(HardcodedString {
+                                file: rel.clone(), line: line_no,
+                                text: text.trim().to_string(), snippet: trimmed_snip.clone(),
+                                kind: "html".into(),
+                            });
+                        }
+                        idx = start + lt + 1;
+                    } else { break; }
+                }
+            } else {
+                // .ts / .js — two passes:
+                //  (a) HTML text inside innerHTML/template literals: >Some Text<
+                //  (b) string literals passed to toast(...) / textContent / placeholder
+                let uses_i18n = line.contains("t('") || line.contains("t(\"") || line.contains("${t(")
+                    || line.contains("data-i18n");
+
+                // (a) tag text like `<span>Real Text</span>` inside backtick HTML templates.
+                if !uses_i18n && !line.contains("<svg") && !line.contains("<path")
+                    && line.contains('>') && line.contains('<') {
+                    let bytes = line.as_bytes();
+                    let mut idx = 0;
+                    while let Some(gt) = line[idx..].find('>') {
+                        let start = idx + gt + 1;
+                        if start >= bytes.len() { break; }
+                        if let Some(lt) = line[start..].find('<') {
+                            let text = &line[start..start + lt];
+                            // skip template interpolations like `>${foo}<`
+                            if !text.contains("${") && looks_human(text)
+                                && (needle.is_empty() || text.to_lowercase().contains(&needle)) {
+                                out.push(HardcodedString {
+                                    file: rel.clone(), line: line_no,
+                                    text: text.trim().to_string(), snippet: trimmed_snip.clone(),
+                                    kind: "ts".into(),
+                                });
+                            }
+                            idx = start + lt + 1;
+                        } else { break; }
+                    }
+                }
+
+                // (b) literals inside toast(...) / textContent / placeholder, not via t(...)
+                let is_toast = line.contains("toast(");
+                let is_text = line.contains(".textContent") || line.contains(".placeholder")
+                    || line.contains(".title =") || line.contains(".innerText");
+                if (is_toast || is_text) && !uses_i18n {
+                    for quote in ['\'', '"'] {
+                        let mut search = line;
+                        while let Some(a) = search.find(quote) {
+                            let rest = &search[a + 1..];
+                            if let Some(b) = rest.find(quote) {
+                                let lit = &rest[..b];
+                                if looks_human(lit) && (needle.is_empty() || lit.to_lowercase().contains(&needle)) {
+                                    out.push(HardcodedString {
+                                        file: rel.clone(), line: line_no,
+                                        text: lit.trim().to_string(), snippet: trimmed_snip.clone(),
+                                        kind: if is_toast { "toast".into() } else { "js".into() },
+                                    });
+                                }
+                                search = &rest[b + 1..];
+                            } else { break; }
+                        }
+                    }
+                }
+            }
+            if out.len() >= 800 { return Ok(out); }
+        }
+    }
+    Ok(out)
+}
+
+/// Scans the frontend source once and classifies i18n keys by how they are used:
+/// "toast" (shown via toast(t('key'))) or "tooltip" (shown via showTaskyHelp('key')).
+/// Returns key -> list of kinds. Lets the sandbox filter Toast / Tooltip keys.
+#[tauri::command]
+pub fn get_i18n_key_kinds(app_handle: tauri::AppHandle) -> Result<std::collections::HashMap<String, Vec<String>>, String> {
+    let lang_dir = get_lang_dir(&app_handle);
+    let frontend_dir = lang_dir.parent().map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+
+    // Extract every t('key') / t("key") referenced in a string.
+    fn t_keys(s: &str) -> Vec<String> {
+        let mut keys = Vec::new();
+        let bytes = s.as_bytes();
+        let mut i = 0;
+        while i + 1 < bytes.len() {
+            if bytes[i] == b't' && bytes[i + 1] == b'(' {
+                // char before 't' must not be an identifier char (so we match t( not foot()
+                let ok_prefix = i == 0 || !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_' || bytes[i - 1] == b'.');
+                if ok_prefix {
+                    let rest = &s[i + 2..];
+                    if let Some(q) = rest.find(['\'', '"']) {
+                        let quote = rest.as_bytes()[q] as char;
+                        let after = &rest[q + 1..];
+                        if let Some(e) = after.find(quote) {
+                            keys.push(after[..e].to_string());
+                        }
+                    }
+                }
+            }
+            i += 1;
+        }
+        keys
+    }
+    // First quoted literal right after a marker like showTaskyHelp(
+    fn first_literal_after(line: &str, marker: &str) -> Option<String> {
+        let idx = line.find(marker)? + marker.len();
+        let rest = &line[idx..];
+        let q = rest.find(['\'', '"'])?;
+        let quote = rest.as_bytes()[q] as char;
+        let after = &rest[q + 1..];
+        let e = after.find(quote)?;
+        Some(after[..e].to_string())
+    }
+
+    let mut map: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+    let mut add = |key: String, kind: &str| {
+        if key.is_empty() || key.starts_with('_') { return; }
+        let e = map.entry(key).or_default();
+        if !e.iter().any(|k| k == kind) { e.push(kind.to_string()); }
+    };
+
+    for entry in jwalk::WalkDir::new(&frontend_dir).into_iter().flatten() {
+        let path = entry.path();
+        if !path.is_file() { continue; }
+        let p_str = path.to_string_lossy().replace('\\', "/");
+        if p_str.contains("/Lang/") || p_str.contains("/node_modules/") || p_str.ends_with(".map") { continue; }
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        if ext != "js" && ext != "ts" && ext != "html" { continue; }
+        let content = match std::fs::read_to_string(&path) { Ok(c) => c, Err(_) => continue };
+        for line in content.lines() {
+            if line.contains("toast(") {
+                for k in t_keys(line) { add(k, "toast"); }
+            }
+            if line.contains("showTaskyHelp(") {
+                if let Some(k) = first_literal_after(line, "showTaskyHelp(") {
+                    // must look like a key (has a dot, no spaces) — literal tooltips are skipped
+                    if k.contains('.') && !k.contains(' ') { add(k, "tooltip"); }
+                }
+            }
+        }
+    }
+    Ok(map)
+}
+
+/// Creates a new language file Lang/{code}.json on disk, seeded either from an
+/// existing language's content (copy_from) or empty. Returns the new file's JSON.
+#[tauri::command]
+pub fn create_language_file(app_handle: tauri::AppHandle, code: String, copy_from: Option<String>) -> Result<String, String> {
+    let code = code.trim().to_lowercase();
+    if code.is_empty() || code == "template" {
+        return Err("Invalid language code".into());
+    }
+    if !code.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        return Err("Language code may only contain letters, digits, - and _".into());
+    }
+    let lang_dir = get_lang_dir(&app_handle);
+    if !lang_dir.exists() { std::fs::create_dir_all(&lang_dir).map_err(|e| e.to_string())?; }
+    let file_path = lang_dir.join(format!("{}.json", code));
+    if file_path.exists() {
+        return Err(format!("Language '{}' already exists", code));
+    }
+
+    // Seed: copy the source language's keys (values kept so the new lang starts usable)
+    let seed_json = match copy_from.filter(|s| !s.trim().is_empty()) {
+        Some(src) => {
+            let src_path = lang_dir.join(format!("{}.json", src.trim().to_lowercase()));
+            std::fs::read_to_string(&src_path).unwrap_or_else(|_| "{}".to_string())
+        }
+        None => "{}".to_string(),
+    };
+    std::fs::write(&file_path, &seed_json).map_err(|e| e.to_string())?;
+    Ok(seed_json)
+}
+
+/// Deletes a (non built-in) language file Lang/{code}.json. The official bundled
+/// languages and the template can never be removed.
+#[tauri::command]
+pub fn delete_language_file(app_handle: tauri::AppHandle, code: String) -> Result<(), String> {
+    let code = code.trim().to_lowercase();
+    const PROTECTED: [&str; 3] = ["en", "fr", "template"];
+    if PROTECTED.contains(&code.as_str()) {
+        return Err(format!("'{}' is a built-in language and cannot be removed", code));
+    }
+    if code.is_empty() || code.contains('/') || code.contains('\\') || code.contains("..") {
+        return Err("Invalid language code".into());
+    }
+    let lang_dir = get_lang_dir(&app_handle);
+    let file_path = lang_dir.join(format!("{}.json", code));
+    if !file_path.exists() {
+        return Err(format!("Language '{}' not found", code));
+    }
+    std::fs::remove_file(&file_path).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Returns the list of available language codes + the raw JSON content of each,
+/// so the sandbox can diff all languages at once.
+#[tauri::command]
+pub fn get_all_languages_content(app_handle: tauri::AppHandle) -> Result<std::collections::HashMap<String, String>, String> {
+    let lang_dir = get_lang_dir(&app_handle);
+    let mut out = std::collections::HashMap::new();
+    if let Ok(entries) = std::fs::read_dir(&lang_dir) {
+        for e in entries.flatten() {
+            let p = e.path();
+            if p.extension().and_then(|x| x.to_str()) == Some("json") {
+                if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
+                    if stem == "template" { continue; }
+                    if let Ok(content) = std::fs::read_to_string(&p) {
+                        out.insert(stem.to_string(), content);
+                    }
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+#[tauri::command]
+pub fn import_language(app_handle: tauri::AppHandle, path: Option<String>) -> Result<String, String> {
+    use tauri_plugin_dialog::DialogExt;
     use std::fs;
 
-    let file_path = FileDialogBuilder::new()
-        .add_filter("Language JSON", &["json"])
-        .set_title("Select Language File")
-        .pick_file();
+    // If a path is supplied (API caller), use it directly; otherwise open a dialog.
+    let file_path = match path.filter(|p| !p.trim().is_empty()) {
+        Some(p) => {
+            let pb = std::path::PathBuf::from(&p);
+            if !pb.exists() { return Err(format!("File not found: {}", p)); }
+            Some(pb)
+        }
+        None => app_handle.dialog().file()
+            .add_filter("Language JSON", &["json"])
+            .set_title("Select Language File")
+            .blocking_pick_file()
+            .and_then(|fp| fp.into_path().ok()),
+    };
 
     if let Some(src_path) = file_path {
         let file_name = src_path
@@ -194,10 +1266,30 @@ pub fn import_language(app_handle: tauri::AppHandle) -> Result<String, String> {
     }
 }
 
+/// Install a language straight from JSON content (used by the `bmm://language/import-inline`
+/// share link, so a translation can be shared as a single link like themes are).
+#[tauri::command]
+pub fn import_language_data(app_handle: tauri::AppHandle, code: String, content: String) -> Result<String, String> {
+    use std::fs;
+    // Sanitise the lang code → safe filename (no path traversal).
+    let code = code.trim().to_lowercase();
+    let safe: String = code.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').collect();
+    if safe.is_empty() { return Err("Invalid language code".to_string()); }
+    if safe == "template" { return Err("Cannot overwrite template.json".to_string()); }
+    // Validate it's real JSON before writing.
+    serde_json::from_str::<serde_json::Value>(&content).map_err(|e| format!("Invalid JSON: {}", e))?;
+
+    let lang_dir = get_lang_dir(&app_handle);
+    if !lang_dir.exists() { fs::create_dir_all(&lang_dir).map_err(|e| e.to_string())?; }
+    let dest = lang_dir.join(format!("{}.json", safe));
+    fs::write(&dest, content).map_err(|e| e.to_string())?;
+    Ok(safe)
+}
+
 #[tauri::command]
 pub fn get_resource_debug_info(app_handle: tauri::AppHandle) -> String {
     let mut debug = String::new();
-    debug.push_str(&format!("Resource Dir: {:?}\n", app_handle.path_resolver().resource_dir()));
+    debug.push_str(&format!("Resource Dir: {:?}\n", app_handle.path().resource_dir().ok()));
     
     let checks = [
         "app.cfg", 
@@ -210,18 +1302,23 @@ pub fn get_resource_debug_info(app_handle: tauri::AppHandle) -> String {
         "_up_/frontend/Lang/en.json"
     ];
     for check in &checks {
-        let res = app_handle.path_resolver().resolve_resource(check);
+        let res = app_handle.path().resolve(check, tauri::path::BaseDirectory::Resource).ok();
         debug.push_str(&format!("Resolve '{}': {:?} (Exists: {})\n", check, res, res.as_ref().map(|p| p.exists()).unwrap_or(false)));
     }
 
-    if let Some(res_dir) = app_handle.path_resolver().resource_dir() {
+    if let Some(res_dir) = app_handle.path().resource_dir().ok() {
         if let Ok(entries) = std::fs::read_dir(&res_dir) {
             debug.push_str("\nResource Dir Listing:\n");
             for entry in entries.flatten() {
-                debug.push_str(&format!(" - {:?}\n", entry.path()));
+                debug.push_str(&format!("  {:?}\n", entry.file_name()));
             }
         }
     }
-
+    
     debug
+}
+
+#[tauri::command]
+pub fn exit_app() {
+    std::process::exit(0);
 }

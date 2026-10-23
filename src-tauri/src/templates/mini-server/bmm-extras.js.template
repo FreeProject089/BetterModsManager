@@ -1,0 +1,1008 @@
+/**
+ * BMM mini-server extras — written by BMM next to every generated standalone server.
+ *
+ * One file, no dependency, loaded by every Node edition (Express, v1 hybrid, v2 Lux). It adds
+ * what BMM's built-in repo server does and the standalone ones did not:
+ *
+ *   /health, /healthz           liveness for Docker, systemd, an uptime monitor (no secrets)
+ *   /status, /status.json       a public status page: repo, version, format, files, size, last
+ *                               update, feed link, « add it in BMM » link, scheduled jobs
+ *   /feed.xml, /feed.atom       the Atom feed of the repo (same shape as BMM's built-in server),
+ *                               behind the same gate as repo.json
+ *   ETag / Last-Modified / 304  on repo.json, the feed and every file
+ *   Range / If-Range / 206      resumable downloads
+ *   rate limiting               per address, token bucket, off unless configured
+ *   scheduled jobs              rescan/rehash, sync from a source, backup of repo.json, log
+ *                               rotation — every N minutes or on a cron line
+ *
+ * Configuration: server.config.json beside this file (BMM writes it; edit it freely, the server
+ * re-reads it when it changes), then environment variables:
+ *   BMM_CONFIG        another config file
+ *   BMM_PUBLIC_URL    the address subscribers type (https://repo.example.com)
+ *   BMM_RATE_LIMIT    requests per minute per address (0 = off)
+ *   BMM_JOBS=off      do not run scheduled jobs (they can still be started from /admin/jobs)
+ *   BMM_STATUS_PAGE=off
+ *
+ * Its own files live in bmm-server/ (job state, backups) and are never served.
+ */
+'use strict';
+const fs = require('fs');
+const fsp = fs.promises;
+const path = require('path');
+const crypto = require('crypto');
+const zlib = require('zlib');
+const { spawn } = require('child_process');
+
+const EXTRAS_VERSION = '1.0';
+const PRIVATE_DIR = 'bmm-server';
+
+// ─── small helpers ───────────────────────────────────────────────────────────
+
+/** Constant-time compare (CWE-208). */
+function safeEqual(a, b) {
+    const A = Buffer.from(String(a == null ? '' : a));
+    const B = Buffer.from(String(b == null ? '' : b));
+    return A.length === B.length && crypto.timingSafeEqual(A, B);
+}
+
+/** The resolved path is the folder itself or below it — never a sibling with the same prefix. */
+function insideDir(dir, p) {
+    const d = path.resolve(dir), a = path.resolve(p);
+    return a === d || a.startsWith(d.endsWith(path.sep) ? d : d + path.sep);
+}
+
+function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function fmtBytes(n) {
+    n = Number(n) || 0;
+    const u = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let i = 0;
+    while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+    return (i === 0 ? String(n) : n.toFixed(n < 10 ? 2 : 1)) + ' ' + u[i];
+}
+
+function fmtDuration(ms) {
+    const s = Math.max(0, Math.round(ms / 1000));
+    const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+    if (d) return d + 'd ' + h + 'h';
+    if (h) return h + 'h ' + m + 'm';
+    if (m) return m + 'm';
+    return s + 's';
+}
+
+function readJson(file, fallback) {
+    try { return JSON.parse(fs.readFileSync(file, 'utf8').replace(/^﻿/, '')); } catch (_) { return fallback; }
+}
+
+/** Write through a temporary file and a rename, so a reader never sees half a file. */
+function writeJsonAtomic(file, value) {
+    const tmp = file + '.tmp-' + process.pid;
+    fs.writeFileSync(tmp, JSON.stringify(value, null, 2));
+    try { fs.renameSync(tmp, file); }
+    catch (_) {
+        // A file bind-mounted on its own (docker-compose) cannot be replaced, only rewritten.
+        fs.writeFileSync(file, fs.readFileSync(tmp));
+        try { fs.unlinkSync(tmp); } catch (__) {}
+    }
+}
+
+function stamp(d) {
+    const p = (n) => String(n).padStart(2, '0');
+    return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
+}
+
+// ─── repo format (same rules as BMM's repo_format.rs, see tests/repo-format-templates) ──
+
+function repoFormatOf(rj) {
+    if (!rj || typeof rj !== 'object' || Array.isArray(rj)) return 'not a repo manifest';
+    const declared = rj.format_version !== undefined ? rj.format_version : rj.formatVersion;
+    if (declared !== undefined && declared !== null) return 'format ' + String(declared);
+    const has = (o, ks) => !!o && ks.some(k => Object.prototype.hasOwnProperty.call(o, k));
+    const profiles = Array.isArray(rj.profiles) ? rj.profiles : [];
+    const mods = [].concat(...profiles.map(p => (p && Array.isArray(p.mods)) ? p.mods : []));
+    const files = [].concat(...mods.map(m => (m && Array.isArray(m.files)) ? m.files : []));
+    if (has(rj, ['files_base_url', 'filesBaseUrl', 'files_layout', 'filesLayout', 'extras', 'credentials']) || files.some(f => has(f, ['mtime']))) return 'legacy 0.4';
+    if (has(rj, ['modpacks', 'require_login', 'requireLogin']) || profiles.some(p => has(p, ['icon', 'color', 'icon_image']))
+        || mods.some(m => has(m, ['archive', 'dependencies', 'changelog', 'update_url', 'direct_url', 'update_sources']))) return 'legacy 0.3';
+    if (has(rj, ['author_id', 'signature', 'seed', 'upload_limit']) && mods.every(m => has(m, ['download_links']))) return 'legacy 0.2';
+    return 'legacy 0.1';
+}
+
+/** Where a mod file sits under the repo root — BMM's mod_file_tail (repo.rs). */
+function modFileTail(layout, id, rel) {
+    const l = (typeof layout === 'string' && layout.trim()) ? layout.trim() : 'mods/{id}/{path}';
+    return l.replace(/^\/+/, '').split('{id}').join(String(id)).split('{path}').join(String(rel).replace(/\\/g, '/'));
+}
+
+/** Each file of a manifest once: { mod, file, tail }. A mod listed in two profiles counts once. */
+function manifestFiles(repo) {
+    const out = [];
+    const seen = new Set();
+    const layout = repo.files_layout || repo.filesLayout;
+    for (const p of (Array.isArray(repo.profiles) ? repo.profiles : [])) {
+        for (const m of ((p && Array.isArray(p.mods)) ? p.mods : [])) {
+            for (const f of ((m && Array.isArray(m.files)) ? m.files : [])) {
+                if (!f || typeof f.relative_path !== 'string') continue;
+                const tail = modFileTail(layout, m.id, f.relative_path);
+                if (seen.has(tail)) continue;
+                seen.add(tail);
+                out.push({ mod: m, file: f, tail });
+            }
+        }
+    }
+    return out;
+}
+
+function isSigned(repo) {
+    return !!(repo && (repo.signature || repo.author_id));
+}
+
+function manifestStats(repo) {
+    const files = manifestFiles(repo);
+    const mods = new Set();
+    for (const p of (Array.isArray(repo.profiles) ? repo.profiles : [])) for (const m of ((p && p.mods) || [])) if (m && m.id) mods.add(m.id);
+    return {
+        name: String(repo.name || 'BMM repo'),
+        description: repo.description ? String(repo.description) : '',
+        author: repo.author ? String(repo.author) : '',
+        game: repo.game_name ? String(repo.game_name) : '',
+        version: repo.version != null ? String(repo.version) : '',
+        format: repoFormatOf(repo),
+        profiles: Array.isArray(repo.profiles) ? repo.profiles.length : 0,
+        mods: mods.size,
+        files: files.length,
+        size: files.reduce((a, x) => a + (Number(x.file.size) || 0), 0),
+        signed: isSigned(repo),
+    };
+}
+
+// ─── Atom feed (BMM's repo_follow::atom_feed) ────────────────────────────────
+
+function xml(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function atomFeed(repo, base, updated) {
+    base = String(base).replace(/\/+$/, '');
+    const when = new Date(updated).toISOString().replace(/\.\d{3}Z$/, 'Z');
+    let s = '<?xml version="1.0" encoding="utf-8"?>\n<feed xmlns="http://www.w3.org/2005/Atom">\n';
+    s += '  <title>' + xml(repo.name) + '</title>\n  <id>' + xml(base) + '/repo.json</id>\n  <updated>' + when + '</updated>\n';
+    s += '  <link rel="alternate" type="application/json" href="' + xml(base) + '/repo.json"/>\n';
+    if (repo.author) s += '  <author><name>' + xml(repo.author) + '</name></author>\n';
+    const seen = new Set();
+    for (const p of (Array.isArray(repo.profiles) ? repo.profiles : [])) {
+        for (const m of ((p && Array.isArray(p.mods)) ? p.mods : [])) {
+            const k = m.id + '@' + m.version;
+            if (seen.has(k)) continue;
+            seen.add(k);
+            s += '  <entry>\n';
+            s += '    <title>' + xml(m.name) + ' ' + xml(m.version) + '</title>\n';
+            s += '    <id>' + xml(base) + '/repo.json#' + xml(m.id) + '@' + xml(m.version) + '</id>\n';
+            s += '    <updated>' + when + '</updated>\n';
+            const summary = m.changelog || m.description || '';
+            if (summary) s += '    <summary>' + xml(summary) + '</summary>\n';
+            s += '  </entry>\n';
+        }
+    }
+    return s + '</feed>\n';
+}
+
+// ─── HTTP caching and ranges ─────────────────────────────────────────────────
+
+function strongEtag(body) {
+    return '"' + crypto.createHash('sha256').update(body).digest('hex').slice(0, 32) + '"';
+}
+
+function fileEtag(st) {
+    // Strong form, from size and mtime (as nginx does): If-Range needs a strong validator.
+    return '"' + st.size.toString(16) + '-' + Math.floor(st.mtimeMs).toString(16) + '"';
+}
+
+/** Does an If-None-Match header match (a list, `*`, or a weak form)? */
+function etagMatches(header, etag) {
+    if (!header) return false;
+    const bare = etag.replace(/^W\//, '');
+    return String(header).split(',').map(t => t.trim().replace(/^W\//, '')).some(t => t === '*' || t === bare);
+}
+
+/**
+ * One `bytes=` range against a size. Returns { start, end } (inclusive), 'unsatisfiable', or
+ * null when the header is absent, malformed or asks for several ranges — then the whole file is
+ * sent, which RFC 9110 allows.
+ */
+function parseRange(header, size) {
+    if (!header || typeof header !== 'string') return null;
+    const m = /^\s*bytes\s*=\s*(\d*)\s*-\s*(\d*)\s*$/i.exec(header);
+    if (!m) return null;
+    if (m[1] === '' && m[2] === '') return null;
+    let start, end;
+    if (m[1] === '') {
+        const n = Number(m[2]);
+        if (n === 0) return 'unsatisfiable';
+        start = Math.max(0, size - n);
+        end = size - 1;
+    } else {
+        start = Number(m[1]);
+        end = m[2] === '' ? size - 1 : Math.min(Number(m[2]), size - 1);
+        if (start > end || start >= size) return 'unsatisfiable';
+    }
+    if (size === 0) return 'unsatisfiable';
+    return { start, end };
+}
+
+/**
+ * Conditional and ranged headers for one file. Sets ETag, Last-Modified, Accept-Ranges and, as
+ * needed, the status and Content-Range. Answers 304, 416 and HEAD itself (`done: true`);
+ * otherwise the caller streams `{ start, end }` and sends `length` as Content-Length.
+ */
+function prepareFile(req, res, absPath, st) {
+    st = st || fs.statSync(absPath);
+    const etag = fileEtag(st);
+    const lastMod = new Date(Math.floor(st.mtimeMs / 1000) * 1000);
+    res.setHeader('ETag', etag);
+    res.setHeader('Last-Modified', lastMod.toUTCString());
+    res.setHeader('Accept-Ranges', 'bytes');
+    const h = req.headers || {};
+    const inm = h['if-none-match'];
+    const ims = h['if-modified-since'];
+    if (etagMatches(inm, etag) || (!inm && ims && !isNaN(Date.parse(ims)) && Date.parse(ims) >= lastMod.getTime())) {
+        res.statusCode = 304;
+        res.end();
+        return { done: true, status: 304 };
+    }
+    let range = parseRange(h['range'], st.size);
+    const ifRange = h['if-range'];
+    if (range && ifRange) {
+        const v = String(ifRange).trim();
+        const ok = v.startsWith('"') ? v === etag : (!v.startsWith('W/') && !isNaN(Date.parse(v)) && Date.parse(v) === lastMod.getTime());
+        if (!ok) range = null;
+    }
+    if (range === 'unsatisfiable') {
+        res.statusCode = 416;
+        res.setHeader('Content-Range', 'bytes */' + st.size);
+        res.end();
+        return { done: true, status: 416 };
+    }
+    let out;
+    if (range) {
+        res.statusCode = 206;
+        res.setHeader('Content-Range', 'bytes ' + range.start + '-' + range.end + '/' + st.size);
+        out = { done: false, status: 206, start: range.start, end: range.end, length: range.end - range.start + 1 };
+    } else {
+        res.statusCode = 200;
+        out = { done: false, status: 200, start: 0, end: Math.max(0, st.size - 1), length: st.size };
+    }
+    if (String(req.method || 'GET').toUpperCase() === 'HEAD') {
+        res.setHeader('Content-Length', out.length);
+        res.end();
+        return { done: true, status: out.status };
+    }
+    return out;
+}
+
+/** A small generated body (repo.json, the feed) with a strong ETag, 304 and gzip. */
+function sendBody(req, res, body, type) {
+    const etag = strongEtag(body);
+    res.setHeader('ETag', etag);
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Vary', 'Accept-Encoding');
+    if (etagMatches((req.headers || {})['if-none-match'], etag)) {
+        res.statusCode = 304;
+        res.end();
+        return;
+    }
+    res.statusCode = 200;
+    res.setHeader('Content-Type', type);
+    const gz = /\bgzip\b/.test(String((req.headers || {})['accept-encoding'] || '')) && Buffer.byteLength(body) > 1024;
+    if (String(req.method || 'GET').toUpperCase() === 'HEAD') { res.end(); return; }
+    if (gz) {
+        const buf = zlib.gzipSync(body);
+        res.setHeader('Content-Encoding', 'gzip');
+        res.setHeader('Content-Length', buf.length);
+        res.end(buf);
+    } else {
+        res.setHeader('Content-Length', Buffer.byteLength(body));
+        res.end(body);
+    }
+}
+
+// ─── schedules: « every 15m » or a 5-field cron line ─────────────────────────
+
+const UNIT = { s: 1000, m: 60000, h: 3600000, d: 86400000, w: 604800000 };
+
+/** "90s", "15m", "6h", "1d", "2w", or a bare number of minutes. null if it is not one. */
+function parseEvery(s) {
+    if (typeof s === 'number' && s > 0) return s * 60000;
+    const m = /^\s*(\d+(?:\.\d+)?)\s*([smhdw]?)\s*$/i.exec(String(s || ''));
+    if (!m) return null;
+    const ms = Number(m[1]) * UNIT[(m[2] || 'm').toLowerCase()];
+    return ms >= 10000 ? ms : null;
+}
+
+const CRON_ALIASES = { '@hourly': '0 * * * *', '@daily': '0 0 * * *', '@midnight': '0 0 * * *', '@weekly': '0 0 * * 0', '@monthly': '0 0 1 * *', '@yearly': '0 0 1 1 *', '@annually': '0 0 1 1 *' };
+const CRON_RANGES = [[0, 59], [0, 23], [1, 31], [1, 12], [0, 7]];
+
+function cronField(txt, lo, hi) {
+    const set = new Set();
+    for (const part of String(txt).split(',')) {
+        const m = /^(\*|(\d+)(?:-(\d+))?)(?:\/(\d+))?$/.exec(part.trim());
+        if (!m) return null;
+        let a = lo, b = hi;
+        if (m[2] !== undefined) { a = Number(m[2]); b = m[3] !== undefined ? Number(m[3]) : (m[4] !== undefined ? hi : a); }
+        const step = m[4] !== undefined ? Number(m[4]) : 1;
+        if (a < lo || b > hi || a > b || step < 1) return null;
+        for (let v = a; v <= b; v += step) set.add(v);
+    }
+    return set;
+}
+
+/** A 5-field cron line (minute hour day-of-month month day-of-week) or an @alias. null if invalid. */
+function parseCron(expr) {
+    let e = String(expr || '').trim().toLowerCase();
+    if (CRON_ALIASES[e]) e = CRON_ALIASES[e];
+    const parts = e.split(/\s+/);
+    if (parts.length !== 5) return null;
+    const f = parts.map((p, i) => cronField(p, CRON_RANGES[i][0], CRON_RANGES[i][1]));
+    if (f.some(x => !x)) return null;
+    if (f[4].has(7)) f[4].add(0);
+    return { min: f[0], hour: f[1], dom: f[2], mon: f[3], dow: f[4], domAny: parts[2] === '*', dowAny: parts[4] === '*' };
+}
+
+/** The first minute strictly after `from` that the cron line matches (local time), or null. */
+function cronNext(cron, from) {
+    const d = new Date(from.getTime());
+    d.setSeconds(0, 0);
+    d.setMinutes(d.getMinutes() + 1);
+    const limit = from.getTime() + 366 * 86400000 * 5;
+    while (d.getTime() <= limit) {
+        if (!cron.mon.has(d.getMonth() + 1)) { d.setMonth(d.getMonth() + 1, 1); d.setHours(0, 0, 0, 0); continue; }
+        const domOk = cron.dom.has(d.getDate()), dowOk = cron.dow.has(d.getDay());
+        const dayOk = cron.domAny && cron.dowAny ? true : cron.domAny ? dowOk : cron.dowAny ? domOk : (domOk || dowOk);
+        if (!dayOk) { d.setDate(d.getDate() + 1); d.setHours(0, 0, 0, 0); continue; }
+        if (!cron.hour.has(d.getHours())) { d.setHours(d.getHours() + 1, 0, 0, 0); continue; }
+        if (!cron.min.has(d.getMinutes())) { d.setMinutes(d.getMinutes() + 1, 0, 0); continue; }
+        return d;
+    }
+    return null;
+}
+
+/** A job's schedule: { kind: 'every', ms } | { kind: 'cron', cron } | null. */
+function parseSchedule(job) {
+    if (!job) return null;
+    if (job.cron) { const c = parseCron(job.cron); return c ? { kind: 'cron', cron: c, text: String(job.cron) } : null; }
+    if (job.every !== undefined && job.every !== null && job.every !== '') {
+        const ms = parseEvery(job.every);
+        return ms ? { kind: 'every', ms, text: 'every ' + String(job.every) } : null;
+    }
+    return null;
+}
+
+function nextRun(schedule, lastRun, startedAt) {
+    if (!schedule) return null;
+    if (schedule.kind === 'every') return new Date(lastRun ? lastRun + schedule.ms : startedAt + Math.min(schedule.ms, 60000));
+    // A run missed while the server was down (lastRun long ago) comes out in the past: it runs
+    // at the next tick, once, then the line takes over again.
+    return cronNext(schedule.cron, new Date(lastRun || startedAt));
+}
+
+// ─── configuration ───────────────────────────────────────────────────────────
+
+const DEFAULT_CONFIG = {
+    publicUrl: '',
+    statusPage: true,
+    rateLimit: { perMinute: 0, burst: 0 },
+    logs: { maxSizeMB: 10, keep: 5 },
+    jobs: [],
+};
+
+function loadConfig(dir, env) {
+    env = env || process.env;
+    const file = env.BMM_CONFIG ? path.resolve(dir, env.BMM_CONFIG) : path.join(dir, 'server.config.json');
+    const raw = readJson(file, {}) || {};
+    const cfg = Object.assign({}, DEFAULT_CONFIG, raw);
+    cfg.rateLimit = Object.assign({}, DEFAULT_CONFIG.rateLimit, raw.rateLimit || {});
+    cfg.logs = Object.assign({}, DEFAULT_CONFIG.logs, raw.logs || {});
+    cfg.jobs = Array.isArray(raw.jobs) ? raw.jobs.filter(j => j && typeof j === 'object') : [];
+    if (env.BMM_PUBLIC_URL) cfg.publicUrl = env.BMM_PUBLIC_URL;
+    if (env.BMM_RATE_LIMIT !== undefined && env.BMM_RATE_LIMIT !== '') cfg.rateLimit.perMinute = Number(env.BMM_RATE_LIMIT) || 0;
+    if (/^(0|off|false|no)$/i.test(String(env.BMM_STATUS_PAGE || ''))) cfg.statusPage = false;
+    cfg.jobsDisabled = /^(0|off|false|no)$/i.test(String(env.BMM_JOBS || ''));
+    cfg._file = file;
+    return cfg;
+}
+
+// ─── jobs ────────────────────────────────────────────────────────────────────
+
+async function sha256File(file) {
+    return new Promise((resolve, reject) => {
+        const h = crypto.createHash('sha256');
+        fs.createReadStream(file).on('error', reject).on('data', c => h.update(c)).on('end', () => resolve(h.digest('hex')));
+    });
+}
+
+function bumpVersion(v) {
+    const s = String(v == null ? '' : v);
+    const m = /^(.*?)(\d+)(\D*)$/.exec(s);
+    if (!m) return s ? s + '.1' : '1';
+    return m[1] + String(Number(m[2]) + 1) + m[3];
+}
+
+async function walkFiles(root, rel, out) {
+    let ents;
+    try { ents = await fsp.readdir(path.join(root, rel), { withFileTypes: true }); } catch (_) { return out; }
+    for (const e of ents) {
+        const r = rel ? rel + '/' + e.name : e.name;
+        if (e.isSymbolicLink()) continue;
+        if (e.isDirectory()) await walkFiles(root, r, out);
+        else if (e.isFile()) out.push(r);
+    }
+    return out;
+}
+
+/**
+ * Check every file the manifest lists against the disk; optionally rewrite the manifest.
+ *
+ * A SIGNED manifest is never rewritten: BMM refuses a manifest whose signature no longer
+ * verifies, so « fixing » a hash here would lock every subscriber out. It is reported instead,
+ * and re-exporting from BMM re-signs it.
+ */
+async function jobRescan(ctx, job) {
+    const repoFile = path.join(ctx.dir, 'repo.json');
+    const repo = readJson(repoFile, null);
+    if (!repo || typeof repo !== 'object') return { result: 'error', message: 'repo.json is missing or unreadable' };
+    const entries = manifestFiles(repo);
+    let changed = 0, missing = 0, checked = 0;
+    const drift = [];
+    for (const e of entries) {
+        const abs = path.resolve(ctx.dir, e.tail);
+        if (!insideDir(ctx.dir, abs)) { missing++; continue; }
+        let st;
+        try { st = await fsp.stat(abs); } catch (_) { missing++; continue; }
+        if (!st.isFile()) { missing++; continue; }
+        checked++;
+        const mtime = Math.floor(st.mtimeMs / 1000);
+        const sameStamp = e.file.mtime !== undefined && Number(e.file.mtime) === mtime && Number(e.file.size) === st.size;
+        if (sameStamp && !job.fullHash) continue;
+        const sizeDiffers = Number(e.file.size) !== st.size;
+        const hash = await sha256File(abs);
+        if (sizeDiffers || String(e.file.sha256_hash || '').toLowerCase() !== hash) {
+            changed++;
+            drift.push({ e, size: st.size, hash, mtime });
+        } else if (e.file.mtime === undefined || Number(e.file.mtime) !== mtime) {
+            drift.push({ e, size: st.size, hash, mtime, stampOnly: true });
+        }
+    }
+    let untracked = 0;
+    const layout = repo.files_layout || repo.filesLayout;
+    if (!layout || String(layout).trim() === 'mods/{id}/{path}') {
+        const listed = new Set(entries.map(x => x.tail));
+        for (const r of await walkFiles(ctx.dir, 'mods', [])) if (!listed.has(r)) untracked++;
+    }
+    let msg = checked + ' checked, ' + changed + ' changed, ' + missing + ' missing, ' + untracked + ' not in the manifest';
+    if (!job.rewrite || (!changed && !drift.length)) {
+        return { result: changed || missing ? 'warn' : 'ok', message: msg };
+    }
+    if (isSigned(repo)) {
+        return { result: changed || missing ? 'warn' : 'ok', message: msg + '. Signed manifest: not rewritten (re-export it from BMM to re-sign)' };
+    }
+    if (!changed && !(job.recordStamps)) return { result: missing ? 'warn' : 'ok', message: msg };
+    ctx.backupRepo('before-rescan');
+    // mtime is written only where the manifest already speaks it: on an undeclared legacy
+    // manifest it would change the format BMM detects.
+    const stamps = repo.format_version != null || repo.formatVersion != null;
+    // A mod listed in two profiles is two objects in the file: update every copy.
+    const byTail = new Map(drift.map(d => [d.e.tail, d]));
+    for (const p of (repo.profiles || [])) for (const m of ((p && p.mods) || [])) for (const f of ((m && m.files) || [])) {
+        const d = f && typeof f.relative_path === 'string' ? byTail.get(modFileTail(layout, m.id, f.relative_path)) : null;
+        if (!d) continue;
+        f.size = d.size;
+        if (!d.stampOnly) { f.sha256_hash = d.hash; f.chunks = null; }
+        if (stamps || f.mtime !== undefined) f.mtime = d.mtime;
+    }
+    if (changed && job.bumpVersion) repo.version = bumpVersion(repo.version);
+    writeJsonAtomic(repoFile, repo);
+    msg += '. repo.json rewritten' + (changed && job.bumpVersion ? ' (version ' + repo.version + ')' : '');
+    return { result: missing ? 'warn' : 'ok', message: msg };
+}
+
+function runProcess(cmd, args, opts) {
+    return new Promise((resolve) => {
+        let out = '';
+        let child;
+        try {
+            child = spawn(cmd, args, { cwd: opts.cwd, windowsHide: true, shell: false, env: process.env });
+        } catch (e) { resolve({ code: -1, out: String(e && e.message) }); return; }
+        const timer = setTimeout(() => { try { child.kill(); } catch (_) {} out += '\n[timed out]'; }, opts.timeoutMs || 1800000);
+        const take = (b) => { out += b.toString(); if (out.length > 20000) out = out.slice(-20000); };
+        child.stdout && child.stdout.on('data', take);
+        child.stderr && child.stderr.on('data', take);
+        child.on('error', (e) => { clearTimeout(timer); resolve({ code: -1, out: out + String(e && e.message) }); });
+        child.on('close', (code) => { clearTimeout(timer); resolve({ code, out }); });
+    });
+}
+
+/** The server's own files: a sync never overwrites or deletes them. */
+const SERVER_OWN = ['server.js', 'bmm-extras.js', 'access-gate.js', 'keyauth.mjs', 'access.json', 'server.config.json',
+    'bans.json', 'whitelist.json', 'downloads.json', 'history.json', 'monitoring.json', 'server.log', '.env',
+    'package.json', 'package-lock.json', 'node_modules', 'public', PRIVATE_DIR, 'Dockerfile', 'docker-compose.yml',
+    'BMM-Standalone-Server.bat', 'BMM-Standalone-Server.sh', 'README-SERVER.md', 'README-SERVER.fr.md'];
+
+async function copyTree(src, dst, rel, stats, mirror) {
+    let ents;
+    try { ents = await fsp.readdir(path.join(src, rel), { withFileTypes: true }); } catch (_) { return; }
+    await fsp.mkdir(path.join(dst, rel), { recursive: true });
+    const names = new Set();
+    for (const e of ents) {
+        if (e.isSymbolicLink()) continue;
+        const r = rel ? path.join(rel, e.name) : e.name;
+        names.add(e.name);
+        if (e.isDirectory()) { await copyTree(src, dst, r, stats, mirror); continue; }
+        if (!e.isFile()) continue;
+        const a = path.join(src, r), b = path.join(dst, r);
+        const sa = await fsp.stat(a);
+        let sb = null;
+        try { sb = await fsp.stat(b); } catch (_) {}
+        if (sb && sb.size === sa.size && Math.floor(sb.mtimeMs) >= Math.floor(sa.mtimeMs)) continue;
+        await fsp.copyFile(a, b);
+        try { await fsp.utimes(b, sa.atime, sa.mtime); } catch (_) {}
+        stats.copied++;
+    }
+    if (mirror) {
+        let here = [];
+        try { here = await fsp.readdir(path.join(dst, rel), { withFileTypes: true }); } catch (_) {}
+        for (const e of here) {
+            if (names.has(e.name) || e.isSymbolicLink()) continue;
+            await fsp.rm(path.join(dst, rel, e.name), { recursive: true, force: true });
+            stats.removed++;
+        }
+    }
+}
+
+/**
+ * Bring the repo up to date from somewhere else: a git remote, an rsync source, or a folder
+ * BMM exports into. The server's own files are never touched.
+ */
+async function jobSync(ctx, job) {
+    const src = job.source || {};
+    const kind = String(src.kind || '').toLowerCase();
+    let res;
+    if (kind === 'git') {
+        const args = ['-C', ctx.dir, 'pull', '--ff-only'];
+        if (src.remote) args.push(String(src.remote));
+        if (src.branch) args.push(String(src.branch));
+        const r = await runProcess('git', args, { cwd: ctx.dir, timeoutMs: job.timeoutMs });
+        res = r.code === 0 ? { result: 'ok', message: 'git: ' + (r.out.trim().split('\n').pop() || 'up to date') } : { result: 'error', message: 'git exited ' + r.code + ': ' + r.out.trim().slice(-300) };
+    } else if (kind === 'rsync') {
+        if (!src.path) return { result: 'error', message: 'sync: source.path is empty' };
+        const args = ['-a', '--itemize-changes'];
+        if (src.delete) args.push('--delete');
+        for (const n of SERVER_OWN) args.push('--exclude', '/' + n);
+        args.push(String(src.path).replace(/\/?$/, '/'), ctx.dir.replace(/[\\/]?$/, '/'));
+        const r = await runProcess('rsync', args, { cwd: ctx.dir, timeoutMs: job.timeoutMs });
+        const n = r.out.split('\n').filter(l => /^[<>ch*]/.test(l)).length;
+        res = r.code === 0 ? { result: 'ok', message: 'rsync: ' + n + ' change(s)' } : { result: 'error', message: 'rsync exited ' + r.code + ': ' + r.out.trim().slice(-300) };
+    } else if (kind === 'folder') {
+        if (!src.path) return { result: 'error', message: 'sync: source.path is empty' };
+        const from = path.resolve(ctx.dir, String(src.path));
+        if (insideDir(ctx.dir, from) || insideDir(from, ctx.dir)) return { result: 'error', message: 'sync: the source folder overlaps this server folder' };
+        if (!fs.existsSync(path.join(from, 'repo.json'))) return { result: 'error', message: 'sync: no repo.json in ' + from };
+        const stats = { copied: 0, removed: 0 };
+        const include = Array.isArray(src.include) && src.include.length ? src.include : ['mods', 'extras'];
+        for (const d of include) {
+            const name = String(d);
+            if (!name || name.includes('..') || path.isAbsolute(name) || SERVER_OWN.includes(name)) continue;
+            if (fs.existsSync(path.join(from, name))) await copyTree(path.join(from, name), path.join(ctx.dir, name), '', stats, !!src.mirror);
+        }
+        // The manifest last, so a subscriber never sees a repo.json pointing at files not yet there.
+        for (const f of ['Info.json', 'info.json', 'repo.json']) {
+            const a = path.join(from, f);
+            if (!fs.existsSync(a)) continue;
+            const b = path.join(ctx.dir, f);
+            const same = fs.existsSync(b) && fs.readFileSync(a).equals(fs.readFileSync(b));
+            if (same) continue;
+            if (f === 'repo.json') ctx.backupRepo('before-sync');
+            const tmp = b + '.tmp-' + process.pid;
+            await fsp.copyFile(a, tmp);
+            try { await fsp.rename(tmp, b); }
+            catch (_) { await fsp.writeFile(b, await fsp.readFile(tmp)); await fsp.unlink(tmp).catch(() => {}); }
+            stats.copied++;
+        }
+        res = { result: 'ok', message: 'folder: ' + stats.copied + ' copied' + (stats.removed ? ', ' + stats.removed + ' removed' : '') };
+    } else if (kind === 'command') {
+        const argv = Array.isArray(src.command) ? src.command.map(String) : [];
+        if (!argv.length) return { result: 'error', message: 'sync: source.command must be an array, e.g. ["sh", "pull.sh"]' };
+        const r = await runProcess(argv[0], argv.slice(1), { cwd: ctx.dir, timeoutMs: job.timeoutMs });
+        res = r.code === 0 ? { result: 'ok', message: 'command: ' + (r.out.trim().split('\n').pop() || 'done') } : { result: 'error', message: 'command exited ' + r.code + ': ' + r.out.trim().slice(-300) };
+    } else {
+        return { result: 'error', message: 'sync: unknown source.kind "' + kind + '" (git, rsync, folder, command)' };
+    }
+    if (res.result === 'ok' && job.thenRescan) {
+        const r = await jobRescan(ctx, { rewrite: !!job.rewrite, bumpVersion: !!job.bumpVersion });
+        res = { result: r.result, message: res.message + '; rescan: ' + r.message };
+    }
+    return res;
+}
+
+async function jobBackup(ctx, job) {
+    const r = ctx.backupRepo('scheduled', Math.max(1, Number(job.keep) || 14));
+    return r ? { result: 'ok', message: r } : { result: 'error', message: 'repo.json is missing' };
+}
+
+async function jobRotateLogs(ctx, job) {
+    const max = Math.max(1, Number(job.maxSizeMB || ctx.config.logs.maxSizeMB) || 10) * 1024 * 1024;
+    const keep = Math.max(1, Number(job.keep || ctx.config.logs.keep) || 5);
+    let rotated = 0;
+    for (const name of ['server.log']) {
+        const f = path.join(ctx.dir, name);
+        let st;
+        try { st = fs.statSync(f); } catch (_) { continue; }
+        if (st.size < max) continue;
+        for (let i = keep; i >= 1; i--) {
+            const from = f + '.' + i;
+            if (!fs.existsSync(from)) continue;
+            if (i === keep) fs.unlinkSync(from); else fs.renameSync(from, f + '.' + (i + 1));
+        }
+        try { fs.renameSync(f, f + '.1'); }
+        catch (_) { fs.writeFileSync(f + '.1', fs.readFileSync(f)); fs.truncateSync(f, 0); } // bind-mounted log
+        rotated++;
+    }
+    return { result: 'ok', message: rotated ? 'server.log rotated' : 'nothing to rotate' };
+}
+
+const JOB_TYPES = { rescan: jobRescan, sync: jobSync, backup: jobBackup, rotateLogs: jobRotateLogs };
+
+// ─── status page ─────────────────────────────────────────────────────────────
+
+const STATUS_CSS = `
+:root{--bg:#f6f7f9;--card:#fff;--text:#16181d;--muted:#5b6270;--line:#e3e6eb;--accent:#4f6bed;--ok:#14804a;--okbg:#e5f5ec;--warn:#9a5b00;--warnbg:#fdf1dc;--err:#b42318;--errbg:#fde8e7;--code:#eef0f4}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1115;--card:#171a21;--text:#e8eaef;--muted:#9aa1ad;--line:#272b35;--accent:#8ea2ff;--ok:#5fd394;--okbg:#14261c;--warn:#f0b75a;--warnbg:#2b2213;--err:#ff8a80;--errbg:#2e1716;--code:#1f232c}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:860px;margin:0 auto;padding:32px 16px 48px}
+header{display:flex;gap:14px;align-items:center;margin-bottom:20px}
+.logo{width:44px;height:44px;border-radius:12px;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:700;flex:none}
+h1{font-size:22px;margin:0;line-height:1.2;overflow-wrap:anywhere}h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 12px}
+.sub{color:var(--muted);font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.stat{min-width:0}.stat b{display:block;font-size:20px;overflow-wrap:anywhere}.stat span{color:var(--muted);font-size:12px}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600}
+.ok{color:var(--ok);background:var(--okbg)}.warn{color:var(--warn);background:var(--warnbg)}.error{color:var(--err);background:var(--errbg)}.idle{color:var(--muted);background:var(--code)}
+code,.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:13px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.copy{display:flex;gap:8px;align-items:stretch}.copy code{flex:1;min-width:0;background:var(--code);padding:8px 10px;border-radius:8px;overflow-x:auto;white-space:nowrap}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--text);text-decoration:none;font-weight:600;font-size:14px;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:8px 6px;border-top:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-weight:600;font-size:12px;border-top:0}
+.tw{overflow-x:auto}td.msg{color:var(--muted);font-size:13px;min-width:180px}
+footer{color:var(--muted);font-size:12px;text-align:center;margin-top:24px}
+ol{margin:0;padding-left:20px}li{margin:4px 0}
+`;
+
+function renderStatus(s) {
+    const r = s.repo;
+    const jobs = s.jobs.map(j => '<tr><td><b>' + esc(j.id) + '</b><div class="sub">' + esc(j.type) + '</div></td><td class="mono">' + esc(j.schedule || 'manual') + '</td>'
+        + '<td>' + (j.lastRun ? esc(new Date(j.lastRun).toLocaleString()) + '<div class="sub">' + (j.durationMs != null ? esc(fmtDuration(j.durationMs)) : '') + '</div>' : '<span class="sub">never</span>') + '</td>'
+        + '<td><span class="pill ' + esc(j.running ? 'idle' : (j.result || 'idle')) + '">' + esc(j.running ? 'running' : (j.result || 'pending')) + '</span></td>'
+        + '<td>' + (j.nextRun ? esc(new Date(j.nextRun).toLocaleString()) : '<span class="sub">-</span>') + '</td>'
+        + '<td class="msg">' + esc(j.message || '') + '</td></tr>').join('');
+    const repoBlock = r.protected
+        ? '<div class="card"><h2>Repository</h2><p>This repository is protected. Add <code>?password=…</code> to this address to see its details, or connect from BMM with the password.</p></div>'
+        : '<div class="card"><h2>Repository</h2><div class="grid">'
+        + '<div class="stat"><b>' + esc(r.version || '-') + '</b><span>Version</span></div>'
+        + '<div class="stat"><b>' + esc(r.format) + '</b><span>Manifest format</span></div>'
+        + '<div class="stat"><b>' + esc(r.mods) + '</b><span>Mods</span></div>'
+        + '<div class="stat"><b>' + esc(r.files) + '</b><span>Files</span></div>'
+        + '<div class="stat"><b>' + esc(fmtBytes(r.size)) + '</b><span>Total size</span></div>'
+        + '<div class="stat"><b>' + esc(r.updated ? new Date(r.updated).toLocaleString() : '-') + '</b><span>Last update</span></div>'
+        + '</div>' + (r.description ? '<p class="sub" style="margin:14px 0 0">' + esc(r.description) + '</p>' : '')
+        + '<p class="row" style="margin:14px 0 0">' + (r.signed ? '<span class="pill ok">signed</span>' : '<span class="pill idle">unsigned</span>')
+        + (r.format.startsWith('legacy') ? ' <span class="pill warn">convert it in BMM</span>' : '') + (r.game ? ' <span class="sub">' + esc(r.game) + '</span>' : '') + '</p></div>';
+    return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+        + '<meta name="color-scheme" content="light dark"><meta http-equiv="refresh" content="60"><title>' + esc(r.protected ? 'BMM repo' : r.name) + ' · status</title>'
+        + '<style>' + STATUS_CSS + '</style></head><body><main>'
+        + '<header><div class="logo">B</div><div><h1>' + esc(r.protected ? 'BMM repository' : r.name) + '</h1><div class="sub">'
+        + (r.author && !r.protected ? 'by ' + esc(r.author) + ' · ' : '') + '<span class="pill ' + (s.healthy ? 'ok' : 'error') + '">' + (s.healthy ? 'online' : 'repo.json unreadable') + '</span> · up ' + esc(fmtDuration(s.uptimeMs)) + '</div></div></header>'
+        + repoBlock
+        + '<div class="card"><h2>Add it in BMM</h2><ol><li>Click <b>Open in BMM</b>, or</li><li>In BMM, open <b>Server Repo</b> → <b>Connect</b> and paste the address below.</li></ol>'
+        + '<div class="copy" style="margin-top:12px"><code id="u">' + esc(s.base + '/') + '</code><button class="btn" type="button" onclick="navigator.clipboard&&navigator.clipboard.writeText(document.getElementById(\'u\').textContent)">Copy</button></div>'
+        + '<p class="row" style="margin:12px 0 0"><a class="btn primary" href="' + esc(s.connectLink) + '">Open in BMM</a>'
+        + (r.protected ? '' : '<a class="btn" href="' + esc(s.base + '/feed.xml') + '">Atom feed</a><a class="btn" href="' + esc(s.base + '/repo.json') + '">repo.json</a>') + '</p></div>'
+        + '<div class="card"><h2>Scheduled tasks</h2>' + (s.jobs.length
+            ? '<div class="tw"><table><thead><tr><th>Task</th><th>Schedule</th><th>Last run</th><th>Result</th><th>Next run</th><th>Details</th></tr></thead><tbody>' + jobs + '</tbody></table></div>'
+            : '<p class="sub" style="margin:0">No scheduled task. Add some under <code>jobs</code> in <code>server.config.json</code>.</p>')
+        + (s.jobsDisabled ? '<p class="sub">Scheduled runs are turned off (BMM_JOBS=off).</p>' : '') + '</div>'
+        + '<footer>BMM standalone server · ' + esc(s.kind) + ' · extras ' + EXTRAS_VERSION + ' · <a href="/health" style="color:inherit">health</a> · <a href="/status.json" style="color:inherit">status.json</a></footer>'
+        + '</main></body></html>';
+}
+
+// ─── the instance ────────────────────────────────────────────────────────────
+
+/**
+ * create({ dir, kind, adminPassword, downloadPassword, port })
+ *
+ * early(req, res, ip)      → true when it answered: rate limit, /health, /status, /admin/jobs
+ * serve(req, res)          → true when it answered: /feed.xml, /feed.atom (call AFTER the gate)
+ * prepareFile(req, res, absPath, stat), sendBody(req, res, body, type)
+ * isPrivate(segments)      → true for bmm-server/…, which is never served
+ */
+function create(opts) {
+    const dir = path.resolve(opts.dir);
+    const kind = opts.kind || 'node';
+    const startTime = Date.now();
+    const privDir = path.join(dir, PRIVATE_DIR);
+    const stateFile = path.join(privDir, 'jobs-state.json');
+    const logFile = path.join(dir, 'server.log');
+    let config = loadConfig(dir);
+    let configMtime = 0;
+    try { configMtime = fs.statSync(config._file).mtimeMs; } catch (_) {}
+    let state = readJson(stateFile, {}) || {};
+    const running = new Set();
+    const buckets = new Map();
+    let timer = null;
+
+    function log(msg, level) {
+        const line = '[' + new Date().toISOString() + '] [' + (level || 'JOB') + '] ' + msg;
+        console.log(line);
+        try { fs.appendFileSync(logFile, line + '\n'); } catch (_) {}
+    }
+
+    function saveState() {
+        try { fs.mkdirSync(privDir, { recursive: true }); writeJsonAtomic(stateFile, state); } catch (_) {}
+    }
+
+    function reloadConfigIfChanged() {
+        let m = 0;
+        try { m = fs.statSync(config._file).mtimeMs; } catch (_) {}
+        if (m !== configMtime) { configMtime = m; config = loadConfig(dir); log('server.config.json reloaded', 'INFO'); }
+    }
+
+    function backupRepo(reason, keep) {
+        const src = path.join(dir, 'repo.json');
+        if (!fs.existsSync(src)) return null;
+        const bdir = path.join(privDir, 'backups');
+        fs.mkdirSync(bdir, { recursive: true });
+        const body = fs.readFileSync(src);
+        const existing = fs.readdirSync(bdir).filter(n => /^repo-\d{8}-\d{6}.*\.json$/.test(n)).sort();
+        const last = existing[existing.length - 1];
+        if (reason === 'scheduled' && last && fs.readFileSync(path.join(bdir, last)).equals(body)) {
+            return 'unchanged since ' + last + ', no new copy';
+        }
+        let name = 'repo-' + stamp(new Date()) + (reason === 'scheduled' ? '' : '-' + reason) + '.json';
+        let n = 1;
+        while (fs.existsSync(path.join(bdir, name))) name = name.replace(/(?:-\d+)?\.json$/, '-' + (++n) + '.json');
+        fs.writeFileSync(path.join(bdir, name), body);
+        const all = fs.readdirSync(bdir).filter(n => /^repo-\d{8}-\d{6}.*\.json$/.test(n)).sort();
+        const limit = keep || 30;
+        for (const old of all.slice(0, Math.max(0, all.length - limit))) { try { fs.unlinkSync(path.join(bdir, old)); } catch (_) {} }
+        return 'saved ' + name;
+    }
+
+    const ctx = { dir, get config() { return config; }, backupRepo, log };
+
+    function jobList() {
+        return config.jobs.map((j, i) => {
+            const id = String(j.id || (j.type + '-' + i));
+            return Object.assign({}, j, { id, _schedule: parseSchedule(j) });
+        });
+    }
+
+    async function runJob(job, why) {
+        const fn = JOB_TYPES[job.type];
+        if (!fn) { state[job.id] = Object.assign({}, state[job.id], { lastRun: Date.now(), result: 'error', message: 'unknown type "' + job.type + '"' }); saveState(); return state[job.id]; }
+        if (running.has(job.id)) return { result: 'skipped', message: 'already running' };
+        running.add(job.id);
+        const t0 = Date.now();
+        log(job.id + ' (' + job.type + ') started' + (why ? ' — ' + why : ''));
+        let r;
+        try { r = await fn(ctx, job); } catch (e) { r = { result: 'error', message: String(e && e.message || e) }; }
+        running.delete(job.id);
+        const prev = state[job.id] || {};
+        const runs = (prev.runs || []).concat([{ at: t0, result: r.result, ms: Date.now() - t0 }]).slice(-10);
+        state[job.id] = { lastRun: t0, durationMs: Date.now() - t0, result: r.result, message: r.message, runs };
+        saveState();
+        log(job.id + ' ' + r.result + ': ' + r.message, r.result === 'error' ? 'ERROR' : 'JOB');
+        return state[job.id];
+    }
+
+    function tick() {
+        reloadConfigIfChanged();
+        if (config.jobsDisabled) return;
+        const now = new Date();
+        for (const job of jobList()) {
+            if (job.enabled === false || !job._schedule || running.has(job.id)) continue;
+            const st = state[job.id] || {};
+            const due = nextRun(job._schedule, st.lastRun, startTime);
+            if (due && due.getTime() <= now.getTime()) runJob(job, job._schedule.text);
+        }
+    }
+
+    function startScheduler() {
+        if (timer) return;
+        for (const job of jobList()) {
+            if (job.enabled === false) continue;
+            if (!JOB_TYPES[job.type]) log('job ' + job.id + ': unknown type "' + job.type + '"', 'WARN');
+            else if (!job._schedule && (job.every || job.cron)) log('job ' + job.id + ': unreadable schedule ' + JSON.stringify(job.every || job.cron), 'WARN');
+            if (job.runOnStart && JOB_TYPES[job.type] && !config.jobsDisabled) runJob(job, 'on start');
+        }
+        timer = setInterval(tick, 15000);
+        if (timer.unref) timer.unref();
+    }
+
+    function jobsView() {
+        const now = new Date();
+        return jobList().map(j => {
+            const st = state[j.id] || {};
+            const nr = j.enabled === false || config.jobsDisabled ? null : nextRun(j._schedule, st.lastRun, startTime);
+            return {
+                id: j.id, type: j.type, enabled: j.enabled !== false,
+                schedule: j._schedule ? (j._schedule.kind === 'cron' ? 'cron ' + j._schedule.text : j._schedule.text) : (j.every || j.cron ? 'invalid: ' + (j.every || j.cron) : ''),
+                lastRun: st.lastRun || null, durationMs: st.durationMs != null ? st.durationMs : null, result: st.result || null,
+                message: st.message || '', nextRun: nr ? Math.max(nr.getTime(), now.getTime()) : null, running: running.has(j.id),
+            };
+        });
+    }
+
+    function readAccessPassword() {
+        const a = readJson(path.join(dir, 'access.json'), {}) || {};
+        return {
+            password: typeof a.password === 'string' ? a.password : '',
+            keys: Array.isArray(a.pubkeys) && a.pubkeys.some(k => typeof k === 'string' && k.trim()),
+            audience: typeof a.audience === 'string' ? a.audience.trim() : '',
+        };
+    }
+
+    function baseUrl(req) {
+        const acc = readAccessPassword();
+        const fixed = (config.publicUrl || acc.audience || '').trim();
+        if (fixed) return fixed.replace(/\/+$/, '');
+        const h = String((req.headers || {}).host || '');
+        const host = h && !/[\/"<>\s\\]/.test(h) ? h : 'localhost' + (opts.port ? ':' + opts.port : '');
+        const xfp = String((req.headers || {})['x-forwarded-proto'] || '').split(',')[0].trim().toLowerCase();
+        const proto = xfp === 'https' || xfp === 'http' ? xfp : (req.socket && req.socket.encrypted ? 'https' : 'http');
+        return proto + '://' + host;
+    }
+
+    function unlocked(req, url) {
+        const acc = readAccessPassword();
+        const pws = [acc.password, opts.downloadPassword || ''].filter(Boolean);
+        if (!pws.length && !acc.keys) return true;
+        if (acc.keys) return false;
+        const given = (req.headers || {})['x-repo-password'] || url.searchParams.get('password') || url.searchParams.get('pw') || '';
+        return pws.every(p => safeEqual(given, p));
+    }
+
+    let repoCache = { mtime: -1, repo: null, stats: null };
+    function repoInfo() {
+        const f = path.join(dir, 'repo.json');
+        let st;
+        try { st = fs.statSync(f); } catch (_) { return null; }
+        if (st.mtimeMs !== repoCache.mtime) {
+            const repo = readJson(f, null);
+            repoCache = { mtime: st.mtimeMs, repo, stats: repo && typeof repo === 'object' ? manifestStats(repo) : null };
+        }
+        return repoCache.stats ? Object.assign({ updated: Math.floor(st.mtimeMs) }, repoCache.stats) : null;
+    }
+
+    function statusData(req, url) {
+        const info = repoInfo();
+        const base = baseUrl(req);
+        const open = unlocked(req, url);
+        const repo = info && open ? Object.assign({ protected: false }, info) : { protected: !open, name: 'BMM repo', format: info ? info.format : 'not a repo manifest', version: '', mods: 0, files: 0, size: 0, updated: null };
+        return {
+            healthy: !!info, kind, uptimeMs: Date.now() - startTime, base,
+            connectLink: 'bmm://repo/connect?url=' + encodeURIComponent(base + '/'),
+            repo, jobs: jobsView(), jobsDisabled: !!config.jobsDisabled,
+        };
+    }
+
+    function rateLimited(ip) {
+        const per = Number(config.rateLimit.perMinute) || 0;
+        if (per <= 0 || !ip || ip === '127.0.0.1' || ip === '::1') return false;
+        const burst = Math.max(1, Number(config.rateLimit.burst) || per);
+        const now = Date.now();
+        let b = buckets.get(ip);
+        if (!b) { b = { tokens: burst, at: now }; buckets.set(ip, b); }
+        b.tokens = Math.min(burst, b.tokens + ((now - b.at) / 60000) * per);
+        b.at = now;
+        if (buckets.size > 10000) for (const [k, v] of buckets) if (now - v.at > 600000) buckets.delete(k);
+        if (b.tokens < 1) return Math.ceil((1 - b.tokens) * 60 / per);
+        b.tokens -= 1;
+        return false;
+    }
+
+    function json(res, code, obj) {
+        res.statusCode = code;
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-store');
+        res.end(JSON.stringify(obj));
+    }
+
+    function early(req, res, ip) {
+        let url;
+        try { url = new URL(req.url, 'http://x'); } catch (_) { return false; }
+        const p = url.pathname.replace(/\/+$/, '') || '/';
+        const wait = rateLimited(ip);
+        if (wait) {
+            res.statusCode = 429;
+            res.setHeader('Retry-After', String(wait));
+            res.end('Too many requests');
+            return true;
+        }
+        if (p === '/health' || p === '/healthz') {
+            const info = repoInfo();
+            json(res, info ? 200 : 503, { ok: !!info, uptime: Math.round((Date.now() - startTime) / 1000), server: kind, extras: EXTRAS_VERSION });
+            return true;
+        }
+        if ((p === '/status' || p === '/status.json') && config.statusPage !== false) {
+            const s = statusData(req, url);
+            if (p === '/status.json') { json(res, 200, s); return true; }
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'text/html; charset=utf-8');
+            res.setHeader('Cache-Control', 'no-store');
+            res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:");
+            res.end(renderStatus(s));
+            return true;
+        }
+        if (p === '/admin/jobs' || p === '/admin/jobs/run') {
+            const auth = (req.headers || {})['authorization'] || '';
+            if (!opts.adminPassword || !safeEqual(String(auth).replace(/^Bearer\s+/i, ''), opts.adminPassword)) { json(res, 401, { err: 'Unauthorized' }); return true; }
+            if (p === '/admin/jobs') { json(res, 200, { jobs: jobsView(), disabled: !!config.jobsDisabled }); return true; }
+            if (String(req.method).toUpperCase() !== 'POST') { json(res, 405, { err: 'POST only' }); return true; }
+            const id = url.searchParams.get('id') || '';
+            const job = jobList().find(j => j.id === id);
+            if (!job) { json(res, 404, { err: 'no job ' + id }); return true; }
+            runJob(job, 'started by the admin').then(r => json(res, 200, r), e => json(res, 500, { err: String(e && e.message) }));
+            return true;
+        }
+        return false;
+    }
+
+    function serve(req, res) {
+        let url;
+        try { url = new URL(req.url, 'http://x'); } catch (_) { return false; }
+        const p = url.pathname.toLowerCase();
+        if (p !== '/feed.xml' && p !== '/feed.atom') return false;
+        const f = path.join(dir, 'repo.json');
+        const repo = readJson(f, null);
+        if (!repo || typeof repo !== 'object') { res.statusCode = 404; res.end('Not Found'); return true; }
+        let updated = Date.now();
+        try { updated = fs.statSync(f).mtimeMs; } catch (_) {}
+        sendBody(req, res, atomFeed(repo, baseUrl(req), updated), 'application/atom+xml; charset=utf-8');
+        return true;
+    }
+
+    function isPrivate(segs) {
+        return Array.isArray(segs) && segs.length > 0 && String(segs[0]).toLowerCase() === PRIVATE_DIR;
+    }
+
+    function attach(server) {
+        startScheduler();
+        // Graceful stop for `docker stop` and systemd: finish what is being sent, then exit.
+        // Only when nothing else listens, so the scripts' own handlers (tunnel, UPnP) stay in charge.
+        setImmediate(() => {
+            if (process.listenerCount('SIGTERM') > 0) return;
+            process.once('SIGTERM', () => {
+                log('SIGTERM: closing', 'INFO');
+                if (timer) clearInterval(timer);
+                try { server && server.close(() => process.exit(0)); } catch (_) { process.exit(0); }
+                setTimeout(() => process.exit(0), 10000).unref();
+            });
+        });
+    }
+
+    return {
+        get config() { return config; }, early, serve, prepareFile, sendBody, isPrivate, attach, safeEqual,
+        runJob: (id) => { const j = jobList().find(x => x.id === id); return j ? runJob(j, 'manual') : Promise.resolve(null); },
+        jobsView, statusData, stop: () => { if (timer) clearInterval(timer); timer = null; },
+    };
+}
+
+module.exports = {
+    create, EXTRAS_VERSION, PRIVATE_DIR,
+    // exported for the self-test and for BMM's own tests
+    parseEvery, parseCron, cronNext, parseSchedule, nextRun, parseRange, etagMatches, prepareFile, sendBody,
+    atomFeed, repoFormatOf, manifestStats, manifestFiles, modFileTail, bumpVersion, renderStatus, loadConfig,
+    jobRescan, jobSync, jobBackup, jobRotateLogs, insideDir, safeEqual,
+};

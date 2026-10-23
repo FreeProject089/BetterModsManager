@@ -1,0 +1,1548 @@
+﻿/**
+ * mapper.ts — Mod Mapper feature
+ * Handles file restructuration by mapping mod files to game directory structure
+ */
+
+import { invoke } from '../../core/api.js';
+import { toast, fetchProfileIconPaths, updateSelectProfileIcon, decorateProfileOptions } from '../../ui/app.js';
+import { t } from '../../core/i18n.js';
+import { confirmAction } from '../../ui/verify.js';
+import { dispatchBmmAction, BMM_ACTIONS, onBmmAction } from '../../ui/tutorial-events.js';
+import { escHtml } from '../../core/utils.js';
+import { bindModal } from '../../ui/modal-shell.js';
+import type { Profile, ModEntry, FileTreeNode, EnrichedMod } from '../../types/models.js';
+import { uiIcon } from '../../ui/icons.js';
+
+let selectedModId: string | null = null;
+// Guard so a refresh can't run twice concurrently — WITHOUT disabling the <select>
+// (toggling `.disabled` on a custom-select-enhanced element left its trigger stuck,
+// so you couldn't pick another mod).
+let _mapperBusy = false;
+let activeProfile: Profile | null = null;
+let modTreeData: FileTreeNode[] = [];
+let gameTreeData: FileTreeNode[] = [];
+
+// Selection State
+let selectedPaths = new Set<string>();
+let lastSelectedPath: string | null = null;
+
+// Pending changes (Draft mode)
+let pendingMoves = new Map<string, string>();
+let pendingDeletions = new Set<string>();
+let pendingNewFolders = new Map<string, { parent: string, name: string }>();
+
+/** Every queued change, of the three kinds. ONE count for "is there anything to save?": Save
+ *  used to test moves and deletions only, so a batch of new folders showed the Save button
+ *  (which counted all three) and then did nothing when clicked. Exported for the test. */
+export function pendingChangeCount(): number {
+    return pendingMoves.size + pendingDeletions.size + pendingNewFolders.size;
+}
+
+// Input Modal State
+let currentInputCallback: ((value: string) => void) | null = null;
+// Undoes the input dialog's keyboard binding (Escape, Tab trap) and returns the focus.
+let inputRelease: (() => void) | null = null;
+
+// Cache guards — avoid re-loading trees if nothing changed
+let lastGamePath: string | null = null;
+let lastModFolderPath: string | null = null;
+let lastProfileId: string | null = null;
+
+// Expand-all cancellation tokens — incremented on collapse to stop a running doExpandAll
+const _expandTokens = new Map<string, number>();
+
+/**
+ * Initializes the Mod Mapper UI and event listeners
+ */
+export async function initMapper(): Promise<void> {
+    const view = document.getElementById('view-mapper');
+    if (!view) return;
+
+    // Intercept [data-tooltip] elements inside the mapper → use Tasky (mouse-follow,
+    // never clipped by the tree panel's overflow) instead of the CSS ::after tooltip.
+    if (!(view as any)._taskyTipBound) {
+        (view as any)._taskyTipBound = true;
+        view.addEventListener('mouseover', (e) => {
+            const el = (e.target as HTMLElement).closest('[data-tooltip]') as HTMLElement | null;
+            if (!el) return;
+            const tip = el.getAttribute('data-tooltip') || '';
+            if (tip) (window as any).showTaskyHelp?.(tip, 'info', true);
+        });
+        view.addEventListener('mouseout', (e) => {
+            const el = (e.target as HTMLElement).closest('[data-tooltip]') as HTMLElement | null;
+            if (el) (window as any).hideTaskyHelp?.();
+        });
+    }
+
+    const modSelect = document.getElementById('mapper-mod-select') as HTMLSelectElement;
+    const profileSelect = document.getElementById('mapper-profile-select') as HTMLSelectElement;
+    const previewBtn = document.getElementById('btn-mapper-preview');
+    const refreshBtn = document.getElementById('btn-mapper-refresh');
+    const saveBtn = document.getElementById('btn-mapper-save');
+
+    // Re-populate translated dropdowns when language changes
+    document.addEventListener('langChanged', () => refreshMapperData());
+
+    // EVENTS FIRST, DATA LAST — the order is the point.
+    //
+    // This used to open with `await refreshMapperData()`, with every addEventListener below
+    // it. initMapper() is called from app.ts without await and without catch, so if that one
+    // call rejected — a profile with a missing game path, an unreadable mod folder, anything
+    // — the promise died there and NOT ONE listener in this function was ever attached. The
+    // mapper then sat looking perfectly normal and did nothing at all: no preview button, no
+    // context menus, no save. Exactly the shape of "it does nothing and the log is clean",
+    // because as far as the app was concerned nothing had gone wrong.
+    //
+    // Binding listeners needs no data. Doing it first means a data failure costs the data,
+    // not the interface.
+
+    // 2. Events
+    modSelect?.addEventListener('change', async () => {
+        if (_mapperBusy) return;
+        if (!modSelect.value && modSelect.value !== "") return;
+        selectedModId = modSelect.value;
+        selectedPaths.clear();
+        pendingMoves.clear();
+        pendingDeletions.clear();
+        updateSaveButtonVisibility();
+        updateSelectionCounter();
+
+        _mapperBusy = true;
+        try {
+            await refreshModTree();
+        } finally {
+            _mapperBusy = false;
+        }
+        if (selectedModId) dispatchBmmAction(BMM_ACTIONS.MAPPER_MOD_SELECTED, { modId: selectedModId });
+    });
+
+    profileSelect?.addEventListener('change', async () => {
+        const newProfileId = profileSelect.value;
+        if (!newProfileId || _mapperBusy) return;
+
+        _mapperBusy = true;
+        try {
+            await invoke('set_active_profile', { profileId: newProfileId });
+            // Profile changed — force reload both trees and reset caches
+            lastGamePath = null;
+            lastModFolderPath = null;
+            await refreshMapperData();
+            await refreshGameTree(true);
+            if (selectedModId) await refreshModTree(true);
+            toast(t("common.saved"), "success");
+        } catch (e: any) {
+            toast(e.message || e, "error");
+        } finally {
+            _mapperBusy = false;
+        }
+    });
+
+    previewBtn?.addEventListener('click', showMapperPreview);
+    
+    refreshBtn?.addEventListener('click', async () => {
+        if (pendingChangeCount() > 0) {
+            if (!(await confirmAction({ title: t('vfy.t.mapperRefresh'), message: t('mapper.confirmRefresh'), confirmLabel: t('vfy.b.refreshAnyway'), tone: 'warn' }))) return;
+        }
+        // All three: the confirm says the unsaved changes go, and a deletion or a new folder
+        // that survived a refresh would be applied by the next Save against a re-read tree.
+        pendingMoves.clear();
+        pendingDeletions.clear();
+        pendingNewFolders.clear();
+        updateSaveButtonVisibility();
+        
+        modSelect.disabled = true;
+        profileSelect.disabled = true;
+        
+        try {
+            await refreshMapperData();
+            // Manual refresh — always bypass cache
+            await refreshGameTree(true);
+            if (selectedModId) await refreshModTree(true);
+        } finally {
+            modSelect.disabled = false;
+            profileSelect.disabled = false;
+        }
+    });
+
+    saveBtn?.addEventListener('click', applyAllChanges);
+
+    // 3. Search Filters & Controls
+    setupFilters();
+    setupContextMenu();
+    setupInputModal();
+
+    // 4. Initial data — BOTH halves of it.
+    //
+    // This called refreshGameTree() alone, and that function reads `activeProfile`, which
+    // ONLY refreshMapperData() ever sets. Both of its other call sites are inside event
+    // listeners (the profile dropdown and the Refresh button), so on a fresh start nothing
+    // had ever set it: the tree rendered "load a profile to view the game folder" and stayed
+    // that way until you pressed Refresh by hand, every single time.
+    //
+    // The events-first ordering above is preserved — this is still the last thing the
+    // function does — and the catch keeps the lesson that comment records: a data failure
+    // costs the data, not the interface.
+    try {
+        await refreshMapperData();
+        await refreshGameTree();
+    } catch (e) {
+        console.error('[MAPPER] initial load failed; the interface is still bound', e);
+    }
+    
+    // Auto-refresh when entering view — only if profile changed
+    document.querySelector('.nav-item[data-view="mapper"]')?.addEventListener('click', async () => {
+        const currentProfileId = profileSelect?.value || null;
+        const profileChanged = currentProfileId !== lastProfileId;
+
+        if (profileChanged) {
+            modSelect.disabled = true;
+            profileSelect.disabled = true;
+            try {
+                await refreshMapperData();
+                await refreshGameTree();
+                if (selectedModId) await refreshModTree();
+            } finally {
+                modSelect.disabled = false;
+                profileSelect.disabled = false;
+            }
+        }
+    });
+
+    // Global click to hide context menu
+    document.addEventListener('mousedown', (e) => {
+        const menu = document.getElementById('mapper-context-menu');
+        if (menu && menu.style.display === 'block') {
+            if (!menu.contains(e.target as Node)) hideContextMenu();
+        }
+    });
+
+    // Auto-refresh mapper profiles/mods when a profile is created or mods are scanned
+    onBmmAction(BMM_ACTIONS.PROFILE_CREATED, async () => {
+        await refreshMapperData();
+        await refreshGameTree(true);
+        if (selectedModId) await refreshModTree(true);
+    });
+
+    onBmmAction(BMM_ACTIONS.MODS_SCANNED, async () => {
+        const modSelect = document.getElementById('mapper-mod-select') as HTMLSelectElement | null;
+        const currentVal = selectedModId;
+        await refreshMapperData();
+        // Restore selection silently after scan
+        if (currentVal && modSelect?.querySelector(`option[value="${currentVal}"]`)) {
+            modSelect.value = currentVal;
+        }
+    });
+
+    // Live refresh: update mod selector when mods list changes from any part of the app
+    window.addEventListener('bmm:mods-updated', async () => {
+        const modSelect = document.getElementById('mapper-mod-select') as HTMLSelectElement | null;
+        if (!modSelect) return;
+        const currentVal = modSelect.value;
+        await refreshMapperData();
+        // Restore selection if mod still exists
+        if (currentVal && modSelect.querySelector(`option[value="${currentVal}"]`)) {
+            modSelect.value = currentVal;
+        }
+    });
+
+    // ── Auto-detect new mods in the active profile's mods folder ──
+    // Poll every 8s while mapper is visible; scan+notify only when count changes.
+    let _mapperPollTimer: ReturnType<typeof setInterval> | null = null;
+    let _lastKnownModCount = -1;
+
+    const startMapperPoll = async () => {
+        if (_mapperPollTimer) return;
+        _mapperPollTimer = setInterval(async () => {
+            if (!document.getElementById('view-mapper')?.classList.contains('active-view') &&
+                !document.querySelector('.nav-item[data-view="mapper"]')?.classList.contains('active')) {
+                return; // Mapper not visible, skip
+            }
+            try {
+                const mods: any[] = await invoke('get_mods');
+                const count = mods.length;
+                if (_lastKnownModCount !== -1 && count !== _lastKnownModCount) {
+                    // New mod detected — auto-scan without user action
+                    await invoke('scan_mods_folder').catch(() => {});
+                    const modSelect = document.getElementById('mapper-mod-select') as HTMLSelectElement | null;
+                    const currentVal = selectedModId;
+                    await refreshMapperData();
+                    if (currentVal && modSelect?.querySelector(`option[value="${currentVal}"]`)) {
+                        modSelect.value = currentVal;
+                    }
+                    const diff = count - _lastKnownModCount;
+                    if (diff > 0) {
+                        toast(diff === 1 ? t('mapper.newModsDetected.one') : t('mapper.newModsDetected.many', { n: String(diff) }), 'success', 3000);
+                    }
+                }
+                _lastKnownModCount = count;
+            } catch (_) {}
+        }, 8000);
+    };
+
+    const stopMapperPoll = () => {
+        if (_mapperPollTimer) { clearInterval(_mapperPollTimer); _mapperPollTimer = null; }
+    };
+
+    // Start/stop poll based on visibility
+    document.querySelector('.nav-item[data-view="mapper"]')?.addEventListener('click', () => {
+        _lastKnownModCount = -1; // reset so first poll sets baseline
+        startMapperPoll();
+    });
+    document.querySelectorAll('.nav-item:not([data-view="mapper"])').forEach(n =>
+        n.addEventListener('click', stopMapperPoll));
+
+    // 1. Initial data load, LAST, and its failure is its own problem: everything above is
+    // already wired, so a bad profile costs an empty tree rather than a dead panel.
+    try {
+        await refreshMapperData();
+    } catch (e: any) {
+        console.error('[mapper] initial data load failed', e);
+    }
+}
+
+/**
+ * Refreshes available mods and the active profile
+ */
+async function refreshMapperData(): Promise<void> {
+    try {
+        const profiles: Profile[] = await invoke('get_profiles');
+        const activeId: string | null = await invoke('get_active_profile_id');
+        activeProfile = profiles.find(p => p.id === activeId) || null;
+        lastProfileId = activeId;
+
+        const profileSelect = document.getElementById('mapper-profile-select') as HTMLSelectElement;
+        if (profileSelect) {
+            // Fetch custom icons in parallel then populate options.
+            const iconPaths = await fetchProfileIconPaths(profiles);
+            profileSelect.innerHTML = `<option value="">— ${t('mapper.selectProfile') || 'Changer de profil'} —</option>`;
+            profiles.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.id;
+                opt.textContent = p.name;
+                if (p.id === activeId) opt.selected = true;
+                profileSelect.appendChild(opt);
+            });
+            // Show the selected profile's icon in the sibling display element.
+            const wrap = profileSelect.closest('.profile-select-icon-wrap');
+            if (wrap) {
+                let iconEl = wrap.querySelector('.profile-icon-display') as HTMLElement | null;
+                if (!iconEl) {
+                    iconEl = document.createElement('span');
+                    iconEl.className = 'profile-icon-display';
+                    wrap.insertBefore(iconEl, profileSelect);
+                }
+                decorateProfileOptions(profileSelect, profiles, iconPaths);
+                updateSelectProfileIcon(profileSelect, profiles, iconPaths, iconEl);
+                profileSelect.addEventListener('change', () =>
+                    updateSelectProfileIcon(profileSelect, profiles, iconPaths, iconEl));
+            }
+        }
+
+        if (activeProfile) {
+            const pathEl = document.getElementById('mapper-game-path');
+            if (pathEl) {
+                pathEl.textContent = activeProfile.game_path;
+                pathEl.title = activeProfile.game_path;
+            }
+            
+            const modSelect = document.getElementById('mapper-mod-select') as HTMLSelectElement;
+            if (modSelect) {
+                const enrichedMods = await invoke('get_mods');
+                const currentVal = modSelect.value;
+                modSelect.innerHTML = `<option value="">— ${t('mapper.selectMod') || 'Sélectionner un mod'} —</option>`;
+                enrichedMods.forEach((m: EnrichedMod) => {
+                    const opt = document.createElement('option');
+                    opt.value = m.id;
+                    opt.textContent = m.name;
+                    // Store folder path in dataset to avoid extra get_all_mods call
+                    opt.dataset.folderPath = (m as any).mod_folder_path || '';
+                    if (m.id === currentVal) opt.selected = true;
+                    modSelect.appendChild(opt);
+                });
+            }
+        }
+    } catch (e) { console.error("[MAPPER] Data load failed:", e); }
+}
+
+/**
+ * Loads and renders the selected mod's file tree
+ */
+async function refreshModTree(force = false): Promise<void> {
+    const container = document.getElementById('mapper-mod-tree');
+    if (!container) return;
+    if (!selectedModId) {
+        container.innerHTML = `<div class="empty-hint">${t('mapper.selectModHint') || 'Select a mod to see its contents'}</div>`;
+        return;
+    }
+
+    // Try to get folder path from the select option (cached) to avoid an extra invoke
+    const modSelect = document.getElementById('mapper-mod-select') as HTMLSelectElement;
+    const selectedOption = modSelect?.options[modSelect.selectedIndex];
+    let modFolderPath: string | null = selectedOption?.dataset.folderPath || null;
+
+    // If no cached path, fall back to get_all_mods
+    if (!modFolderPath) {
+        try {
+            const mods: ModEntry[] = await invoke('get_all_mods');
+            const m = mods.find(mod => mod.id === selectedModId);
+            if (!m) { container.innerHTML = `<div class="empty-hint error">${t('mapper.modNotFound') || 'Mod non trouvé'}</div>`; return; }
+            modFolderPath = m.mod_folder_path;
+        } catch (e) { container.innerHTML = `<div class="empty-hint error" style="color:var(--danger)">${e}</div>`; return; }
+    }
+
+    // Skip reload if same mod folder is already loaded
+    if (!force && lastModFolderPath === modFolderPath && modTreeData.length > 0) {
+        await renderFilteredModTree();
+        return;
+    }
+
+    container.innerHTML = `<div class="loading-spinner-container"><div class="loading-spinner"></div></div>`;
+    try {
+        modTreeData = await invoke('get_directory_tree', { path: modFolderPath });
+        lastModFolderPath = modFolderPath;
+        await renderFilteredModTree();
+    } catch (e: any) {
+        // Mod folder may have been moved externally — show a friendly error and
+        // clear the selection so the user can pick a different mod.
+        const msg = String(e);
+        const isMissing = msg.includes('not found') || msg.includes('introuvable') ||
+                          msg.includes('n\'existe pas') || msg.includes('NotFound') || msg.includes('os error 2');
+        if (isMissing) {
+            selectedModId = null;
+            modTreeData = [];
+            lastModFolderPath = null;
+            container.innerHTML = `
+                <div class="empty-hint error" style="color:var(--danger);text-align:center;padding:20px;">
+                    <div style="margin-bottom:8px;color:var(--text-muted)">${uiIcon('open-folder', 24)}</div>
+                    <strong>${t('mapper.modFolderMissing') || 'Mod folder not found'}</strong><br>
+                    <span style="font-size:11px;color:var(--text-muted);display:block;margin-top:6px;">
+                        ${t('mapper.modFolderMissingHint') || 'This mod\'s folder was moved or deleted externally. Rescan mods to update the list.'}
+                    </span>
+                    <button class="btn btn-sm btn-secondary" style="margin-top:12px;" id="btn-mapper-missing-rescan">
+                        ${t('mapper.rescanMods') || 'Rescan mods'}
+                    </button>
+                </div>`;
+            document.getElementById('btn-mapper-missing-rescan')?.addEventListener('click', async () => {
+                await invoke('scan_mods_folder').catch(() => {});
+                await refreshMapperData();
+            });
+            const modSelect = document.getElementById('mapper-mod-select') as HTMLSelectElement | null;
+            if (modSelect) modSelect.value = '';
+        } else {
+            container.innerHTML = `<div class="empty-hint error" style="color:var(--danger)">${escHtml(msg)}</div>`;
+        }
+    }
+}
+
+/**
+ * Loads and renders the game directory tree
+ */
+async function refreshGameTree(force = false): Promise<void> {
+    const container = document.getElementById('mapper-game-tree');
+    if (!container) return;
+    if (!activeProfile) {
+        container.innerHTML = `<div class="empty-hint">${t('mapper.loadProfileHint') || 'Load a profile to view the destination folder'}</div>`;
+        return;
+    }
+
+    if (!force && activeProfile.game_path === lastGamePath && gameTreeData.length > 0) {
+        await renderFilteredGameTree();
+        return;
+    }
+
+    container.innerHTML = `<div class="loading-spinner-container"><div class="loading-spinner"></div></div>`;
+    try {
+        gameTreeData = await invoke('get_directory_tree', { path: activeProfile.game_path });
+        lastGamePath = activeProfile.game_path;
+        await renderFilteredGameTree();
+    } catch (e: any) {
+        container.innerHTML = `<div class="empty-hint error" style="color:var(--danger)">Error: ${e.message || e}</div>`;
+    }
+}
+
+function setupFilters(): void {
+    const modFilter = document.getElementById('mapper-mod-search') as HTMLInputElement;
+    const gameFilter = document.getElementById('mapper-game-search') as HTMLInputElement;
+    
+    let debounceModTimer: any;
+    let debounceGameTimer: any;
+    const debouncedModSearch = () => {
+        clearTimeout(debounceModTimer);
+        debounceModTimer = setTimeout(() => renderFilteredModTree(), 300);
+    };
+    const debouncedGameSearch = () => {
+        clearTimeout(debounceGameTimer);
+        debounceGameTimer = setTimeout(() => renderFilteredGameTree(), 300);
+    };
+
+    modFilter?.addEventListener('input', debouncedModSearch);
+    gameFilter?.addEventListener('input', debouncedGameSearch);
+    
+    // (btn-mapper-mod-selectroot is now rendered on the mod-root tree item itself)
+    document.getElementById('btn-mapper-mod-expand')?.addEventListener('click', () => toggleAll('mapper-mod-tree', true));
+    document.getElementById('btn-mapper-mod-collapse')?.addEventListener('click', () => toggleAll('mapper-mod-tree', false));
+    document.getElementById('btn-mapper-game-expand')?.addEventListener('click', () => toggleAll('mapper-game-tree', true));
+    document.getElementById('btn-mapper-game-collapse')?.addEventListener('click', () => toggleAll('mapper-game-tree', false));
+
+    // The dismissible banner is gone; its sentence lives under the mod tree now, where the
+    // multi-select it describes actually happens. Nothing to wire — a footer that is always
+    // there needs no show, no hide and no stored preference.
+}
+
+function toggleAll(containerId: string, expand: boolean): void {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    // Bump token — any running doExpandAll for this container will see the mismatch and abort
+    const myToken = (_expandTokens.get(containerId) ?? 0) + 1;
+    _expandTokens.set(containerId, myToken);
+
+    if (!expand) {
+        // Collapse all: hide everything immediately (cancels any ongoing expansion)
+        container.querySelectorAll('.tree-children').forEach((c) => {
+            (c as HTMLElement).style.display = 'none';
+            const item = c.previousElementSibling as HTMLElement;
+            if (item) { item.style.opacity = '0.7'; item.classList.remove('expanded'); }
+        });
+        return;
+    }
+
+    // Expand: use _expandFn with cancellation support.
+    // Process in batches with requestAnimationFrame yields to keep UI responsive.
+    const BATCH = 6;
+    const doExpandAll = async () => {
+        let round = 0;
+        while (round++ < 10) {
+            if (_expandTokens.get(containerId) !== myToken) return; // cancelled by collapse
+
+            const toExpand = Array.from(container.querySelectorAll('.folder'))
+                .filter(el => {
+                    const next = (el as HTMLElement).nextElementSibling as HTMLElement;
+                    return next?.classList.contains('tree-children') &&
+                           next.style.display !== 'block';
+                }) as HTMLElement[];
+
+            if (toExpand.length === 0) break;
+
+            // Process in small batches, yielding to the browser between each
+            for (let i = 0; i < toExpand.length; i += BATCH) {
+                if (_expandTokens.get(containerId) !== myToken) return; // cancelled
+                const batch = toExpand.slice(i, i + BATCH);
+                for (const folderItem of batch) {
+                    if ((folderItem as any)._expandFn) {
+                        await (folderItem as any)._expandFn();
+                    }
+                }
+                await new Promise(r => requestAnimationFrame(r));
+            }
+        }
+    };
+    doExpandAll();
+}
+
+/**
+ * Builds a virtual tree reflecting pending moves
+ */
+function getVirtualModTree(): FileTreeNode[] {
+    if (pendingMoves.size === 0 && pendingNewFolders.size === 0) return modTreeData;
+
+    const virtualTree: FileTreeNode[] = typeof structuredClone === 'function' ? structuredClone(modTreeData) : JSON.parse(JSON.stringify(modTreeData)); // Deep copy
+
+    // 1. Remove moved items from their original locations
+    const movedOriginalPaths = Array.from(pendingMoves.keys());
+    const removeFromTree = (nodes: FileTreeNode[]) => {
+        for (let i = nodes.length - 1; i >= 0; i--) {
+            if (movedOriginalPaths.includes(nodes[i].path)) {
+                nodes.splice(i, 1);
+            } else if (nodes[i].children) {
+                removeFromTree(nodes[i].children!);
+            }
+        }
+    };
+    removeFromTree(virtualTree);
+
+    // 2. Insert items into their new virtual locations
+    pendingMoves.forEach((targetFolder, sourcePath) => {
+        const fileName = sourcePath.split(/[\\/]/).pop() || sourcePath;
+        const newNode: FileTreeNode = {
+            name: fileName,
+            path: sourcePath,
+            is_dir: false,
+            children: null
+        };
+
+        if (targetFolder === ".") {
+            virtualTree.push(newNode);
+        } else {
+            const folderParts = targetFolder.split(/[\\/]/);
+            let currentLevel = virtualTree;
+            let currentPath = "";
+            
+            folderParts.forEach((part, idx) => {
+                currentPath = currentPath ? `${currentPath}\\${part}` : part;
+                let folder = currentLevel.find(n => n.name === part && n.is_dir);
+                if (!folder) {
+                    folder = { name: part, path: `VIRTUAL_${currentPath}`, is_dir: true, children: [] };
+                    currentLevel.push(folder);
+                }
+                if (idx === folderParts.length - 1) {
+                    if (!folder.children) folder.children = [];
+                    folder.children.push(newNode);
+                } else {
+                    if (!folder.children) folder.children = [];
+                    currentLevel = folder.children;
+                }
+            });
+        }
+    });
+
+    // 3. Insert pending new folders
+    pendingNewFolders.forEach((data, virtualPath) => {
+        const newNode: FileTreeNode = {
+            name: data.name,
+            path: virtualPath,
+            is_dir: true,
+            children: []
+        };
+
+        if (data.parent === ".") {
+            virtualTree.push(newNode);
+        } else {
+            const findAndInsert = (nodes: FileTreeNode[]) => {
+                for (const node of nodes) {
+                    if (node.path === data.parent || (node.path === "." && data.parent === ".")) {
+                        if (!node.children) node.children = [];
+                        node.children.push(newNode);
+                        return true;
+                    }
+                    if (node.children && findAndInsert(node.children)) return true;
+                }
+                return false;
+            };
+            findAndInsert(virtualTree);
+        }
+    });
+
+    return virtualTree;
+}
+
+async function renderFilteredModTree(): Promise<void> {
+    const modFilter = (document.getElementById('mapper-mod-search') as HTMLInputElement)?.value.toLowerCase() || '';
+    const modContainer = document.getElementById('mapper-mod-tree');
+    if (modContainer) {
+        modContainer.innerHTML = '';
+        
+        // Add Virtual "Racine du Mod" item — with a "select whole mod" button on it
+        if (selectedModId) {
+            const rootItem = document.createElement('div');
+            rootItem.className = 'tree-item folder root-target-item mod-root-target';
+            rootItem.innerHTML = `
+                <span class="tree-item-icon">
+                    ${uiIcon('box', 14)}
+                </span>
+                <span class="tree-item-label">${t('mapper.modRoot') || 'Racine du Mod'}</span>
+                <button class="mapper-root-select-btn" id="btn-mapper-mod-selectroot" data-tooltip="${t('mapper.selectRoot') || 'Select whole mod root'}">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                    </svg>
+                </button>`;
+            rootItem.dataset.path = ".";
+            rootItem.querySelector('#btn-mapper-mod-selectroot')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectModRoot();
+            });
+            rootItem.addEventListener('contextmenu', (e) => {
+                e.preventDefault(); e.stopPropagation();
+                showContextMenu(e.clientX, e.clientY, ".", true, true);
+            });
+            modContainer.appendChild(rootItem);
+        }
+
+        await renderTree(filterTree(getVirtualModTree(), modFilter), modContainer, true);
+    }
+    updateLiveMappingHighlight();
+}
+
+async function renderFilteredGameTree(): Promise<void> {
+    const gameFilter = (document.getElementById('mapper-game-search') as HTMLInputElement)?.value.toLowerCase() || '';
+    const gameContainer = document.getElementById('mapper-game-tree');
+    if (gameContainer) {
+        gameContainer.innerHTML = '';
+        const rootItem = document.createElement('div');
+        rootItem.className = 'tree-item folder root-target-item game-root-target';
+        rootItem.innerHTML = `
+            <span class="tree-item-icon">
+                ${uiIcon('server', 14)}
+            </span>
+            <span class="tree-item-label">${t('mapper.gameRoot') || 'Racine du Jeu'}</span>`;
+        rootItem.dataset.path = ".";
+        rootItem.title = t('mapper.dblClickDumpHint') || 'Double-click: move selection here (or the whole mod if nothing is selected)';
+        rootItem.addEventListener('dblclick', () => queueMoveSelectedOrRoot("."));
+        rootItem.addEventListener('contextmenu', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            showContextMenu(e.clientX, e.clientY, ".", true, false);
+        });
+        gameContainer.appendChild(rootItem);
+        await renderTree(filterTree(gameTreeData, gameFilter), gameContainer, false);
+    }
+    updateLiveMappingHighlight();
+}
+
+function filterTree(nodes: FileTreeNode[], query: string): FileTreeNode[] {
+    if (!query) return nodes;
+    return nodes.reduce((acc: FileTreeNode[], node) => {
+        const matchesSelf = node.name.toLowerCase().includes(query);
+        const filteredChildren = node.children ? filterTree(node.children, query) : null;
+        const hasMatchingChildren = filteredChildren && filteredChildren.length > 0;
+        if (matchesSelf || hasMatchingChildren) {
+            acc.push({ ...node, children: filteredChildren });
+        }
+        return acc;
+    }, []);
+}
+
+async function renderTree(nodes: FileTreeNode[], container: HTMLElement, isModSide: boolean): Promise<void> {
+    if (!nodes || nodes.length === 0) {
+        if (container.classList.contains('file-tree')) {
+            const empty = document.createElement('div');
+            empty.className = 'empty-hint';
+            empty.textContent = t('common.noResults') || 'No results';
+            container.appendChild(empty);
+        }
+        return;
+    }
+
+    const fragment = document.createDocumentFragment();
+
+    for (let i = 0; i < nodes.length; i++) {
+        if (i > 0 && i % 100 === 0) {
+            // Yield to main thread to prevent UI freezing on huge trees
+            await new Promise(r => setTimeout(r, 0));
+        }
+        
+        const node = nodes[i];
+        const item = document.createElement('div');
+        item.className = `tree-item ${node.is_dir ? 'folder pointer-clickable' : 'file'}`;
+        
+        if (isModSide) {
+            const isPending = pendingMoves.has(node.path);
+            let isAtRoot = true;
+            if (isPending) {
+                const target = pendingMoves.get(node.path)!;
+                isAtRoot = target === ".";
+            } else if (!node.path.startsWith('VIRTUAL_')) {
+                isAtRoot = !node.path.includes('/') && !node.path.includes('\\');
+            }
+            if (isAtRoot) item.classList.add('root-item');
+            else item.classList.add('mapped-item');
+            if (isPending) item.classList.add('pending-item');
+        }
+
+        if (selectedPaths.has(node.path)) item.classList.add('selected');
+        item.dataset.path = node.path;
+        item.dataset.name = node.name;
+        const icon = document.createElement('span');
+        icon.className = 'tree-item-icon';
+        icon.innerHTML = node.is_dir ? 
+            `${uiIcon('folder', 14)}` :
+            `${uiIcon('file', 14)}`;
+        
+        const label = document.createElement('span');
+        label.className = 'tree-item-label';
+        
+        if (isModSide && pendingMoves.has(node.path)) {
+            const target = pendingMoves.get(node.path);
+            const targetDisplay = target === "." ? (t('mapper.root') || "Racine") : target;
+            label.innerHTML = `${node.name} <span class="pending-badge">→ ${targetDisplay}</span>`;
+        } else if (isModSide && pendingDeletions.has(node.path)) {
+            label.innerHTML = `<span style="text-decoration: line-through; opacity: 0.6;">${node.name}</span> <span class="pending-badge danger" style="background: var(--danger);">${t('common.delete') || 'Supprimer'}</span>`;
+            item.classList.add('pending-delete');
+        } else if (isModSide && pendingNewFolders.has(node.path)) {
+            label.innerHTML = `${node.name} <span class="pending-badge success" style="background: var(--success);">${t('mapper.newBadge') || 'NOUVEAU'}</span>`;
+            item.classList.add('pending-new');
+        } else {
+            label.textContent = node.name;
+        }
+
+        if (node.is_dir) {
+            const chevron = document.createElement('span');
+            chevron.className = 'tree-item-chevron';
+            chevron.innerHTML = `${uiIcon('chevron-down', 12)}`;
+            chevron.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const childrenContainer = item.nextElementSibling as HTMLElement;
+                if (childrenContainer && childrenContainer.classList.contains('tree-children')) {
+                    const isCollapsed = childrenContainer.style.display === 'none';
+                    childrenContainer.style.display = isCollapsed ? 'block' : 'none';
+                    chevron.style.transform = isCollapsed ? 'rotate(0deg)' : 'rotate(-90deg)';
+                }
+            });
+            item.appendChild(chevron);
+        }
+
+        item.appendChild(icon);
+        item.appendChild(label);
+        fragment.appendChild(item);
+
+        // Selection logic on mousedown
+        item.addEventListener('mousedown', (e) => {
+            if (e.button !== 0) return;
+            e.stopPropagation();
+            if (isModSide && !node.path.startsWith('VIRTUAL_')) {
+                if (e.ctrlKey) {
+                    if (selectedPaths.has(node.path)) selectedPaths.delete(node.path);
+                    else selectedPaths.add(node.path);
+                } else {
+                    selectedPaths.clear();
+                    selectedPaths.add(node.path);
+                }
+                lastSelectedPath = node.path;
+                updateSelectionVisuals();
+                updateSelectionCounter();
+                updateLiveMappingHighlight();
+            }
+        });
+
+        if (!isModSide && node.is_dir) {
+            item.title = t('mapper.dblClickDumpHint') || 'Double-click: move selection here (or the whole mod if nothing is selected)';
+            item.addEventListener('dblclick', (e) => {
+                e.stopPropagation();
+                queueMoveSelectedOrRoot(node.path);
+            });
+        }
+
+        item.addEventListener('contextmenu', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            if (!node.path.startsWith('VIRTUAL_')) {
+                // If the right-clicked item is not already selected, make it the only selection
+                if (!selectedPaths.has(node.path)) {
+                    selectedPaths.clear(); 
+                    selectedPaths.add(node.path);
+                    updateSelectionVisuals(); 
+                    updateSelectionCounter(); 
+                    if (isModSide) updateLiveMappingHighlight();
+                }
+                showContextMenu(e.clientX, e.clientY, node.path, node.is_dir, isModSide);
+            }
+        });
+
+        if (node.is_dir) {
+            const childrenContainer = document.createElement('div');
+            childrenContainer.className = 'tree-children';
+            const isSearching = (document.getElementById(isModSide ? 'mapper-mod-search' : 'mapper-game-search') as HTMLInputElement)?.value.length > 0;
+            
+            // LAZY LOADING OPTIMIZATION: 
+            // If we are searching, we render everything. 
+            // If NOT searching, we only render children if the folder is already expanded (rare) or wait for user click.
+            childrenContainer.style.display = isSearching ? 'block' : 'none';
+            fragment.appendChild(childrenContainer);
+            
+            if (isSearching && node.children && node.children.length > 0) {
+                await renderTree(node.children, childrenContainer, isModSide);
+            }
+
+            // Click listener for lazy expansion
+            const toggleFolder = async (e: MouseEvent) => {
+                e.stopPropagation();
+                const isCollapsed = childrenContainer.style.display === 'none';
+                
+                if (isCollapsed) {
+                    // If not rendered yet, do it now
+                    if (childrenContainer.children.length === 0 && node.children && node.children.length > 0) {
+                        const spinner = document.createElement('div');
+                        spinner.className = 'tree-loading-inline';
+                        spinner.innerHTML = '<span class="spinner-tiny"></span>';
+                        childrenContainer.appendChild(spinner);
+                        
+                        childrenContainer.style.display = 'block';
+                        await renderTree(node.children, childrenContainer, isModSide);
+                        spinner.remove();
+                    } else {
+                        childrenContainer.style.display = 'block';
+                    }
+                    if (chevron) chevron.style.transform = 'rotate(0deg)';
+                    item.style.opacity = '1';
+                    item.classList.add('expanded');
+                    const iconBox = item.querySelector('.tree-item-icon');
+                    if (iconBox) iconBox.innerHTML = `${uiIcon('open-folder', 14)}`;
+                } else {
+                    childrenContainer.style.display = 'none';
+                    if (chevron) chevron.style.transform = 'rotate(-90deg)';
+                    item.style.opacity = '0.7';
+                    item.classList.remove('expanded');
+                    const iconBox = item.querySelector('.tree-item-icon');
+                    if (iconBox) iconBox.innerHTML = `${uiIcon('folder', 14)}`;
+                }
+            };
+
+            const chevron = item.querySelector('.tree-item-chevron') as HTMLElement;
+            if (chevron) {
+                // Replace old listener
+                const newChevron = chevron.cloneNode(true);
+                chevron.parentNode?.replaceChild(newChevron, chevron);
+                newChevron.addEventListener('click', toggleFolder as any);
+            }
+            
+            // Also toggle on item click (includes icon and label) if not selecting
+            item.addEventListener('click', (e) => {
+                const isSelectionAction = e.ctrlKey || e.shiftKey;
+                if (!isSelectionAction) {
+                    toggleFolder(e as any);
+                }
+            });
+
+            // Direct expand function for toggleAll — avoids click-event race conditions
+            (item as any)._expandFn = async () => {
+                if (childrenContainer.style.display === 'block') return; // already open
+                if (childrenContainer.children.length === 0 && node.children && node.children.length > 0) {
+                    await renderTree(node.children, childrenContainer, isModSide);
+                }
+                childrenContainer.style.display = 'block';
+                const ch = item.querySelector('.tree-item-chevron') as HTMLElement;
+                if (ch) ch.style.transform = 'rotate(0deg)';
+                item.style.opacity = '1';
+                item.classList.add('expanded');
+            };
+        }
+    }
+
+    container.appendChild(fragment);
+}
+
+function updateSelectionCounter() {
+    const el = document.getElementById('mapper-selection-count');
+    if (!el) return;
+    // Hidden at zero rather than reading "0 selected". A badge that is always present says
+    // nothing when it says zero, and it competes with the panel title for the same glance.
+    const n = selectedPaths.size;
+    el.hidden = n === 0;
+    el.textContent = n === 0 ? '' : `${n} ${t("modpack.modsSelected")}`;
+}
+
+function updateSaveButtonVisibility() {
+    const saveBtn = document.getElementById('btn-mapper-save') as HTMLButtonElement;
+    if (saveBtn) {
+        saveBtn.style.display = pendingChangeCount() > 0 ? 'flex' : 'none';
+    }
+}
+
+
+// ── Archived (.zip) mods in the mapper ────────────────────────────────────────
+//
+// The mapper moves real files around. An archived mod has no files to move — it has one
+// container, and its contents live in a DERIVED extraction cache that is rebuilt from the
+// archive, so anything written there is silently lost.
+//
+// The mapper used to refuse, and the refusal told the user to extract the mod from the
+// Library first. There is no such action in the Library; that sentence pointed at nothing.
+//
+// So the mod is unpacked FOR them, and the only real question is what happens afterwards:
+// leave it as a folder, or put it back into a .zip once the changes are applied. That is a
+// decision about their disk, so it is asked once per mod and remembered for the session.
+type ArchiveChoice = 'zip' | 'folder';
+const _archiveChoice = new Map<string, ArchiveChoice>();
+
+/** Ask what should happen to an archived mod. null = the user cancelled. */
+function askArchiveStrategy(wasZip: boolean): Promise<ArchiveChoice | null> {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('modal-confirm-generic');
+        const titleEl = document.getElementById('confirm-title');
+        const msgEl = document.getElementById('confirm-message');
+        const yesBtn = document.getElementById('btn-confirm-yes') as HTMLButtonElement | null;
+        const noBtn = document.getElementById('btn-confirm-cancel') as HTMLButtonElement | null;
+        if (!modal || !titleEl || !msgEl || !yesBtn || !noBtn) { resolve(null); return; }
+
+        titleEl.textContent = t('mapper.archiveTitle');
+        // Shown only when the original was NOT a .zip. BMM READS 7z and rar but can only
+        // WRITE zip, so "put it back" cannot mean "back into a .rar". Said before the choice,
+        // not discovered afterwards as a changed extension on their disk.
+        const note = wasZip ? '' : '<p class="mapper-arch-note">' + escHtml(t('mapper.archiveNoteFormat')) + '</p>';
+        msgEl.innerHTML =
+            '<div class="mapper-arch">' +
+            '<p class="mapper-arch-intro">' + escHtml(t('mapper.archiveIntro')) + '</p>' +
+            note +
+            '<button type="button" class="mapper-arch-opt" id="mapper-arch-zip">' +
+            '<span class="mapper-arch-opt-t">' + escHtml(t('mapper.archiveKeepZip')) + '</span>' +
+            '<span class="mapper-arch-opt-d">' + escHtml(t('mapper.archiveKeepZipDesc')) + '</span>' +
+            '</button>' +
+            '<button type="button" class="mapper-arch-opt" id="mapper-arch-folder">' +
+            '<span class="mapper-arch-opt-t">' + escHtml(t('mapper.archiveKeepFolder')) + '</span>' +
+            '<span class="mapper-arch-opt-d">' + escHtml(t('mapper.archiveKeepFolderDesc')) + '</span>' +
+            '</button>' +
+            '</div>';
+
+        // The two real answers are the cards; the footer keeps only a way out. Same borrowing
+        // pattern the plugin-permission modal uses — and confirmCustom normalises this shared
+        // modal on its next open, so an exit by any route cannot leave it broken.
+        yesBtn.style.display = 'none';
+        noBtn.textContent = t('common.cancel');
+
+        let done = false;
+        const finish = (v: ArchiveChoice | null) => {
+            if (done) return;
+            done = true;
+            modal.classList.remove('open');
+            yesBtn.style.display = '';
+            noBtn.removeEventListener('click', onCancel);
+            modal.removeEventListener('click', onBackdrop);
+            resolve(v);
+        };
+        const onCancel = () => finish(null);
+        const onBackdrop = (ev: MouseEvent) => { if (ev.target === modal) finish(null); };
+        noBtn.addEventListener('click', onCancel);
+        modal.addEventListener('click', onBackdrop);
+        msgEl.querySelector('#mapper-arch-zip')?.addEventListener('click', () => finish('zip'));
+        msgEl.querySelector('#mapper-arch-folder')?.addEventListener('click', () => finish('folder'));
+
+        modal.classList.add('open');
+    });
+}
+
+/**
+ * Make the selected mod writable, asking first if it is archived.
+ * Returns false when the user cancelled — the caller must then do nothing at all.
+ */
+async function ensureModWritable(): Promise<boolean> {
+    if (!selectedModId) return false;
+    let archived = false;
+    try { archived = await invoke('is_mod_archived', { modId: selectedModId }) as boolean; }
+    catch { return true; }   // cannot tell → let the Rust guard have the last word
+    if (!archived) return true;
+
+    const choice = await askArchiveStrategy(_selectedModIsZip());
+    if (!choice) return false;
+
+    try {
+        const folder = await invoke('unarchive_mod', { modId: selectedModId }) as string;
+        _archiveChoice.set(selectedModId, choice);
+
+        // THE MOD HAS MOVED. `Mod.zip` is gone and `Mod/` has taken its place, and
+        // refreshModTree reads the folder path out of the <option>'s dataset — a cache
+        // filled when the list was built. Leaving the dead .zip path there made the very
+        // next get_directory_tree fail with "Le dossier n'existe pas", which refreshModTree
+        // reads as "this mod was deleted externally" and answers by setting selectedModId
+        // to null. applyAllChanges then carried on and sent `modId: null` to
+        // restructure_mod_item. Two errors in the console, one cause, and both of them here.
+        const sel = document.getElementById('mapper-mod-select') as HTMLSelectElement | null;
+        const opt = sel?.options[sel.selectedIndex];
+        if (opt) opt.dataset.folderPath = folder;
+        lastModFolderPath = null;   // the tree cache is keyed on the path, which just changed
+
+        toast(t('mapper.archiveUnpacked'), 'success');
+        await refreshModTree(true);
+        return true;
+    } catch (e: any) {
+        toast(e.message || e, 'error');
+        return false;
+    }
+}
+
+/** True when the selected mod's file name ends in .zip (so repacking is lossless). */
+function _selectedModIsZip(): boolean {
+    const sel = document.getElementById('mapper-mod-select') as HTMLSelectElement | null;
+    const label = sel?.options[sel.selectedIndex]?.text || '';
+    return /\.zip\s*$/i.test(label.trim());
+}
+
+/** Put the mod back into a .zip if that is what was asked, once the changes are applied. */
+async function restoreArchiveIfAsked(modId: string): Promise<void> {
+    if (_archiveChoice.get(modId) !== 'zip') return;
+    try {
+        await invoke('rearchive_mod', { modId });
+        _archiveChoice.delete(modId);
+        lastModFolderPath = null;   // the mod moved again: folder -> .zip
+        toast(t('mapper.archiveRezipped'), 'success');
+        await refreshMapperData();
+    } catch (e: any) {
+        // The changes ARE saved; only the repacking failed. Say exactly that — a bare "error"
+        // would read as if the edit had been lost, and the user would redo it.
+        toast(t('mapper.archiveRezipFailed', { err: String(e?.message || e) }), 'warning');
+    }
+}
+
+async function applyAllChanges() {
+    if (pendingChangeCount() === 0) return;
+
+    // Archived mod → ask, unpack, and only then write. Cancelling leaves every queued
+    // change pending, so nothing the user lined up is thrown away by saying no.
+    if (!await ensureModWritable()) return;
+
+    // Capture the id ONCE and use it for every call below.
+    //
+    // selectedModId is module state that other code is entitled to clear — refreshModTree
+    // nulls it when a mod's folder has gone missing, which is a reasonable thing for it to
+    // do. What is not reasonable is a half-finished batch of writes then sending `null` as
+    // the mod id and getting "invalid type: null, expected a string" from the Rust side. A
+    // batch that has started works on the mod it started with.
+    const modId = selectedModId;
+    if (!modId) { toast(t('mapper.selectModHint'), 'warning'); return; }
+    
+    const saveBtn = document.getElementById('btn-mapper-save') as HTMLButtonElement;
+    const originalText = saveBtn.innerHTML;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = `<span class="spinner"></span> ${t('common.saving') || 'Saving...'}`;
+
+    try {
+        // 1. Handle new folders
+        for (const [vPath, data] of pendingNewFolders.entries()) {
+            await invoke('create_mod_folder', { modId, parentRelPath: data.parent, folderName: data.name });
+        }
+
+        // 2. Handle moves
+        for (const [src, dst] of pendingMoves.entries()) {
+            await invoke('restructure_mod_item', { modId, itemRelPath: src, targetGameFolderRel: dst });
+        }
+        
+        // 3. Handle deletions
+        for (const path of pendingDeletions) {
+            await invoke('delete_mod_item', { modId, itemRelPath: path });
+        }
+
+        toast(t('common.success'), 'success');
+        pendingMoves.clear();
+        pendingDeletions.clear();
+        pendingNewFolders.clear();
+        await restoreArchiveIfAsked(modId);
+        await refreshModTree(true);
+        updateSaveButtonVisibility();
+        selectedPaths.clear(); updateSelectionCounter(); updateSelectionVisuals();
+    } catch (e: any) {
+        toast(e.message || e, 'error');
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = originalText;
+    }
+}
+
+function queueMoveTo(targetPath: string) {
+    const count = selectedPaths.size;
+    selectedPaths.forEach(p => { pendingMoves.set(p, targetPath); });
+    const targetDisplay = targetPath === "." ? (t("mapper.root") || "la racine") : targetPath;
+    // t() returns the KEY itself when a key is missing, and a key is truthy — so the `||`
+    // fallback that used to sit here could never run, and the toast read "mapper.itemsMoved"
+    // verbatim. The key exists now; the fallback is gone because it was decoration.
+    toast(t("mapper.itemsMoved", { count: count.toString(), target: targetDisplay }), "info");
+    updateSaveButtonVisibility();
+    renderFilteredModTree();
+}
+
+/** Select every top-level item of the current mod (the "mod root"), so the user
+ *  visibly sees the whole mod selected and can dump it into a game folder. */
+function selectModRoot(): void {
+    if (!selectedModId) { toast(t('mapper.selectModFirst') || 'Select a mod first', 'warning'); return; }
+    const topLevel = (modTreeData || []).filter(n => !n.path.includes('/') && !n.path.includes('\\'));
+    if (topLevel.length === 0) { toast(t('mapper.modEmpty') || 'This mod is empty', 'info'); return; }
+    selectedPaths.clear();
+    topLevel.forEach(n => selectedPaths.add(n.path));
+    lastSelectedPath = topLevel[topLevel.length - 1].path;
+    updateSelectionVisuals();
+    updateSelectionCounter();
+    updateLiveMappingHighlight();
+    toast(t('mapper.modRootSelected', { count: topLevel.length.toString() })
+        || `Whole mod root selected (${topLevel.length} items) — double-click a destination folder to map it there`, 'info', 3500);
+}
+
+/** Move the current selection to `targetPath`. If nothing is selected, move the
+ *  ENTIRE mod root (all top-level mod items) — "dump the whole mod here". */
+function queueMoveSelectedOrRoot(targetPath: string) {
+    if (selectedPaths.size > 0) { queueMoveTo(targetPath); return; }
+
+    // No selection → dump every top-level mod item into the target folder
+    const topLevel = (modTreeData || []).filter(n => {
+        // top-level = path has no separator (or starts a virtual root)
+        return !n.path.includes('/') && !n.path.includes('\\');
+    });
+    if (topLevel.length === 0) {
+        toast(t('mapper.nothingToMap') || 'Nothing to map — select a mod first', 'warning');
+        return;
+    }
+    topLevel.forEach(n => pendingMoves.set(n.path, targetPath));
+    const targetDisplay = targetPath === "." ? (t("mapper.root") || "la racine") : targetPath;
+    toast(t('mapper.modRootMapped', { count: topLevel.length.toString(), target: targetDisplay })
+        || `Whole mod (${topLevel.length} items) mapped to "${targetDisplay}"`, 'success');
+    updateSaveButtonVisibility();
+    renderFilteredModTree();
+}
+
+function updateSelectionVisuals() {
+    document.querySelectorAll('.tree-item.selected, .tree-item.parent-highlight').forEach(el => {
+        el.classList.remove('selected', 'parent-highlight');
+    });
+
+    selectedPaths.forEach(path => {
+        const safePath = path.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        document.querySelectorAll(`.tree-item[data-path="${safePath}"]`).forEach(htmlItem => {
+            htmlItem.classList.add('selected');
+            highlightParents(htmlItem as HTMLElement);
+        });
+    });
+}
+
+function highlightParents(item: HTMLElement) {
+    let p = item.parentElement;
+    while (p && !p.classList.contains('file-tree')) {
+        if (p.classList.contains('tree-children')) {
+            const trigger = p.previousElementSibling as HTMLElement;
+            if (trigger && trigger.classList.contains('tree-item')) {
+                trigger.classList.add('parent-highlight');
+            }
+        }
+        p = p.parentElement;
+    }
+}
+
+function updateLiveMappingHighlight() {
+    const gameContainer = document.getElementById('mapper-game-tree');
+    if (!gameContainer) return;
+
+    gameContainer.querySelectorAll('.mapping-target-folder').forEach(el => el.classList.remove('mapping-target-folder'));
+
+    if (selectedPaths.size === 0) return;
+
+    selectedPaths.forEach(path => {
+        const targetFolder = pendingMoves.get(path) || ".";
+        const safeTarget = targetFolder.replace(/\//g, '\\').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        const targetItem = gameContainer.querySelector(`.tree-item[data-path="${safeTarget}"]`);
+        if (targetItem) {
+            targetItem.classList.add('mapping-target-folder');
+            highlightParents(targetItem as HTMLElement);
+            let p = targetItem.parentElement as HTMLElement;
+            while (p && p !== gameContainer) {
+                if (p.classList.contains('tree-children')) {
+                    if (p.style.display !== 'block') {
+                        p.style.display = 'block';
+                        const trigger = p.previousElementSibling as HTMLElement;
+                        if (trigger) trigger.style.opacity = '1';
+                    }
+                }
+                p = p.parentElement as HTMLElement;
+            }
+        }
+    });
+}
+
+/**
+ * Context Menu
+ */
+function setupContextMenu() {
+    const menu = document.getElementById('mapper-context-menu');
+    if (!menu) return;
+    document.getElementById('ctx-mapper-open')?.addEventListener('click', async (e) => {
+        e.stopPropagation(); 
+        if (lastSelectedPath) {
+            const isModSide = menu.classList.contains('mod-side-active');
+            try {
+                if (isModSide) await invoke('open_item_in_explorer', { modId: selectedModId, itemRelPath: lastSelectedPath });
+                else await invoke('open_game_item_in_explorer', { itemRelPath: lastSelectedPath });
+            } catch (err: any) {
+                toast(err.message || err, 'error');
+            }
+        }
+        hideContextMenu();
+    });
+    document.getElementById('ctx-mapper-copy')?.addEventListener('click', (e) => {
+        e.stopPropagation(); 
+        const isModSide = menu.classList.contains('mod-side-active');
+        
+        const getAbsolutePath = (relPath: string) => {
+            if (relPath === ".") {
+                return isModSide ? lastModFolderPath : activeProfile?.game_path;
+            }
+            const root = isModSide ? lastModFolderPath : activeProfile?.game_path;
+            if (!root) return relPath;
+            // Ensure no double slashes
+            const separator = root.endsWith('\\') || root.endsWith('/') ? '' : '\\';
+            return `${root}${separator}${relPath}`;
+        };
+
+        if (selectedPaths.size > 1) { 
+            const paths = Array.from(selectedPaths).map(p => getAbsolutePath(p)).join('\n');
+            navigator.clipboard.writeText(paths); 
+            toast(t('mapper.pathCopiedCount', { count: selectedPaths.size.toString() }) || `${selectedPaths.size} chemin(s) copié(s) !`); 
+        } else if (lastSelectedPath) { 
+            const fullPath = getAbsolutePath(lastSelectedPath);
+            navigator.clipboard.writeText(fullPath || ""); 
+            toast(t('mapper.pathCopied') || 'Chemin copié !'); 
+        }
+        hideContextMenu();
+    });
+    document.getElementById('ctx-mapper-cancel-mapping')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (selectedPaths.size > 0) {
+            let count = 0;
+            selectedPaths.forEach(p => {
+                if (pendingMoves.has(p)) {
+                    pendingMoves.delete(p);
+                    count++;
+                } else if (pendingDeletions.has(p)) {
+                    pendingDeletions.delete(p);
+                    count++;
+                } else if (pendingNewFolders.has(p)) {
+                    pendingNewFolders.delete(p);
+                    // Also cancel any moves targeted to this folder?
+                    // (Might be complex, for now just remove the folder)
+                    count++;
+                }
+            });
+            if (count > 0) {
+                toast(t("mapper.actionCancelled", { count: count.toString() }) || `${count} action(s) annulée(s)`, "info");
+                updateSaveButtonVisibility();
+                renderFilteredModTree();
+            }
+        }
+        hideContextMenu();
+    });
+    // Stage a new folder inside the mod. `parent` is the currently-selected mod folder
+    // (or the mod root). Nothing hits disk until Save; cancel it via the item's
+    // "Cancel mapping" action or the Refresh button (draft model).
+    const stageNewFolder = () => {
+        if (!selectedModId) { toast(t("mapper.selectModFirst") || "Sélectionnez d'abord un mod.", "warning"); return; }
+        openInputModal(t("mapper.newFolder"), t("mapper.enterName"), "", async (name) => {
+            if (name && selectedModId) {
+                const parent = lastSelectedPath || ".";
+                const virtualPath = `NEW_${parent}_${name}`;
+                pendingNewFolders.set(virtualPath, { parent, name });
+                toast(t("mapper.folderStaged") || "Dossier planifié pour création", "info");
+                try { dispatchBmmAction(BMM_ACTIONS.MAPPER_FOLDER_STAGED, { name, parent }); } catch { /* ignore */ }
+                updateSaveButtonVisibility();
+                renderFilteredModTree();
+            }
+        });
+    };
+    document.getElementById('ctx-mapper-new-folder')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        stageNewFolder();
+        hideContextMenu();
+    });
+    // Discoverable toolbar button — same staging as the right-click "New folder".
+    document.getElementById('btn-mapper-new-folder')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        stageNewFolder();
+    });
+    document.getElementById('ctx-mapper-rename')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const currentName = lastSelectedPath?.split(/[\\/]/).pop() || "";
+        openInputModal(t("mapper.rename"), t("mapper.enterName"), currentName, async (name) => {
+            if (name && selectedModId && lastSelectedPath) {
+                // Renaming writes straight away instead of queueing, so it needs the same
+                // archived-mod question that applyAllChanges asks.
+                if (!await ensureModWritable()) return;
+                // Captured AFTER the question, for the same reason applyAllChanges captures:
+                // ensureModWritable may unpack the mod and refresh the tree, and a refresh
+                // that finds a missing folder clears selectedModId. The rename then went out
+                // with modId: null.
+                const modId = selectedModId;
+                if (!modId) return;
+                try {
+                    const isRoot = lastSelectedPath === "." || lastSelectedPath === "" || lastSelectedPath === "/";
+                    await invoke('rename_mod_item', { modId, itemRelPath: lastSelectedPath, newName: name });
+                    
+                    if (isRoot) {
+                        await refreshMapperData();
+                        // Search for the mod with the new name in the select
+                        const modSelect = document.getElementById('mapper-mod-select') as HTMLSelectElement;
+                        if (modSelect) {
+                            for (let i = 0; i < modSelect.options.length; i++) {
+                                // We check text content because ID might have changed if derived from folder name
+                                if (modSelect.options[i].text === name) {
+                                    modSelect.selectedIndex = i;
+                                    selectedModId = modSelect.value;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    
+                    toast(t("common.saved"), "success"); 
+                    await refreshModTree(true);
+                } catch (e: any) { toast(e.message || e, "error"); }
+            }
+        });
+        hideContextMenu();
+    });
+    document.getElementById('ctx-mapper-delete')?.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (selectedPaths.size > 0) {
+            const msg = t("mapper.confirmStagedDelete", { count: selectedPaths.size.toString() }) 
+                || `Voulez-vous marquer ${selectedPaths.size} élément(s) pour suppression définitive ? (Sera appliqué lors du clic sur 'Appliquer la structure')`;
+            
+            openConfirmModal(t("common.confirmDelete") || "Confirmation de suppression", msg, () => {
+                const count = selectedPaths.size;
+                selectedPaths.forEach(p => {
+                    pendingDeletions.add(p);
+                    pendingMoves.delete(p); 
+                });
+                selectedPaths.clear();
+                updateSelectionCounter();
+                updateSaveButtonVisibility();
+                renderFilteredModTree();
+                toast(t("mapper.itemsMarkedForDelete", { count: count.toString() }) || `${count} élément(s) marqué(s) pour suppression`, "info");
+            });
+        }
+        hideContextMenu();
+    });
+}
+
+function openConfirmModal(title: string, message: string, onOk: () => void) {
+    const modal = document.getElementById('modal-mapper-confirm');
+    const titleEl = document.getElementById('mapper-confirm-title');
+    const msgEl = document.getElementById('mapper-confirm-message');
+    const okBtn = document.getElementById('btn-mapper-confirm-ok');
+    const cancelBtn = document.getElementById('btn-mapper-confirm-cancel');
+
+    if (!modal || !okBtn || !cancelBtn) return;
+
+    if (titleEl) titleEl.textContent = title;
+    if (msgEl) msgEl.textContent = message;
+    if (okBtn) okBtn.textContent = t("common.confirm") || "Confirmer";
+    if (cancelBtn) cancelBtn.textContent = t("common.cancel") || "Annuler";
+
+    const close = () => {
+        modal.classList.remove('open');
+        release();
+        okBtn.removeEventListener('click', handleOk);
+        cancelBtn.removeEventListener('click', close);
+        modal.removeEventListener('click', handleOverlayClick);
+    };
+
+    const handleOk = () => {
+        onOk();
+        close();
+    };
+
+    const handleOverlayClick = (e: MouseEvent) => {
+        if (e.target === modal) close();
+    };
+
+    okBtn.addEventListener('click', handleOk);
+    cancelBtn.addEventListener('click', close);
+    modal.addEventListener('click', handleOverlayClick);
+
+    modal.classList.add('open');
+    // Escape cancels, Tab stays in the dialog, and a destructive question starts on Cancel.
+    const release = bindModal(modal, { onClose: close, initialFocus: cancelBtn });
+}
+
+function showContextMenu(x: number, y: number, path: string, isDir: boolean, isModSide: boolean) {
+    const menu = document.getElementById('mapper-context-menu');
+    if (!menu) return;
+    lastSelectedPath = path; menu.style.display = 'block';
+    
+    if (isModSide) menu.classList.add('mod-side-active');
+    else menu.classList.remove('mod-side-active');
+
+    // Toggle Mod-only items
+    const modOnly = menu.querySelectorAll('.mod-only-menu');
+    modOnly.forEach(el => (el as HTMLElement).style.display = isModSide ? 'flex' : 'none');
+
+    // For folders on mod side, show "New Folder"
+    const newFolderBtn = document.getElementById('ctx-mapper-new-folder');
+    if (newFolderBtn && isModSide) newFolderBtn.style.display = isDir ? 'flex' : 'none';
+
+    // Protect ModRoot: Hide Rename/Delete if path is "." (root)
+    const renameBtn = document.getElementById('ctx-mapper-rename');
+    const deleteBtn = document.getElementById('ctx-mapper-delete');
+    const isRoot = path === "." || path === "";
+    
+    if (renameBtn) renameBtn.style.display = (isModSide && !isRoot) ? 'flex' : 'none';
+    if (deleteBtn) deleteBtn.style.display = (isModSide && !isRoot) ? 'flex' : 'none';
+
+    // Show "Cancel Mapping" only if at least one selected item is in pendingMoves, pendingDeletions or pendingNewFolders
+    const cancelMappingBtn = document.getElementById('ctx-mapper-cancel-mapping');
+    if (cancelMappingBtn) {
+        if (isModSide) {
+            let hasPending = false;
+            selectedPaths.forEach(p => { 
+                if (pendingMoves.has(p) || pendingDeletions.has(p) || pendingNewFolders.has(p)) hasPending = true; 
+            });
+            cancelMappingBtn.style.display = hasPending ? 'flex' : 'none';
+        } else {
+            cancelMappingBtn.style.display = 'none';
+        }
+    }
+
+    const menuWidth = menu.offsetWidth; const menuHeight = menu.offsetHeight;
+    const winWidth = window.innerWidth; const winHeight = window.innerHeight;
+    if (x + menuWidth > winWidth) x -= menuWidth;
+    if (y + menuHeight > winHeight) y -= menuHeight;
+    menu.style.left = `${x}px`; menu.style.top = `${y}px`;
+}
+
+function hideContextMenu() {
+    const menu = document.getElementById('mapper-context-menu');
+    if (menu) menu.style.display = 'none';
+}
+
+/**
+ * Input Modal Logic
+ */
+function setupInputModal() {
+    const modal = document.getElementById('modal-mapper-input');
+    const field = document.getElementById('mapper-input-field') as HTMLInputElement;
+    const confirmBtn = document.getElementById('btn-mapper-input-confirm');
+    const cancelBtn = document.getElementById('btn-mapper-input-cancel');
+
+    confirmBtn?.addEventListener('click', () => {
+        if (currentInputCallback) currentInputCallback(field.value);
+        modal?.classList.remove('open');
+        inputRelease?.(); inputRelease = null;
+    });
+
+    cancelBtn?.addEventListener('click', () => {
+        modal?.classList.remove('open');
+        inputRelease?.(); inputRelease = null;
+    });
+
+    field?.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') confirmBtn?.click();
+    });
+}
+
+function openInputModal(title: string, label: string, defaultValue: string, callback: (val: string) => void) {
+    const modal = document.getElementById('modal-mapper-input');
+    const titleEl = document.getElementById('mapper-input-title');
+    const labelEl = document.getElementById('mapper-input-label');
+    const field = document.getElementById('mapper-input-field') as HTMLInputElement;
+
+    if (titleEl) titleEl.textContent = title;
+    if (labelEl) labelEl.textContent = label;
+    if (field) {
+        field.value = defaultValue;
+        setTimeout(() => field.focus(), 100);
+    }
+
+    currentInputCallback = callback;
+    modal?.classList.add('open');
+    if (modal) inputRelease = bindModal(modal, { onClose: () => (document.getElementById('btn-mapper-input-cancel') as HTMLElement | null)?.click(), initialFocus: field });
+}
+
+/**
+ * Final preview — see mapper-preview.ts. Reads the files with their sizes, the queued moves
+ * and deletions, the game tree already loaded for the right panel (to tell a new file from
+ * one that replaces a game file) and the conflicts with other mods; "Apply" runs the same
+ * save as the toolbar button.
+ */
+async function showMapperPreview(): Promise<void> {
+    if (!selectedModId) { toast(t("mapper.selectModHint"), 'warning'); return; }
+    const modId = selectedModId;
+    try {
+        const [files, conflicts] = await Promise.all([
+            invoke('list_mod_files_sized', { modId }) as Promise<Array<{ path: string; size: number }>>,
+            (invoke('get_mod_conflicts', { modId }) as Promise<Array<{ other_mod_name: string; file_count: number }>>).catch(() => []),
+        ]);
+        dispatchBmmAction(BMM_ACTIONS.MAPPER_OPENED);
+        const { openMapperPreview } = await import('./mapper-preview.js');
+        openMapperPreview({
+            gamePath: activeProfile?.game_path || '',
+            files: Array.isArray(files) ? files : [],
+            moves: Array.from(pendingMoves.entries()),
+            deletions: Array.from(pendingDeletions),
+            gameTree: gameTreeData || [],
+            conflicts: Array.isArray(conflicts) ? conflicts : [],
+            pending: pendingChangeCount(),
+            onApply: () => { void applyAllChanges(); },
+        });
+    } catch (e: any) {
+        toast(e?.message || String(e), 'error');
+    }
+}

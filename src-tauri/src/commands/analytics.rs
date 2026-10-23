@@ -1,0 +1,1415 @@
+// Telemetry / analytics — GDPR & privacy first.
+//
+// Design principles:
+//   • OPT-IN only. Nothing is collected or sent unless `settings.analytics_consent
+//     == Some(true)`. The frontend shows a clear consent prompt on first start.
+//   • Local-first. Events are appended to a local queue file and flushed in
+//     batches. If no endpoint is configured they simply stay on disk (no network).
+//   • Transparent & erasable. The user can export the raw queued data and delete
+//     everything at any time (right to access / erasure).
+//   • PostHog-compatible batch payload, so the BMM team can point it at PostHog
+//     (or any compatible capture endpoint) without changing the client.
+//
+// `distinct_id` is the Creator ID — an anonymous, hardware-derived identifier the
+// user already has; no name/email is ever collected.
+
+use tauri::Manager;
+use std::path::{Path, PathBuf};
+use std::io::Write;
+use tauri::{AppHandle, State};
+use serde_json::{json, Value};
+use crate::state::AppState;
+use crate::commands::crash::log_line;
+
+/// Gzip a byte slice (best-effort) for compressed telemetry uploads.
+fn gzip_bytes(data: &[u8]) -> Option<Vec<u8>> {
+    use std::io::Write;
+    let mut enc = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+    enc.write_all(data).ok()?;
+    enc.finish().ok()
+}
+
+fn queue_path(app: &AppHandle) -> PathBuf {
+    app.path().app_data_dir().ok().unwrap_or_default().join("analytics_queue.jsonl")
+}
+
+fn read_queue(app: &AppHandle) -> Vec<Value> {
+    std::fs::read_to_string(queue_path(app)).ok()
+        .map(|s| s.lines().filter_map(|l| serde_json::from_str(l).ok()).collect())
+        .unwrap_or_default()
+}
+
+fn clear_queue(app: &AppHandle) {
+    let _ = std::fs::remove_file(queue_path(app));
+}
+
+/// Replace the queue with what is left after a partial send (BetterCommunity v2 mode).
+fn write_queue(app: &AppHandle, events: &[Value]) {
+    if events.is_empty() {
+        clear_queue(app);
+        return;
+    }
+    let mut out = String::new();
+    for ev in events {
+        if let Ok(line) = serde_json::to_string(ev) {
+            out.push_str(&line);
+            out.push('\n');
+        }
+    }
+    let _ = std::fs::write(queue_path(app), out);
+}
+
+fn consent_granted(state: &State<AppState>) -> bool {
+    state.data.lock().map(|d| d.settings.analytics_consent == Some(true)).unwrap_or(false)
+}
+
+// ── Consent ───────────────────────────────────────────────────────────────────
+#[tauri::command]
+pub fn get_analytics_consent(state: State<AppState>) -> Option<bool> {
+    state.data.lock().ok().and_then(|d| d.settings.analytics_consent)
+}
+
+/// `live_errors`: the "errors" category, when the caller says (the consent dialog does).
+/// When it does not, live errors FOLLOW telemetry on the way up: going from off (or never
+/// asked) to on turns them on, as the owner asked. They can still be turned off on their own
+/// afterwards (live_issues_set_enabled), and re-accepting while already on changes nothing.
+#[tauri::command]
+pub fn set_analytics_consent(state: State<AppState>, app_handle: AppHandle, enabled: bool, live_errors: Option<bool>, receipt: Option<crate::commands::consent_ledger::RecordInput>) -> Result<(), String> {
+    let (was, live) = {
+        let mut data = state.data.lock().map_err(|_| "lock".to_string())?;
+        let was = data.settings.analytics_consent;
+        data.settings.analytics_consent = Some(enabled);
+        data.settings.live_errors = live_after_consent(was, enabled, data.settings.live_errors, live_errors);
+        (was, data.settings.live_errors)
+    };
+    let _ = state.save();
+    // Proof of the answer (consent_ledger.rs): what was answered, where, on which text.
+    let mut r = receipt.unwrap_or_default();
+    let mut cats = r.categories.take().unwrap_or_default();
+    if enabled { if let Some(l) = live { cats.insert("errors".into(), l); } }
+    r.doc = "telemetry".into();
+    r.choice = consent_choice(was, enabled, &cats).into();
+    r.categories = Some(cats);
+    if r.source.is_none() { r.source = Some("settings".into()); }
+    crate::commands::consent_ledger::record_quiet(&state, &app_handle, r);
+    // Declining wipes anything we'd buffered (right to erasure).
+    if !enabled { let _ = std::fs::remove_file(queue_path(&app_handle)); }
+    // Live errors ride on the same consent: off stops them and wipes their queue too.
+    crate::commands::live_issues::on_consent_changed(Some(enabled), live);
+    log_line(format!("[ANALYTICS] consent set to {}", enabled));
+    Ok(())
+}
+
+/// The receipt's choice for a telemetry answer. Pure (tested below).
+pub fn consent_choice(was: Option<bool>, enabled: bool, cats: &std::collections::BTreeMap<String, bool>) -> &'static str {
+    match (enabled, was) {
+        (false, Some(true)) => "withdrawn",
+        (false, _) => "declined",
+        // The weekly hardware report and unmasked replay are extras, never part of « all »:
+        // leaving them off does not make an « accept all » a custom choice.
+        (true, _) if cats.iter().any(|(k, v)| !v && k != "bench" && k != "replayFull") => "custom",
+        (true, _) => "accepted",
+    }
+}
+
+/// The live-errors switch after a consent answer. Pure (tested below).
+pub fn live_after_consent(was: Option<bool>, enabled: bool, live: Option<bool>, asked: Option<bool>) -> Option<bool> {
+    if !enabled { return live; }               // off: the switch is kept, and inert
+    if let Some(v) = asked { return Some(v); } // the dialog said
+    if was == Some(true) { live } else { Some(true) }
+}
+
+// ── System profile (collected once, sent as a $set on the user) ───────────────
+struct CimInfo {
+    gpus: Vec<String>,
+    os: String,
+    model: String,
+    manuf: String,
+    board: String,
+    // displays: EDID-derived monitor identity (maker|model|year) + active resolutions
+    monitors: Vec<String>,
+    resolutions: Vec<String>,
+}
+
+/// One CIM call: ALL GPUs, OS caption, motherboard, VM signals, and connected
+/// displays (EDID identity via WmiMonitorID + active resolution per controller).
+fn cim_system() -> CimInfo {
+    let script = "$ErrorActionPreference='SilentlyContinue';\
+        Get-CimInstance Win32_VideoController | ForEach-Object { Write-Output \"GPU=$($_.Name)\"; if($_.CurrentHorizontalResolution){ Write-Output \"RES=$($_.CurrentHorizontalResolution)x$($_.CurrentVerticalResolution)@$($_.CurrentRefreshRate)\" } };\
+        $o=(Get-CimInstance Win32_OperatingSystem).Caption;\
+        $cs=Get-CimInstance Win32_ComputerSystem;\
+        $bb=Get-CimInstance Win32_BaseBoard;\
+        Write-Output \"OS=$o\";\
+        Write-Output \"MODEL=$($cs.Model)\"; Write-Output \"MANUF=$($cs.Manufacturer)\";\
+        Write-Output \"BOARD=$($bb.Manufacturer) $($bb.Product)\";\
+        Get-CimInstance -Namespace root\\wmi -ClassName WmiMonitorID | ForEach-Object {\
+            $mk=(($_.ManufacturerName | Where-Object {$_ -gt 0} | ForEach-Object {[char]$_}) -join '');\
+            $nm=(($_.UserFriendlyName | Where-Object {$_ -gt 0} | ForEach-Object {[char]$_}) -join '');\
+            Write-Output \"MON=$mk|$nm|$($_.YearOfManufacture)\" }";
+    let out = crate::commands::proc::hidden_command("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-Command", script])
+        .output();
+    let mut info = CimInfo { gpus: Vec::new(), os: String::new(), model: String::new(), manuf: String::new(), board: String::new(), monitors: Vec::new(), resolutions: Vec::new() };
+    if let Ok(o) = out {
+        for line in String::from_utf8_lossy(&o.stdout).lines() {
+            if let Some(v) = line.strip_prefix("GPU=") { let v = v.trim(); if !v.is_empty() { info.gpus.push(v.to_string()); } }
+            else if let Some(v) = line.strip_prefix("RES=") { let v = v.trim(); if !v.is_empty() && !v.starts_with("x") { info.resolutions.push(v.to_string()); } }
+            else if let Some(v) = line.strip_prefix("MON=") { let v = v.trim().trim_matches('|'); if !v.is_empty() && v != "||" { info.monitors.push(v.to_string()); } }
+            else if let Some(v) = line.strip_prefix("OS=") { info.os = v.trim().to_string(); }
+            else if let Some(v) = line.strip_prefix("MODEL=") { info.model = v.trim().to_string(); }
+            else if let Some(v) = line.strip_prefix("MANUF=") { info.manuf = v.trim().to_string(); }
+            else if let Some(v) = line.strip_prefix("BOARD=") { info.board = v.trim().to_string(); }
+        }
+    }
+    info
+}
+
+/// Pick the most relevant GPU (the discrete one): score by vendor, prefer dGPU.
+fn pick_best_gpu(names: &[String]) -> String {
+    let score = |n: &str| -> i32 {
+        let l = n.to_lowercase();
+        if l.contains("nvidia") || l.contains("geforce") || l.contains("rtx") || l.contains("gtx") || l.contains("quadro") { 4 }
+        else if l.contains("radeon") || l.contains("amd ") || l.contains(" rx ") || l.contains("firepro") { 4 }
+        else if l.contains("arc") { 3 }
+        else if l.contains("iris") || l.contains("intel") || l.contains("uhd") || l.contains("vega") { 2 }
+        else if l.contains("microsoft basic") || l.contains("standard vga") || l.contains("remote") { 0 }
+        else { 1 }
+    };
+    names.iter().max_by_key(|n| (score(n), n.len())).cloned().unwrap_or_default()
+}
+
+/// Heuristic VM detection from model/manufacturer/GPU strings.
+fn detect_vm(model: &str, manuf: &str, gpu: &str) -> bool {
+    let hay = format!("{} {} {}", model, manuf, gpu).to_lowercase();
+    ["vmware", "virtualbox", "vbox", "kvm", "qemu", "hyper-v", "hyperv", "virtual machine",
+     "xen", "parallels", "bochs", "innotek", "microsoft corporation virtual"]
+        .iter().any(|s| hay.contains(s))
+}
+
+/// The drive root of a path (e.g. "C:" on Windows), for "same disk?" comparisons.
+fn drive_of(p: &std::path::Path) -> String {
+    let s = p.to_string_lossy().replace('/', "\\");
+    if s.len() >= 2 && s.as_bytes()[1] == b':' { s[..2].to_uppercase() }
+    else { s.split('\\').next().unwrap_or("").to_string() }
+}
+
+/// EXTRA precise hardware identity — only collected when the user opts into the
+/// weekly-benchmark / extra mode. Includes serials & identifiers (motherboard SN,
+/// machine UUID, BIOS version, disk serials, MAC, TPM/Secure-Boot/UEFI, OS build…)
+/// gathered in one PowerShell/WMI pass. Windows-only (empty object elsewhere).
+fn collect_extra_hardware() -> Value {
+    #[cfg(not(target_os = "windows"))]
+    { return json!({}); }
+    #[cfg(target_os = "windows")]
+    {
+        let script = "$ErrorActionPreference='SilentlyContinue';\
+            $bb=Get-CimInstance Win32_BaseBoard; Write-Output \"BOARD_SN=$($bb.SerialNumber)\"; Write-Output \"BOARD=$($bb.Manufacturer) $($bb.Product)\";\
+            $bios=Get-CimInstance Win32_BIOS; Write-Output \"BIOS_VER=$($bios.SMBIOSBIOSVersion)\"; Write-Output \"BIOS_DATE=$($bios.ReleaseDate)\"; Write-Output \"BIOS_MAN=$($bios.Manufacturer)\";\
+            $csp=Get-CimInstance Win32_ComputerSystemProduct; Write-Output \"UUID=$($csp.UUID)\";\
+            $os=Get-CimInstance Win32_OperatingSystem; Write-Output \"OS_VER=$($os.Version)\"; Write-Output \"OS_BUILD=$($os.BuildNumber)\";\
+            $cs=Get-CimInstance Win32_ComputerSystem; Write-Output \"LOGICAL=$($cs.NumberOfLogicalProcessors)\";\
+            $cpu=Get-CimInstance Win32_Processor | Select-Object -First 1; Write-Output \"CORES=$($cpu.NumberOfCores)\"; Write-Output \"THREADS=$($cpu.ThreadCount)\"; Write-Output \"L2=$($cpu.L2CacheSize)\"; Write-Output \"L3=$($cpu.L3CacheSize)\";\
+            $fw=$env:firmware_type; if(-not $fw){ try { $fw=(Get-ComputerInfo -Property BiosFirmwareType).BiosFirmwareType } catch {} }; Write-Output \"FIRMWARE=$fw\";\
+            try { Write-Output \"SECUREBOOT=$(Confirm-SecureBootUEFI)\" } catch { Write-Output \"SECUREBOOT=unknown\" };\
+            try { $tpm=Get-Tpm; Write-Output \"TPM=$($tpm.TpmPresent)/$($tpm.TpmReady)\" } catch { Write-Output \"TPM=unknown\" };\
+            Get-CimInstance Win32_DiskDrive | ForEach-Object { Write-Output \"DISK=$($_.Model)|$($_.SerialNumber)|$([math]::Round($_.Size/1GB))|$($_.InterfaceType)\" };\
+            Get-CimInstance Win32_NetworkAdapter -Filter \"PhysicalAdapter=true AND MACAddress IS NOT NULL\" | ForEach-Object { Write-Output \"MAC=$($_.MACAddress)\" }";
+        let out = crate::commands::proc::hidden_command("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", script])
+            .output();
+        let mut o = serde_json::Map::new();
+        let mut disks: Vec<Value> = Vec::new();
+        let mut macs: Vec<Value> = Vec::new();
+        if let Ok(out) = out {
+            for line in String::from_utf8_lossy(&out.stdout).lines() {
+                let (k, v) = match line.split_once('=') { Some(kv) => kv, None => continue };
+                let v = v.trim();
+                let put = |o: &mut serde_json::Map<String, Value>, key: &str| { o.insert(key.into(), json!(v)); };
+                match k {
+                    "BOARD_SN" => put(&mut o, "motherboard_serial"),
+                    "BOARD" => put(&mut o, "motherboard"),
+                    "BIOS_VER" => put(&mut o, "bios_version"),
+                    "BIOS_DATE" => put(&mut o, "bios_date"),
+                    "BIOS_MAN" => put(&mut o, "bios_manufacturer"),
+                    "UUID" => put(&mut o, "machine_uuid"),
+                    "OS_VER" => put(&mut o, "os_version"),
+                    "OS_BUILD" => put(&mut o, "os_build"),
+                    "LOGICAL" => { o.insert("logical_processors".into(), json!(v.parse::<i64>().unwrap_or(0))); }
+                    "CORES" => { o.insert("cpu_cores".into(), json!(v.parse::<i64>().unwrap_or(0))); }
+                    "THREADS" => { o.insert("cpu_threads".into(), json!(v.parse::<i64>().unwrap_or(0))); }
+                    "L2" => { o.insert("l2_cache_kb".into(), json!(v.parse::<i64>().unwrap_or(0))); }
+                    "L3" => { o.insert("l3_cache_kb".into(), json!(v.parse::<i64>().unwrap_or(0))); }
+                    "FIRMWARE" => put(&mut o, "firmware_type"),  // "1"=BIOS/legacy "2"=UEFI, or text
+                    "SECUREBOOT" => put(&mut o, "secure_boot"),
+                    "TPM" => put(&mut o, "tpm"),                 // "present/ready"
+                    "DISK" => {
+                        let p: Vec<&str> = v.split('|').collect();
+                        disks.push(json!({
+                            "model": p.first().copied().unwrap_or("").trim(),
+                            "serial": p.get(1).copied().unwrap_or("").trim(),
+                            "size_gb": p.get(2).and_then(|s| s.trim().parse::<i64>().ok()).unwrap_or(0),
+                            "interface": p.get(3).copied().unwrap_or("").trim(),
+                        }));
+                    }
+                    "MAC" => { if !v.is_empty() { macs.push(json!(v)); } }
+                    _ => {}
+                }
+            }
+        }
+        o.insert("disks".into(), json!(disks));
+        o.insert("mac_addresses".into(), json!(macs));
+        json!(o)
+    }
+}
+
+/// Per-disk hardware info (count, type, size) — no contents, just the drives.
+fn collect_disks() -> (Value, f64) {
+    use sysinfo::Disks;
+    let disks = Disks::new_with_refreshed_list();
+    let mut list = Vec::new();
+    let mut total = 0.0_f64;
+    let mut seen = std::collections::HashSet::new();
+    for d in disks.iter() {
+        let name = d.name().to_string_lossy().to_string();
+        // sysinfo lists each mount; dedupe by name so we count physical-ish drives once.
+        if !seen.insert(format!("{}|{}", name, d.mount_point().to_string_lossy())) { continue; }
+        let kind = match d.kind() { sysinfo::DiskKind::HDD => "HDD", sysinfo::DiskKind::SSD => "SSD", _ => "Unknown" };
+        let size_gb = (d.total_space() as f64 / 1_073_741_824.0 * 10.0).round() / 10.0;
+        total += d.total_space() as f64;
+        list.push(json!({
+            "type": kind,
+            "size_gb": size_gb,
+            "fs": d.file_system().to_string_lossy(),
+            "removable": d.is_removable(),
+            "mount": d.mount_point().to_string_lossy(),
+        }));
+    }
+    (json!(list), total / 1_073_741_824.0)
+}
+
+/// Privacy-safe profile layout: counts + folder/disk topology only (NEVER paths
+/// or contents). Tells us how users organise game/mods/backup across drives.
+fn profile_layout(state: &State<AppState>) -> Value {
+    let data = match state.data.lock() { Ok(d) => d, Err(_) => return json!({}) };
+    let mut profiles = Vec::new();
+    let mut total_mods = 0usize;
+    for p in &data.profiles {
+        let mod_count = data.mods.iter().filter(|m| m.mod_folder_path.starts_with(&p.mods_path)).count();
+        total_mods += mod_count;
+        let (gd, md, bd) = (drive_of(&p.game_path), drive_of(&p.mods_path), drive_of(&p.backup_path));
+        let mut drives: Vec<String> = vec![gd.clone(), md.clone(), bd.clone()];
+        drives.sort(); drives.dedup(); drives.retain(|s| !s.is_empty());
+        let folders_distinct = p.game_path != p.mods_path && p.mods_path != p.backup_path && p.game_path != p.backup_path;
+        profiles.push(json!({
+            "game_name": p.game_name,
+            "mod_count": mod_count,
+            "disks_used": drives.len(),
+            "all_same_disk": drives.len() <= 1,
+            "folders_distinct": folders_distinct,
+            "mods_on_game_disk": gd == md,
+            "backup_on_game_disk": gd == bd,
+        }));
+    }
+    let n = data.profiles.len();
+    json!({
+        "profile_count": n,
+        "total_mods": total_mods,
+        "avg_mods_per_profile": if n > 0 { (total_mods as f64 / n as f64 * 10.0).round() / 10.0 } else { 0.0 },
+        "active_profile": data.active_profile_id.is_some(),
+        "profiles": profiles,
+    })
+}
+
+/// Anonymous machine profile: real OS/CPU/RAM/GPU/disk specs, motherboard, VM flag,
+/// profile/folder topology, app version, locale, creator_id. No IP address, private or public.
+#[tauri::command]
+pub async fn analytics_system_profile(state: State<'_, AppState>, app_handle: AppHandle, extra: Option<bool>) -> Result<Value, String> {
+    use sysinfo::System;
+    let mut sys = System::new();
+    sys.refresh_memory();
+    sys.refresh_cpu();
+
+    let cpu = sys.cpus().first().map(|c| c.brand().trim().to_string()).unwrap_or_default();
+    let cores = sys.cpus().len();
+    let ram_gb = (sys.total_memory() as f64 / 1_073_741_824.0 * 10.0).round() / 10.0;
+    let cim = cim_system();
+    let gpu = pick_best_gpu(&cim.gpus);
+    let is_vm = detect_vm(&cim.model, &cim.manuf, &gpu);
+
+    let (disks_json, disk_total_gb) = collect_disks();
+    let disk_count = disks_json.as_array().map(|a| a.len()).unwrap_or(0);
+
+    // No IP address in the profile: neither the LAN address nor a public one. BMM never asks a
+    // third-party echo service for the public IP; the server sees only the connection itself.
+
+    let profiles = profile_layout(&state);
+    let locale = state.data.lock().map(|d| d.settings.language.clone()).unwrap_or_default();
+    let creator_id = crate::commands::security::get_creator_id(app_handle.clone()).unwrap_or_default();
+    let app_version = app_handle.package_info().version.to_string();
+    // Precise hardware identity — ONLY when the user opted into extra mode (weekly bench).
+    let hw_extra = if extra == Some(true) { collect_extra_hardware() } else { Value::Null };
+
+    Ok(json!({
+        "distinct_id": creator_id,
+        "hw_extra": hw_extra,
+        "os": std::env::consts::OS,
+        "os_caption": cim.os,
+        "arch": std::env::consts::ARCH,
+        "cpu": cpu,
+        "cpu_cores": cores,
+        "ram_gb": ram_gb,
+        "gpu": gpu,
+        "gpus": cim.gpus,
+        "motherboard": cim.board,
+        "machine_model": cim.model,
+        "machine_manufacturer": cim.manuf,
+        "is_vm": is_vm,
+        "disk_count": disk_count,
+        "disk_total_gb": (disk_total_gb * 10.0).round() / 10.0,
+        "disks": disks_json,
+        "monitors": cim.monitors,                 // EDID identity: maker|model|year
+        "monitor_count": cim.monitors.len(),
+        "resolutions": cim.resolutions,           // active resolution(s) e.g. 2560x1440@144
+        "primary_resolution": cim.resolutions.first().cloned().unwrap_or_default(),
+        "profiles_summary": profiles,
+        "locale": locale,
+        "app_version": app_version,
+    }))
+}
+
+// ── Sampling (set from the dashboard, applied per install) ───────────────────
+// The telemetry server answers every /batch with a `sampling` document: a `total` cap plus
+// one percentage per element kind (events, replay, errors, perf, benchmarks, logs). The
+// decision is deterministic per install and per kind — fnv1a-32 of "{creator_id}:{kind}"
+// modulo 10000 against pct*100 — so an install is either fully in or fully out of a kind
+// and the collected data stays coherent. The server applies the same rule on ingest; this
+// side only saves the upload. Kept in sync with `server/src/sampling.rs` in the dashboard.
+fn sampling_path(app: &AppHandle) -> PathBuf {
+    app.path().app_data_dir().ok().unwrap_or_default().join("telemetry_sampling.json")
+}
+static SAMPLING: std::sync::OnceLock<std::sync::Mutex<Option<Value>>> = std::sync::OnceLock::new();
+fn sampling_cache() -> &'static std::sync::Mutex<Option<Value>> { SAMPLING.get_or_init(|| std::sync::Mutex::new(None)) }
+fn load_sampling(app: &AppHandle) -> Option<Value> {
+    if let Ok(g) = sampling_cache().lock() { if g.is_some() { return g.clone(); } }
+    let v: Option<Value> = std::fs::read_to_string(sampling_path(app)).ok().and_then(|s| serde_json::from_str(&s).ok());
+    if let (Some(v), Ok(mut g)) = (v.as_ref(), sampling_cache().lock()) { *g = Some(v.clone()); }
+    v
+}
+fn store_sampling(app: &AppHandle, v: &Value) {
+    if !v.is_object() { return; }
+    if let Ok(s) = serde_json::to_string(v) { let _ = std::fs::write(sampling_path(app), s); }
+    if let Ok(mut g) = sampling_cache().lock() { *g = Some(v.clone()); }
+}
+fn fnv1a32(s: &str) -> u32 {
+    let mut h: u32 = 0x811c9dc5;
+    for b in s.bytes() { h ^= b as u32; h = h.wrapping_mul(0x01000193); }
+    h
+}
+fn sampling_kind(event: &str) -> &'static str {
+    match event {
+        "$replay" => "replay",
+        "$log_js" | "$log_rust" => "logs",
+        "perf" | "$web_vitals" | "web_vitals" => "perf",
+        "benchmark" => "benchmarks",
+        e if e.starts_with("$error") || e == "error" || e == "crash" || e == "js_error" || e == "rust_panic" => "errors",
+        _ => "events",
+    }
+}
+/// Is this install inside the sampled population for `event`? No document = send everything.
+pub fn sampling_allows(sampling: Option<&Value>, distinct_id: &str, event: &str) -> bool {
+    let Some(s) = sampling else { return true };
+    let pct = |k: &str| s.get(k).and_then(Value::as_f64).unwrap_or(100.0).clamp(0.0, 100.0);
+    let inside = |k: &str| ((fnv1a32(&format!("{distinct_id}:{k}")) % 10000) as f64) < pct(k) * 100.0;
+    inside("total") && inside(sampling_kind(event))
+}
+
+// ── Event tracking ────────────────────────────────────────────────────────────
+fn now_iso() -> String { chrono::Utc::now().to_rfc3339() }
+
+#[tauri::command]
+pub fn analytics_track(
+    state: State<AppState>,
+    app_handle: AppHandle,
+    event: String,
+    properties: Option<Value>,
+    distinct_id: Option<String>,
+) -> Result<(), String> {
+    if !consent_granted(&state) { return Ok(()); } // hard gate
+    // Sampling set from the dashboard: an install outside the population for this kind
+    // of element never queues it (the session_end beacon is the one path that skips this
+    // and it is trimmed server-side by the same rule).
+    if !sampling_allows(load_sampling(&app_handle).as_ref(), distinct_id.as_deref().unwrap_or(""), &event) { return Ok(()); }
+    let p = queue_path(&app_handle);
+    // Hard limit: 10MB file size to avoid unbounded growth if offline
+    if let Ok(meta) = std::fs::metadata(&p) {
+        if meta.len() > 10_485_760 { return Ok(()); }
+    }
+    let ev = json!({
+        "event": event,
+        "properties": properties.unwrap_or_else(|| json!({})),
+        "distinct_id": distinct_id.unwrap_or_default(),
+        "timestamp": now_iso(),
+    });
+    if let Some(parent) = p.parent() { let _ = std::fs::create_dir_all(parent); }
+    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(p) {
+        use std::io::Write;
+        if let Ok(s) = serde_json::to_string(&ev) {
+            let _ = writeln!(file, "{}", s);
+        }
+    }
+    Ok(())
+}
+
+/// Telemetry is sent over HTTPS in production. For LOCAL dev we also accept plain
+/// http to LOOPBACK (localhost / 127.0.0.1 / *.localhost) so the desktop app can post
+/// to a local BCWEB/telemetry stack without an HTTPS tunnel. Never plaintext to a
+/// non-loopback host (that would leak telemetry in the clear over the network).
+pub(crate) fn endpoint_allowed(e: &str) -> bool {
+    let e = e.trim();
+    e.starts_with("https://")
+        || e.starts_with("http://localhost")
+        || e.starts_with("http://127.0.0.1")
+        || e.starts_with("http://telemetry.localhost:5176")
+}
+
+/// The name and version of the upload format. Two top-level fields of the `/batch` envelope,
+/// beside `api_key` / `packet_id` / `batch`: the telemetry server (BCW telemetry-dashboard,
+/// `ingest_handler`) reads the envelope as free JSON and ignores keys it does not know, so a
+/// server older than them is unaffected, and a newer one can tell which shape it is reading
+/// before it reads it. Not data about anybody: two constants, the same in every upload.
+/// Bump `TELEMETRY_SCHEMA_V` when an event's shape changes in a way the server must know about.
+/// The webview's session-end beacon (core/analytics.ts) sends the same pair.
+pub const TELEMETRY_SCHEMA: &str = "bmm-telemetry";
+pub const TELEMETRY_SCHEMA_V: u32 = 1;
+
+/// The `/batch` body: the versioned envelope around the queued events.
+pub fn envelope(api_key: &str, packet_id: &str, batch: &[Value]) -> Value {
+    json!({ "schema": TELEMETRY_SCHEMA, "v": TELEMETRY_SCHEMA_V, "api_key": api_key, "packet_id": packet_id, "batch": batch })
+}
+
+#[cfg(test)]
+mod envelope_tests {
+    use super::*;
+    #[test]
+    fn the_envelope_is_versioned_and_keeps_the_fields_the_server_reads() {
+        let b = envelope("bmm_pk_x", "p1", &[json!({ "event": "app_open", "distinct_id": "d" })]);
+        assert_eq!(b["schema"], "bmm-telemetry");
+        assert_eq!(b["v"], 1);
+        // what ingest_handler reads, unchanged
+        assert_eq!(b["api_key"], "bmm_pk_x");
+        assert_eq!(b["packet_id"], "p1");
+        assert_eq!(b["batch"][0]["event"], "app_open");
+        assert_eq!(b.as_object().unwrap().len(), 5);
+    }
+}
+
+/// Flush the queued events to a PostHog-compatible capture endpoint in one batch.
+/// `endpoint`/`api_key` come from the frontend config; empty endpoint = keep local.
+#[tauri::command]
+pub async fn analytics_flush(
+    state: State<'_, AppState>,
+    app_handle: AppHandle,
+    endpoint: Option<String>,
+    api_key: Option<String>,
+) -> Result<usize, String> {
+    if !consent_granted(&state) { return Ok(0); }
+    let mut batch = read_queue(&app_handle);
+    if batch.is_empty() { return Ok(0); }
+
+    // BetterCommunity v2 (ADR 0024), only when this session runs on v2 AND links.json gives the
+    // app's id and publishable key: the events go to `/v2/apps/{app}/telemetry/batch` with the
+    // ledger's consent header (bc_v2_telemetry.rs). Session replay has no v2 home and continues
+    // below to the v1 telemetry server. Without the switch nothing here runs.
+    let mut v2_sent = 0usize;
+    if let Some(root) = crate::commands::bc_v2::effective_v2_root() {
+        let rt = crate::commands::bc_v2::runtime();
+        if crate::commands::bc_v2::app_id_ok(&rt.app_id) && crate::commands::bc_v2::app_key_ok(&rt.app_key) {
+            let receipts = crate::commands::consent_ledger::ledger_for(&state).receipts();
+            if let Some(header) = crate::commands::bc_v2_telemetry::consent_header(&receipts) {
+                let cid = crate::commands::security::get_creator_id(app_handle.clone()).unwrap_or_default();
+                let install = crate::commands::bc_v2_telemetry::pseudonym(&cid);
+                let (n, keep, packets) = crate::commands::bc_v2_telemetry::flush(&root, &rt.app_id, &rt.app_key, &header, batch, &install).await;
+                write_queue(&app_handle, &keep);
+                if n > 0 {
+                    let mut log = read_sent(&app_handle);
+                    log.push(json!({ "id": packets.first().cloned().unwrap_or_default(), "packets": packets, "ts": now_iso(), "count": n, "deletion_requested": false, "events": {}, "dest": "bc_v2" }));
+                    if log.len() > 500 { let d = log.len() - 500; log.drain(0..d); }
+                    write_sent(&app_handle, &log);
+                }
+                v2_sent = n;
+                batch = keep;
+                if batch.is_empty() { return Ok(v2_sent); }
+            }
+        }
+    }
+
+    let endpoint = match endpoint.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        Some(e) if endpoint_allowed(e) => e.to_string(),
+        _ => return Ok(v2_sent), // not configured (or plaintext to a remote host) → keep buffering locally
+    };
+
+    // Each flush is a "packet" with a random id. The id lets the user later request
+    // erasure of that exact batch (the dashboard deletes everything tagged with it).
+    let packet_id = uuid::Uuid::new_v4().to_string();
+    let body = envelope(&api_key.unwrap_or_default(), &packet_id, &batch);
+    // Gzip the payload (telemetry batches — especially rrweb replay chunks —
+    // compress heavily) to cut upload size & bandwidth. The server transparently
+    // decompresses Content-Encoding: gzip request bodies.
+    let raw = serde_json::to_vec(&body).map_err(|e| e.to_string())?;
+    let req = match gzip_bytes(&raw) {
+        Some(gz) => crate::commands::net::client().post(&endpoint)
+            .header(reqwest::header::CONTENT_TYPE, "application/json")
+            .header(reqwest::header::CONTENT_ENCODING, "gzip")
+            .body(gz),
+        None => crate::commands::net::client().post(&endpoint).json(&body),
+    };
+    // UA + timeout per-request (the shared client carries neither) — preserves the
+    // previous behaviour without rebuilding a client for every flush.
+    let req = req
+        .header(reqwest::header::USER_AGENT, "BetterModsManager")
+        .timeout(std::time::Duration::from_secs(15));
+    let resp = match req.send().await {
+        Ok(r) => r,
+        Err(_) => return Ok(v2_sent), // Silently fail on network error to prevent console spam
+    };
+    if resp.status().is_success() {
+        let n = batch.len();
+        clear_queue(&app_handle); // clear only after a confirmed send
+        // The response carries the current sampling document — keep it for the next tracks.
+        if let Ok(body) = resp.json::<Value>().await {
+            if let Some(s) = body.get("sampling") { store_sampling(&app_handle, s); }
+        }
+        // Record the sent packet locally: id + time + count + a privacy-safe
+        // breakdown of WHICH event types it held (names + counts only — never the
+        // property values / content).
+        let mut summary: std::collections::BTreeMap<String, i64> = std::collections::BTreeMap::new();
+        for ev in &batch {
+            if let Some(e) = ev.get("event").and_then(|v| v.as_str()) {
+                *summary.entry(e.to_string()).or_insert(0) += 1;
+            }
+        }
+        let mut log = read_sent(&app_handle);
+        log.push(json!({ "id": packet_id, "ts": now_iso(), "count": n, "deletion_requested": false, "events": summary }));
+        if log.len() > 500 { let d = log.len() - 500; log.drain(0..d); }
+        write_sent(&app_handle, &log);
+        Ok(n + v2_sent)
+    } else {
+        if resp.status() == reqwest::StatusCode::PAYLOAD_TOO_LARGE {
+            // Unrecoverable, drop the queue so it doesn't loop forever causing lag
+            let _ = std::fs::remove_file(queue_path(&app_handle));
+            return Ok(v2_sent);
+        }
+        Ok(v2_sent) // Silently fail on other HTTP errors to prevent console spam
+    }
+}
+
+// ── Sent-packet log + per-packet deletion request ─────────────────────────────
+fn sent_path(app: &AppHandle) -> PathBuf {
+    app.path().app_data_dir().ok().unwrap_or_default().join("analytics_sent.json")
+}
+fn read_sent(app: &AppHandle) -> Vec<Value> {
+    std::fs::read_to_string(sent_path(app)).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
+}
+fn write_sent(app: &AppHandle, v: &[Value]) {
+    let p = sent_path(app);
+    if let Some(parent) = p.parent() { let _ = std::fs::create_dir_all(parent); }
+    if let Ok(s) = serde_json::to_string_pretty(v) { let _ = std::fs::write(p, s); }
+}
+
+/// The log of packets BMM has sent (id + time + event count — never the content),
+/// newest first, so the user can request deletion of any one.
+#[tauri::command]
+pub fn analytics_sent_packets(app_handle: AppHandle) -> Vec<Value> {
+    let mut v = read_sent(&app_handle);
+    v.reverse();
+    v
+}
+
+/// Query the dashboard for the received/processed status of previously-sent
+/// packets. Routed through Rust (reqwest) rather than a webview fetch: the
+/// browser fetch needs the custom `ngrok-skip-browser-warning` header, which
+/// forces a CORS preflight that ngrok-free's interstitial intercepts (no
+/// Access-Control-Allow-Origin). reqwest has no CORS and sends a non-browser
+/// User-Agent, so it reaches the endpoint directly. Returns the `statuses` map
+/// ({ id: status }); empty object on any failure (best-effort, never throws).
+#[tauri::command]
+pub async fn analytics_packet_status(
+    endpoint: Option<String>,
+    ids: Vec<String>,
+) -> Value {
+    let base = endpoint.unwrap_or_default();
+    let base = base.trim().trim_end_matches('/').trim_end_matches("/batch");
+    if !endpoint_allowed(base) || ids.is_empty() {
+        return json!({});
+    }
+    let url = format!("{}/api/packet-status?ids={}", base, ids.join(","));
+    let resp = match crate::commands::net::client()
+        .get(&url)
+        .header(reqwest::header::USER_AGENT, "BetterModsManager")
+        .timeout(std::time::Duration::from_secs(10))
+        .header("ngrok-skip-browser-warning", "true")
+        .send()
+        .await
+    {
+        Ok(r) => r,
+        Err(_) => return json!({}),
+    };
+    if !resp.status().is_success() {
+        return json!({});
+    }
+    resp.json::<Value>()
+        .await
+        .ok()
+        .and_then(|j| j.get("statuses").cloned())
+        .unwrap_or_else(|| json!({}))
+}
+
+/// Ask the dashboard to erase one previously-sent packet. The deletion is applied
+/// after a mandatory 72h delay (time for an admin to review) — never instantly.
+#[tauri::command]
+pub async fn analytics_request_deletion(
+    app_handle: AppHandle,
+    packet_id: String,
+    endpoint: Option<String>,
+    api_key: Option<String>,
+) -> Result<(), String> {
+    // A packet sent to BetterCommunity v2 (ADR 0024): v2 erases by install, not by packet, so
+    // the request erases every event of this install there (`/telemetry/forget`).
+    let v2_packet = read_sent(&app_handle).iter().any(|p| p.get("id").and_then(|v| v.as_str()) == Some(packet_id.as_str()) && p.get("dest").and_then(|v| v.as_str()) == Some("bc_v2"));
+    if v2_packet {
+        let rt = crate::commands::bc_v2::runtime();
+        let root = crate::commands::bc_v2::effective_v2_root().ok_or_else(|| "BetterCommunity v2 is not reachable in this session".to_string())?;
+        let cid = crate::commands::security::get_creator_id(app_handle.clone()).unwrap_or_default();
+        crate::commands::bc_v2_telemetry::forget(&root, &rt.app_id, &rt.app_key, &crate::commands::bc_v2_telemetry::pseudonym(&cid)).await?;
+        let mut log = read_sent(&app_handle);
+        for p in log.iter_mut() {
+            if p.get("dest").and_then(|v| v.as_str()) == Some("bc_v2") {
+                if let Some(o) = p.as_object_mut() {
+                    o.insert("deletion_requested".into(), Value::Bool(true));
+                    o.insert("deletion_requested_at".into(), Value::String(now_iso()));
+                }
+            }
+        }
+        write_sent(&app_handle, &log);
+        log_line("[ANALYTICS] BetterCommunity v2: this install's events erased (forget)".to_string());
+        return Ok(());
+    }
+    let base = endpoint.unwrap_or_default();
+    // Derive the delete URL from the configured /batch/ endpoint.
+    let url = base.trim().trim_end_matches('/').trim_end_matches("/batch").to_string() + "/delete-request";
+    if !endpoint_allowed(&url) { return Err("telemetry endpoint not configured".into()); }
+
+    let body = json!({ "api_key": api_key.unwrap_or_default(), "packet_id": packet_id });
+    let resp = crate::commands::net::client().post(&url)
+        .header(reqwest::header::USER_AGENT, "BetterModsManager")
+        .timeout(std::time::Duration::from_secs(15))
+        .json(&body).send().await.map_err(|e| format!("request failed: {}", e))?;
+    if !resp.status().is_success() { return Err(format!("HTTP {}", resp.status())); }
+    // The dashboard returns when the packet will be auto-erased (≤ delay window).
+    let scheduled = resp.json::<Value>().await.ok()
+        .and_then(|j| j.get("scheduled_at").and_then(|v| v.as_i64()));
+
+    // Mark it locally so the UI shows "deletion requested" + the erase date.
+    let mut log = read_sent(&app_handle);
+    for p in log.iter_mut() {
+        if p.get("id").and_then(|v| v.as_str()) == Some(packet_id.as_str()) {
+            if let Some(o) = p.as_object_mut() {
+                o.insert("deletion_requested".into(), Value::Bool(true));
+                o.insert("deletion_requested_at".into(), Value::String(now_iso()));
+                if let Some(s) = scheduled { o.insert("deletion_scheduled_at".into(), json!(s)); }
+            }
+        }
+    }
+    write_sent(&app_handle, &log);
+    log_line(format!("[ANALYTICS] deletion requested for packet {}", packet_id));
+    Ok(())
+}
+
+/// Right to access (GDPR): file a request for a copy of all data tied to this
+/// Creator ID. An admin reviews it on the dashboard and e-mails the export back
+/// manually (we never auto-send personal data to an unverified address).
+#[tauri::command]
+pub async fn analytics_request_data(
+    app_handle: AppHandle,
+    email: String,
+    endpoint: Option<String>,
+    api_key: Option<String>,
+) -> Result<(), String> {
+    let email = email.trim().to_string();
+    if !email.contains('@') || email.len() < 5 { return Err("invalid email".into()); }
+    let base = endpoint.unwrap_or_default();
+    let url = base.trim().trim_end_matches('/').trim_end_matches("/batch").to_string() + "/data-request";
+    if !endpoint_allowed(&url) { return Err("telemetry endpoint not configured".into()); }
+    let creator_id = crate::commands::security::get_creator_id(app_handle.clone()).unwrap_or_default();
+
+    let body = json!({ "api_key": api_key.unwrap_or_default(), "creator_id": creator_id, "email": email });
+    let resp = crate::commands::net::client().post(&url)
+        .header(reqwest::header::USER_AGENT, "BetterModsManager")
+        .timeout(std::time::Duration::from_secs(15))
+        .json(&body).send().await.map_err(|e| format!("request failed: {}", e))?;
+    if !resp.status().is_success() { return Err(format!("HTTP {}", resp.status())); }
+    log_line(format!("[ANALYTICS] data-access request filed for creator {}", creator_id));
+    Ok(())
+}
+
+/// Transparency: return everything currently buffered (right to access).
+#[tauri::command]
+pub fn analytics_export(app_handle: AppHandle) -> Result<String, String> {
+    let q = read_queue(&app_handle);
+    serde_json::to_string_pretty(&q).map_err(|e| e.to_string())
+}
+
+// ─── REPLAY SPOOL ────────────────────────────────────────────────────────────
+//
+// The session recorder used to hold the whole rrweb event stream in the webview and
+// re-serialise it in full every 45s, which is what put Tauri out of memory on a long
+// idle session. It now streams events here as they happen and this module assembles
+// the .bmmreplay at flush time — so the frontend's peak is one small batch, and the
+// full document only ever exists as bytes moving through a file handle.
+//
+// Layout:  <appdata>/Spool/<id>/seg-000001.ndjson …   one JSON event per line.
+// A segment == one rrweb "checkout" chunk, and each starts with a full snapshot, so a
+// segment is self-contained: dropping the oldest whole segment always leaves something
+// playable. That is what makes the rolling window a file delete instead of an array copy.
+
+fn spool_root(app: &AppHandle) -> PathBuf {
+    app.path().app_data_dir().ok().unwrap_or_default().join("Spool")
+}
+/// Resolve a spool id to its directory, refusing anything that isn't a plain name —
+/// the id crosses the IPC boundary, so `..` must not be able to walk out (CWE-22).
+fn spool_dir(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
+    if id.is_empty() || id.len() > 64 || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+        return Err("Invalid spool id".into());
+    }
+    Ok(spool_root(app).join(id))
+}
+fn segment_files(dir: &Path) -> Vec<PathBuf> {
+    let mut v: Vec<PathBuf> = std::fs::read_dir(dir)
+        .map(|rd| rd.flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().map(|x| x == "ndjson").unwrap_or(false))
+            .collect())
+        .unwrap_or_default();
+    v.sort();     // zero-padded names ⇒ lexicographic order is chronological
+    v
+}
+
+/// Open a spool for a new recording session. Also clears any spool left behind by a
+/// previous run that never got to finalise (a hard crash), so they can't accumulate.
+#[tauri::command]
+pub fn replay_spool_begin(app_handle: AppHandle) -> Result<String, String> {
+    let root = spool_root(&app_handle);
+    if let Ok(rd) = std::fs::read_dir(&root) {
+        for e in rd.flatten() { let _ = std::fs::remove_dir_all(e.path()); }
+    }
+    let id = uuid::Uuid::new_v4().to_string();
+    let dir = spool_dir(&app_handle, &id)?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(id)
+}
+
+/// Append a batch of already-serialised events to segment `seq`. `lines` is the batch
+/// joined by \n — the frontend serialises one event at a time, so nothing large is ever
+/// held on that side. Returns the spool's total size so the caller can decide to trim.
+#[tauri::command]
+pub fn replay_spool_append(app_handle: AppHandle, id: String, seq: u32, lines: String) -> Result<u64, String> {
+    let dir = spool_dir(&app_handle, &id)?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let path = dir.join(format!("seg-{:06}.ndjson", seq));
+    let mut f = std::fs::OpenOptions::new().create(true).append(true).open(&path).map_err(|e| e.to_string())?;
+    f.write_all(lines.as_bytes()).map_err(|e| e.to_string())?;
+    if !lines.ends_with('\n') { f.write_all(b"\n").map_err(|e| e.to_string())?; }
+    Ok(segment_files(&dir).iter().filter_map(|p| std::fs::metadata(p).ok()).map(|m| m.len()).sum())
+}
+
+/// Rolling window: delete oldest whole segments until the spool fits `max_bytes`.
+/// Never deletes the last one — a spool with no segments would mean no recording at all.
+#[tauri::command]
+pub fn replay_spool_trim(app_handle: AppHandle, id: String, max_bytes: u64) -> Result<u64, String> {
+    let dir = spool_dir(&app_handle, &id)?;
+    let mut files = segment_files(&dir);
+    let size = |p: &PathBuf| std::fs::metadata(p).map(|m| m.len()).unwrap_or(0);
+    let mut total: u64 = files.iter().map(size).sum();
+    while total > max_bytes && files.len() > 1 {
+        let oldest = files.remove(0);
+        total = total.saturating_sub(size(&oldest));
+        let _ = std::fs::remove_file(&oldest);
+    }
+    Ok(total)
+}
+
+/// Assemble the spool into a real .bmmreplay, STREAMING: the events array is copied
+/// line by line straight from the segments, so peak memory is one event — never the
+/// whole session. `meta_json` / `console_json` are small JSON fragments from the caller.
+/// `mode` = "crash" (the single rolling buffer a crash report attaches) or "list" (a
+/// saved replay). `dest_path` overrides both, for "export to a file the user picked".
+/// Returns the written path.
+#[tauri::command]
+pub fn replay_spool_finalize(
+    app_handle: AppHandle,
+    id: String,
+    meta_json: String,
+    console_json: String,
+    rust_log: String,
+    mode: String,
+    dest_path: Option<String>,
+    tail_bytes: Option<u64>,
+) -> Result<String, String> {
+    let dir = spool_dir(&app_handle, &id)?;
+    let mut files = segment_files(&dir);
+    if files.is_empty() { return Err("empty spool".into()); }
+
+    // `tail_bytes` keeps only the NEWEST whole segments that fit. The crash buffer uses it: it is
+    // rewritten every 45s, so assembling the entire rolling window meant writing tens (eventually
+    // hundreds) of MB to disk every 45 seconds, and attaching that to a crash report. A crash
+    // wants the recent past, not the whole session. Segments open with a full snapshot, so a tail
+    // cut on a segment boundary is still playable. Saving or exporting a replay passes None and
+    // gets everything.
+    if let Some(limit) = tail_bytes {
+        let size = |p: &PathBuf| std::fs::metadata(p).map(|m| m.len()).unwrap_or(0);
+        let mut kept: Vec<PathBuf> = Vec::new();
+        let mut total: u64 = 0;
+        for f in files.iter().rev() {
+            let s = size(f);
+            if !kept.is_empty() && total + s > limit { break; }
+            total += s;
+            kept.push(f.clone());
+        }
+        kept.reverse();
+        files = kept;
+    }
+
+    let app_dir = app_handle.path().app_data_dir().ok().unwrap_or_default();
+    let out_path = if let Some(p) = dest_path.filter(|s| !s.trim().is_empty()) {
+        PathBuf::from(p)      // the user picked it in the save dialog
+    } else if mode == "list" {
+        let d = app_dir.join("Replays");
+        let _ = std::fs::create_dir_all(&d);
+        d.join(format!("bmm-session-{}.bmmreplay", chrono::Utc::now().timestamp_millis()))
+    } else {
+        let _ = std::fs::create_dir_all(&app_dir);
+        app_dir.join("last_crash_session.bmmreplay")
+    };
+    assemble_replay(&files, &meta_json, &console_json, &rust_log, &out_path, &id, &|doc| {
+        crate::commands::doc_sign::sign_doc(&app_handle, doc, "bmmreplay");
+    })?;
+    Ok(out_path.to_string_lossy().to_string())
+}
+
+/// The streaming assembly of `replay_spool_finalize`, without the app handle: the spool
+/// segments `files` (one rrweb event per line) into `out_path` as ONE envelope,
+///   { <meta fields>, "events": [...], "console": [...], "rustLog": "...", "bmm_signature_of": {...} }
+/// which is the shape every reader accepts (core/replay-body.ts `parseReplayText`). `sign`
+/// signs the small digest document (the command passes `doc_sign::sign_doc`, the tests a no-op).
+/// Written to a temp file and renamed, so a crash mid-write never leaves a truncated file where a
+/// complete one was.
+pub(crate) fn assemble_replay(
+    files: &[PathBuf],
+    meta_json: &str,
+    console_json: &str,
+    rust_log: &str,
+    out_path: &Path,
+    id: &str,
+    sign: &dyn Fn(&mut Value),
+) -> Result<(), String> {
+    let tmp_path = out_path.with_extension("bmmreplay.part");
+    {
+        let mut out = std::io::BufWriter::new(std::fs::File::create(&tmp_path).map_err(|e| e.to_string())?);
+        // meta_json arrives as a complete object; splice it open and continue the object.
+        let meta = meta_json.trim();
+        let meta_inner = meta.strip_prefix('{').and_then(|s| s.strip_suffix('}')).unwrap_or("");
+        out.write_all(b"{").map_err(|e| e.to_string())?;
+        if !meta_inner.trim().is_empty() {
+            out.write_all(meta_inner.as_bytes()).map_err(|e| e.to_string())?;
+            out.write_all(b",").map_err(|e| e.to_string())?;
+        }
+        out.write_all(b"\"events\":[").map_err(|e| e.to_string())?;
+        // Hashed as it streams: the bytes go past exactly once, so this costs a hash update
+        // per event and nothing in memory.
+        let mut hasher = { use sha2::Digest; sha2::Sha256::new() };
+        let mut event_count = 0usize;
+        let mut first = true;
+        let mut skipped = 0usize;
+        for seg in files {
+            let f = match std::fs::File::open(seg) { Ok(f) => f, Err(_) => continue };
+            for line in std::io::BufRead::lines(std::io::BufReader::new(f)) {
+                let line = match line { Ok(l) => l, Err(_) => continue };
+                let l = line.trim();
+                if l.is_empty() { continue; }
+                // A hard kill can leave the final line half-written. Copying it would
+                // produce invalid JSON, so drop anything that isn't a complete object.
+                if !l.starts_with('{') || !l.ends_with('}') { skipped += 1; continue; }
+                if !first { out.write_all(b",").map_err(|e| e.to_string())?; }
+                out.write_all(l.as_bytes()).map_err(|e| e.to_string())?;
+                { use sha2::Digest; hasher.update(l.as_bytes()); }
+                event_count += 1;
+                first = false;
+            }
+        }
+        if skipped > 0 {
+            log_line(format!("[REPLAY] spool {}: skipped {} incomplete event line(s)", id, skipped));
+        }
+        out.write_all(b"],\"console\":").map_err(|e| e.to_string())?;
+        out.write_all(if console_json.trim().is_empty() { "[]" } else { console_json.trim() }.as_bytes()).map_err(|e| e.to_string())?;
+        out.write_all(b",\"rustLog\":").map_err(|e| e.to_string())?;
+        let log = serde_json::to_string(&rust_log).unwrap_or_else(|_| "\"\"".into());
+        out.write_all(log.as_bytes()).map_err(|e| e.to_string())?;
+
+        // Signed by its DIGEST, not by its content.
+        //
+        // Every other BMM document is signed over the document itself, but a replay is
+        // assembled streaming precisely so it never exists in memory — a session runs to
+        // hundreds of megabytes. Loading it back to sign it would undo the one design
+        // decision this function is built around.
+        //
+        // So the same shape the archives use: what gets signed is a small document that
+        // carries a hash of the big thing. `events_sha256` is a running hash of exactly the
+        // bytes written above, so verifying means re-hashing the events array and comparing —
+        // no second rule, and nothing held in memory on either side.
+        let digest = hex::encode({
+            use sha2::Digest;
+            hasher.finalize()
+        });
+        let mut sig_doc = serde_json::json!({
+            "format": "bmmreplay",
+            "events_sha256": digest,
+            "events": event_count,
+        });
+        sign(&mut sig_doc);
+        out.write_all(b",\"bmm_signature_of\":").map_err(|e| e.to_string())?;
+        out.write_all(serde_json::to_string(&sig_doc).unwrap_or_else(|_| "null".into()).as_bytes())
+            .map_err(|e| e.to_string())?;
+
+        out.write_all(b"}").map_err(|e| e.to_string())?;
+        out.flush().map_err(|e| e.to_string())?;
+    }
+    std::fs::rename(&tmp_path, out_path).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Drop a spool's contents (end of session, or the user turned the recorder off).
+#[tauri::command]
+pub fn replay_spool_clear(app_handle: AppHandle, id: String) -> Result<(), String> {
+    let dir = spool_dir(&app_handle, &id)?;
+    let _ = std::fs::remove_dir_all(&dir);
+    Ok(())
+}
+
+/// Auto-saves a local replay bundle to the `Replays` folder without prompting.
+#[tauri::command]
+pub fn save_local_replay(app_handle: AppHandle, content: String) -> Result<String, String> {
+    let dir = app_handle.path().app_data_dir().ok().unwrap_or_default().join("Replays");
+    let _ = std::fs::create_dir_all(&dir);
+    let name = format!("bmm-session-{}.bmmreplay", chrono::Utc::now().timestamp_millis());
+    let path = dir.join(&name);
+    std::fs::write(&path, content).map_err(|e| e.to_string())?;
+    log_line(format!("[ANALYTICS] Auto-saved local replay to {:?}", path));
+
+    // Retention is handled by the configurable `prune_sessions` (count + total size),
+    // called by the caller after saving — so no hard 20-cap here anymore.
+
+    Ok(path.to_string_lossy().to_string())
+}
+
+// ─── Reading a .bmmreplay back ───────────────────────────────────────────────────────
+//
+// « The .bmmreplay from crash reports and sessions don't work: unreadable. » The in-app player
+// read saved and imported files with `fetch(convertFileSrc(path))`: the asset protocol only
+// serves $APP / $APPDATA / $RESOURCE (tauri.conf.json), so a replay exported to the Desktop or
+// picked from Downloads answered 403 and the viewer said « Unreadable file » whatever was in it.
+// It now asks the core for the bytes, which also inflates the gzipped form
+// (tools/release/shrink-replays.mjs) here instead of in each reader.
+
+/// The most a replay may weigh once inflated: the spool's rolling window is 512 MiB.
+pub const REPLAY_READ_MAX_BYTES: u64 = 768 * 1024 * 1024;
+
+/// A replay file's bytes as JSON text: gzip (1f 8b) inflated, a UTF-8 BOM dropped. Errors
+/// say what is wrong in words, for the viewer's message.
+pub fn replay_text_from_bytes(bytes: &[u8]) -> Result<String, String> {
+    let raw: std::borrow::Cow<[u8]> = if bytes.len() >= 2 && bytes[0] == 0x1f && bytes[1] == 0x8b {
+        use std::io::Read;
+        let mut out = Vec::new();
+        flate2::read::MultiGzDecoder::new(bytes)
+            .take(REPLAY_READ_MAX_BYTES + 1)
+            .read_to_end(&mut out)
+            .map_err(|e| format!("the file looks gzipped but does not inflate: {e}"))?;
+        if out.len() as u64 > REPLAY_READ_MAX_BYTES {
+            return Err(format!("the recording is larger than {} MB once inflated", REPLAY_READ_MAX_BYTES >> 20));
+        }
+        std::borrow::Cow::Owned(out)
+    } else {
+        std::borrow::Cow::Borrowed(bytes)
+    };
+    let raw = raw.strip_prefix(&[0xef, 0xbb, 0xbf][..]).unwrap_or(&raw);
+    String::from_utf8(raw.to_vec()).map_err(|_| "the file is not text (not a .bmmreplay, or damaged)".to_string())
+}
+
+/// Read a replay file the person picked, saved or exported: `.bmmreplay`, `.json` or their
+/// `.gz`, nothing else (the webview names the path). Returns the JSON text.
+#[tauri::command]
+pub async fn read_replay_file(path: String) -> Result<String, String> {
+    let p = PathBuf::from(&path);
+    let name = p.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
+    if !(name.ends_with(".bmmreplay") || name.ends_with(".json") || name.ends_with(".bmmreplay.gz") || name.ends_with(".json.gz")) {
+        return Err("refused: not a .bmmreplay or .json file".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let len = std::fs::metadata(&p).map_err(|e| format!("cannot open {}: {e}", p.display()))?.len();
+        if len > REPLAY_READ_MAX_BYTES {
+            return Err(format!("the recording is larger than {} MB", REPLAY_READ_MAX_BYTES >> 20));
+        }
+        let bytes = std::fs::read(&p).map_err(|e| format!("cannot read {}: {e}", p.display()))?;
+        replay_text_from_bytes(&bytes)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Save a Replay Studio video clip next to the `.bmmreplay` files.
+///
+/// Base64 rather than a byte array: Tauri's IPC serialises a `Vec<u8>` as a JSON array of
+/// numbers, which costs roughly six characters per byte — a 20 MB clip becomes a ~120 MB
+/// JSON string to parse. Base64 is ~1.33x instead.
+///
+/// The extension is an allowlist, not a parameter: the frontend picks whichever container
+/// `MediaRecorder` actually produced, and letting an arbitrary string through would let a
+/// compromised webview write `..\..\something.exe` by way of the file name.
+#[tauri::command]
+pub fn save_local_video(app_handle: AppHandle, b64: String, ext: String) -> Result<String, String> {
+    let ext = match ext.as_str() {
+        "mp4" | "webm" => ext,
+        other => return Err(format!("refused: unsupported video extension {:?}", other)),
+    };
+    use base64::{Engine as _, engine::general_purpose};
+    let bytes = general_purpose::STANDARD
+        .decode(b64.as_bytes())
+        .map_err(|e| format!("bad base64: {}", e))?;
+    if bytes.is_empty() {
+        return Err("refused: empty clip".into());
+    }
+    let dir = app_handle.path().app_data_dir().map_err(|e| e.to_string())?.join("Replays");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let path = dir.join(format!("bmm-clip-{}.{}", chrono::Utc::now().timestamp_millis(), ext));
+    std::fs::write(&path, &bytes).map_err(|e| e.to_string())?;
+    log_line(format!("[ANALYTICS] Saved studio clip to {:?} ({} bytes)", path, bytes.len()));
+    Ok(path.to_string_lossy().to_string())
+}
+
+/// Delete a specific replay file. Confined to the app's own `Replays` folder — the
+/// frontend only ever deletes files it listed from there, so an unvalidated path (e.g.
+/// from a compromised webview) can't remove arbitrary files off disk (CWE-22 hardening).
+/// `AppHandle` is injected by Tauri, so the JS `invoke('delete_local_replay', { path })`
+/// call is unchanged.
+#[tauri::command]
+pub fn delete_local_replay(app_handle: AppHandle, path: String) -> Result<(), String> {
+    let root = app_handle.path().app_data_dir().map_err(|e| e.to_string())?.join("Replays");
+    let canon_root = root.canonicalize().map_err(|e| e.to_string())?;
+    let canon_target = std::path::PathBuf::from(&path).canonicalize().map_err(|e| e.to_string())?;
+    if !canon_target.starts_with(&canon_root) {
+        return Err("refused: path is outside the Replays folder".into());
+    }
+    std::fs::remove_file(&canon_target).map_err(|e| e.to_string())
+}
+
+/// Overwrite the single rolling "crash buffer". The session is ALWAYS recorded in
+/// memory and flushed here, but this file is NOT a saved replay (never shown in the
+/// list, never sent). It exists only so a crash report can attach the session just
+/// before the crash. Saving a *real* replay to the list happens via
+/// `save_local_replay`, and only when the user enables the Session recorder.
+#[tauri::command]
+pub fn save_crash_session(app_handle: AppHandle, content: String) -> Result<(), String> {
+    let dir = app_handle.path().app_data_dir().ok().unwrap_or_default();
+    let _ = std::fs::create_dir_all(&dir);
+    std::fs::write(dir.join("last_crash_session.bmmreplay"), content).map_err(|e| e.to_string())
+}
+
+/// Prune saved sessions to the user's limits: keep at most `max_count` of the
+/// newest, and delete oldest until the total is under `max_mb` megabytes. Applies
+/// to BOTH the saved replays (Replays/*.bmmreplay) and the "Session" crash reports
+/// (Reports/Session + Archive/Session *.zip), so the manager never floods. Returns
+/// how many files were deleted.
+#[tauri::command]
+pub fn prune_sessions(app_handle: AppHandle, max_count: usize, max_mb: u64) -> usize {
+    let root = app_handle.path().app_data_dir().ok().unwrap_or_default();
+    let max_bytes = max_mb.saturating_mul(1024 * 1024);
+    // (modified_time, size, path) for every prunable session-ish file.
+    let mut items: Vec<(std::time::SystemTime, u64, PathBuf)> = Vec::new();
+    let mut collect = |dir: PathBuf, exts: &[&str]| {
+        if let Ok(rd) = std::fs::read_dir(&dir) {
+            for e in rd.flatten() {
+                let p = e.path();
+                let ext = p.extension().and_then(|s| s.to_str()).unwrap_or("");
+                if !exts.contains(&ext) {
+                    continue;
+                }
+                if let Ok(m) = e.metadata() {
+                    items.push((m.modified().unwrap_or(std::time::UNIX_EPOCH), m.len(), p));
+                }
+            }
+        }
+    };
+    collect(root.join("Replays"), &["bmmreplay"]);
+    let crashes = root.join("Crashes");
+    collect(crashes.join("Reports").join("Session"), &["zip"]);
+    collect(crashes.join("Archive").join("Session"), &["zip"]);
+
+    // Newest first.
+    items.sort_by(|a, b| b.0.cmp(&a.0));
+    let max_count = max_count.max(1);
+
+    let mut deleted = 0usize;
+    let mut running: u64 = 0;
+    for (i, (_, size, path)) in items.iter().enumerate() {
+        running = running.saturating_add(*size);
+        let over_count = i >= max_count;
+        let over_size = max_bytes > 0 && running > max_bytes;
+        if over_count || over_size {
+            if std::fs::remove_file(path).is_ok() {
+                deleted += 1;
+            }
+        }
+    }
+    deleted
+}
+
+/// List saved local replays (the persistent ones, when recording is enabled),
+/// newest first — so the UI can play/delete/export them without importing a file.
+#[tauri::command]
+pub fn list_saved_replays(app_handle: AppHandle) -> Vec<serde_json::Value> {
+    let dir = app_handle.path().app_data_dir().ok().unwrap_or_default().join("Replays");
+    let mut out: Vec<(std::time::SystemTime, serde_json::Value)> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&dir) {
+        for e in entries.flatten() {
+            let p = e.path();
+            if p.extension().and_then(|s| s.to_str()) != Some("bmmreplay") {
+                continue;
+            }
+            let meta = std::fs::metadata(&p).ok();
+            let size = meta.as_ref().map(|m| m.len()).unwrap_or(0);
+            let modified = meta.and_then(|m| m.modified().ok()).unwrap_or(std::time::UNIX_EPOCH);
+            let ts = modified.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+            out.push((modified, serde_json::json!({
+                "name": p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string(),
+                "path": p.to_string_lossy().to_string(),
+                "size": size,
+                "ts": ts,
+            })));
+        }
+    }
+    out.sort_by(|a, b| b.0.cmp(&a.0));
+    out.into_iter().map(|(_, v)| v).collect()
+}
+
+/// Right to erasure: wipe all locally buffered telemetry.
+#[tauri::command]
+pub fn analytics_clear(app_handle: AppHandle) -> Result<(), String> {
+    let _ = std::fs::remove_file(queue_path(&app_handle));
+    Ok(())
+}
+
+/// Clears the local sent-packet history list (does not affect the server).
+#[tauri::command]
+pub fn analytics_clear_sent_log(app_handle: AppHandle) -> Result<(), String> {
+    let _ = std::fs::remove_file(sent_path(&app_handle));
+    Ok(())
+}
+
+/// Read a Tauri asset image (asset://localhost/… or https://asset.localhost/…)
+/// from disk and return it as a data: URL. Used by the session-replay recorder
+/// (full mode only) so the remote dashboard can show local images it cannot
+/// fetch. Capped at 3 MB; returns "" on any failure.
+#[tauri::command]
+pub fn replay_asset_data_url(url: String) -> String {
+    use base64::Engine;
+    // Strip scheme + host → percent-encoded absolute file path.
+    let after_host = if let Some(i) = url.find("asset.localhost/") {
+        &url[i + "asset.localhost/".len()..]
+    } else if let Some(rest) = url.strip_prefix("asset://localhost/") {
+        rest
+    } else if let Some(rest) = url.strip_prefix("asset://") {
+        rest
+    } else {
+        return String::new();
+    };
+    let enc = after_host.split(|c| c == '?' || c == '#').next().unwrap_or("");
+    let path_str = percent_encoding::percent_decode_str(enc).decode_utf8_lossy().to_string();
+    let path = std::path::PathBuf::from(path_str);
+    let meta = match std::fs::metadata(&path) { Ok(m) => m, Err(_) => return String::new() };
+    if !meta.is_file() || meta.len() > 3 * 1024 * 1024 { return String::new(); }
+    let bytes = match std::fs::read(&path) { Ok(b) => b, Err(_) => return String::new() };
+    let mime = match path.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()).as_deref() {
+        Some("png") => "image/png",
+        Some("jpg") | Some("jpeg") => "image/jpeg",
+        Some("gif") => "image/gif",
+        Some("webp") => "image/webp",
+        Some("svg") => "image/svg+xml",
+        Some("bmp") => "image/bmp",
+        Some("ico") => "image/x-icon",
+        Some("avif") => "image/avif",
+        _ => "application/octet-stream",
+    };
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    format!("data:{mime};base64,{b64}")
+}
+
+#[cfg(test)]
+mod sampling_tests {
+    use super::*;
+    #[test]
+    fn fnv1a_reference_vectors() {
+        assert_eq!(fnv1a32(""), 0x811c9dc5);
+        assert_eq!(fnv1a32("a"), 0xe40c292c);
+        assert_eq!(fnv1a32("foobar"), 0xbf9cf968);
+    }
+    #[test]
+    fn no_document_sends_everything_and_zero_sends_nothing() {
+        assert!(sampling_allows(None, "abc", "$replay"));
+        let s = json!({ "total": 100, "replay": 0, "events": 100 });
+        assert!(!sampling_allows(Some(&s), "abc", "$replay"));
+        assert!(sampling_allows(Some(&s), "abc", "page_enter"));
+        assert!(!sampling_allows(Some(&json!({ "total": 0 })), "abc", "page_enter"));
+    }
+}
+
+#[cfg(test)]
+mod consent_tests {
+    use super::live_after_consent;
+    #[test]
+    fn live_errors_follow_telemetry_on_the_way_up() {
+        assert_eq!(live_after_consent(None, true, None, None), Some(true), "first yes turns them on");
+        assert_eq!(live_after_consent(Some(false), true, Some(false), None), Some(true), "off -> on turns them on again");
+        assert_eq!(live_after_consent(Some(true), true, Some(false), None), Some(false), "re-accepting keeps a separate 'off'");
+        assert_eq!(live_after_consent(None, true, None, Some(false)), Some(false), "the dialog's answer wins");
+        assert_eq!(live_after_consent(Some(true), false, Some(true), None), Some(true), "declining keeps the switch (inert without consent)");
+        assert!(!crate::commands::live_issues::effective(Some(false), live_after_consent(Some(true), false, Some(true), None)));
+    }
+
+    /// The consent receipt names the answer: a refusal, a withdrawal, all on, or a choice.
+    #[test]
+    fn the_receipt_names_the_answer() {
+        use super::consent_choice;
+        let mut c = std::collections::BTreeMap::new();
+        assert_eq!(consent_choice(None, false, &c), "declined");
+        assert_eq!(consent_choice(Some(true), false, &c), "withdrawn");
+        c.insert("usage".to_string(), true);
+        assert_eq!(consent_choice(None, true, &c), "accepted");
+        c.insert("bench".to_string(), false);
+        c.insert("replayFull".to_string(), false);
+        assert_eq!(consent_choice(None, true, &c), "accepted", "the extras are not part of « all »");
+        c.insert("perf".to_string(), false);
+        assert_eq!(consent_choice(Some(false), true, &c), "custom");
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod replay_readback_tests {
+    //! « The .bmmreplay from crash reports and sessions don't work: unreadable. » Each real
+    //! writer produces a sample here, and the sample is kept in tests/fixtures/replays/ for
+    //! tests/replay-readers.test.mjs, which reads it with the app's own reader
+    //! (core/replay-body.ts). A writer and a reader that drift apart fail on one side or the other.
+    use super::*;
+
+    /// The events a recording opens with: Meta (4), FullSnapshot (2), then incremental (3).
+    pub(crate) const SAMPLE_EVENTS: [&str; 4] = [
+        r#"{"type":4,"data":{"href":"tauri://localhost/","width":1280,"height":800},"timestamp":1000}"#,
+        r#"{"type":2,"data":{"node":{"type":0,"childNodes":[],"id":1},"initialOffset":{"left":0,"top":0}},"timestamp":1001}"#,
+        r#"{"type":3,"data":{"source":2,"type":2,"id":1,"x":10,"y":10},"timestamp":1500}"#,
+        r#"{"type":3,"data":{"source":0,"texts":[],"attributes":[],"removes":[],"adds":[]},"timestamp":2000}"#,
+    ];
+
+    pub(crate) fn scratch(tag: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("bmm-replay-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    /// Write `name` in tests/fixtures/replays when its bytes changed (no churn otherwise).
+    pub(crate) fn write_fixture(name: &str, bytes: &[u8]) {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("tests").join("fixtures").join("replays");
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join(name);
+        if std::fs::read(&p).ok().as_deref() != Some(bytes) {
+            std::fs::write(&p, bytes).unwrap();
+        }
+    }
+
+    /// The spool as `replay_spool_append` leaves it: two segments, the second opening with
+    /// its own checkout, and a final line a hard kill cut in half.
+    fn sample_spool(dir: &Path) -> Vec<PathBuf> {
+        let a = dir.join("seg-000000.ndjson");
+        let b = dir.join("seg-000001.ndjson");
+        std::fs::write(&a, format!("{}\n{}\n{}\n", SAMPLE_EVENTS[0], SAMPLE_EVENTS[1], SAMPLE_EVENTS[2])).unwrap();
+        std::fs::write(&b, format!("{}\n{}\n{}\n{{\"type\":3,\"data\":{{\"sou", SAMPLE_EVENTS[0], SAMPLE_EVENTS[1], SAMPLE_EVENTS[3])).unwrap();
+        vec![a, b]
+    }
+
+    const META: &str = r#"{"bmmReplay":1,"app":"BetterModsManager","createdAt":"2026-10-21T00:00:00.000Z","masked":true,"durationMs":1000}"#;
+
+    pub(crate) fn finalized_sample() -> Vec<u8> {
+        // One folder per call: the tests run in parallel and three of them build a sample.
+        static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let dir = scratch(&format!("finalize{}", N.fetch_add(1, std::sync::atomic::Ordering::Relaxed)));
+        let files = sample_spool(&dir);
+        let out = dir.join("out.bmmreplay");
+        assemble_replay(&files, META, r#"[{"t":1,"level":"log","msg":"hello"}]"#, "rust log line\n", &out, "test", &|_| {}).unwrap();
+        let bytes = std::fs::read(&out).unwrap();
+        assert!(!dir.join("out.bmmreplay.part").exists(), "the temp file is renamed away");
+        let _ = std::fs::remove_dir_all(&dir);
+        bytes
+    }
+
+    #[test]
+    fn the_spool_finalize_writes_one_valid_envelope_with_every_whole_event() {
+        let bytes = finalized_sample();
+        let v: Value = serde_json::from_slice(&bytes).expect("valid JSON");
+        assert_eq!(v["bmmReplay"], 1);
+        let events = v["events"].as_array().unwrap();
+        assert_eq!(events.len(), 6, "the half-written last line is dropped, the rest kept");
+        assert_eq!(events[0]["type"], 4);
+        assert_eq!(events[1]["type"], 2);
+        assert_eq!(v["console"][0]["msg"], "hello");
+        assert_eq!(v["rustLog"], "rust log line\n");
+        assert_eq!(v["bmm_signature_of"]["events"], 6);
+        write_fixture("spool-finalize.bmmreplay", &bytes);
+    }
+
+    #[test]
+    fn a_gzipped_replay_reads_back_as_the_same_text() {
+        use std::io::Write as _;
+        let plain = finalized_sample();
+        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        gz.write_all(&plain).unwrap();
+        let gz = gz.finish().unwrap();
+        assert_eq!(&gz[..2], &[0x1f, 0x8b]);
+        assert_eq!(replay_text_from_bytes(&gz).unwrap().as_bytes(), &plain[..]);
+        // The shrink tool keeps the .bmmreplay name for the gzipped form.
+        write_fixture("gzipped.bmmreplay", &gz);
+        // A BOM (a file saved by an editor) is not part of the JSON.
+        let mut bom = vec![0xef, 0xbb, 0xbf];
+        bom.extend_from_slice(&plain);
+        assert_eq!(replay_text_from_bytes(&bom).unwrap().as_bytes(), &plain[..]);
+    }
+
+    #[test]
+    fn damaged_files_are_refused_in_words() {
+        let e = replay_text_from_bytes(&[0x1f, 0x8b, 0, 1, 2, 3]).unwrap_err();
+        assert!(e.contains("gzipped"), "{e}");
+        let e = replay_text_from_bytes(&[0xff, 0xfe, 0xfd]).unwrap_err();
+        assert!(e.contains("not text"), "{e}");
+    }
+
+    #[test]
+    fn reading_is_limited_to_replay_files() {
+        let e = tauri::async_runtime::block_on(read_replay_file("C:/Windows/win.ini".into())).unwrap_err();
+        assert!(e.starts_with("refused"), "{e}");
+        let dir = scratch("read");
+        let p = dir.join("x.bmmreplay");
+        std::fs::write(&p, finalized_sample()).unwrap();
+        let text = tauri::async_runtime::block_on(read_replay_file(p.to_string_lossy().to_string())).unwrap();
+        assert!(serde_json::from_str::<Value>(&text).is_ok());
+        let e = tauri::async_runtime::block_on(read_replay_file(dir.join("missing.bmmreplay").to_string_lossy().to_string())).unwrap_err();
+        assert!(e.starts_with("cannot open"), "{e}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

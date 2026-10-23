@@ -1,0 +1,39 @@
+# Référence des Badges de Documentation BMM
+
+Ce document sert de référence visuelle et technique pour tous les badges standard pris en charge par le moteur de rendu Markdown du Better Mods Manager (BMM).
+
+## 🎨 Aperçu Visuel
+
+| Type | Aperçu du Badge | Syntaxe | Cas d'utilisation |
+|:---|:---|:---|:---|
+| **Nouveauté** | <span style="background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.3);padding:2px 10px;border-radius:6px;font-size:11px;font-weight:800;text-transform:uppercase;">NOUVEAU</span> | `[NOUVEAU]` | Nouvelles fonctionnalités ou composants. |
+| **Polissage** | <span style="background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);padding:2px 10px;border-radius:6px;font-size:11px;font-weight:800;text-transform:uppercase;">RAFFINEMENT</span> | `[RAFFINEMENT]` | Petites améliorations ou ajustements. |
+| **Logique** | <span style="background:rgba(245,158,11,0.15);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);padding:2px 10px;border-radius:6px;font-size:11px;font-weight:800;text-transform:uppercase;">AMÉLIORÉ</span> | `[AMÉLIORÉ]` | Améliorations de la logique ou des performances. |
+| **Correction** | <span style="background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.3);padding:2px 10px;border-radius:6px;font-size:11px;font-weight:800;text-transform:uppercase;">FIXÉ</span> | `[FIXÉ]` | Résolutions de bugs et corrections de stabilité. |
+| **Interface** | <span style="background:rgba(168,85,247,0.15);color:#a855f7;border:1px solid rgba(168,85,247,0.3);padding:2px 10px;border-radius:6px;font-size:11px;font-weight:800;text-transform:uppercase;">VISUEL</span> | `[VISUEL]` | Changements graphiques, styles ou animations. |
+| **Majeur** | <span style="background:rgba(249,115,22,0.15);color:#f97316;border:1px solid rgba(249,115,22,0.3);padding:2px 10px;border-radius:6px;font-size:11px;font-weight:800;text-transform:uppercase;">MAJEUR</span> | `[MAJEUR]` | Changements majeurs ou cassants, et fonctionnalités phares. |
+
+## 📢 Alertes de style GitHub
+
+BMM prend également en charge les alertes standard de style GitHub pour mettre en évidence les informations importantes dans votre documentation.
+
+| Syntaxe | Rendu | Cas d'utilisation |
+|:---|:---|:---|
+| `> [!REMARQUE]` ou `> [!NOTE]` | Boîte d'alerte bleue | Informations utiles ou contexte. |
+| `> [!ASTUCE]` ou `> [!TIP]` | Boîte d'alerte verte | Conseils utiles ou bonnes pratiques. |
+| `> [!IMPORTANT]` | Boîte d'alerte violette | Informations cruciales à ne pas manquer. |
+| `> [!AVERTISSEMENT]` ou `> [!WARNING]` | Boîte d'alerte jaune/orange | Problèmes potentiels ou effets secondaires. |
+| `> [!ATTENTION]` ou `> [!CAUTION]` | Boîte d'alerte rouge | Actions à haut risque ou avertissements critiques. |
+
+## 🛠️ Détails d'Implémentation
+
+Les badges sont automatiquement rendus à l'aide d'un analyseur regex personnalisé dans la fonction `renderMarkdown` de l'interface BMM.
+
+- **Fichiers Anglais** : Utilisez la syntaxe anglaise (ex: `[NEW]`).
+- **Fichiers Français** : Utilisez les équivalents de syntaxe française (ex: `[NOUVEAU]`).
+
+> [!TIP]
+> Placez toujours les badges au début d'une ligne ou après une puce pour un meilleur alignement visuel.
+
+---
+*Généré pour le Standard de Documentation du Better Mods Manager.*

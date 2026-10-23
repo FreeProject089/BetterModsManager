@@ -1,0 +1,31 @@
+{
+  "version": "1.0",
+  "name": "Community Apps",
+  "description": "Apps for DCS",
+  "partner_catalogs": ["https://partner.example/apps.json"],
+  "apps": [
+    {
+      "id": "srs",
+      "title": "SimpleRadio Standalone",
+      "description": "Radio for DCS",
+      "md_link": null,
+      "category": "utility",
+      "price": "free",
+      "tags": ["radio", "voice"],
+      "version": "2.1.0",
+      "requirements": "Windows 10",
+      "images": { "thumb": "https://example.org/srs.png" },
+      "download": { "url": "https://example.org/srs.zip", "file_type": "zip", "size": 1048576, "sha256": "sha256:AB12CD34AB12CD34AB12CD34AB12CD34AB12CD34AB12CD34AB12CD34AB12CD34" },
+      "official": true
+    },
+    {
+      "id": "tacview",
+      "title": "Tacview",
+      "description": "",
+      "category": "other",
+      "price": "paid",
+      "tags": [],
+      "download": { "url": "https://example.org/tacview.exe", "file_type": "exe" }
+    }
+  ]
+}

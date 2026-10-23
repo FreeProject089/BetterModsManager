@@ -1,0 +1,13 @@
+{
+  "_note": "Read by scripts/gen-credits.mjs to build Credits → Code contributors from `git log` of the repositories below. `aliases` folds every commit name (and Co-authored-by name) one person used into one row; matching is case-insensitive. An optional `emails` list folds commits made under any other name with those addresses (names that share an email are folded anyway; a repository's .mailmap is honoured). `github` is optional when the person commits with a GitHub noreply address. `contributor` is the id of their card in frontend/assets/contributors.json, when they have one. `ignore` drops bots and tools (tested against the name and the email; emails are never written to the output). A repo's `url` is shown as a link: leave it null for a private repository.",
+  "repos": [
+    { "id": "bmm", "label": "Better Mod Manager", "dir": ".", "url": "https://github.com/FreeProject089/BetterModsManager" },
+    { "id": "bcw", "label": "BetterCommunity", "dir": "BCW", "url": null },
+    { "id": "docs", "label": "BMM Docs", "dir": "BMM Docs", "url": "https://github.com/FreeProject089/BMM-Docs" },
+    { "id": "installer", "label": "BetterInstaller", "dir": "BetterInstaller", "url": "https://github.com/FreeProject089/BetterInstaller" }
+  ],
+  "people": [
+    { "name": "FreeProject089", "aliases": ["FreeProject089", "freeproject089f", "better-dcs"], "github": "https://github.com/FreeProject089", "contributor": "freeproject" }
+  ],
+  "ignore": ["^GitHub$", "\\[bot\\]", "^Claude\\b", "^Copilot\\b", "^Cursor\\b", "noreply@anthropic\\.com$", "noreply@github\\.com$"]
+}

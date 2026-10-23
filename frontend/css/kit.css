@@ -1,0 +1,211 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   kit.css — styles for the src/ui/kit.ts component helpers.
+   Consumes the design tokens on purpose: --space-* (4-pt grid) and the semantic
+   colour tokens (--bmm-info/-success/-warning/-danger/-accent + -dim). Every new
+   screen built with kit.ts inherits this rhythm + palette for free.
+   Buttons reuse the existing .btn / .btn-* rules in main.css — no duplication.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Loading spinner (kit.spinner) — relies on the app-wide @keyframes spin. */
+.kit-spin { animation: spin 0.8s linear infinite; flex: none; }
+
+/* ── Badge ─────────────────────────────────────────────────────────────────── */
+.kit-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 2px var(--space-2);
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 700;
+    line-height: 1.5;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+.kit-badge svg { width: 12px; height: 12px; flex: none; }
+
+.kit-badge-neutral { background: var(--bmm-s08); color: var(--bmm-text-secondary); border-color: var(--bmm-border); }
+.kit-badge-info    { background: var(--bmm-info-dim);    color: var(--bmm-info);    border-color: rgba(var(--bmm-info-r),var(--bmm-info-g),var(--bmm-info-b),0.35); }
+.kit-badge-success { background: var(--bmm-success-dim); color: var(--bmm-success); border-color: rgba(var(--bmm-success-r),var(--bmm-success-g),var(--bmm-success-b),0.35); }
+.kit-badge-warning { background: var(--bmm-warning-dim); color: var(--bmm-warning); border-color: rgba(var(--bmm-warning-r),var(--bmm-warning-g),var(--bmm-warning-b),0.35); }
+.kit-badge-danger  { background: var(--bmm-danger-dim);  color: var(--bmm-danger);  border-color: rgba(var(--bmm-danger-r),var(--bmm-danger-g),var(--bmm-danger-b),0.35); }
+.kit-badge-accent  { background: var(--bmm-accent-dim);  color: var(--bmm-accent);  border-color: var(--bmm-border-accent); }
+
+/* ── Card ──────────────────────────────────────────────────────────────────── */
+.kit-card {
+    background: var(--bmm-bg-elevated);
+    border: 1px solid var(--bmm-border);
+    border-radius: var(--bmm-radius-card);
+    padding: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+.kit-card-title {
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--bmm-text-primary);
+    letter-spacing: -0.01em;
+}
+
+/* ── Field (labelled form row) ─────────────────────────────────────────────── */
+.kit-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+}
+.kit-field-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--bmm-text-secondary);
+}
+.kit-field-hint {
+    font-size: 11px;
+    color: var(--bmm-text-muted);
+    line-height: 1.4;
+}
+
+/* ── Meta line (muted, dot-separated) ──────────────────────────────────────── */
+.kit-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: 11px;
+    color: var(--bmm-text-muted);
+    flex-wrap: wrap;
+}
+.kit-meta-sep { opacity: 0.5; }
+
+/* ── Callout (kit.callout) ─────────────────────────────────────────────────────
+   THE tip/hint/notice shape, app-wide. One form for every advisory box: flat elevated
+   surface, a 3px tone-coloured inset bar, an icon in a tinted square, 12.5px body.
+   Tone changes the COLOUR and the icon changes the SUBJECT — the geometry never moves.
+
+   This exists because every screen had grown its own: the Mapper wore an angled accent
+   gradient, sync warnings were inline-styled paragraphs, the discovery panel invented a
+   third look. Different shapes imply different kinds of thing; these are all the same
+   kind of thing — a sentence the screen wants you to read before you act. */
+.kit-callout {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--bmm-radius-card, 12px);
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-bg-elevated);
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--bmm-text-secondary);
+}
+.kit-callout-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    flex: none;
+    border-radius: 8px;
+    background: var(--bmm-s08);
+    color: var(--bmm-text-muted);
+}
+.kit-callout-icon svg { width: 15px; height: 15px; }
+.kit-callout-body { min-width: 0; }
+.kit-callout-title {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--bmm-text-primary);
+    margin-bottom: 2px;
+}
+.kit-callout-info    { border-color: color-mix(in srgb, var(--bmm-info) 30%, var(--bmm-border)); background: color-mix(in srgb, var(--bmm-info) 5%, var(--bmm-bg-elevated)); }
+.kit-callout-info    .kit-callout-icon { background: var(--bmm-info-dim); color: var(--bmm-info); }
+.kit-callout-success { border-color: color-mix(in srgb, var(--bmm-success) 30%, var(--bmm-border)); background: color-mix(in srgb, var(--bmm-success) 5%, var(--bmm-bg-elevated)); }
+.kit-callout-success .kit-callout-icon { background: var(--bmm-success-dim); color: var(--bmm-success); }
+.kit-callout-warning { border-color: color-mix(in srgb, var(--bmm-warning) 30%, var(--bmm-border)); background: color-mix(in srgb, var(--bmm-warning) 5%, var(--bmm-bg-elevated)); }
+.kit-callout-warning .kit-callout-icon { background: var(--bmm-warning-dim); color: var(--bmm-warning); }
+.kit-callout-danger  { border-color: color-mix(in srgb, var(--bmm-danger) 30%, var(--bmm-border)); background: color-mix(in srgb, var(--bmm-danger) 5%, var(--bmm-bg-elevated)); }
+.kit-callout-danger  .kit-callout-icon { background: var(--bmm-danger-dim); color: var(--bmm-danger); }
+.kit-callout-accent  { border-color: color-mix(in srgb, var(--bmm-accent) 30%, var(--bmm-border)); background: color-mix(in srgb, var(--bmm-accent) 5%, var(--bmm-bg-elevated)); }
+.kit-callout-accent  .kit-callout-icon { background: var(--bmm-accent-dim); color: var(--bmm-accent); }
+
+/* ── Getting-started checklist (gs-checklist.ts) ───────────────────────────────
+   Steps are BUTTONS — each one a door to where the step happens — so they wear button
+   affordances: hover, cursor, and a done state that stays readable rather than fading
+   to decoration. */
+.gs-step {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    padding: 6px 8px;
+    background: none;
+    border: 0;
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--bmm-text-secondary);
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+}
+.gs-step:hover { background: var(--bmm-bg-hover); color: var(--bmm-text-primary); }
+.gs-dot {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid var(--bmm-border-hover, var(--bmm-border));
+    /* Ink ON the success fill below — the token that light-accent themes override. */
+    color: var(--bmm-text-on-accent, #fff);
+}
+.gs-step.done .gs-dot { background: var(--bmm-success); border-color: var(--bmm-success); }
+.gs-step.done > span:last-child { text-decoration: line-through; opacity: 0.65; }
+
+/* The Settings toggle that hides tips app-wide. One rule, one class — a page cannot
+   half-obey. Only .bmm-tip callouts hide; warning/danger callouts never carry that
+   class, so nothing load-bearing can be silenced from a comfort setting. */
+body.bmm-tips-hidden .bmm-tip { display: none; }
+
+/* Per-tip dismissal. The switch above is all-or-nothing; this is the × on ONE box.
+   A class rather than display:none inline, because some callouts already drive their own
+   display (the repo-sync hint starts hidden and shows itself), and a dismissal must not be
+   able to fight that — or to reveal something the app meant to keep hidden. */
+.bmm-tip[data-tip-id] { position: relative; padding-right: 30px; }
+.bmm-tip.tip-dismissed { display: none; }
+.bmm-tip-close {
+    position: absolute;
+    top: 5px;
+    right: 6px;
+    display: flex;
+    padding: 4px;
+    background: none;
+    border: 0;
+    border-radius: 6px;
+    color: var(--bmm-text-muted, var(--text-muted));
+    cursor: pointer;
+    opacity: 0.55;
+    transition: opacity 0.14s ease, color 0.14s ease, background 0.14s ease;
+}
+.bmm-tip-close:hover {
+    opacity: 1;
+    color: var(--bmm-text-primary, var(--text-primary));
+    background: var(--bmm-s08, rgba(255, 255, 255, 0.08));
+}
+.bmm-tip-close:focus-visible { outline: 2px solid var(--bmm-accent, var(--accent)); outline-offset: 1px; opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) { .bmm-tip-close { transition: none; } }
+
+/* ── Custom select (ui/custom-select.ts): keyboard highlight + trigger icon ──────────────
+   The rest of the custom select's rules live in main.css (.bmm-csel*). These two belong to
+   behaviour added with the keyboard support:
+   · .kb-active is the row ↑/↓ points at (announced via aria-activedescendant — the rows are
+     never focused, so :focus-visible cannot draw it);
+   · .bmm-csel-trigger-icon is the chosen option's icon on the closed control, for a select
+     that opts in with data-csel-trigger-icon="on". */
+.bmm-csel-opt.kb-active { background: var(--bmm-bg-hover); box-shadow: inset 0 0 0 1px var(--bmm-border-accent); }
+.bmm-csel-opt.selected.kb-active { background: var(--bmm-accent-dim); }
+.bmm-csel-trigger-icon { display: inline-flex; align-items: center; flex: none; }
+.bmm-csel-trigger-icon[hidden] { display: none; }
+.bmm-csel-trigger-icon + .bmm-csel-label { flex: 1; }

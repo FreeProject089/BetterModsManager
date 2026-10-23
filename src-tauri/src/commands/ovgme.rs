@@ -3,7 +3,12 @@ use crate::state::AppState;
 use std::path::PathBuf;
 use tauri::State;
 
-fn parse_utf16_string(bytes: &[u8], offset: usize, max_len: usize) -> String {
+/// A fixed-offset UTF-16 field out of OvGME's `game.dat`.
+///
+/// Shared with `legacy_scan`, deliberately: the first-launch offer names a configuration and
+/// the import then creates it, and those two must read the same bytes the same way or the
+/// offer promises a profile that arrives under another name.
+pub fn read_utf16_field(bytes: &[u8], offset: usize, max_len: usize) -> String {
     let mut utf16_chars = Vec::new();
     for i in 0..(max_len / 2) {
         let idx = offset + (i * 2);
@@ -39,7 +44,7 @@ pub async fn import_ovgme_profiles(state: State<'_, AppState>) -> Result<usize, 
 }
 
 async fn parse_ovgme_path(ovgme_path: &PathBuf, state: State<'_, AppState>) -> Result<usize, String> {
-    let entries = std::fs::read_dir(ovgme_path).map_err(|e| format!("Erreur lecture OvGME: {}", e))?;
+    let entries = std::fs::read_dir(ovgme_path).map_err(|e| format!("OvGME read error: {}", e))?;
     let mut imported_count = 0;
     
     // Collect game data first without holding lock
@@ -51,10 +56,10 @@ async fn parse_ovgme_path(ovgme_path: &PathBuf, state: State<'_, AppState>) -> R
 
         if let Ok(bytes) = std::fs::read(&game_dat_path) {
             if bytes.len() >= 0x8A4 {
-                let title = parse_utf16_string(&bytes, 0x002, 128);
-                let root = parse_utf16_string(&bytes, 0x082, 520);
-                let mods_dir = parse_utf16_string(&bytes, 0x494, 520);
-                let back_dir = parse_utf16_string(&bytes, 0x69C, 520);
+                let title = read_utf16_field(&bytes, 0x002, 128);
+                let root = read_utf16_field(&bytes, 0x082, 520);
+                let mods_dir = read_utf16_field(&bytes, 0x494, 520);
+                let back_dir = read_utf16_field(&bytes, 0x69C, 520);
                 if !title.is_empty() && !root.is_empty() && !mods_dir.is_empty() {
                     configs.push((title, root, mods_dir, back_dir));
                 }
@@ -68,7 +73,7 @@ async fn parse_ovgme_path(ovgme_path: &PathBuf, state: State<'_, AppState>) -> R
         let game_path = PathBuf::from(&root);
         let backup_path = PathBuf::from(&back_dir);
 
-        let mut data = state.data.lock().unwrap();
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
         
         // Find if profile already exists (match by same game path or name)
         let _profile_id = if let Some(p) = data.profiles.iter().find(|p| p.name == title || p.game_path == game_path) {
@@ -76,7 +81,7 @@ async fn parse_ovgme_path(ovgme_path: &PathBuf, state: State<'_, AppState>) -> R
         } else {
             let new_profile = Profile::new(
                 title.clone(),
-                "Imported (OvGME)".to_string(),
+                "prof.importSourceOvgme".to_string(),
                 game_path,
                 mods_path.clone(),
                 backup_path
@@ -114,7 +119,7 @@ async fn parse_ovgme_path(ovgme_path: &PathBuf, state: State<'_, AppState>) -> R
                         }
 
                         // Re-lock to add the mod if not already there
-                        let mut data = state.data.lock().unwrap();
+                        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
                         let is_already_added = data.mods.iter().any(|m| {
                              // Compare canonicalized if possible to avoid UNC / \\?\ mismatch
                              let m_p = &m.mod_folder_path;

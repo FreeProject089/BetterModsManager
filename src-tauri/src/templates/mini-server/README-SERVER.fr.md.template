@@ -1,0 +1,143 @@
+# Serveur de dépôt BMM autonome
+
+Généré par BMM ({{EDITION}}). Il sert le `repo.json` et les fichiers de mods de ce dossier aux
+utilisateurs de BMM, sans que BMM tourne. Port : **{{PORT}}**.
+
+## Le lancer
+
+| Où | Comment |
+|---|---|
+| Windows | {{START_WINDOWS}} |
+| Linux / macOS | {{START_LINUX}} |
+| Docker | `docker compose up -d` (si BMM a généré un `Dockerfile`) |
+| Au démarrage, Linux | `bmm-server/bmm-repo.service` (systemd, voir plus bas) |
+| Au démarrage, Windows | `powershell -ExecutionPolicy Bypass -File bmm-server\windows-task.ps1` (en administrateur) |
+
+Puis ouvrez `http://127.0.0.1:{{PORT}}/status`.
+
+## Adresses
+
+| Chemin | Quoi | Pour qui |
+|---|---|---|
+| `/repo.json` | Le manifeste. ETag + `304 Not Modified` si rien n'a changé, gzip | Abonnés (mot de passe / clés si définis) |
+| `/mods/...` | Fichiers des mods. `ETag`, `Last-Modified`, `304`, `Range` (reprise), `HEAD` | Abonnés |
+| `/feed.xml`, `/feed.atom` | Flux Atom : une entrée par version de mod | Abonnés |
+| `/status` | Page d'état : dépôt, version, format, fichiers, taille, dernière mise à jour, flux, tâches planifiées, « Ouvrir dans BMM » | Tout le monde. Un dépôt protégé ne montre ses détails qu'avec `?password=` |
+| `/status.json` | La même chose, en JSON | Tout le monde (même règle) |
+| `/health` | `200 {"ok":true}` tant que `repo.json` est lisible, `503` sinon | Tout le monde (Docker, systemd, surveillance) |
+| `/monitoring.json` | Totaux seulement, ni adresse IP ni Creator ID | Tout le monde |
+| `/dashboard`, `/admin/*` | Panneau d'administration (selon l'édition) | Mot de passe admin |
+| `/admin/jobs`, `POST /admin/jobs/run?id=<tâche>` | État des tâches ; lancer une tâche maintenant | Mot de passe admin (en-tête `Authorization`) |
+
+Jamais servis : tous les fichiers à la racine sauf `repo.json` / `Info.json`, `node_modules/`, et
+`bmm-server/` (état des tâches, sauvegardes).
+
+## L'ajouter dans BMM
+
+Server Repo → Connecter, collez `http://<cet-hôte>:{{PORT}}/`, ou cliquez **Ouvrir dans BMM** sur la
+page d'état (`bmm://repo/connect?url=…`).
+
+## Protéger le dépôt : `access.json`
+
+```json
+{ "password": "", "pubkeys": [], "audience": "" }
+```
+
+- `password` : les abonnés l'envoient en `X-Repo-Password` (ou `?password=`). Vide = ouvert.
+- `pubkeys` : clés publiques OpenSSH sur une ligne ; en lister une rend la preuve signée obligatoire.
+- `audience` : l'adresse que tapent les abonnés (`https://repo.example.com`), nécessaire avec des clés.
+
+Relu à chaque requête : modifiez-le, sans redémarrer. `bans.json` et `whitelist.json` aussi.
+
+## Configuration : `server.config.json`
+
+Relu quand il change. Les variables d'environnement passent devant :
+
+| Variable | Effet |
+|---|---|
+| `PORT` | Port d'écoute (par défaut {{PORT}}) |
+| `ADMIN_PASSWORD` | Mot de passe admin (éditions avec panneau d'administration) |
+| `BMM_PUBLIC_URL` | L'adresse publique, pour le flux et le lien « Ouvrir dans BMM » |
+| `BMM_PUBLIC_ORIGIN` | L'audience des preuves de clé (comme `audience` dans access.json) |
+| `BMM_RATE_LIMIT` | Requêtes par minute et par adresse, `0` = désactivé |
+| `BMM_JOBS=off` | Aucune exécution planifiée (on peut toujours lancer depuis `/admin/jobs`) |
+| `BMM_STATUS_PAGE=off` | Pas de `/status` |
+| `BMM_CONFIG` | Un autre fichier de configuration |
+
+`rateLimit` : `{ "perMinute": 600, "burst": 300 }` répond `429` + `Retry-After` au-delà de la
+rafale. Les requêtes de cette machine ne sont jamais limitées. Une synchro télécharge un fichier
+par requête : gardez la limite bien au-dessus du nombre de fichiers qu'un abonné tire d'un coup.
+
+## Tâches planifiées
+
+Configurées maintenant :
+
+{{JOBS}}
+
+Chaque entrée de `jobs` a un `id`, un `type`, et **soit** `"every": "15m"` (`s`, `m`, `h`, `d`,
+`w`) **soit** `"cron": "0 3 * * *"` (minute heure jour mois jour-de-semaine, heure locale ; `*`,
+`*/n`, `a-b`, `a,b`, `@hourly`, `@daily`, `@weekly`, `@monthly`). `"enabled": false` la met en
+pause, `"runOnStart": true` la lance aussi au démarrage. Une exécution manquée pendant que le
+serveur était arrêté a lieu une fois au démarrage suivant. Dernière exécution, résultat et
+prochaine exécution sont sur `/status` ; chaque exécution est aussi notée dans `server.log`.
+
+| `type` | Ce qu'elle fait | Options |
+|---|---|---|
+| `rescan` | Vérifie chaque fichier listé par `repo.json` sur le disque (taille, SHA-256), compte les fichiers manquants et ceux absents du manifeste | `rewrite` (met à jour les empreintes d'un manifeste **non signé** ; un manifeste signé n'est jamais réécrit, réexportez-le depuis BMM), `bumpVersion`, `fullHash` |
+| `sync` | Met le dépôt à jour depuis une source, puis le revérifie si demandé | `source.kind` : `git` (`git pull --ff-only`), `rsync` (`source.path`, `source.delete`), `folder` (un dossier où BMM exporte : `source.path`, `source.include`, `source.mirror`), `command` (`source.command` : un tableau d'arguments, sans shell) ; `thenRescan`, `timeoutMs` |
+| `backup` | Copie `repo.json` dans `bmm-server/backups/` (sautée s'il n'a pas changé) | `keep` (14 par défaut) |
+| `rotateLogs` | Fait tourner `server.log` au-delà d'une taille | `maxSizeMB` (10), `keep` (5) |
+
+Une synchro n'écrase jamais les fichiers du serveur lui-même (`access.json`,
+`server.config.json`, les scripts, `bmm-server/`…). Avant qu'un rescan ou une synchro réécrive
+`repo.json`, une copie part dans `bmm-server/backups/`.
+
+## HTTPS
+
+Placez le serveur derrière un proxy inverse qui porte le certificat, et mettez `publicUrl` (ou
+`BMM_PUBLIC_URL`) sur l'adresse `https://`.
+
+Caddy (certificat automatique) :
+
+```
+repo.example.com {
+    reverse_proxy 127.0.0.1:{{PORT}}
+}
+```
+
+nginx :
+
+```
+location / {
+    proxy_pass http://127.0.0.1:{{PORT}};
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_buffering off;
+}
+```
+
+Les éditions script (v1, v2) lisent `X-Forwarded-For` pour l'adresse de l'appelant : ne l'exposez qu'à travers le
+proxy (port fermé au pare-feu), sinon un client peut se prétendre n'importe quelle adresse.
+
+## Lancer au démarrage
+
+**systemd** (Linux) : copiez le dossier dans `/srv/bmm-repo` (ou modifiez `WorkingDirectory`), puis
+
+```
+sudo cp bmm-server/bmm-repo.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now bmm-repo
+journalctl -u bmm-repo -f
+```
+
+**Windows** : `bmm-server\windows-task.ps1` enregistre une tâche planifiée qui lance le serveur au
+démarrage (`-Remove` la supprime).
+
+## Autotest
+
+```
+node bmm-server/selftest.js
+```
+
+Vérifie les planifications, les plages, le cache, le flux, la page d'état et les tâches sur une
+copie temporaire ; votre dépôt n'est pas touché. Code de sortie 0 = tout est passé.

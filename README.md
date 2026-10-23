@@ -1,75 +1,44 @@
-# Better Mod Manager (BMM)
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/I2I31ZIPPG)
+<div align="center">
 
-A modern, high-performance, and universal mod manager built with Rust and Tauri. Designed for performance, safety, and a premium "workstation" user experience across any PC game.
+  <img src=".github/screenshots/hero.png" alt="Better Mod Manager 1.0.4" width="100%" />
 
-## Overview
+  # Better Mod Manager
 
-Better Mod Manager (BMM) simplifies the process of managing, installing, and sharing mods. Unlike traditional managers that rely on unstable symlinks, BMM uses a "Smart Physical Copy" engine with automated backup and restoration layers.
+  ![Version](https://img.shields.io/badge/version-1.0.4-blue.svg?style=flat-square)
+  ![License](https://img.shields.io/badge/license-GPL--3.0-green.svg?style=flat-square)
+  ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-important?style=flat-square)
 
-## Key Features
+</div>
 
-- **Multi-Game Profiles**: Manage multiple games independently with dedicated paths and visual themes.
-- **Smart Activation**: Physical file installation with automatic backups of original game files.
-- **Conflict Detection**: Real-time monitoring of file collisions between active mods.
-- **Mod Sharing (.MM)**: Export and import complete mod configurations, including download links and installation priorities.
-- **Local Mod Pooling**: Automatically detects and copies mods already present in other profiles to save bandwidth.
-- **Server Administration Suite**: Integrated tools for live monitoring, IP whitelisting, and creator key ban management with a premium glassmorphic UI.
-- **Dynamic Internationalization**: Fully extensible translation system with auto-discovery, full FR/EN support, and FlagCDN integration.
-- **Automated Versioning & Updates**: Real-time update checks via GitHub API (v0.9.8 finalized) and automated build-time date capture.
-- **Integrity Reporting**: Diagnostic tool to verify if modded files have been corrupted or overwritten by game updates.
-- **Archive Explorer**: Built-in tree view for navigating .zip and .rar contents without extraction.
-- **Interactive Documentation**: Technical architecture visualized through dynamic Mermaid.js diagrams with Tasky mascot guidance.
-- **Mod Link Support**: Categorize links (GitHub, MEGA, etc.) with custom icons and behavior.
+## English
 
-## Mod Link Types
+A universal mod manager for Windows. Your mods live in a Library, a Profile decides which are
+on for one game, and turning a mod on copies its files with backups and SHA-256 checks, so it can
+always be turned off cleanly. Modpacks, `.MM` lists, Server Repo sync and hosting, an App
+Catalog, optional offline AI (Laya), a scheduler, plugins, themes, and a CLI, MCP server and
+local API.
 
-In the **Mod Detail Panel** and **.MM Lists**, links can be set to different types to improve identification and automated processing:
+**[Read the README in English](README_EN.md)** · [What's new in 1.0.4](Update/changelog_v1.0.4_EN.md)
 
-- **GitHub**: Link to a repository or release. Stable and community-standard.
-- **Google Drive**: Link to a shared folder or file. Often requires manual clicking.
-- **MEGA**: Secure cloud storage link.
-- **Direct**: A **direct download link** (ending in .zip, .rar, .7z). This allows BMM to download and extract the mod automatically during imports.
-- **Other**: For generic websites or specialized forums.
+## Français
 
-## Technical Stack
+Un gestionnaire de mods universel pour Windows. Vos mods vivent dans une Bibliothèque, un Profil
+décide lesquels sont actifs pour un jeu, et activer un mod copie ses fichiers avec sauvegardes et
+contrôle SHA-256, pour pouvoir toujours le désactiver proprement. Modpacks, listes `.MM`,
+synchronisation et hébergement Serveur Repo, Catalogue d'applications, IA hors ligne facultative
+(Laya), planificateur, plugins, thèmes, ainsi qu'une CLI, un serveur MCP et une API locale.
 
-- **Backend**: Rust 1.70+ (Tauri, Reqwest, Zip-rs)
-- **Frontend**: ES2022 JavaScript (Modular Architecture), CSS3 (Vanilla), HTML5
-- **Performance**: Low memory footprint (<80MB RAM), 60FPS responsive UI.
-- **Safety**: Thread-safe I/O operations with global Mutex locking.
+**[Lire le README en français](README_FR.md)** · [Nouveautés de la 1.0.4](Update/changelog_v1.0.4_FR.md)
 
-## Installation & Development
+---
 
-### Prerequisites
+<div align="center">
 
-- [Node.js](https://nodejs.org/) (LTS recommended)
-- [Rust](https://www.rust-lang.org/tools/install)
-- [Tauri Dependencies](https://tauri.app/v1/guides/getting-started/prerequisites)
+  [Download / Télécharger](https://github.com/FreeProject089/BetterModsManager/releases/latest) •
+  [Documentation](https://bettercommunity.ch/docs) •
+  [Discord](https://discord.gg/CTaaEF9R75) •
+  [Ko-fi](https://ko-fi.com/I2I31ZIPPG)
 
-### Setup
+  <sub>GPL-3.0 · [LICENSE.md](LICENSE.md) · [Privacy](PRIVACY.md) / [Confidentialité](PRIVACY_FR.md)</sub>
 
-1. Clone the repository.
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-3. Run in development mode:
-   ```bash
-   npm run tauri dev
-   ```
-4. Build for production:
-   ```bash
-   npm run tauri build
-   ```
-
-## Documentation
-
-Detailed documentation is available in the `Update/` directory:
-- [User Guide & Features](Update/Old_Update/App_Features.md)
-- [Technical Architecture Analysis](Update/Old_Update/Technical_Analysis.md)
-- [Latest Changelog (EN)](Update/changelog_since_7e839e.md) | [Changelog (FR)](Update/changelog_since_7e839e_FR.md)
-
-## License
-
-This project is licensed under the GNU General Public License v3.0 (GPL-3.0).
+</div>

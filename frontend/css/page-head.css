@@ -1,0 +1,161 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   page-head.css — the head of a nav PAGE, and the strip of tabs under it.
+
+   Plugins & API and the App Catalog are siblings in the sidebar and were built on
+   different days: one had a bare title with an underline tab row, the other an icon,
+   an uppercase "REFRESH" and a second underline row with different metrics. These are
+   the pieces both now share, made of the modal shell's own parts (.bms-tabs, .bms-chip,
+   the icon tile) so a page and a dialog read as the same app.
+
+   · .pg-head      icon tile · title + one line · what the page is for (right)
+   · .pg-tabbar    the tab rail (role="tablist", .bms-tabs) with a count per tab
+   · .pg-toolbar   find on the left (.pg-search + .pg-results), actions on the right
+   Tokens only; the accent is a FILL here, accent-coloured text goes through
+   --bms-accent-ink (modal-shell.css).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.pg-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 14px;
+    margin-bottom: 18px;
+    min-width: 0;
+}
+.pg-head-icon {
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    background: var(--bmm-accent-dim);
+    border: 1px solid var(--bmm-border-accent);
+    color: var(--bms-accent-ink);
+}
+/* The title block keeps at least a readable width; below it the actions take the next line. */
+.pg-head-titles { flex: 1 1 260px; min-width: 0; }
+.pg-head-title {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--bmm-text-primary);
+    letter-spacing: -0.01em;
+}
+.pg-head-sub {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: var(--bmm-text-secondary);
+    line-height: 1.45;
+}
+.pg-head-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+    flex: 0 1 auto;
+    min-width: 0;
+}
+
+/* ── Tabs ─────────────────────────────────────────────────────────────────── */
+.pg-tabbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 18px;
+    min-width: 0;
+}
+/* The rail scrolls sideways rather than wrapping or pushing the page wider. */
+.pg-tabs { flex: 0 1 auto; min-width: 0; }
+.pg-tabs .bms-tab svg,
+.bms-seg-btn svg { flex: none; }
+
+/* A count beside a tab (or a heading): the same pill the Translation Sandbox uses. */
+.pg-count {
+    display: inline-block;
+    min-width: 18px;
+    padding: 0 6px;
+    border-radius: 999px;
+    text-align: center;
+    background: var(--bmm-s06);
+    color: var(--bmm-text-secondary);
+    font-size: 10.5px;
+    font-weight: 700;
+    line-height: 17px;
+    font-variant-numeric: tabular-nums;
+}
+.pg-count:empty { display: none; }
+.bms-tab[aria-selected="true"] .pg-count,
+.bms-seg-btn[aria-selected="true"] .pg-count {
+    background: color-mix(in srgb, var(--bmm-text-on-accent) 22%, transparent);
+    color: var(--bmm-text-on-accent);
+}
+.plug-section-title .pg-count { margin-left: 8px; vertical-align: 1px; }
+
+/* ── Toolbar: find on the left, actions on the right ──────────────────────── */
+.pg-toolbar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+    min-width: 0;
+}
+.pg-toolbar-gap { flex: 1 1 0; min-width: 0; }
+.pg-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 260px;
+    max-width: 420px;
+    min-width: 180px;
+    height: 34px;
+    padding: 0 10px;
+    border-radius: 9px;
+    border: 1px solid var(--bmm-border-hover);
+    background: var(--bmm-s03);
+    color: var(--bmm-text-muted);
+    cursor: text;
+    transition: border-color var(--bmm-transition-fast), box-shadow var(--bmm-transition-fast);
+}
+.pg-search:focus-within {
+    border-color: var(--bmm-border-accent);
+    box-shadow: 0 0 0 3px var(--bmm-accent-dim);
+}
+.pg-search svg { flex: none; }
+.pg-search-input {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    border: 0;
+    background: transparent;
+    color: var(--bmm-text-primary);
+    font: inherit;
+    font-size: 13px;
+    outline: none;
+}
+.pg-search-input::placeholder { color: var(--bmm-text-muted); }
+.pg-results {
+    font-size: 12px;
+    color: var(--bmm-text-secondary);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.pg-results:empty { display: none; }
+
+/* A toggle button in a toolbar (a panel it opens is showing). */
+.pg-toolbar .btn.active,
+.pg-toolbar .btn[aria-expanded="true"] {
+    background: var(--bmm-accent-dim);
+    border-color: var(--bmm-border-accent);
+    color: var(--bms-accent-ink);
+}
+
+/* An icon-only toolbar button (it carries its own aria-label): square, the field's height. */
+.pg-iconbtn { width: 34px; height: 34px; padding: 0; justify-content: center; flex: none; }
+
+/* Page rails are a little tighter than a dialog's: six labelled tabs with counts must fit
+   the content column at the app's minimum width (1120 px window) without scrolling. */
+.pg-tabs .bms-tab { padding: 6px 12px; gap: 6px; }

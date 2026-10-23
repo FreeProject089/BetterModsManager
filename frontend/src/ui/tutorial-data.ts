@@ -1,0 +1,1566 @@
+// @ts-nocheck
+/**
+ * tutorial-data.ts — All tutorial definitions for BMM.
+ *
+ * HOW TO CREATE A NEW TUTORIAL
+ * ─────────────────────────────
+ * 1. Add a TutorialDef object to the TUTORIALS array below.
+ * 2. Give it a unique `id`, icon, color, and parts.
+ * 3. Each part has steps; steps use i18n keys for title and text.
+ * 4. For interactive steps, add an `action` with the event name from BMM_ACTIONS.
+ * 5. Add the corresponding translation keys to en.json and fr.json.
+ * 6. Done — the hub picks it up automatically.
+ */
+
+import type { TutorialDef } from './tutorial-types.js';
+import { BMM_ACTIONS } from './tutorial-events.js';
+import { uiIcon } from './icons.js';
+
+// ── Icons (reusable SVG snippets) ────────────────────────────────────────────
+
+const ICON = {
+    profile: `${uiIcon('user', 20)}`,
+    scan:    `${uiIcon('scan', 20)}`,
+    map:     `${uiIcon('map', 20)}`,
+    modpack: `${uiIcon('hexagon', 20)}`,
+    activate:`${uiIcon('power', 20)}`,
+    shield:  `${uiIcon('shield-check', 20)}`,
+    conflict:`${uiIcon('warning', 20, { style: 'color:var(--warning)' })}`,
+    share:   `${uiIcon('share', 20)}`,
+    repo:    `${uiIcon('network', 20)}`,
+    plugin:  `${uiIcon('tag', 20)}`,
+    api:     `${uiIcon('run', 20)}`,
+    library: `${uiIcon('book', 20)}`,
+    rocket:  `${uiIcon('launch', 20)}`,
+    bench:   `${uiIcon('activity', 20)}`,
+    bug:     `${uiIcon('bug', 20)}`,
+    catalog: `${uiIcon('store', 20)}`,
+    translate:`${uiIcon('languages', 20)}`,
+    palette: `${uiIcon('palette', 20)}`,
+    disk:    `${uiIcon('hard-drive', 20)}`,
+};
+
+// ── Tutorial: BMM Modding Basics ─────────────────────────────────────────────
+
+const BASICS: TutorialDef = {
+    id: 'basics',
+    category: 'essentials',
+    level: 1,
+    title_key: 'tut.basics.meta.title',
+    desc_key:  'tut.basics.meta.desc',
+    icon: `${uiIcon('book-open', 24)}`,
+    color: 'var(--accent)',
+    assets: [
+        {
+            id: 'flappy-game',
+            name_key: 'tut.assets.flappy.name',
+            desc_key:  'tut.assets.flappy.desc',
+            type: 'game',
+            usage_key: 'tut.assets.flappy.usage',
+        },
+        {
+            id: 'snake-game',
+            name_key: 'tut.assets.snake.name',
+            desc_key:  'tut.assets.snake.desc',
+            type: 'game',
+            usage_key: 'tut.assets.snake.usage',
+        },
+        {
+            id: 'tut-mods-pack',
+            name_key: 'tut.assets.mods.name',
+            desc_key:  'tut.assets.mods.desc',
+            type: 'mod',
+            usage_key: 'tut.assets.mods.usage',
+        },
+    ],
+    parts: [
+        // ── Part 1 : Profiles ──────────────────────────────────────
+        {
+            id: 'profiles',
+            title_key: 'tut.basics.profiles.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.basics.profiles.s1.title',
+                    text_key:  'tut.basics.profiles.s1.text',
+                    nav: 'profiles',
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.basics.profiles.s2.title',
+                    text_key:  'tut.basics.profiles.s2.text',
+                    nav: 'profiles',
+                    selector: 'btn-new-profile',
+                    modal_selector: 'btn-confirm-profile',
+                    // Every field of the New Profile modal, explained + numbered.
+                    modal_fields: [
+                        { sel: 'prof-name',        key: 'tut.basics.profiles.f.name' },
+                        { sel: 'prof-game',        key: 'tut.basics.profiles.f.game' },
+                        { sel: 'prof-color',       key: 'tut.basics.profiles.f.color' },
+                        { sel: 'prof-icon-grid',   key: 'tut.basics.profiles.f.icon' },
+                        { sel: 'prof-game-path',   key: 'tut.basics.profiles.f.gamedir' },
+                        { sel: 'prof-mods-path',   key: 'tut.basics.profiles.f.modsdir' },
+                        { sel: 'prof-backup-path', key: 'tut.basics.profiles.f.backupdir' },
+                        { sel: 'btn-confirm-profile', key: 'tut.basics.profiles.f.create' },
+                    ],
+                    action: { event: BMM_ACTIONS.PROFILE_CREATED, desc_key: 'tut.basics.profiles.s2.action' },
+                    // Creating the first profile is the point of this part, so the reader must
+                    // actually do it — Next stays locked until PROFILE_CREATED fires. (This is
+                    // the "require interaction" advance mode, stated for clarity; a step with an
+                    // action defaults to it.)
+                    advance: 'interact',
+                },
+                {
+                    id: 'edit',
+                    title_key: 'tut.basics.profiles.edit.title',
+                    text_key:  'tut.basics.profiles.edit.text',
+                    nav: 'profiles',
+                    icon: ICON.profile,
+                    selector: 'btn-edit-profile',
+                    modal_selector: 'btn-confirm-edit-profile',
+                    optional: true,
+                    // Editing is optional, so Next is available straight away — the reader may
+                    // customise now or move on. The PROFILE_EDITED action is still tracked if
+                    // they do it. (This is the "plain Next" advance mode.)
+                    advance: 'next',
+                    // Same fields as creation — edit/customise any of them anytime.
+                    modal_fields: [
+                        { sel: 'edit-prof-name',         key: 'tut.basics.profiles.f.name' },
+                        { sel: 'edit-prof-game',         key: 'tut.basics.profiles.f.game' },
+                        { sel: 'edit-prof-color',        key: 'tut.basics.profiles.f.color' },
+                        { sel: 'edit-prof-icon-grid',    key: 'tut.basics.profiles.f.icon' },
+                        { sel: 'edit-prof-game-path',    key: 'tut.basics.profiles.f.gamedir' },
+                        { sel: 'edit-prof-mods-path',    key: 'tut.basics.profiles.f.modsdir' },
+                        { sel: 'edit-prof-backup-path',  key: 'tut.basics.profiles.f.backupdir' },
+                        { sel: 'btn-confirm-edit-profile', key: 'tut.basics.profiles.f.save' },
+                    ],
+                    action: { event: BMM_ACTIONS.PROFILE_EDITED, desc_key: 'tut.basics.profiles.edit.action' },
+                },
+                {
+                    id: 's3',
+                    title_key: 'tut.basics.profiles.s3.title',
+                    text_key:  'tut.basics.profiles.s3.text',
+                    nav: 'profiles',
+                    icon: ICON.profile,
+                },
+                {
+                    id: 's4',
+                    title_key: 'tut.basics.profiles.s4.title',
+                    text_key:  'tut.basics.profiles.s4.text',
+                    nav: 'profiles',
+                },
+            ],
+        },
+        // ── Part 2 : Mod Scanning ──────────────────────────────────
+        {
+            id: 'scan',
+            title_key: 'tut.basics.scan.title',
+            steps: [
+                {
+                    id: 's0',
+                    title_key: 'tut.basics.scan.s0.title',
+                    text_key:  'tut.basics.scan.s0.text',
+                    nav: 'profiles',
+                    icon: ICON.profile,
+                },
+                {
+                    id: 's1',
+                    title_key: 'tut.basics.scan.s1.title',
+                    text_key:  'tut.basics.scan.s1.text',
+                    nav: 'library',
+                    icon: ICON.scan,
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.basics.scan.s2.title',
+                    text_key:  'tut.basics.scan.s2.text',
+                    nav: 'library',
+                    selector: 'btn-scan-mods',
+                    action: { event: BMM_ACTIONS.MODS_SCANNED, desc_key: 'tut.basics.scan.s2.action' },
+                },
+                {
+                    id: 's3',
+                    title_key: 'tut.basics.scan.s3.title',
+                    text_key:  'tut.basics.scan.s3.text',
+                    nav: 'library',
+                    selector: 'btn-add-mod',
+                    modal_selector: 'btn-confirm-add-mod',
+                    optional: true,
+                    // Adding a mod by hand is optional here — Next stays available so the reader
+                    // can skip straight on, while MOD_ADDED is still tracked if they try it.
+                    advance: 'next',
+                    modal_fields: [
+                        { sel: 'mod-name',             key: 'tut.basics.scan.f.name' },
+                        { sel: 'mod-folder',           key: 'tut.basics.scan.f.folder' },
+                        { sel: 'mod-version',          key: 'tut.basics.scan.f.version' },
+                        { sel: 'mod-author',           key: 'tut.basics.scan.f.author' },
+                        { sel: 'mod-desc',             key: 'tut.basics.scan.f.desc' },
+                        { sel: 'mod-tag',              key: 'tut.basics.scan.f.tag' },
+                        { sel: 'mod-dependency-input', key: 'tut.basics.scan.f.deps' },
+                        { sel: 'btn-confirm-add-mod',  key: 'tut.basics.scan.f.add' },
+                    ],
+                    action: { event: BMM_ACTIONS.MOD_ADDED, desc_key: 'tut.basics.scan.s3.action' },
+                },
+            ],
+        },
+        // ── Part 2b : Mod Details ──────────────────────────────────
+        {
+            id: 'moddetails',
+            title_key: 'tut.basics.moddetails.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.basics.moddetails.s1.title',
+                    text_key:  'tut.basics.moddetails.s1.text',
+                    nav: 'library',
+                    icon: ICON.library,
+                    // The library toolbar — search + filters + sort.
+                    fields: [
+                        { sel: 'mod-search',        key: 'tut.basics.moddetails.f.search' },
+                        { sel: 'mod-status-filter', key: 'tut.basics.moddetails.f.status' },
+                        { sel: 'mod-tag-filter',    key: 'tut.basics.moddetails.f.tag' },
+                        { sel: 'mod-sort',          key: 'tut.basics.moddetails.f.sort' },
+                    ],
+                },
+                {
+                    // Open the detail panel — detected as an action.
+                    id: 's2',
+                    title_key: 'tut.basics.moddetails.s2.title',
+                    text_key:  'tut.basics.moddetails.s2.text',
+                    nav: 'library',
+                    selector: 'mod-card',
+                    action: { event: BMM_ACTIONS.MOD_DETAIL_OPENED, desc_key: 'tut.basics.moddetails.s2.action' },
+                },
+                {
+                    // Metadata block — name / version / author and the inline edit (pencil).
+                    id: 's3',
+                    title_key: 'tut.basics.moddetails.s3.title',
+                    text_key:  'tut.basics.moddetails.s3.text',
+                    nav: 'library',
+                    // Every field the screen actually shows. This step used to explain
+                    // ONE (Save) while the panel displays seven — the "FIELDS ON THIS
+                    // SCREEN: 1" box under a form full of inputs was the visible symptom.
+                    fields: [
+                        { sel: 'detail-name',      key: 'tut.basics.moddetails.f.name', open: '#mdd-tab-details' },
+                        { sel: 'detail-version',   key: 'tut.basics.moddetails.f.version', open: '#mdd-tab-details' },
+                        { sel: 'detail-author',    key: 'tut.basics.moddetails.f.author', open: '#mdd-tab-details' },
+                        { sel: 'detail-desc',      key: 'tut.basics.moddetails.f.desc', open: '#mdd-tab-details' },
+                        { sel: 'detail-tag-open',   key: 'tut.basics.moddetails.f.tags', open: '#mdd-tab-details' },
+                        { sel: 'detail-dep-input', key: 'tut.basics.moddetails.f.deps', open: '#mdd-tab-details' },
+                        { sel: 'btn-save-detail',  key: 'tut.basics.moddetails.f.edit', open: '#mdd-tab-details' },
+                    ],
+                },
+                {
+                    // Integrity + content-id — the trust/identity tools.
+                    id: 's4',
+                    title_key: 'tut.basics.moddetails.s4.title',
+                    text_key:  'tut.basics.moddetails.s4.text',
+                    nav: 'library',
+                    fields: [
+                        { sel: 'btn-verify-mod-integrity', key: 'tut.basics.moddetails.f.verify', open: '#mdd-tab-files' },
+                        { sel: 'btn-copy-content-id',      key: 'tut.basics.moddetails.f.contentid', open: '#mdd-tab-files' },
+                    ],
+                },
+                {
+                    // Files + update links — inspect contents, wire an update source.
+                    id: 's5',
+                    title_key: 'tut.basics.moddetails.s5.title',
+                    text_key:  'tut.basics.moddetails.s5.text',
+                    nav: 'library',
+                    fields: [
+                        { sel: 'btn-browse-archive', key: 'tut.basics.moddetails.f.browse', open: '#mdd-tab-files' },
+                        { sel: 'btn-add-link',       key: 'tut.basics.moddetails.f.link', open: '#mdd-tab-updates' },
+                    ],
+                },
+                {
+                    id: 's6',
+                    title_key: 'tut.basics.moddetails.s6.title',
+                    text_key:  'tut.basics.moddetails.s6.text',
+                    nav: 'library',
+                    icon: ICON.library,
+                },
+            ],
+        },
+        // ── Part 3 : Mapping ───────────────────────────────────────
+        {
+            id: 'map',
+            title_key: 'tut.basics.map.title',
+            steps: [
+                {
+                    // Concept first — WHY the mapper exists.
+                    id: 's1',
+                    title_key: 'tut.basics.map.s1.title',
+                    text_key:  'tut.basics.map.s1.text',
+                    nav: 'mapper',
+                    icon: ICON.map,
+                },
+                {
+                    // Pick a profile → loads that game's folder tree on the right.
+                    id: 's2',
+                    title_key: 'tut.basics.map.s2.title',
+                    text_key:  'tut.basics.map.s2.text',
+                    nav: 'mapper',
+                    selector: 'mapper-profile-select',
+                },
+                {
+                    // The two-panel layout: mod structure (left) vs game folders (right).
+                    id: 's3',
+                    title_key: 'tut.basics.map.s3.title',
+                    text_key:  'tut.basics.map.s3.text',
+                    nav: 'mapper',
+                    fields: [
+                        { sel: 'mapper-mods-panel', key: 'tut.basics.map.f.modpanel' },
+                        { sel: 'mapper-game-panel', key: 'tut.basics.map.f.gamepanel' },
+                    ],
+                },
+                {
+                    // Pick a mod → its file tree appears on the left. Detected as an action.
+                    id: 's4',
+                    title_key: 'tut.basics.map.s4.title',
+                    text_key:  'tut.basics.map.s4.text',
+                    nav: 'mapper',
+                    selector: 'mapper-mod-select',
+                    action: { event: BMM_ACTIONS.MAPPER_MOD_SELECTED, desc_key: 'tut.basics.map.s4.action' },
+                },
+                {
+                    // THE core interaction: select left, double-click right.
+                    id: 's5',
+                    title_key: 'tut.basics.map.s5.title',
+                    text_key:  'tut.basics.map.s5.text',
+                    nav: 'mapper',
+                    fields: [
+                        { sel: 'mapper-mod-tree',  key: 'tut.basics.map.f.modtree' },
+                        { sel: 'mapper-game-tree', key: 'tut.basics.map.f.gametree' },
+                    ],
+                },
+                {
+                    // Create a folder inside the mod (staged; cancelable before Save).
+                    id: 's5b',
+                    title_key: 'tut.basics.map.s5b.title',
+                    text_key:  'tut.basics.map.s5b.text',
+                    nav: 'mapper',
+                    selector: 'btn-mapper-new-folder',
+                    action: { event: BMM_ACTIONS.MAPPER_FOLDER_STAGED, desc_key: 'tut.basics.map.s5b.action' },
+                },
+                {
+                    // Preview the full diagnostic before touching anything.
+                    id: 's6',
+                    title_key: 'tut.basics.map.s6.title',
+                    text_key:  'tut.basics.map.s6.text',
+                    nav: 'mapper',
+                    selector: 'btn-mapper-preview',
+                    action: { event: BMM_ACTIONS.MAPPER_OPENED, desc_key: 'tut.basics.map.s6.action' },
+                },
+                {
+                    // Apply — the Save button only appears once you've made changes.
+                    id: 's7',
+                    title_key: 'tut.basics.map.s7.title',
+                    text_key:  'tut.basics.map.s7.text',
+                    nav: 'mapper',
+                },
+            ],
+        },
+        // ── Part 4 : Modpacks ──────────────────────────────────────
+        {
+            id: 'modpacks',
+            title_key: 'tut.basics.modpacks.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.basics.modpacks.s1.title',
+                    text_key:  'tut.basics.modpacks.s1.text',
+                    nav: 'modpacks',
+                    icon: ICON.modpack,
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.basics.modpacks.s2.title',
+                    text_key:  'tut.basics.modpacks.s2.text',
+                    nav: 'modpacks',
+                    selector: 'modpack-create-btn',
+                    modal_selector: 'editor-save',
+                    // The creator is a four-step wizard (Basics, Mods, Options, Review); these
+                    // are the fields of its first step and its footer.
+                    modal_fields: [
+                        { sel: 'mp-name',          key: 'tut.basics.modpacks.f.name' },
+                        { sel: 'mp-game',          key: 'tut.basics.modpacks.f.game' },
+                        { sel: 'mp-desc',          key: 'tut.basics.modpacks.f.desc' },
+                        { sel: 'mp-next',          key: 'tut.basics.modpacks.f.next' },
+                        { sel: 'mp-pick-all',      key: 'tut.basics.modpacks.f.addmods' },
+                        { sel: 'editor-save',      key: 'tut.basics.modpacks.f.save' },
+                    ],
+                    action: { event: BMM_ACTIONS.MODPACK_CREATED, desc_key: 'tut.basics.modpacks.s2.action' },
+                },
+                {
+                    // Apply a pack in one click — the demo "Example Modpack" is the target.
+                    // The card's Activate / Deactivate button (data-mp-act="apply").
+                    id: 's3',
+                    title_key: 'tut.basics.modpacks.s3.title',
+                    text_key:  'tut.basics.modpacks.s3.text',
+                    nav: 'modpacks',
+                    selector: '.modpack-card [data-mp-act="apply"]',
+                    action: { event: BMM_ACTIONS.MODPACK_APPLIED, desc_key: 'tut.basics.modpacks.s3.action' },
+                },
+            ],
+        },
+        // ── Part 5 : Activation ────────────────────────────────────
+        {
+            id: 'activate',
+            title_key: 'tut.basics.activate.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.basics.activate.s1.title',
+                    text_key:  'tut.basics.activate.s1.text',
+                    nav: 'library',
+                    icon: ICON.activate,
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.basics.activate.s2.title',
+                    text_key:  'tut.basics.activate.s2.text',
+                    nav: 'library',
+                    selector: 'mod-toggle',
+                    action: { event: BMM_ACTIONS.MOD_ACTIVATED, desc_key: 'tut.basics.activate.s2.action' },
+                },
+                {
+                    id: 's3',
+                    title_key: 'tut.basics.activate.s3.title',
+                    text_key:  'tut.basics.activate.s3.text',
+                    nav: 'library',
+                    selector: 'mod-toggle',
+                    action: { event: BMM_ACTIONS.MOD_DEACTIVATED, desc_key: 'tut.basics.activate.s3.action' },
+                },
+                {
+                    id: 's4',
+                    title_key: 'tut.basics.activate.s4.title',
+                    text_key:  'tut.basics.activate.s4.text',
+                    nav: 'library',
+                },
+            ],
+        },
+        // ── Part 6 : Integrity ─────────────────────────────────────
+        {
+            id: 'integrity',
+            title_key: 'tut.basics.integrity.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.basics.integrity.s1.title',
+                    text_key:  'tut.basics.integrity.s1.text',
+                    nav: 'library',
+                    icon: ICON.shield,
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.basics.integrity.s2.title',
+                    text_key:  'tut.basics.integrity.s2.text',
+                    nav: 'library',
+                    selector: 'btn-verify-integrity',
+                    action: { event: BMM_ACTIONS.INTEGRITY_CHECK, desc_key: 'tut.basics.integrity.s2.action' },
+                },
+                {
+                    id: 's3',
+                    title_key: 'tut.basics.integrity.s3.title',
+                    text_key:  'tut.basics.integrity.s3.text',
+                    nav: 'library',
+                    icon: ICON.shield,
+                },
+            ],
+        },
+        // ── Part 7 : Conflicts & Storage ───────────────────────────
+        {
+            id: 'conflicts',
+            title_key: 'tut.basics.conflicts.title',
+            steps: [
+                {
+                    // Point at the REAL badge — the two demo mods share Mods/shared/config.ini.
+                    id: 's1',
+                    title_key: 'tut.basics.conflicts.s1.title',
+                    text_key:  'tut.basics.conflicts.s1.text',
+                    nav: 'library',
+                    icon: ICON.conflict,
+                    selector: 'tag-conflict',
+                },
+                {
+                    // Resolving: click the badge → the conflict resolver shows which mod wins.
+                    id: 's1b',
+                    title_key: 'tut.basics.conflicts.s1b.title',
+                    text_key:  'tut.basics.conflicts.s1b.text',
+                    nav: 'library',
+                },
+                {
+                    // The activation order: open it on the example profile, move the texture
+                    // pack to the bottom, apply. Its config.ini is then the one in the game.
+                    id: 'order1',
+                    title_key: 'tut.basics.conflicts.order1.title',
+                    text_key:  'tut.basics.conflicts.order1.text',
+                    nav: 'profiles',
+                    icon: ICON.conflict,
+                    selector: 'btn-load-order',
+                    modal_selector: 'lo-list',
+                    action: { event: BMM_ACTIONS.ORDER_APPLIED, desc_key: 'tut.basics.conflicts.order1.action' },
+                },
+                {
+                    id: 'order2',
+                    title_key: 'tut.basics.conflicts.order2.title',
+                    text_key:  'tut.basics.conflicts.order2.text',
+                    nav: 'profiles',
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.basics.conflicts.s2.title',
+                    text_key:  'tut.basics.conflicts.s2.text',
+                    nav: 'settings',
+                },
+            ],
+        },
+        // ── Part 8 : Shared Folders (optional) ────────────────────
+        {
+            id: 'shared',
+            title_key: 'tut.basics.shared.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.basics.shared.s1.title',
+                    text_key:  'tut.basics.shared.s1.text',
+                    nav: 'profiles',
+                    optional: true,
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.basics.shared.s2.title',
+                    text_key:  'tut.basics.shared.s2.text',
+                    nav: 'profiles',
+                    optional: true,
+                },
+            ],
+        },
+    ],
+};
+
+// ── Tutorial: BMM Advanced P1 ────────────────────────────────────────────────
+
+const ADVANCED: TutorialDef = {
+    id: 'advanced',
+    category: 'advanced',
+    level: 3,
+    title_key: 'tut.advanced.meta.title',
+    desc_key:  'tut.advanced.meta.desc',
+    // lucide: book-open-text
+    icon: `${uiIcon('book-open-text', 24)}`,
+    color: '#f59e0b',
+    parts: [
+        // ── Part 1 : .MM Lists ─────────────────────────────────────
+        {
+            id: 'mm',
+            title_key: 'tut.advanced.mm.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.advanced.mm.s1.title',
+                    text_key:  'tut.advanced.mm.s1.text',
+                    nav: 'modlists',
+                    icon: ICON.share,
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.advanced.mm.s2.title',
+                    text_key:  'tut.advanced.mm.s2.text',
+                    nav: 'modlists',
+                    selector: 'btn-export-mm',
+                    action: { event: BMM_ACTIONS.MODLIST_EXPORTED, desc_key: 'tut.advanced.mm.s2.action' },
+                },
+                {
+                    id: 's3',
+                    title_key: 'tut.advanced.mm.s3.title',
+                    text_key:  'tut.advanced.mm.s3.text',
+                    nav: 'modlists',
+                    selector: 'btn-import-mm',
+                    action: { event: BMM_ACTIONS.MODLIST_IMPORTED, desc_key: 'tut.advanced.mm.s3.action' },
+                },
+            ],
+        },
+        // ── Part 2 : Server Repository ─────────────────────────────
+        {
+            id: 'repo',
+            title_key: 'tut.advanced.repo.title',
+            steps: [
+                {
+                    // Concept + the two tabs (Sync / Host).
+                    id: 's1',
+                    title_key: 'tut.advanced.repo.s1.title',
+                    text_key:  'tut.advanced.repo.s1.text',
+                    nav: 'repo',
+                    icon: ICON.repo,
+                    fields: [
+                        { sel: 'btn-repo-tab-sync', key: 'tut.advanced.repo.f.tabsync' },
+                        { sel: 'btn-repo-tab-host', key: 'tut.advanced.repo.f.tabhost' },
+                    ],
+                },
+                {
+                    // Sync = JOIN someone's repo. This tab is active by default, so its
+                    // fields are visible — point at them.
+                    id: 's2',
+                    title_key: 'tut.advanced.repo.s2.title',
+                    text_key:  'tut.advanced.repo.s2.text',
+                    nav: 'repo',
+                    fields: [
+                        { sel: 'repo-sync-url',         key: 'tut.advanced.repo.f.url' },
+                        // Two arrivals the lesson has to keep up with: the up-front
+                        // password row and the no-manifest inspector.
+                        { sel: 'btn-sync-pass-toggle',  key: 'tut.advanced.repo.f.password' },
+                        // A repo can also demand a signed request (keyauth): the key row.
+                        { sel: 'btn-sync-key-toggle',   key: 'tut.advanced.repo.f.key' },
+                        { sel: 'btn-discover-server',   key: 'tut.advanced.repo.f.inspect' },
+                        // The destination / mods / backup fields only exist for a NEW
+                        // profile (repo-sync-paths-section is hidden otherwise); the step
+                        // text says so instead of ringing three invisible fields.
+                    ],
+                },
+                {
+                    // Host = SHARE your library. Point at the Host tab button (always
+                    // visible); its panel is described in prose so we don't depend on it
+                    // being the active tab.
+                    id: 's3',
+                    title_key: 'tut.advanced.repo.s3.title',
+                    text_key:  'tut.advanced.repo.s3.text',
+                    nav: 'repo',
+                    selector: 'btn-repo-tab-host',
+                },
+                {
+                    id: 's4',
+                    title_key: 'tut.advanced.repo.s4.title',
+                    text_key:  'tut.advanced.repo.s4.text',
+                    nav: 'repo',
+                },
+            ],
+        },
+        // ── Part 2b : Following a repo (1.0.4) ─────────────────────
+        //
+        // « Follow a repo » sits in the Followed repos card on the Sync tab (the default tab),
+        // and opens features/repo/follow-dialog.ts: a modal-shell dialog with className
+        // 'rdlg-modal' whose fields have names rather than ids, hence the compound selectors.
+        {
+            id: 'follow',
+            title_key: 'tut.advanced.follow.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.advanced.follow.s1.title',
+                    text_key:  'tut.advanced.follow.s1.text',
+                    nav: 'repo',
+                    icon: ICON.repo,
+                    selector: 'btn-repo-follow-add',
+                    modal_selector: 'rdlg-modal',
+                    modal_fields: [
+                        { sel: '.rdlg-modal [name="url"]',     key: 'tut.advanced.follow.f.address' },
+                        { sel: '.rdlg-modal [name="password"]', key: 'tut.advanced.follow.f.password' },
+                        { sel: 'rdlg-test',                     key: 'tut.advanced.follow.f.test' },
+                        { sel: '.rdlg-modal [name="mode"]',    key: 'tut.advanced.follow.f.mode' },
+                        { sel: '.rdlg-modal [data-r="save"]',  key: 'tut.advanced.follow.f.save' },
+                    ],
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.advanced.follow.s2.title',
+                    text_key:  'tut.advanced.follow.s2.text',
+                    nav: 'repo',
+                    fields: [
+                        { sel: 'repo-follow-card',          key: 'tut.advanced.follow.f.list' },
+                        { sel: 'btn-repo-follow-check-all', key: 'tut.advanced.follow.f.checkall' },
+                    ],
+                },
+            ],
+        },
+        // ── Part 3 : Modpacks (complete) ───────────────────────────
+        {
+            id: 'modpacks',
+            title_key: 'tut.advanced.modpacks.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.advanced.modpacks.s1.title',
+                    text_key:  'tut.advanced.modpacks.s1.text',
+                    nav: 'modpacks',
+                    icon: ICON.modpack,
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.advanced.modpacks.s2.title',
+                    text_key:  'tut.advanced.modpacks.s2.text',
+                    nav: 'modpacks',
+                },
+                {
+                    id: 's3',
+                    title_key: 'tut.advanced.modpacks.s3.title',
+                    text_key:  'tut.advanced.modpacks.s3.text',
+                    nav: 'modpacks',
+                },
+            ],
+        },
+        // ── Part 4 : Mod Library (complete) ────────────────────────
+        {
+            id: 'library',
+            title_key: 'tut.advanced.library.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.advanced.library.s1.title',
+                    text_key:  'tut.advanced.library.s1.text',
+                    nav: 'library',
+                    icon: ICON.library,
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.advanced.library.s2.title',
+                    text_key:  'tut.advanced.library.s2.text',
+                    nav: 'library',
+                },
+                {
+                    id: 's3',
+                    title_key: 'tut.advanced.library.s3.title',
+                    text_key:  'tut.advanced.library.s3.text',
+                    nav: 'library',
+                    selector: 'btn-browse-archive',
+                },
+            ],
+        },
+    ],
+};
+
+// ── Tutorial: Other Features ─────────────────────────────────────────────────
+
+const OTHER: TutorialDef = {
+    id: 'other',
+    category: 'tools',
+    level: 2,
+    title_key: 'tut.other.meta.title',
+    desc_key:  'tut.other.meta.desc',
+    // Book (lucide book) with a wrench on the cover — "extra tools".
+    icon: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><g transform="translate(8.3 6.4) scale(0.34)"><path vector-effect="non-scaling-stroke" d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></g></svg>`,
+    color: '#22c55e',
+    parts: [
+        // ── Part 1 : BMM Launchpack ────────────────────────────────
+        {
+            id: 'launchpack',
+            title_key: 'tut.other.launchpack.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.other.launchpack.s1.title',
+                    text_key:  'tut.other.launchpack.s1.text',
+                    icon: ICON.rocket,
+                    nav: 'settings',
+                    selector: 'btn-create-launchpack',
+                    modal_selector: 'lp-btn-confirm',
+                    modal_fields: [
+                        { sel: 'lp-input-name',     key: 'tut.other.launchpack.f.name' },
+                        { sel: 'lp-btn-add-exe',    key: 'tut.other.launchpack.f.apps' },
+                        { sel: 'lp-btn-select-icon', key: 'tut.other.launchpack.f.icon' },
+                        { sel: 'lp-btn-confirm',    key: 'tut.other.launchpack.f.create' },
+                    ],
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.other.launchpack.s2.title',
+                    text_key:  'tut.other.launchpack.s2.text',
+                    nav: 'settings',
+                    selector: 'settings-launchpack-section',
+                },
+            ],
+        },
+        // ── Part 2 : Storage & Smart I/O ───────────────────────────
+        {
+            id: 'storage',
+            title_key: 'tut.other.storage.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.other.storage.s1.title',
+                    text_key:  'tut.other.storage.s1.text',
+                    nav: 'settings',
+                    icon: ICON.disk,
+                    selector: 'settings-storage-section',
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.other.storage.s2.title',
+                    text_key:  'tut.other.storage.s2.text',
+                    nav: 'settings',
+                    selector: 'btn-open-storage',
+                },
+                {
+                    id: 's3',
+                    title_key: 'tut.other.storage.s3.title',
+                    text_key:  'tut.other.storage.s3.text',
+                    nav: 'settings',
+                },
+            ],
+        },
+        // ── Part 3 : Data & Backup ─────────────────────────────────
+        {
+            id: 'backup',
+            title_key: 'tut.other.backup.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.other.backup.s1.title',
+                    text_key:  'tut.other.backup.s1.text',
+                    nav: 'settings',
+                    icon: ICON.shield,
+                    selector: 'btn-export-data',
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.other.backup.s2.title',
+                    text_key:  'tut.other.backup.s2.text',
+                    nav: 'settings',
+                    selector: 'btn-export-data',
+                },
+                {
+                    id: 's3',
+                    title_key: 'tut.other.backup.s3.title',
+                    text_key:  'tut.other.backup.s3.text',
+                    nav: 'settings',
+                    selector: 'btn-import-data',
+                },
+            ],
+        },
+        // ── Part 4 : Benchmark ─────────────────────────────────────
+        {
+            id: 'benchmark',
+            title_key: 'tut.other.benchmark.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.other.benchmark.s1.title',
+                    text_key:  'tut.other.benchmark.s1.text',
+                    nav: 'settings',
+                    icon: ICON.bench,
+                    selector: 'btn-open-benchmark',
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.other.benchmark.s2.title',
+                    text_key:  'tut.other.benchmark.s2.text',
+                    nav: 'settings',
+                },
+            ],
+        },
+        // ── Part 3 : Bug Report ────────────────────────────────────
+        //
+        // Rewritten with the feedback centre. This part used to end on "to file a manual report
+        // or a feature request, visit the GitHub Issues page linked in Credits" — which was true
+        // when the only in-app path was the automatic crash reporter. It is not true now: BMM has
+        // its own form, sending to BetterCommunity, with three report kinds, reproduction steps,
+        // attachments, opt-in diagnostics, a live quality gauge and an offline queue. A tutorial
+        // that sends people to a browser for something the app does better is worse than no
+        // tutorial, because the reader believes it.
+        {
+            id: 'bugreport',
+            title_key: 'tut.other.bugreport.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.other.bugreport.s1.title',
+                    text_key:  'tut.other.bugreport.s1.text',
+                    nav: 'settings',
+                    icon: ICON.bug,
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.other.bugreport.s2.title',
+                    text_key:  'tut.other.bugreport.s2.text',
+                    nav: 'settings',
+                    selector: 'btn-settings-betahub-bugreport',
+                    // The form is built when it opens, so none of these ids exist until the
+                    // reader clicks — which is exactly what modal_selector/modal_fields are for.
+                    modal_selector: 'fbm-send',
+                    modal_fields: [
+                        { sel: 'fbm-title',       key: 'tut.other.bugreport.f.title' },
+                        { sel: 'fbm-desc',        key: 'tut.other.bugreport.f.desc' },
+                        { sel: 'fbm-steps-wrap',  key: 'tut.other.bugreport.f.steps' },
+                        { sel: 'fbm-attach-wrap', key: 'tut.other.bugreport.f.attach' },
+                        { sel: 'fbm-quality',     key: 'tut.other.bugreport.f.quality' },
+                        { sel: 'fbm-send',        key: 'tut.other.bugreport.f.send' },
+                    ],
+                },
+                {
+                    id: 's3',
+                    title_key: 'tut.other.bugreport.s3.title',
+                    text_key:  'tut.other.bugreport.s3.text',
+                    nav: 'settings',
+                    icon: ICON.shield,
+                },
+                {
+                    id: 's4',
+                    title_key: 'tut.other.bugreport.s4.title',
+                    text_key:  'tut.other.bugreport.s4.text',
+                    nav: 'settings',
+                    selector: 'btn-fbc-test',
+                },
+            ],
+        },
+        // ── Part 4 : Plugins & API ─────────────────────────────────
+        {
+            id: 'pluginsapi',
+            title_key: 'tut.other.pluginsapi.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.other.pluginsapi.s1.title',
+                    text_key:  'tut.other.pluginsapi.s1.text',
+                    nav: 'plugins',
+                    icon: ICON.plugin,
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.other.pluginsapi.s2.title',
+                    text_key:  'tut.other.pluginsapi.s2.text',
+                    nav: 'plugins',
+                    selectors: ['.plug-tabs [data-tab="catalog"]', 'plug-head-import'],
+                    optional: true,
+                    action: { event: BMM_ACTIONS.PLUGIN_INSTALLED, desc_key: 'tut.other.pluginsapi.s2.action' },
+                },
+                {
+                    id: 's3',
+                    title_key: 'tut.other.pluginsapi.s3.title',
+                    text_key:  'tut.other.pluginsapi.s3.text',
+                    nav: 'plugins',
+                    selector: '.plug-tabs [data-tab="perms"]',
+                    icon: ICON.shield,
+                },
+                {
+                    id: 's4',
+                    title_key: 'tut.other.pluginsapi.s4.title',
+                    text_key:  'tut.other.pluginsapi.s4.text',
+                    nav: 'plugins',
+                    selector: '.plug-tabs [data-tab="scripts"]',
+                    icon: ICON.api,
+                    optional: true,
+                    action: { event: BMM_ACTIONS.SCRIPT_GENERATED, desc_key: 'tut.other.pluginsapi.s4.action' },
+                },
+                {
+                    id: 's5',
+                    title_key: 'tut.other.pluginsapi.s5.title',
+                    text_key:  'tut.other.pluginsapi.s5.text',
+                    nav: 'plugins',
+                    selector: 'plug-api-chip',
+                    icon: ICON.api,
+                },
+                {
+                    id: 's6',
+                    title_key: 'tut.other.pluginsapi.s6.title',
+                    text_key:  'tut.other.pluginsapi.s6.text',
+                    // The token is in two places: the API & Scripts card on the Plugins page
+                    // and Settings → Identity & API. This step uses Settings, whose Copy now
+                    // announces API_TOKEN_COPIED like the Plugins page's does.
+                    nav: 'settings',
+                    optional: true,
+                    // The local-API config fields (Settings → Identity).
+                    fields: [
+                        { sel: 'sic-api-token', key: 'tut.other.pluginsapi.f.token' },
+                        { sel: 'sic-api-url',   key: 'tut.other.pluginsapi.f.url' },
+                        { sel: 'sic-api-port',  key: 'tut.other.pluginsapi.f.port' },
+                        { sel: 'btn-sic-copy-token', key: 'tut.other.pluginsapi.f.copy' },
+                    ],
+                    action: { event: BMM_ACTIONS.API_TOKEN_COPIED, desc_key: 'tut.other.pluginsapi.s6.action' },
+                },
+            ],
+        },
+        // ── Part : Create a plugin (1.0.4) ─────────────────────────
+        //
+        // The Create tab (plugins.ts renderCreate): a six-step form, a step bar and a live
+        // preview. Its sections only exist once the tab is open, which the first step asks for.
+        {
+            id: 'plugincreate',
+            title_key: 'tut.other.plugincreate.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.other.plugincreate.s1.title',
+                    text_key:  'tut.other.plugincreate.s1.text',
+                    nav: 'plugins',
+                    icon: ICON.plugin,
+                    selector: '.plug-tabs [data-tab="create"]',
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.other.plugincreate.s2.title',
+                    text_key:  'tut.other.plugincreate.s2.text',
+                    fields: [
+                        { sel: 'pc-steps',          key: 'tut.other.plugincreate.f.steps' },
+                        { sel: 'pc-sec-template',   key: 'tut.other.plugincreate.f.template' },
+                        { sel: 'pc-sec-identity',   key: 'tut.other.plugincreate.f.identity' },
+                        { sel: 'pc-sec-contents',   key: 'tut.other.plugincreate.f.contents' },
+                        { sel: 'pc-sec-perms',      key: 'tut.other.plugincreate.f.perms' },
+                    ],
+                },
+                {
+                    id: 's3',
+                    title_key: 'tut.other.plugincreate.s3.title',
+                    text_key:  'tut.other.plugincreate.s3.text',
+                    icon: ICON.shield,
+                    fields: [
+                        { sel: 'pc-checks',   key: 'tut.other.plugincreate.f.checks' },
+                        { sel: 'pc-manifest', key: 'tut.other.plugincreate.f.manifest' },
+                    ],
+                },
+                {
+                    id: 's4',
+                    title_key: 'tut.other.plugincreate.s4.title',
+                    text_key:  'tut.other.plugincreate.s4.text',
+                    icon: ICON.share,
+                    fields: [
+                        { sel: 'pc-save-local',      key: 'tut.other.plugincreate.f.save' },
+                        { sel: 'pc-dry-run',         key: 'tut.other.plugincreate.f.dryrun' },
+                        { sel: 'pc-export-bmmplug',  key: 'tut.other.plugincreate.f.export' },
+                    ],
+                },
+            ],
+        },
+        // ── Part 5 : App Catalog ───────────────────────────────────
+        {
+            id: 'appcatalog',
+            title_key: 'tut.other.appcatalog.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.other.appcatalog.s1.title',
+                    text_key:  'tut.other.appcatalog.s1.text',
+                    nav: 'apps',
+                    icon: ICON.catalog,
+                    selector: 'nav-apps',
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.other.appcatalog.s2.title',
+                    text_key:  'tut.other.appcatalog.s2.text',
+                    nav: 'apps',
+                    selectors: ['apps-search', 'apps-filter-cat'],
+                },
+                {
+                    id: 's3',
+                    title_key: 'tut.other.appcatalog.s3.title',
+                    text_key:  'tut.other.appcatalog.s3.text',
+                    nav: 'apps',
+                    selector: 'apps-content',
+                    icon: ICON.shield,
+                },
+                {
+                    id: 's4',
+                    title_key: 'tut.other.appcatalog.s4.title',
+                    text_key:  'tut.other.appcatalog.s4.text',
+                    nav: 'apps',
+                    // The Sources tab itself (1.0.4: the one source list, shared with Settings).
+                    selector: '#apps-tabs [data-tab="sources"]',
+                },
+            ],
+        },
+        // ── Part 6 : Translation Tool ──────────────────────────────
+        {
+            id: 'translate',
+            title_key: 'tut.other.translate.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.other.translate.s1.title',
+                    text_key:  'tut.other.translate.s1.text',
+                    nav: 'settings',
+                    icon: ICON.translate,
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.other.translate.s2.title',
+                    text_key:  'tut.other.translate.s2.text',
+                    nav: 'settings',
+                    selector: 'btn-open-i18n-sandbox',
+                    modal_selector: 'bmm-translation-studio',
+                    modal_fields: [
+                        { sel: 'tst-source',       key: 'tut.other.translate.f.base' },
+                        { sel: 'tst-target',       key: 'tut.other.translate.f.target' },
+                        { sel: 'tst-pick',         key: 'tut.other.translate.f.pick' },
+                        { sel: 'tst-list',         key: 'tut.other.translate.f.keys' },
+                        { sel: 'tst-live',         key: 'tut.other.translate.f.live' },
+                        { sel: 'tst-export',       key: 'tut.other.translate.f.export' },
+                    ],
+                },
+                {
+                    id: 's3',
+                    title_key: 'tut.other.translate.s3.title',
+                    text_key:  'tut.other.translate.s3.text',
+                    nav: 'settings',
+                    icon: ICON.share,
+                },
+                {
+                    id: 's4',
+                    title_key: 'tut.other.translate.s4.title',
+                    text_key:  'tut.other.translate.s4.text',
+                    nav: 'settings',
+                },
+            ],
+        },
+        // ── Part 7 : Theme System ──────────────────────────────────
+        {
+            id: 'themes',
+            title_key: 'tut.other.themes.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.other.themes.s1.title',
+                    text_key:  'tut.other.themes.s1.text',
+                    nav: 'settings',
+                    icon: ICON.palette,
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.other.themes.s2.title',
+                    text_key:  'tut.other.themes.s2.text',
+                    nav: 'settings',
+                    selector: 'btn-open-theme-editor',
+                    modal_selector: 'bte-save',
+                    // The rebuilt editor (1.0.4): section rail, live preview, contrast checks.
+                    // Import / Export moved into the File menu (hidden until opened), so the
+                    // guide points at the menu button instead of its items.
+                    modal_fields: [
+                        { sel: 'bte-rail',          key: 'tut.other.themes.f.sections' },
+                        { sel: 'bte-live',          key: 'tut.other.themes.f.live' },
+                        { sel: 'bte-contrast',      key: 'tut.other.themes.f.contrast' },
+                        { sel: 'bte-pick-token',    key: 'tut.other.themes.f.pick' },
+                        { sel: 'bte-file-menu-btn', key: 'tut.other.themes.f.filemenu' },
+                        { sel: 'bte-save',          key: 'tut.other.themes.f.save' },
+                    ],
+                },
+                {
+                    id: 's3',
+                    title_key: 'tut.other.themes.s3.title',
+                    text_key:  'tut.other.themes.s3.text',
+                    nav: 'settings',
+                    icon: ICON.palette,
+                },
+                {
+                    id: 's4',
+                    title_key: 'tut.other.themes.s4.title',
+                    text_key:  'tut.other.themes.s4.text',
+                    nav: 'settings',
+                    icon: ICON.share,
+                },
+                {
+                    // Pop-out (ui/popout.ts): the editor can leave BMM's window. The button is
+                    // only shown where popping out is possible, hence a field, not a selector.
+                    id: 's5',
+                    title_key: 'tut.other.themes.s5.title',
+                    text_key:  'tut.other.themes.s5.text',
+                    nav: 'settings',
+                    fields: [
+                        { sel: '#bmm-theme-editor .bmm-popout-btn', key: 'tut.other.themes.f.popout' },
+                        { sel: 'bte-dock',                          key: 'tut.other.themes.f.dock' },
+                    ],
+                },
+            ],
+        },
+        // ── Part : Notification centre (1.0.4) ─────────────────────
+        //
+        // The bell in the sidebar footer opens ui/notification-center.ts's panel (.nc-panel);
+        // the preferences are rendered into #notif-source-list in Settings by ui/app.ts.
+        {
+            id: 'notifications',
+            title_key: 'tut.other.notifications.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.other.notifications.s1.title',
+                    text_key:  'tut.other.notifications.s1.text',
+                    selector: 'btn-notif-center',
+                    modal_selector: 'nc-panel',
+                    modal_fields: [
+                        { sel: 'nc-dnd',      key: 'tut.other.notifications.f.dnd' },
+                        { sel: 'nc-read-all', key: 'tut.other.notifications.f.readall' },
+                        { sel: 'nc-settings', key: 'tut.other.notifications.f.settings' },
+                    ],
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.other.notifications.s2.title',
+                    text_key:  'tut.other.notifications.s2.text',
+                    nav: 'settings',
+                    fields: [
+                        { sel: 'notif-source-list', key: 'tut.other.notifications.f.groups' },
+                        { sel: 'notif-quiet-on',    key: 'tut.other.notifications.f.quiet' },
+                        { sel: 'notif-test',        key: 'tut.other.notifications.f.test' },
+                    ],
+                },
+            ],
+        },
+        // ── Part : Update sources ──────────────────────────────────
+        {
+            id: 'updates',
+            title_key: 'tut.other.updates.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.other.updates.s1.title',
+                    text_key:  'tut.other.updates.s1.text',
+                    nav: 'library',
+                    icon: ICON.repo,
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.other.updates.s2.title',
+                    text_key:  'tut.other.updates.s2.text',
+                    nav: 'library',
+                    icon: ICON.share,
+                },
+                {
+                    id: 's3',
+                    title_key: 'tut.other.updates.s3.title',
+                    text_key:  'tut.other.updates.s3.text',
+                    nav: 'library',
+                    selector: 'btn-lib-check-updates',
+                },
+            ],
+        },
+        // ── Part : Scheduling & Automation ─────────────────────────
+        {
+            id: 'automation',
+            title_key: 'tut.other.automation.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.other.automation.s1.title',
+                    text_key:  'tut.other.automation.s1.text',
+                    nav: 'plugins',
+                    selector: '.plug-tab[data-tab="automations"]',
+                    icon: ICON.activate,
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.other.automation.s2.title',
+                    text_key:  'tut.other.automation.s2.text',
+                    nav: 'plugins',
+                    // Clicking "Load example" builds a real, ready-to-use simple-loop
+                    // automation (createExampleAutomation) and opens it, so the fields
+                    // below actually contain a working loop the user can inspect.
+                    // "Load example" lives in the Files… menu, whose items are a hidden
+                    // template until the menu opens — so the ring goes on Files…, and the
+                    // field guide starts once the editor it builds is on screen.
+                    selector: 'sched-more-btn',
+                    modal_selector: 'sched-save',
+                    modal_fields: [
+                        { sel: 'sched-name',    key: 'tut.other.automation.f.name' },
+                        { sel: 'sched-trigger', key: 'tut.other.automation.f.trigger' },
+                        { sel: 'sched-mode-switch', key: 'tut.other.automation.f.modes' },
+                        { sel: 'sched-steps',   key: 'tut.other.automation.f.steps' },
+                        { sel: 'sched-status',  key: 'tut.other.automation.f.status' },
+                        { sel: 'sched-debug',   key: 'tut.other.automation.f.debug' },
+                        { sel: 'sched-save',    key: 'tut.other.automation.f.save' },
+                    ],
+                },
+                {
+                    id: 's3',
+                    title_key: 'tut.other.automation.s3.title',
+                    text_key:  'tut.other.automation.s3.text',
+                    nav: 'settings',
+                    icon: ICON.modpack,
+                },
+                {
+                    id: 's4',
+                    title_key: 'tut.other.automation.s4.title',
+                    text_key:  'tut.other.automation.s4.text',
+                    nav: 'settings',
+                    icon: ICON.share,
+                },
+                {
+                    id: 's5',
+                    title_key: 'tut.other.automation.s5.title',
+                    text_key:  'tut.other.automation.s5.text',
+                    nav: 'settings',
+                    icon: ICON.api,
+                },
+            ],
+        },
+        {
+            id: 'palette',
+            title_key: 'tut.other.palette.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.other.palette.s1.title',
+                    text_key:  'tut.other.palette.s1.text',
+                    icon: ICON.activate,
+                },
+                {
+                    // Action-gated: the palette dispatches bmm:action:palette-opened on open.
+                    id: 's2',
+                    title_key: 'tut.other.palette.s2.title',
+                    text_key:  'tut.other.palette.s2.text',
+                    modal_selector: 'cp-box',
+                    action: { event: 'bmm:action:palette-opened', desc_key: 'tut.other.palette.s2.action' },
+                },
+                {
+                    id: 's3',
+                    title_key: 'tut.other.palette.s3.title',
+                    text_key:  'tut.other.palette.s3.text',
+                    nav: 'settings',
+                    selector: 'shortcuts-manager',
+                },
+                {
+                    id: 's4',
+                    title_key: 'tut.other.palette.s4.title',
+                    text_key:  'tut.other.palette.s4.text',
+                    // The navbar editor's trigger is "Customize navigation" in the Settings
+                    // layout bar (card-order.ts); the old sidebar button is gone.
+                    nav: 'settings',
+                    selector: 'cardorder-navbar',
+                    icon: ICON.share,
+                },
+                {
+                    // BMM Tools (features/tools/tools-hub.ts) open from the palette only (or a
+                    // pinned navbar entry), so this step has no target of its own.
+                    id: 's5',
+                    title_key: 'tut.other.palette.s5.title',
+                    text_key:  'tut.other.palette.s5.text',
+                    icon: ICON.bench,
+                },
+            ],
+        },
+    ],
+};
+
+// ── Registry ─────────────────────────────────────────────────────────────────
+
+/** All available tutorials — add new ones here. */
+// ── Tutorial: The five-minute tour ───────────────────────────────────────────
+//
+// The short one the long ones cannot replace. "Basics" teaches modding properly over 38
+// steps; this answers a different question — "what IS this app" — in ten, one stop per
+// big idea, never opening a modal and never asking for an action. Someone who finishes
+// it knows where everything lives; the long tutorials are for learning to use it.
+//
+// Every selector below is individually verified against index.html (and the guard keeps
+// that true). Stops stick to what is visible on each view's default tab, so no step
+// highlights something a previous action was supposed to reveal.
+
+const QUICK: TutorialDef = {
+    id: 'quick',
+    category: 'start',
+    level: 1,
+    title_key: 'tut.quick.meta.title',
+    desc_key:  'tut.quick.meta.desc',
+    icon: ICON.rocket,
+    color: 'var(--bmm-success, #22c55e)',
+    parts: [
+        {
+            id: 'tour',
+            title_key: 'tut.quick.tour.title',
+            steps: [
+                { id: 's1', title_key: 'tut.quick.tour.s1.title', text_key: 'tut.quick.tour.s1.text', nav: 'library' },
+                { id: 's2', title_key: 'tut.quick.tour.s2.title', text_key: 'tut.quick.tour.s2.text', nav: 'library', selector: 'btn-add-mod' },
+                { id: 's3', title_key: 'tut.quick.tour.s3.title', text_key: 'tut.quick.tour.s3.text', nav: 'library', selector: 'btn-verify-integrity' },
+                { id: 's4', title_key: 'tut.quick.tour.s4.title', text_key: 'tut.quick.tour.s4.text', nav: 'profiles', selector: 'btn-new-profile' },
+                { id: 's5', title_key: 'tut.quick.tour.s5.title', text_key: 'tut.quick.tour.s5.text', nav: 'modpacks' },
+                { id: 's6', title_key: 'tut.quick.tour.s6.title', text_key: 'tut.quick.tour.s6.text', nav: 'mapper' },
+            ],
+        },
+        {
+            id: 'connect',
+            title_key: 'tut.quick.connect.title',
+            steps: [
+                { id: 's1', title_key: 'tut.quick.connect.s1.title', text_key: 'tut.quick.connect.s1.text', nav: 'repo', selector: 'repo-sync-url' },
+                { id: 's2', title_key: 'tut.quick.connect.s2.title', text_key: 'tut.quick.connect.s2.text', nav: 'repo', selector: 'btn-fetch-repo-info' },
+                // The notification bell (sidebar footer): where every message BMM showed is kept.
+                { id: 'bell', title_key: 'tut.quick.connect.bell.title', text_key: 'tut.quick.connect.bell.text', selector: 'btn-notif-center', dim: false },
+                { id: 's3', title_key: 'tut.quick.connect.s3.title', text_key: 'tut.quick.connect.s3.text', nav: 'settings' },
+                { id: 's4', title_key: 'tut.quick.connect.s4.title', text_key: 'tut.quick.connect.s4.text', nav: 'docs' },
+            ],
+        },
+    ],
+};
+
+// ── Tutorial: Order and integrity ────────────────────────────────────────────
+//
+// The two questions a working setup keeps asking: "which mod's file is in the game?" and
+// "is that file still the one I installed?". Basics touches both in passing; this is the
+// whole of each — the activation order dialog, the saved order lists, and the Integrity
+// dialog behind the Library's Verify. Every target is a stable id or class; steps inside a
+// dialog declare the dialog's own element as modal_selector, so the ring waits for it.
+
+const ORDER: TutorialDef = {
+    id: 'order',
+    category: 'essentials',
+    level: 2,
+    title_key: 'tut.order.meta.title',
+    desc_key:  'tut.order.meta.desc',
+    icon: `${uiIcon('list-ordered', 20)}`,
+    color: '#0ea5e9',
+    parts: [
+        {
+            id: 'order',
+            title_key: 'tut.order.order.title',
+            steps: [
+                { id: 's1', title_key: 'tut.order.order.s1.title', text_key: 'tut.order.order.s1.text', nav: 'profiles', icon: ICON.conflict },
+                {
+                    id: 's2',
+                    title_key: 'tut.order.order.s2.title',
+                    text_key:  'tut.order.order.s2.text',
+                    nav: 'profiles',
+                    selector: 'btn-load-order',
+                    modal_selector: 'lo-list',
+                    action: { event: BMM_ACTIONS.ORDER_OPENED, desc_key: 'tut.order.order.s2.action' },
+                },
+                { id: 's3', title_key: 'tut.order.order.s3.title', text_key: 'tut.order.order.s3.text', nav: 'profiles', selector: 'lo-list' },
+                {
+                    id: 's4',
+                    title_key: 'tut.order.order.s4.title',
+                    text_key:  'tut.order.order.s4.text',
+                    nav: 'profiles',
+                    selector: 'lo-apply',
+                    optional: true,
+                    action: { event: BMM_ACTIONS.ORDER_APPLIED, desc_key: 'tut.order.order.s4.action' },
+                },
+            ],
+        },
+        // ── The Conflicts view (1.0.4) ─────────────────────────────
+        //
+        // features/mods/conflicts-view.ts: a modal-shell dialog (className 'cv-modal'). A
+        // library badge opens the conflict list, whose « Resolve conflicts » opens this view;
+        // the palette (« Resolve conflicts ») opens it directly. No action event is dispatched
+        // on open or apply, so these steps are plain Next.
+        {
+            id: 'conflicts',
+            title_key: 'tut.order.conflicts.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.order.conflicts.s1.title',
+                    text_key:  'tut.order.conflicts.s1.text',
+                    nav: 'library',
+                    icon: ICON.conflict,
+                    selector: 'tag-conflict',
+                    modal_selector: 'cv-modal',
+                },
+                {
+                    id: 's2',
+                    title_key: 'tut.order.conflicts.s2.title',
+                    text_key:  'tut.order.conflicts.s2.text',
+                    fields: [
+                        { sel: 'cv-order', key: 'tut.order.conflicts.f.order' },
+                        { sel: 'cv-pairs', key: 'tut.order.conflicts.f.pairs' },
+                    ],
+                },
+                {
+                    id: 's3',
+                    title_key: 'tut.order.conflicts.s3.title',
+                    text_key:  'tut.order.conflicts.s3.text',
+                    fields: [
+                        { sel: 'cv-pair-acts', key: 'tut.order.conflicts.f.pairacts' },
+                        { sel: 'cv-batch',     key: 'tut.order.conflicts.f.batch' },
+                    ],
+                },
+                {
+                    id: 's4',
+                    title_key: 'tut.order.conflicts.s4.title',
+                    text_key:  'tut.order.conflicts.s4.text',
+                    fields: [
+                        { sel: '.cv-foot [data-cv="moves"]', key: 'tut.order.conflicts.f.moves' },
+                        { sel: '.cv-foot [data-cv="apply"]', key: 'tut.order.conflicts.f.apply' },
+                    ],
+                },
+            ],
+        },
+        {
+            id: 'lists',
+            title_key: 'tut.order.lists.title',
+            steps: [
+                { id: 's1', title_key: 'tut.order.lists.s1.title', text_key: 'tut.order.lists.s1.text', nav: 'profiles' },
+                {
+                    id: 's2',
+                    title_key: 'tut.order.lists.s2.title',
+                    text_key:  'tut.order.lists.s2.text',
+                    nav: 'profiles',
+                    selector: 'btn-load-order',
+                    modal_selector: 'lo-lists',
+                },
+                { id: 's3', title_key: 'tut.order.lists.s3.title', text_key: 'tut.order.lists.s3.text', nav: 'profiles', selector: 'olm-name', dim: false },
+                { id: 's4', title_key: 'tut.order.lists.s4.title', text_key: 'tut.order.lists.s4.text', nav: 'profiles' },
+            ],
+        },
+        {
+            id: 'integrity',
+            title_key: 'tut.order.integrity.title',
+            steps: [
+                {
+                    id: 's1',
+                    title_key: 'tut.order.integrity.s1.title',
+                    text_key:  'tut.order.integrity.s1.text',
+                    nav: 'library',
+                    selector: 'btn-verify-integrity',
+                    optional: true,
+                    action: { event: BMM_ACTIONS.INTEGRITY_CHECK, desc_key: 'tut.order.integrity.s1.action' },
+                },
+                { id: 's2', title_key: 'tut.order.integrity.s2.title', text_key: 'tut.order.integrity.s2.text', nav: 'library', icon: ICON.shield },
+                { id: 's3', title_key: 'tut.order.integrity.s3.title', text_key: 'tut.order.integrity.s3.text', nav: 'settings', selector: 'settings-sha-card' },
+                {
+                    id: 's4',
+                    title_key: 'tut.order.integrity.s4.title',
+                    text_key:  'tut.order.integrity.s4.text',
+                    nav: 'settings',
+                    selector: '#settings-sha-card [data-act="showHashingStats"]',
+                    modal_selector: 'modal-sha-stats',
+                },
+            ],
+        },
+    ],
+};
+
+// ── Tutorial: Laya ───────────────────────────────────────────────────────────
+//
+// The optional assistant. Off by default, and a classifier rather than a writer: it picks
+// tags from the user's own list, detects a language and ranks answers. The lesson says
+// that plainly, shows where it is switched on, and never turns it on by itself.
+
+const LAYA: TutorialDef = {
+    id: 'laya',
+    category: 'tools',
+    level: 1,
+    title_key: 'tut.laya.meta.title',
+    desc_key:  'tut.laya.meta.desc',
+    icon: `${uiIcon('ai', 20)}`,
+    color: '#a855f7',
+    parts: [
+        {
+            id: 'meet',
+            title_key: 'tut.laya.meet.title',
+            steps: [
+                { id: 's1', title_key: 'tut.laya.meet.s1.title', text_key: 'tut.laya.meet.s1.text', nav: 'settings' },
+                { id: 's2', title_key: 'tut.laya.meet.s2.title', text_key: 'tut.laya.meet.s2.text', nav: 'settings', selector: 'settings-ai-section' },
+                {
+                    id: 's3',
+                    title_key: 'tut.laya.meet.s3.title',
+                    text_key:  'tut.laya.meet.s3.text',
+                    nav: 'settings',
+                    selector: 'laya-open',
+                    modal_selector: 'modal-laya',
+                },
+                { id: 's4', title_key: 'tut.laya.meet.s4.title', text_key: 'tut.laya.meet.s4.text', nav: 'settings', selector: '.laya-tab[data-tab="general"]', dim: false },
+            ],
+        },
+        {
+            id: 'use',
+            title_key: 'tut.laya.use.title',
+            steps: [
+                { id: 's1', title_key: 'tut.laya.use.s1.title', text_key: 'tut.laya.use.s1.text', nav: 'library', selector: 'mod-search' },
+                { id: 's2', title_key: 'tut.laya.use.s2.title', text_key: 'tut.laya.use.s2.text', nav: 'library' },
+                { id: 's3', title_key: 'tut.laya.use.s3.title', text_key: 'tut.laya.use.s3.text', nav: 'settings', selector: 'settings-ai-section' },
+            ],
+        },
+    ],
+};
+
+export const TUTORIALS: TutorialDef[] = [QUICK, BASICS, ORDER, ADVANCED, OTHER, LAYA];
+
+/** Get all step keys for a tutorial (used for completion counting). */
+export function getAllStepKeys(tutorial: TutorialDef): string[] {
+    return tutorial.parts.flatMap(p => p.steps.map(s => `${p.id}:${s.id}`));
+}

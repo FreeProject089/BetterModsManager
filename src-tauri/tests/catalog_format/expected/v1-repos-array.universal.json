@@ -1,0 +1,16 @@
+{
+  "format": "bmm-catalog",
+  "format_version": 1,
+  "items": [
+    {
+      "description": "LAN",
+      "download": {
+        "url": "http://192.168.1.10:8080/repo"
+      },
+      "id": "http://192.168.1.10:8080/repo",
+      "kind": "repo",
+      "name": "Local repo"
+    }
+  ],
+  "name": ""
+}

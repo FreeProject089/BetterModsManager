@@ -1,0 +1,401 @@
+[
+  {
+    "action": "api",
+    "params": [
+      "method",
+      "path"
+    ]
+  },
+  {
+    "action": "app/install",
+    "params": [
+      "id",
+      "url",
+      "path",
+      "title",
+      "type",
+      "sha256"
+    ]
+  },
+  {
+    "action": "app/launch",
+    "params": [
+      "id"
+    ]
+  },
+  {
+    "action": "benchmark/open",
+    "params": [
+      "dataset",
+      "size",
+      "mb",
+      "mode",
+      "sources",
+      "folders",
+      "profiles"
+    ]
+  },
+  {
+    "action": "benchmark/run",
+    "params": [
+      "dataset",
+      "size",
+      "mb",
+      "mode",
+      "sources",
+      "folders",
+      "profiles"
+    ]
+  },
+  {
+    "action": "catalog/delete",
+    "params": [
+      "type"
+    ]
+  },
+  {
+    "action": "catalog/entry",
+    "params": [
+      "mode",
+      "type",
+      "id",
+      "fields"
+    ]
+  },
+  {
+    "action": "catalog/follow",
+    "params": [
+      "type",
+      "url",
+      "password",
+      "key",
+      "passphrase"
+    ]
+  },
+  {
+    "action": "catalog/import",
+    "params": [
+      "url",
+      "type",
+      "password",
+      "key",
+      "passphrase"
+    ]
+  },
+  {
+    "action": "catalog/publish",
+    "params": [
+      "kind",
+      "dir",
+      "name",
+      "base"
+    ]
+  },
+  {
+    "action": "catalog/unfollow",
+    "params": [
+      "type",
+      "url",
+      "password",
+      "key",
+      "passphrase"
+    ]
+  },
+  {
+    "action": "data/export-auto",
+    "params": [
+      "dir",
+      "name",
+      "increment"
+    ]
+  },
+  {
+    "action": "discord/rpc",
+    "params": [
+      "enabled"
+    ]
+  },
+  {
+    "action": "docs/open",
+    "params": [
+      "article"
+    ]
+  },
+  {
+    "action": "download",
+    "params": [
+      "url",
+      "name"
+    ]
+  },
+  {
+    "action": "hook",
+    "params": [
+      "name",
+      "data"
+    ]
+  },
+  {
+    "action": "import",
+    "params": [
+      "url",
+      "name"
+    ]
+  },
+  {
+    "action": "install",
+    "params": [
+      "url",
+      "name"
+    ]
+  },
+  {
+    "action": "language/import",
+    "params": [
+      "path"
+    ]
+  },
+  {
+    "action": "language/import-inline",
+    "params": [
+      "data",
+      "code",
+      "gz"
+    ]
+  },
+  {
+    "action": "launchpack/run",
+    "params": [
+      "id"
+    ]
+  },
+  {
+    "action": "mod/check-updates",
+    "params": []
+  },
+  {
+    "action": "mod/disable",
+    "params": [
+      "id"
+    ]
+  },
+  {
+    "action": "mod/enable",
+    "params": [
+      "id"
+    ]
+  },
+  {
+    "action": "mod/update",
+    "params": [
+      "url",
+      "name",
+      "type",
+      "sha256"
+    ]
+  },
+  {
+    "action": "modpack/create",
+    "params": [
+      "name",
+      "profile"
+    ]
+  },
+  {
+    "action": "modpack/disable",
+    "params": [
+      "id"
+    ]
+  },
+  {
+    "action": "modpack/enable",
+    "params": [
+      "id",
+      "order"
+    ]
+  },
+  {
+    "action": "order",
+    "params": [
+      "d"
+    ]
+  },
+  {
+    "action": "plugin/activate",
+    "params": [
+      "id"
+    ]
+  },
+  {
+    "action": "plugin/compare",
+    "params": [
+      "id"
+    ]
+  },
+  {
+    "action": "plugin/delete",
+    "params": [
+      "id"
+    ]
+  },
+  {
+    "action": "profile/activate",
+    "params": [
+      "id"
+    ]
+  },
+  {
+    "action": "recorder/set",
+    "params": []
+  },
+  {
+    "action": "replay/export",
+    "params": [
+      "path"
+    ]
+  },
+  {
+    "action": "replay/import",
+    "params": [
+      "path",
+      "url"
+    ]
+  },
+  {
+    "action": "repo/connect",
+    "params": [
+      "url",
+      "password",
+      "key",
+      "passphrase"
+    ]
+  },
+  {
+    "action": "repo/fetch-ssh",
+    "params": [
+      "dir"
+    ]
+  },
+  {
+    "action": "repo/gen",
+    "params": []
+  },
+  {
+    "action": "repo/host",
+    "params": [
+      "dir",
+      "port"
+    ]
+  },
+  {
+    "action": "repo/publish-ssh",
+    "params": [
+      "dir",
+      "target"
+    ]
+  },
+  {
+    "action": "repo/sync",
+    "params": [
+      "url",
+      "profile",
+      "local_profile",
+      "game_dir",
+      "mods_dir",
+      "backup_dir",
+      "password",
+      "key",
+      "passphrase"
+    ]
+  },
+  {
+    "action": "repo/update",
+    "params": [
+      "dir"
+    ]
+  },
+  {
+    "action": "resources/open",
+    "params": []
+  },
+  {
+    "action": "resources/preset",
+    "params": [
+      "name"
+    ]
+  },
+  {
+    "action": "restart",
+    "params": []
+  },
+  {
+    "action": "schedule/enable",
+    "params": [
+      "id",
+      "k",
+      "on"
+    ]
+  },
+  {
+    "action": "schedule/run",
+    "params": [
+      "id",
+      "k",
+      "on"
+    ]
+  },
+  {
+    "action": "schedule/runs",
+    "params": [
+      "id"
+    ]
+  },
+  {
+    "action": "settings/layout",
+    "params": [
+      "code"
+    ]
+  },
+  {
+    "action": "settings/navbar",
+    "params": [
+      "code"
+    ]
+  },
+  {
+    "action": "telemetry/consent",
+    "params": []
+  },
+  {
+    "action": "telemetry/set",
+    "params": []
+  },
+  {
+    "action": "theme/apply",
+    "params": [
+      "id"
+    ]
+  },
+  {
+    "action": "theme/editor",
+    "params": []
+  },
+  {
+    "action": "theme/import",
+    "params": [
+      "url"
+    ]
+  },
+  {
+    "action": "theme/import-inline",
+    "params": [
+      "data"
+    ]
+  },
+  {
+    "action": "view/open",
+    "params": [
+      "id"
+    ]
+  }
+]

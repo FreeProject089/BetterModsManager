@@ -1,0 +1,1452 @@
+// Command system — one registry that powers BOTH the app-wide command palette (Ctrl/⌘+K)
+// and the rebindable keyboard-shortcuts manager in Settings. Every navigable/actionable thing
+// is a Command with an id, a bilingual title, keywords, a run(), and an optional default chord.
+//
+// - Chords are full combinations (Ctrl / Shift / Alt + key), not the old "Ctrl + single letter".
+// - Custom bindings persist in localStorage (bmm_cmd_bindings) layered over the defaults, so a
+//   user can rebind or clear any shortcut from Settings → Raccourcis Clavier.
+// - A single global dispatcher matches a keypress against every bound command and runs it.
+// - The palette does classic + semantic (synonym-expanded, Algolia-style) search over commands.
+
+import { getLang, t, getSynonyms } from './i18n.js';
+import { registerSearchProvider, searchAll, type SearchHit, type HitKind } from './search.js';
+import { learnMore, LEARN_MORE_EVENT } from './learn-more.js';
+import { FLOW_KEYS, flowKeyActive, flowKeyRun } from '../features/settings/sched-flow-keys.js';
+import { ORDER_KEYS, orderKeysActive, orderKeyRun, LIB_ORDER_KEYS, libOrderKeysActive, libOrderKeyRun } from '../features/profiles/load-order-keys.js';
+import { uiIcon } from '../ui/icons.js';
+import {
+  deviceOf, deviceReserved, mouseRecordable, mouseKey, wheelKey, padKey, padButtons, padLabel, mouseButton, wheelDir,
+  validBindingString, validCommandId, PAD_MAX, SHORTCUTS_FILE_VERSION,
+} from './shortcut-model.js';
+
+type L = { en: string; fr: string };
+const tr = (s: L): string => (getLang() === 'fr' ? s.fr : s.en);
+
+/**
+ * A binding. `key` is a keyboard key name (`k`, `f5`, `arrowup`) or a device key from
+ * core/shortcut-model.ts (`mouse:3`, `wheel:up`, `pad:0-4`); the modifiers apply to both.
+ */
+export interface Chord { ctrl?: boolean; shift?: boolean; alt?: boolean; key: string; }
+export interface Command {
+  id: string;
+  category: 'nav' | 'mods' | 'profiles' | 'repo' | 'tools' | 'settings' | 'scheduler' | 'help' | 'custom';
+  title: L;
+  keywords?: string;
+  run: () => void;
+  defaultChord?: Chord | null;
+  contextual?: boolean;   // palette-only (never globally dispatched)
+  /**
+   * Where the command applies. Absent = everywhere. A scoped command is dispatched, and offered
+   * in the palette, only while `when()` is true — and while it is, its chord wins over a global
+   * one: the scheduler's flow canvas owns Delete and the arrows while it has the focus, and
+   * nowhere else.
+   */
+  when?: () => boolean;
+}
+
+// ── chord helpers ──────────────────────────────────────────────────────────────
+const MOD_KEYS = new Set(['control', 'shift', 'alt', 'meta', 'os']);
+export function chordFromEvent(e: KeyboardEvent): Chord | null {
+  const k = e.key.toLowerCase();
+  if (MOD_KEYS.has(k)) return null;                 // a modifier alone isn't a chord
+  return { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey, alt: e.altKey, key: k === ' ' ? 'space' : k };
+}
+export function chordToStr(c: Chord | null): string {
+  if (!c || !c.key) return '';
+  const p: string[] = [];
+  if (c.ctrl) p.push('Ctrl'); if (c.shift) p.push('Shift'); if (c.alt) p.push('Alt');
+  p.push(c.key.length === 1 ? c.key.toUpperCase() : c.key.replace(/^\w/, (m) => m.toUpperCase()));
+  return p.join('+');
+}
+/** What a device key is called on screen: « Middle button », « Wheel up », « A+RB ». */
+function deviceText(key: string): string {
+  const d = deviceOf(key);
+  if (d === 'mouse') {
+    const b = mouseButton(key);
+    if (b === 1) return t('sk.dev.middle');
+    if (b === 3) return t('sk.dev.back');
+    if (b === 4) return t('sk.dev.forward');
+    return t('sk.dev.button', { n: String(b + 1) });
+  }
+  if (d === 'wheel') return t(wheelDir(key) === 'up' ? 'sk.dev.wheelUp' : 'sk.dev.wheelDown');
+  if (d === 'pad') return padLabel(key);
+  return key;
+}
+/** A chord as people read it, for a toast or a palette row: « Ctrl+Back button », « Ctrl+K ». */
+export function chordLabel(c: Chord | null): string {
+  if (!c || !c.key) return '';
+  if (deviceOf(c.key) === 'key') return chordToStr(c);
+  const p: string[] = [];
+  if (c.ctrl) p.push('Ctrl'); if (c.shift) p.push('Shift'); if (c.alt) p.push('Alt');
+  p.push(deviceText(c.key));
+  return p.join('+');
+}
+function chordEq(a: Chord | null, b: Chord | null): boolean {
+  if (!a || !b) return false;
+  return !!a.ctrl === !!b.ctrl && !!a.shift === !!b.shift && !!a.alt === !!b.alt && a.key === b.key;
+}
+function matches(e: KeyboardEvent, c: Chord | null): boolean {
+  if (!c || !c.key) return false;
+  // `e.key` is not always there. IME composition, some autofill paths and any synthetic
+  // event dispatched without it all reach here, and the crash landed on EVERY keystroke
+  // afterwards because the listener threw before any binding could run.
+  const raw = typeof e.key === 'string' ? e.key.toLowerCase() : '';
+  if (!raw) return false;
+  const k = raw === ' ' ? 'space' : raw;
+  return (e.ctrlKey || e.metaKey) === !!c.ctrl && e.shiftKey === !!c.shift && e.altKey === !!c.alt && k === c.key;
+}
+
+// ── registry + persistence ─────────────────────────────────────────────────────
+const _cmds = new Map<string, Command>();
+export function registerCommand(cmd: Command): void { _cmds.set(cmd.id, cmd); }
+export function allCommands(): Command[] { return [..._cmds.values()]; }
+
+const LS = 'bmm_cmd_bindings';
+// Read once and kept: the wheel and the gamepad ask for every binding many times a second, and
+// parsing localStorage on each of those was the keyboard's cost multiplied by sixty. A copy is
+// handed out, so a caller that edits it changes nothing until it saves.
+let _ovCache: Record<string, string> | null = null;
+function loadOverrides(): Record<string, string> {
+  if (!_ovCache) {
+    try { const v = JSON.parse(localStorage.getItem(LS) || '{}'); _ovCache = v && typeof v === 'object' ? v : {}; } catch { _ovCache = {}; }
+  }
+  return { ..._ovCache };
+}
+function saveOverrides(o: Record<string, string>): void {
+  _ovCache = { ...o };
+  try { localStorage.setItem(LS, JSON.stringify(o)); } catch { /* ignore */ }
+  syncDeviceListeners();
+}
+
+/** Effective chord for a command: a user override (may be "" = intentionally unbound) wins over the default. */
+export function bindingOf(id: string): Chord | null {
+  const o = loadOverrides();
+  if (Object.prototype.hasOwnProperty.call(o, id)) return o[id] ? parseChord(o[id]) : null;
+  return _cmds.get(id)?.defaultChord ?? null;
+}
+export function parseChord(s: string): Chord | null {
+  if (!s) return null;
+  const parts = s.split('+').map((x) => x.trim().toLowerCase());
+  const key = parts.pop() || '';
+  return { ctrl: parts.includes('ctrl'), shift: parts.includes('shift'), alt: parts.includes('alt'), key };
+}
+/** Set (chord), clear (null), or reset-to-default (undefined) a command's binding. */
+export function setBinding(id: string, chord: Chord | null | undefined): void {
+  const o = loadOverrides();
+  if (chord === undefined) delete o[id];           // reset → fall back to default
+  else o[id] = chord ? chordToStr(chord) : '';     // "" = explicitly unbound
+  saveOverrides(o);
+}
+/** The command currently bound to a chord, if any (for conflict detection). Excludes `exceptId`. */
+export function conflictFor(chord: Chord | null, exceptId?: string): Command | null {
+  if (!chord) return null;
+  for (const c of _cmds.values()) { if (c.id === exceptId) continue; if (chordEq(bindingOf(c.id), chord)) return c; }
+  return null;
+}
+
+// ── global dispatcher ──────────────────────────────────────────────────────────
+function isTyping(el: EventTarget | null): boolean {
+  const n = el as HTMLElement | null;
+  if (!n) return false;
+  const tag = n.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || n.isContentEditable;
+}
+/**
+ * The command a binding test picks, or null. Two passes: the commands scoped to where the focus
+ * is first, then the global ones; a scoped command whose scope is not active is skipped.
+ * `best` ranks several hits (the gamepad prefers the combination with the most buttons).
+ */
+function findBound(test: (ch: Chord) => boolean, typing: boolean, best?: (ch: Chord) => number): Command | null {
+  for (const scoped of [true, false]) {
+    let pick: Command | null = null;
+    let score = -1;
+    for (const c of _cmds.values()) {
+      if (c.contextual || !!c.when !== scoped) continue;
+      if (c.when && !c.when()) continue;
+      const ch = bindingOf(c.id);
+      if (!ch) continue;
+      // While typing, only fire keyboard chords that use a modifier (plain letters stay typing).
+      if (typing && deviceOf(ch.key) === 'key' && !ch.ctrl && !ch.alt) continue;
+      if (!test(ch)) continue;
+      if (!best) return c;
+      const s = best(ch);
+      if (s > score) { score = s; pick = c; }
+    }
+    if (pick) return pick;
+  }
+  return null;
+}
+function runCmd(c: Command): void { try { c.run(); } catch { /* the command reports its own errors */ } }
+function onKeydown(e: KeyboardEvent) {
+  // Let the palette handle its own keys when open.
+  if (paletteOpen) return;
+  const c = findBound((ch) => deviceOf(ch.key) === 'key' && matches(e, ch), isTyping(e.target));
+  if (c) { e.preventDefault(); runCmd(c); }
+}
+
+// ── Mouse buttons, the wheel and gamepads ─────────────────────────────────────────
+// The same registry and the same dispatcher rule (scoped first, then global), fed by three more
+// sources. Each listens only while a binding of its kind exists: a non-passive wheel listener
+// costs every scroll, and a gamepad has no events for its buttons, only polling — which runs on
+// animation frames, while the window has the focus, and stops the moment it loses it.
+const modsMatch = (e: MouseEvent, c: Chord): boolean =>
+  (e.ctrlKey || e.metaKey) === !!c.ctrl && e.shiftKey === !!c.shift && e.altKey === !!c.alt;
+const _dev = { mouse: false, wheel: false, pad: false };
+/** > 0 while a recorder owns the devices (the Settings table, the New shortcut dialog). */
+let _recording = 0;
+let _devStarted = false;
+
+function onMouseDown(e: MouseEvent) {
+  if (!_dev.mouse || _recording || paletteOpen || !mouseRecordable(e.button)) return;
+  const key = mouseKey(e.button);
+  const c = findBound((ch) => ch.key === key && modsMatch(e, ch), false);
+  if (!c) return;
+  // The browser's own meaning of the button (autoscroll, back, forward) is cancelled for this
+  // press, down AND up: Chromium navigates on the release of the back button.
+  e.preventDefault();
+  e.stopPropagation();
+  swallowRelease(e.button);
+  runCmd(c);
+}
+let _swallowBtn = -1;
+let _swallowTimer: ReturnType<typeof setTimeout> | null = null;
+function swallowRelease(button: number): void {
+  _swallowBtn = button;
+  if (_swallowTimer) clearTimeout(_swallowTimer);
+  _swallowTimer = setTimeout(() => { _swallowBtn = -1; }, 800);
+}
+function onMouseRelease(e: MouseEvent) {
+  if (e.button !== _swallowBtn) return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (e.type === 'auxclick') _swallowBtn = -1;
+}
+
+let _wheelQuietUntil = 0;
+/** The wheel's vertical turn. Chromium turns Shift+wheel into a sideways one: read that too. */
+const wheelDelta = (e: WheelEvent): number => e.deltaY || (e.shiftKey ? e.deltaX : 0);
+function onWheel(e: WheelEvent) {
+  if (_recording || paletteOpen) return;
+  if (!e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) return;     // the wheel alone scrolls
+  const d = wheelDelta(e);
+  if (!d) return;
+  const key = wheelKey(d);
+  const c = findBound((ch) => ch.key === key && modsMatch(e, ch), false);
+  if (!c) return;
+  e.preventDefault();
+  // One turn is a burst of events: the first runs the command, the rest of the burst only
+  // keeps it from scrolling. A pause of a quarter second starts a new turn.
+  const now = performance.now();
+  const fresh = now >= _wheelQuietUntil;
+  _wheelQuietUntil = now + 250;
+  if (fresh) runCmd(c);
+}
+
+// The gamepad poller: one loop for the dispatcher and for a recorder.
+type PadSub = (now: Set<number>, prev: Set<number>) => void;
+const _padSubs = new Set<PadSub>();
+let _padRaf = 0;
+let _padPrev = new Set<number>();
+function padPressed(): Set<number> {
+  const s = new Set<number>();
+  let pads: ReadonlyArray<Gamepad | null> = [];
+  try { pads = navigator.getGamepads ? navigator.getGamepads() : []; } catch { /* blocked by policy */ }
+  for (const p of pads) {
+    if (!p || !p.connected) continue;
+    p.buttons.forEach((b, i) => { if (b.pressed || b.value > 0.5) s.add(i); });
+  }
+  return s;
+}
+const sameSet = (a: Set<number>, b: Set<number>): boolean => a.size === b.size && [...a].every((x) => b.has(x));
+function padShouldRun(): boolean {
+  return (_padSubs.size > 0 || _dev.pad) && typeof navigator !== 'undefined' && typeof navigator.getGamepads === 'function'
+    && typeof document !== 'undefined' && document.hasFocus();
+}
+function padTick() {
+  _padRaf = 0;
+  if (!padShouldRun()) { _padPrev = new Set(); return; }
+  const now = padPressed();
+  if (!sameSet(now, _padPrev)) {
+    for (const f of [..._padSubs]) { try { f(now, _padPrev); } catch { /* a recorder's own problem */ } }
+    padDispatch(now, _padPrev);
+  }
+  _padPrev = now;
+  _padRaf = requestAnimationFrame(padTick);
+}
+function syncPadPoll(): void {
+  if (!_padRaf && padShouldRun()) _padRaf = requestAnimationFrame(padTick);
+}
+/** Edge detection: a combination runs on the frame it becomes complete, never while held. */
+function padDispatch(now: Set<number>, prev: Set<number>) {
+  if (!_dev.pad || _recording || paletteOpen) return;
+  const complete = (s: Set<number>, ch: Chord) => { const b = padButtons(ch.key); return b.length > 0 && b.every((x) => s.has(x)); };
+  const c = findBound((ch) => deviceOf(ch.key) === 'pad' && complete(now, ch) && !complete(prev, ch), false,
+    (ch) => padButtons(ch.key).length);
+  if (c) runCmd(c);
+}
+
+/** Recompute which device sources have a binding, and listen to those only. */
+function syncDeviceListeners(): void {
+  if (typeof document === 'undefined') return;
+  const o = _ovCache || loadOverrides();
+  const kinds = new Set(Object.values(o).map((v) => deviceOf((String(v).split('+').pop() || '').toLowerCase())));
+  _dev.mouse = kinds.has('mouse');
+  _dev.pad = kinds.has('pad');
+  const wheel = kinds.has('wheel');
+  if (!_devStarted) return;   // initCommands attaches the rest
+  if (wheel !== _dev.wheel) {
+    if (wheel) document.addEventListener('wheel', onWheel, { capture: true, passive: false });
+    else document.removeEventListener('wheel', onWheel, { capture: true } as EventListenerOptions);
+  }
+  _dev.wheel = wheel;
+  syncPadPoll();
+}
+function startDeviceDispatch(): void {
+  if (_devStarted || typeof document === 'undefined') return;
+  _devStarted = true;
+  document.addEventListener('mousedown', onMouseDown, true);
+  document.addEventListener('mouseup', onMouseRelease, true);
+  document.addEventListener('auxclick', onMouseRelease, true);
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('focus', syncPadPoll);
+    window.addEventListener('gamepadconnected', syncPadPoll);
+  }
+  _dev.wheel = false;
+  syncDeviceListeners();
+}
+
+export interface RecorderOpts {
+  /** A combination was made: keys, a mouse button, a wheel turn (with a modifier) or pad buttons. */
+  onChord: (ch: Chord) => void;
+  /** Escape. */
+  onCancel: () => void;
+}
+/**
+ * Listen for one binding from any device until stopped. Keys and buttons being recorded never
+ * reach the dispatcher nor the page: on window, capture phase, ahead of the global dispatcher and
+ * of a dialog's Escape. The left and right buttons pass (they are how you click elsewhere), and
+ * the wheel without a modifier still scrolls. A gamepad combination is taken when every button
+ * is released: holding A, then pressing B and letting go of both, records A+B.
+ * Returns the function that stops it.
+ */
+export function startChordRecorder(o: RecorderOpts): () => void {
+  _recording++;
+  let stopped = false;
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); o.onCancel(); return; }
+    const ch = chordFromEvent(e);
+    if (!ch) return;      // a modifier alone: wait for the rest
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    o.onChord(ch);
+  };
+  const onDown = (e: MouseEvent) => {
+    if (!mouseRecordable(e.button)) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    swallowRelease(e.button);
+    o.onChord({ ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey, alt: e.altKey, key: mouseKey(e.button) });
+  };
+  let wheelUntil = 0;
+  const onWh = (e: WheelEvent) => {
+    if (!e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) return;
+    const d = wheelDelta(e);
+    if (!d) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    const now = performance.now();
+    const fresh = now >= wheelUntil;
+    wheelUntil = now + 400;
+    if (fresh) o.onChord({ ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey, alt: e.altKey, key: wheelKey(d) });
+  };
+  const held = new Set<number>();
+  const onPad: PadSub = (now) => {
+    if (now.size) { now.forEach((b) => held.add(b)); return; }
+    if (!held.size) return;
+    const key = held.size <= PAD_MAX ? padKey(held) : null;
+    held.clear();
+    if (key) o.onChord({ key });
+  };
+  window.addEventListener('keydown', onKey, true);
+  window.addEventListener('mousedown', onDown, true);
+  window.addEventListener('mouseup', onMouseRelease, true);
+  window.addEventListener('auxclick', onMouseRelease, true);
+  window.addEventListener('wheel', onWh, { capture: true, passive: false });
+  _padSubs.add(onPad);
+  syncPadPoll();
+  return () => {
+    if (stopped) return;
+    stopped = true;
+    _recording = Math.max(0, _recording - 1);
+    window.removeEventListener('keydown', onKey, true);
+    window.removeEventListener('mousedown', onDown, true);
+    window.removeEventListener('mouseup', onMouseRelease, true);
+    window.removeEventListener('auxclick', onMouseRelease, true);
+    window.removeEventListener('wheel', onWh, { capture: true } as EventListenerOptions);
+    _padSubs.delete(onPad);
+  };
+}
+
+// ── the command palette (Ctrl/⌘+K) ───────────────────────────────────────────────
+let overlay: HTMLElement | null = null;
+let paletteOpen = false;
+let pMode: 'classic' | 'semantic' = 'classic';
+let pResults: SearchHit[] = [];
+let pActive = 0;
+
+function expand(q: string): string[] {
+  const base = q.toLowerCase().split(/\s+/).filter(Boolean);
+  if (pMode === 'classic') return base;
+  const syn = getSynonyms() || {};
+  const set = new Set(base);
+  for (const tok of base) for (const [k, list] of Object.entries(syn))
+    if (k.toLowerCase() === tok || (list || []).some((s) => s.toLowerCase() === tok)) { set.add(k.toLowerCase()); (list || []).forEach((s) => set.add(s.toLowerCase())); }
+  return [...set];
+}
+// Commands are now just one SOURCE among several. The palette searches everything registered
+// (see core/search.ts): commands, installed mods, profiles, documentation pages…
+//
+// Semantic mode still widens the query through the synonym table, but it does so by handing
+// the expanded terms to the SAME scorer rather than by counting substring hits — so a synonym
+// match can surface a result without outranking the thing you literally typed.
+registerSearchProvider('commands', (q: string): SearchHit[] => {
+  const expanded = expand(q);
+  const extra = pMode === 'semantic' ? expanded.join(' ') : '';
+  return allCommands().filter((c) => !c.when || c.when()).map((c) => ({
+    id: c.id,
+    kind: 'command' as HitKind,
+    title: tr(c.title),
+    sub: tr(CAT_LABEL[c.category]),
+    // Both languages are searchable whichever one is displayed: people search in the language
+    // they think in, not the one the UI happens to be showing.
+    keywords: `${c.title.en} ${c.title.fr} ${c.keywords || ''} ${c.category} ${extra}`,
+    run: () => c.run(),
+  }));
+});
+// Titles now come from USER data — a mod name, a profile name — not only from our own
+// string table, so they are escaped before they reach innerHTML.
+const esc = (v: string): string => String(v)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+const KIND_LABEL: Record<HitKind, L> = {
+  command: { en: 'Command', fr: 'Commande' }, mod: { en: 'Mod', fr: 'Mod' },
+  profile: { en: 'Profile', fr: 'Profil' }, doc: { en: 'Doc', fr: 'Doc' },
+  theme: { en: 'Theme', fr: 'Thème' }, plugin: { en: 'Plugin', fr: 'Plugin' },
+  setting: { en: 'Setting', fr: 'Réglage' }, app: { en: 'App', fr: 'App' },
+  element: { en: 'On this page', fr: 'Sur la page' },
+};
+const CAT_LABEL: Record<Command['category'], L> = {
+  nav: { en: 'Go to', fr: 'Aller à' }, mods: { en: 'Mods', fr: 'Mods' }, profiles: { en: 'Profiles', fr: 'Profils' },
+  repo: { en: 'Server Repo', fr: 'Dépôt serveur' }, tools: { en: 'Tools', fr: 'Outils' },
+  settings: { en: 'Settings', fr: 'Paramètres' }, scheduler: { en: 'Scheduler', fr: 'Planificateur' },
+  help: { en: 'Help', fr: 'Aide' }, custom: { en: 'My shortcut', fr: 'Mon raccourci' },
+};
+function renderPalette() {
+  const list = overlay?.querySelector('.cp-list') as HTMLElement | null;
+  if (!list) return;
+  if (!pResults.length) { list.innerHTML = `<div class="cp-empty">${tr({ en: 'No commands match.', fr: 'Aucune commande.' })}</div>`; return; }
+  list.innerHTML = pResults.map((h, i) => {
+    // A shortcut only exists for commands; for a mod or a page the same slot shows what KIND
+    // of thing it is, so a list mixing sources stays readable.
+    const ch = h.kind === 'command' ? bindingOf(h.id) : null;
+    return `<button class="cp-item ${i === pActive ? 'on' : ''}" data-i="${i}">
+      <span class="cp-cat cp-kind-${h.kind}">${esc(h.kind === 'command' ? (h.sub || '') : tr(KIND_LABEL[h.kind] || KIND_LABEL.command))}</span>
+      <span class="cp-title">${esc(h.title)}</span>
+      ${h.kind !== 'command' && h.sub ? `<span class="cp-sub">${esc(h.sub)}</span>` : ''}
+      ${ch ? `<kbd class="cp-kbd">${esc(chordLabel(ch))}</kbd>` : ''}
+    </button>`;
+  }).join('');
+  const act = list.querySelector('.cp-item.on') as HTMLElement | null;
+  act?.scrollIntoView({ block: 'nearest' });
+}
+// Async now, because providers may be. A sequence number drops a stale response: type fast
+// and an older, slower query must not land after a newer one and replace its results.
+let _searchSeq = 0;
+async function updateResults(q: string) {
+  const ticket = ++_searchSeq;
+  const hits = await searchAll(q, 40);
+  if (ticket !== _searchSeq || !paletteOpen) return;
+  pResults = hits; pActive = 0; renderPalette();
+}
+function runActive() {
+  const h = pResults[pActive];
+  closePalette();
+  if (h) { try { h.run(); } catch { /* ignore */ } }
+}
+// The Help hub opens the palette through this global instead of importing this module: commands.ts
+// already imports docs-hub, and an import back (even a dynamic one) is one more import cycle.
+try { (window as any).bmmOpenCommandPalette = () => openCommandPalette(); } catch { /* no window in tests */ }
+export function openCommandPalette() {
+  if (paletteOpen) return;
+  ensurePaletteStyles();
+  refreshNavCommands();   // palette always shows the current navbar (custom pages included)
+  paletteOpen = true;
+  { const a = document.activeElement as HTMLElement | null; _paletteOpener = a && a !== document.body ? a : null; }
+  // Tutorial hook — lets the interactive tutorial gate a step on "open the palette".
+  try { document.dispatchEvent(new CustomEvent('bmm:action:palette-opened', { detail: {} })); } catch { /* ignore */ }
+  overlay = document.createElement('div');
+  overlay.className = 'cp-overlay';
+  overlay.innerHTML = `
+    <div class="cp-box" role="dialog" aria-modal="true">
+      <div class="cp-search">
+        ${uiIcon('search', 18)}
+        <input class="cp-input" type="text" autocomplete="off" spellcheck="false" placeholder="${tr({ en: 'Type a command or search…', fr: 'Tapez une commande ou recherchez…' })}">
+        <div class="cp-modes">
+          <button class="cp-mode ${pMode === 'classic' ? 'on' : ''}" data-mode="classic">${tr({ en: 'Classic', fr: 'Classique' })}</button>
+          <button class="cp-mode ${pMode === 'semantic' ? 'on' : ''}" data-mode="semantic">${tr({ en: 'Semantic', fr: 'Sémantique' })}</button>
+        </div>
+      </div>
+      <div class="cp-list"></div>
+      <div class="cp-foot"><span><kbd>↑</kbd><kbd>↓</kbd> ${tr({ en: 'navigate', fr: 'naviguer' })} · <kbd>↵</kbd> ${tr({ en: 'run', fr: 'exécuter' })} · <kbd>Esc</kbd> ${tr({ en: 'close', fr: 'fermer' })}</span>${learnMore('command-palette', { className: 'cp-learn' })}</div>
+    </div>`;
+  // Mount inside the visible, rounded, clipped app window (#app-window-outer) so the backdrop
+  // and the box's drop-shadow can't bleed into the transparent OS-webview margin around BMM.
+  // Falls back to <body> if the frame element isn't present.
+  (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
+  // "Learn more" in the footer opens the docs view — which the palette would sit on top of.
+  overlay.addEventListener(LEARN_MORE_EVENT, () => closePalette());
+  const input = overlay.querySelector('.cp-input') as HTMLInputElement;
+  updateResults('');
+  input.focus();
+
+  input.addEventListener('input', () => updateResults(input.value.trim()));
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); pActive = Math.min(pResults.length - 1, pActive + 1); renderPalette(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); pActive = Math.max(0, pActive - 1); renderPalette(); }
+    else if (e.key === 'Enter') { e.preventDefault(); runActive(); }
+    else if (e.key === 'Escape') { e.preventDefault(); closePalette(true); }
+  });
+  overlay.addEventListener('click', (e) => {
+    const el = e.target as HTMLElement;
+    if (el === overlay) { closePalette(true); return; }
+    const mode = el.closest('.cp-mode') as HTMLElement | null;
+    if (mode) { pMode = (mode.getAttribute('data-mode') as any) || 'classic'; overlay!.querySelectorAll('.cp-mode').forEach((m) => m.classList.toggle('on', m === mode)); updateResults(input.value.trim()); return; }
+    const item = el.closest('.cp-item') as HTMLElement | null;
+    if (item) { pActive = parseInt(item.getAttribute('data-i') || '0', 10); runActive(); }
+  });
+}
+/** Where the focus was when the palette opened. Dismissing the palette (Escape, a click
+ *  outside) gives it back — to the launch deck or a dialog it was opened over, which otherwise
+ *  lost the keyboard to the page behind. Running a command does not: the command decides. */
+let _paletteOpener: HTMLElement | null = null;
+export function closePalette(restoreFocus = false) {
+  paletteOpen = false; overlay?.remove(); overlay = null;
+  const back = _paletteOpener; _paletteOpener = null;
+  if (restoreFocus && back?.isConnected) { try { back.focus({ preventScroll: true }); } catch { /* gone */ } }
+}
+
+// ── Custom shortcuts: a key for one specific thing ───────────────────────────────
+// A registry command is a fixed action (« Go to Profiles »). A custom shortcut is an action with
+// its target chosen by the user: open THIS Settings card, switch to THIS profile, activate THIS
+// modpack, run THIS automation. Each one is registered as an ordinary command (category
+// 'custom'), so it is dispatched, listed in the palette and rebound by the same engine; only the
+// list of what they are lives apart (bmm_cmd_custom), and its key in the same overrides map as
+// every other binding. What they DO is in features/settings/custom-shortcuts.ts, loaded on use.
+// 'element' is a control picked on screen with the eyedropper (« Pick in BMM »): its target is a
+// CSS selector, re-resolved at every press and checked by the same guard as an automation's
+// click (features/settings/custom-shortcuts.ts).
+export type CustomKind = 'settings' | 'profile' | 'modpack' | 'automation' | 'element';
+export interface CustomShortcut {
+  id: string;            // 'custom.<random>'
+  kind: CustomKind;
+  target: string;        // card key, profile id, modpack id, automation id or a selector
+  label: string;         // shown in the list and the palette
+  scope: string;         // '' = everywhere, else a view name ('library', 'profiles'…)
+  /** For an element: the view it was picked on, opened first when it is not on screen. */
+  view?: string;
+  /** Imported with nothing to run here, and kept on purpose: listed, never dispatched. */
+  disabled?: boolean;
+}
+const LS_CUSTOM = 'bmm_cmd_custom';
+const CUSTOM_KINDS: CustomKind[] = ['settings', 'profile', 'modpack', 'automation', 'element'];
+function validCustom(x: any): x is CustomShortcut {
+  return !!x && typeof x.id === 'string' && /^custom\.[\w-]{1,40}$/.test(x.id) && CUSTOM_KINDS.includes(x.kind)
+    && typeof x.target === 'string' && x.target.length > 0 && x.target.length < 300
+    // A selector is data from a file: no markup, no rule blocks (sched-nav-model selectorProblem).
+    && (x.kind !== 'element' || !/[<>{}]/.test(x.target))
+    && (x.view === undefined || (typeof x.view === 'string' && /^[\w-]{0,60}$/.test(x.view)))
+    && (x.disabled === undefined || typeof x.disabled === 'boolean')
+    && typeof x.label === 'string' && x.label.length < 200 && (x.scope === undefined || typeof x.scope === 'string');
+}
+export function readCustomShortcuts(): CustomShortcut[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(LS_CUSTOM) || '[]');
+    return Array.isArray(v) ? v.filter(validCustom).map((x) => ({ ...x, scope: x.scope || '' })) : [];
+  } catch { return []; }
+}
+function writeCustom(list: CustomShortcut[]): void { try { localStorage.setItem(LS_CUSTOM, JSON.stringify(list)); } catch { /* ignore */ } }
+
+/** The name a view has in the navbar (what the user calls it). */
+export function viewLabel(v: string): string {
+  const n = (typeof document !== 'undefined' ? document.querySelector(`.nav-item[data-view="${v}"] .nav-label`) : null) as HTMLElement | null;
+  return (n?.textContent || v).trim();
+}
+/** The view on screen (`#view-<name>.active`), '' when none. */
+export function currentView(): string {
+  const v = (typeof document !== 'undefined' ? document.querySelector('.view.active') : null) as HTMLElement | null;
+  return (v?.id || '').replace(/^view-/, '');
+}
+function registerCustom(cs: CustomShortcut): void {
+  registerCommand({
+    id: cs.id, category: 'custom', title: { en: cs.label, fr: cs.label }, keywords: `custom ${cs.kind} ${cs.label}`, defaultChord: null,
+    run: () => {
+      void import('../features/settings/custom-shortcuts.js')
+        .then((m) => m.runCustomShortcut(cs))
+        .catch((e) => { try { (window as any).toast?.(String(e), 'error'); } catch { /* ignore */ } });
+    },
+    when: cs.disabled ? () => false : cs.scope ? () => currentView() === cs.scope : undefined,
+  });
+}
+let _customLoaded = false;
+function ensureCustomRegistered(): void {
+  if (_customLoaded) return;
+  _customLoaded = true;
+  for (const cs of readCustomShortcuts()) registerCustom(cs);
+}
+/** Create or replace a custom shortcut, and give it `chord`. */
+export function saveCustomShortcut(cs: CustomShortcut, chord: Chord | null): void {
+  ensureCustomRegistered();
+  const list = readCustomShortcuts().filter((x) => x.id !== cs.id);
+  const clean: CustomShortcut = { ...cs };
+  if (!clean.disabled) delete clean.disabled;
+  if (!clean.view) delete clean.view;
+  list.push(clean);
+  writeCustom(list);
+  registerCustom(clean);
+  setBinding(cs.id, chord);
+}
+export function deleteCustomShortcut(id: string): void {
+  writeCustom(readCustomShortcuts().filter((x) => x.id !== id));
+  _cmds.delete(id);
+  const o = loadOverrides();
+  delete o[id];
+  saveOverrides(o);
+}
+export function getCommand(id: string): Command | null { ensureCustomRegistered(); return _cmds.get(id) || null; }
+
+/**
+ * Everything the shortcuts page holds, for a file: the rebinds and the custom shortcuts.
+ * Version 2: a binding may name a mouse button, the wheel or gamepad buttons (shortcut-model.ts);
+ * a version 1 file is a version 2 file that happens to hold only keys.
+ */
+export function exportShortcutData(): { format: string; version: number; bindings: Record<string, string>; custom: CustomShortcut[] } {
+  return { format: 'bmm-shortcuts', version: SHORTCUTS_FILE_VERSION, bindings: loadOverrides(), custom: readCustomShortcuts() };
+}
+/** Is this parsed JSON a shortcuts file this BMM can read (any version up to its own)? */
+export function isShortcutFile(data: any): boolean {
+  if (!data || data.format !== 'bmm-shortcuts' || typeof data.bindings !== 'object' || !data.bindings) return false;
+  const v = data.version === undefined ? 1 : Number(data.version);
+  return Number.isInteger(v) && v >= 1 && v <= SHORTCUTS_FILE_VERSION;
+}
+/** The custom shortcuts of a file that pass validation, scope filled in. */
+export function shortcutFileCustom(data: any): CustomShortcut[] {
+  return (Array.isArray(data?.custom) ? data.custom.filter(validCustom) : []).map((x: CustomShortcut) => ({ ...x, scope: x.scope || '' }));
+}
+/**
+ * What to do with one entry of a file, by id (a command id or a custom shortcut's id):
+ * 'skip' leaves it out, 'disable' keeps it without letting it run (a custom shortcut is listed
+ * as disabled; a binding for a command BMM does not have stays waiting for that command).
+ * Entries without a decision are imported as they are.
+ */
+export type ImportDecision = 'skip' | 'disable';
+/** Merge a file made by exportShortcutData. Returns how many entries were taken, or -1 if it is not one. */
+export function importShortcutData(data: any, decisions: Record<string, ImportDecision> = {}): number {
+  if (!isShortcutFile(data)) return -1;
+  ensureCustomRegistered();
+  let n = 0;
+  const custom = shortcutFileCustom(data).filter((cs) => decisions[cs.id] !== 'skip');
+  if (custom.length) {
+    const byId = new Map(readCustomShortcuts().map((x) => [x.id, x]));
+    for (const raw of custom) {
+      const cs: CustomShortcut = { ...raw };
+      if (decisions[cs.id] === 'disable') cs.disabled = true; else delete cs.disabled;
+      byId.set(cs.id, cs);
+      registerCustom(cs);
+      n++;
+    }
+    writeCustom([...byId.values()]);
+  }
+  const o = loadOverrides();
+  for (const [id, v] of Object.entries(data.bindings)) {
+    if (!validCommandId(id) || !validBindingString(v) || decisions[id] === 'skip') continue;
+    if (v && !parseChord(v)?.key) continue;
+    o[id] = v;
+    n++;
+  }
+  saveOverrides(o);
+  return n;
+}
+
+// Keys the shortcuts page refuses to take: the editing keys every text field needs, the
+// window's own (close, reload, devtools) and the ones BMM already gives a fixed meaning (the
+// palette, the page search). A command whose DEFAULT is one of them keeps it (the scheduler's
+// undo is Ctrl+Z, the palette is Ctrl+K).
+const RESERVED = new Set(['Ctrl+C', 'Ctrl+V', 'Ctrl+X', 'Ctrl+A', 'Ctrl+Z', 'Ctrl+Y', 'Ctrl+K', 'Ctrl+F', 'Ctrl+W', 'Ctrl+R',
+  'Ctrl+Shift+I', 'Ctrl+Tab', 'Alt+F4', 'Alt+Tab', 'F5', 'Ctrl+F5', 'F12', 'Escape', 'Tab', 'Shift+Tab', 'Enter', 'Backspace']);
+export function reservedChord(c: Chord | null, forId?: string): boolean {
+  // The wheel alone, Ctrl+wheel (zoom), Shift+wheel, the left and right buttons: never.
+  if (c && deviceReserved(c)) return true;
+  if (!c || !RESERVED.has(chordToStr(c))) return false;
+  const def = forId ? _cmds.get(forId)?.defaultChord || null : null;
+  return !(def && chordEq(def, c));
+}
+
+/** Where a command's key applies: two commands only clash when they apply in the same place. */
+function scopeKey(c: Command): string {
+  if (!c.when) return 'global';
+  if (c.category === 'custom') return 'page:' + (readCustomShortcuts().find((x) => x.id === c.id)?.scope || '');
+  return 'scoped:' + c.id;    // a scoped built-in (the flow editor's keys) owns its own place
+}
+/** The other command that answers the same keys in the same place, if any. */
+export function clashWith(chord: Chord | null, scope: string, exceptId?: string): Command | null {
+  if (!chord) return null;
+  ensureCustomRegistered();
+  for (const c of _cmds.values()) {
+    if (c.id === exceptId || c.contextual) continue;
+    if (scopeKey(c) === scope && chordEq(bindingOf(c.id), chord)) return c;
+  }
+  return null;
+}
+export function scopeOf(id: string): string { const c = _cmds.get(id); return c ? scopeKey(c) : 'global'; }
+function hasOverride(id: string): boolean { return Object.prototype.hasOwnProperty.call(loadOverrides(), id); }
+
+/** A chord as keycaps. A mouse, wheel or gamepad key wears its device's icon. */
+export function keycapsHtml(c: Chord | null): string {
+  const pretty: Record<string, string> = { Arrowup: '↑', Arrowdown: '↓', Arrowleft: '←', Arrowright: '→', Escape: 'Esc', Delete: 'Del', Pageup: 'PgUp', Pagedown: 'PgDn' };
+  if (!c || !c.key) return '';
+  const dev = deviceOf(c.key);
+  if (dev === 'key') return chordToStr(c).split('+').filter(Boolean).map((k) => `<kbd class="sk-kbd">${esc(pretty[k] || k)}</kbd>`).join('');
+  const mods = [c.ctrl && 'Ctrl', c.shift && 'Shift', c.alt && 'Alt'].filter(Boolean) as string[];
+  const icon = uiIcon(dev === 'pad' ? 'game' : 'mouse', 12);
+  return mods.map((k) => `<kbd class="sk-kbd">${k}</kbd>`).join('')
+    + `<kbd class="sk-kbd sk-kbd-dev">${icon}<span>${esc(deviceText(c.key))}</span></kbd>`;
+}
+
+// ── Settings: the rebindable shortcuts manager ────────────────────────────────────
+// A table: the action, its keys as keycaps, then reset / clear (or edit / delete for a custom
+// one). Groups are headings; a search above narrows the rows in place. « New shortcut » opens
+// features/settings/custom-shortcuts.ts. A clash is said on the row it concerns.
+let recording: { id: string; row: HTMLElement } | null = null;
+let _skQuery = '';
+let _skChanged = false;
+const SK_GROUPS: Command['category'][] = ['custom', 'nav', 'profiles', 'mods', 'repo', 'tools', 'settings', 'scheduler', 'help'];
+const SK_TITLE: Record<Command['category'], L> = {
+  nav: { en: 'Navigation', fr: 'Navigation' }, profiles: { en: 'Profiles', fr: 'Profils' }, mods: { en: 'Mods', fr: 'Mods' },
+  repo: { en: 'Server Repo', fr: 'Dépôt serveur' }, tools: { en: 'Tools', fr: 'Outils' },
+  settings: { en: 'Settings', fr: 'Paramètres' }, help: { en: 'Help', fr: 'Aide' },
+  scheduler: { en: 'Scheduler', fr: 'Planificateur' }, custom: { en: 'Your shortcuts', fr: 'Vos raccourcis' },
+};
+
+/** Show only the rows the search (and « Changed only ») keep; hide the headings left empty. */
+function applySkFilter(container: HTMLElement): void {
+  if (!container.querySelectorAll) return;
+  const q = _skQuery.trim().toLowerCase();
+  let shown = 0;
+  container.querySelectorAll<HTMLElement>('.sk-group').forEach((g) => {
+    let any = false;
+    g.querySelectorAll<HTMLElement>('.sk-row').forEach((r) => {
+      const hitQ = !q || (r.textContent || '').toLowerCase().includes(q);
+      const hitC = !_skChanged || r.dataset.changed === '1';
+      r.hidden = !(hitQ && hitC);
+      if (!r.hidden) { any = true; shown++; }
+    });
+    g.hidden = !any;
+  });
+  const empty = container.querySelector<HTMLElement>('.sk-empty');
+  if (empty) empty.hidden = shown > 0;
+}
+
+export function renderShortcutsManager(container: HTMLElement) {
+  ensurePaletteStyles();   // the palette's sheet; the table itself is styled in css/settings-page.css
+  refreshNavCommands();    // reflect the current navbar (custom pages, renames, reorders)
+  ensureCustomRegistered();
+  // A re-render ends a recording in progress: its row is about to be replaced.
+  _stopRowRec?.(); _stopRowRec = null; recording = null;
+  const all = allCommands().filter((c) => !c.contextual);
+  let changed = 0;
+  const rowFor = (c: Command) => {
+    const ch = bindingOf(c.id);
+    const custom = c.category === 'custom';
+    const modified = !custom && hasOverride(c.id);
+    const clash = ch ? clashWith(ch, scopeKey(c), c.id) : null;
+    if (modified || custom) changed++;
+    const name = tr(c.title);
+    const mine = custom ? readCustomShortcuts().find((x) => x.id === c.id) : undefined;
+    const scope = mine?.scope || '';
+    const tag = modified ? `<span class="sk-tag">${esc(t('sk.modified'))}</span>`
+      : mine?.disabled ? `<span class="sk-tag sk-tag-off">${esc(t('sk.disabledTag'))}</span>`
+      : scope ? `<span class="sk-tag">${esc(t('sk.onlyOn', { page: viewLabel(scope) }))}</span>` : '';
+    const btn = (act: string, icon: Parameters<typeof uiIcon>[0], label: string, cls = '', off = false) =>
+      `<button type="button" class="sk-act ${cls}" data-act="${act}" data-tooltip="${esc(label)}" aria-label="${esc(label)}"${off ? ' disabled' : ''}>${uiIcon(icon, 14)}</button>`;
+    const acts = custom
+      ? btn('edit', 'edit', t('sk.edit')) + btn('delete', 'delete', t('sk.delete'), 'sk-del')
+      : btn('reset', 'reset', t('sk.resetOne'), '', !modified) + btn('clear', 'clear', t('sk.clear'), '', !ch);
+    return `<div class="sk-row" role="row" data-id="${esc(c.id)}" data-changed="${modified || custom || clash ? 1 : 0}">
+      <span class="sk-label" role="cell">${esc(name)}${tag}</span>
+      <button type="button" class="sk-chord ${ch ? '' : 'sk-none'}" data-act="record" aria-label="${esc(t('sk.changeFor', { name }))}">${ch ? keycapsHtml(ch) : esc(t('sk.notSet'))}</button>
+      <span class="sk-acts" role="cell">${acts}</span>
+      ${clash ? `<div class="sk-warn">${uiIcon('warning', 12)}<span>${esc(t('sk.alsoUsedBy', { name: tr(clash.title) }))}</span></div>` : ''}
+    </div>`;
+  };
+  const groups = SK_GROUPS.map((g) => {
+    const items = all.filter((c) => c.category === g);
+    if (!items.length) return '';
+    const note = g === 'scheduler' ? `<span class="sk-group-note">${esc(t('sk.schedulerNote'))}</span>` : '';
+    return `<section class="sk-group" data-group="${g}" role="rowgroup"><h4 class="sk-group-h"><span>${esc(tr(SK_TITLE[g]))}</span>${note}<span class="sk-group-n">${items.length}</span></h4>${items.map(rowFor).join('')}</section>`;
+  }).join('');
+  container.innerHTML = `
+    <div class="sk-tools">
+      <label class="sk-search">${uiIcon('search', 14)}<input type="search" class="sk-q" value="${esc(_skQuery)}" placeholder="${esc(t('sk.searchPh'))}" aria-label="${esc(t('sk.searchPh'))}"></label>
+      <button type="button" class="btn btn-ghost btn-sm sk-filter" data-act="changed" aria-pressed="${_skChanged}">${esc(t('sk.changedOnly'))}</button>
+      <button type="button" class="btn btn-primary btn-sm sk-new" data-act="new">${uiIcon('add', 14)}<span>${esc(t('sk.new'))}</span></button>
+    </div>
+    <div class="sk-table" role="table" aria-label="${esc(t('settings.shortcutsTitle'))}">${groups}</div>
+    <div class="sk-empty" hidden>${esc(t('sk.noMatch'))}</div>
+    <div class="stg-foot sk-foot">
+      <span class="stg-foot-status">${esc(t('sk.count', { n: String(all.length), c: String(changed) }))}</span>
+      <button type="button" class="btn btn-ghost btn-sm" data-act="import">${uiIcon('import', 14)}<span>${esc(t('sk.import'))}</span></button>
+      <button type="button" class="btn btn-ghost btn-sm" data-act="export">${uiIcon('export', 14)}<span>${esc(t('sk.export'))}</span></button>
+      <button type="button" class="btn btn-ghost btn-sm sk-reset-all" data-act="reset-all">${uiIcon('reset', 14)}<span>${esc(t('sk.resetAll'))}</span></button>
+    </div>`;
+  applySkFilter(container);
+  const rerender = () => renderShortcutsManager(container);
+
+  const q = container.querySelector?.<HTMLInputElement>('.sk-q');
+  q?.addEventListener('input', () => { _skQuery = q.value; applySkFilter(container); });
+
+  const stopRecording = () => {
+    _stopRowRec?.(); _stopRowRec = null;
+    if (recording) { recording.row.classList.remove('sk-recording'); recording = null; }
+  };
+  const tools = () => import('../features/settings/custom-shortcuts.js');
+  container.onclick = (e) => {
+    const el = (e.target as HTMLElement).closest('[data-act]') as HTMLElement | null;
+    if (!el || (el as HTMLButtonElement).disabled) return;
+    const act = el.getAttribute('data-act');
+    if (act === 'changed') { _skChanged = !_skChanged; el.setAttribute('aria-pressed', String(_skChanged)); applySkFilter(container); return; }
+    if (act === 'new') { void tools().then((m) => m.openShortcutEditor({ onDone: rerender })); return; }
+    if (act === 'export') { void tools().then((m) => m.exportShortcutsFile()); return; }
+    if (act === 'import') { void tools().then((m) => m.importShortcutsFile(rerender)); return; }
+    if (act === 'reset-all') { void tools().then((m) => m.confirmResetAll(rerender)); return; }
+    const row = el.closest('.sk-row') as HTMLElement | null;
+    if (!row) return;
+    const id = row.getAttribute('data-id')!;
+    if (act === 'reset') { setBinding(id, undefined); rerender(); return; }
+    if (act === 'clear') { setBinding(id, null); rerender(); return; }
+    if (act === 'edit') { void tools().then((m) => m.openShortcutEditor({ editId: id, onDone: rerender })); return; }
+    if (act === 'delete') { void tools().then((m) => m.confirmDeleteCustom(id, rerender)); return; }
+    if (act === 'record') {
+      stopRecording();
+      recording = { id, row };
+      row.classList.add('sk-recording');
+      const btn = row.querySelector('.sk-chord') as HTMLElement;
+      btn.textContent = t('sk.pressKeys');
+      // Keys, a mouse button, a modified wheel turn or gamepad buttons (startChordRecorder): on
+      // window, capture phase, so what is being recorded does not also run its command.
+      const stopRec = startChordRecorder({
+        onCancel: () => { stopRecording(); rerender(); },
+        onChord: (ch) => {
+          if (!recording) return;
+          if (reservedChord(ch, recording.id)) {
+            btn.textContent = t('sk.reserved', { keys: chordLabel(ch) });
+            return; // still recording: another combination, or Escape
+          }
+          setBinding(recording.id, ch);
+          stopRecording();
+          rerender();
+        },
+      });
+      // A left click anywhere else ends the recording, the keys unchanged. The row is put back
+      // in place rather than re-rendered: the click may be on another row's keys, and replacing
+      // the table under the pointer would swallow it.
+      const onOutside = (ev: MouseEvent) => {
+        if (ev.button !== 0 || row.contains(ev.target as Node)) return;
+        const ch = bindingOf(id);
+        stopRecording();
+        btn.innerHTML = ch ? keycapsHtml(ch) : esc(t('sk.notSet'));
+      };
+      window.addEventListener('mousedown', onOutside, true);
+      _stopRowRec = () => { stopRec(); window.removeEventListener('mousedown', onOutside, true); };
+    }
+  };
+}
+/** The recorder of the table row being recorded, if any (one at a time, across re-renders). */
+let _stopRowRec: (() => void) | null = null;
+
+// ── register BMM's commands + start the dispatcher ────────────────────────────────
+const clickNav = (view: string) => () => (document.querySelector(`.nav-item[data-view="${view}"]`) as HTMLElement | null)?.click();
+const clickAfterNav = (view: string, btnId: string, delay = 60) => () => {
+  (document.querySelector(`.nav-item[data-view="${view}"]`) as HTMLElement | null)?.click();
+  setTimeout(() => document.getElementById(btnId)?.click(), delay);
+};
+// Go to a view, switch one of its inner tabs, then (optionally) click a button inside that tab.
+const clickTab = (view: string, tabSel: string, delay = 70) => () => {
+  (document.querySelector(`.nav-item[data-view="${view}"]`) as HTMLElement | null)?.click();
+  setTimeout(() => (document.querySelector(tabSel) as HTMLElement | null)?.click(), delay);
+};
+const clickTabThen = (view: string, tabSel: string, btnId: string, d1 = 70, d2 = 150) => () => {
+  (document.querySelector(`.nav-item[data-view="${view}"]`) as HTMLElement | null)?.click();
+  setTimeout(() => (document.querySelector(tabSel) as HTMLElement | null)?.click(), d1);
+  setTimeout(() => document.getElementById(btnId)?.click(), d2);
+};
+// A button that lives outside any view (present in the static shell) — click it directly.
+const clickId = (btnId: string) => () => document.getElementById(btnId)?.click();
+// A window-global entry point (modal openers exposed on window); no-op if not yet wired.
+const callGlobal = (name: string) => () => { try { (window as any)[name]?.(); } catch { /* ignore */ } };
+
+// Nav commands are built from the LIVE navbar so they always match what's actually there —
+// including custom pages, reordered/renamed items, and anything hidden/shown via navbar
+// customisation. Rebuilt on demand (Settings render + palette open). Bindings persist by id.
+// ── App-data providers ─────────────────────────────────────────────────────────────────
+//
+// Registered here, but every app module is reached through a DYNAMIC import inside the
+// provider. commands.ts is imported by much of the app, so a static import of a feature
+// module would close an import cycle; doing it lazily also means a source nobody searches
+// costs nothing to have registered.
+//
+// Each returns candidates unfiltered — ranking and cutoff are search.ts's job, and a provider
+// that pre-filters on its own would apply a second, different notion of "matches".
+
+registerSearchProvider('mods', async (q): Promise<SearchHit[]> => {
+  if (!q) return [];   // an empty query should list COMMANDS, not every mod you own
+  const { appState } = await import('./state.js');
+  const mods = (appState.state.allMods || []) as Array<{ id: string; name: string; version?: string; author?: string | null; tags?: string[] }>;
+  return mods.map((m) => ({
+    id: `mod:${m.id}`,
+    kind: 'mod' as HitKind,
+    title: m.name,
+    sub: [m.author || null, m.version ? `v${m.version}` : null].filter(Boolean).join(' · '),
+    keywords: (m.tags || []).join(' '),
+    run: () => {
+      // Route through the mods view's own search rather than inventing a second way to focus
+      // a mod — whatever that view does about filters and scrolling keeps working.
+      try {
+        document.dispatchEvent(new CustomEvent('bmm:search:open-mod', { detail: { id: m.id, name: m.name } }));
+      } catch { /* ignore */ }
+    },
+  }));
+});
+
+registerSearchProvider('themes', async (q): Promise<SearchHit[]> => {
+  if (!q) return [];
+  try {
+    const m = await import('../features/themes/theme-engine.js') as {
+      BUILTIN_THEMES?: Array<{ id: string; name?: string; author?: string }>;
+      getInstalledThemes?: () => Array<{ id: string; name?: string; author?: string }>;
+      activateTheme?: (id: string) => Promise<void>;
+    };
+    const seen = new Set<string>();
+    const all = [...(m.BUILTIN_THEMES || []), ...(m.getInstalledThemes?.() || [])]
+      .filter((th) => th && th.id && !seen.has(th.id) && seen.add(th.id));
+    return all.map((th) => ({
+      id: `theme:${th.id}`,
+      kind: 'theme' as HitKind,
+      title: th.name || th.id,
+      sub: th.author || '',
+      // Applying it IS the action — for a theme, "take me to it" and "use it" are the same
+      // intent, and a list of themes you then have to find again would be busywork.
+      run: () => { void m.activateTheme?.(th.id); },
+    }));
+  } catch { return []; }
+});
+
+registerSearchProvider('plugins', async (q): Promise<SearchHit[]> => {
+  if (!q) return [];
+  try {
+    const { invoke } = await import('./api.js');
+    // `get_installed_plugins`, NOT `list_plugins` — the latter is a plugin-ACTION name mapped
+    // to GET /api/plugins, not a Tauri command. Calling it would have thrown into the catch
+    // below and left this provider silently returning nothing for ever.
+    const list = (await invoke('get_installed_plugins', {}, { quiet: true })) as Array<Record<string, any>> | null;
+    return (list || []).map((p) => {
+      const man = (p.manifest || {}) as Record<string, any>;
+      return {
+      id: `plugin:${man.id ?? man.name}`,
+      kind: 'plugin' as HitKind,
+      title: String(man.name ?? man.id ?? ''),
+      sub: [man.version ? `v${man.version}` : null, man.author || null, p.enabled === false ? 'disabled' : null].filter(Boolean).join(' · '),
+      keywords: String(man.description ?? ''),
+      run: () => { (document.querySelector('.nav-item[data-view="plugins"]') as HTMLElement | null)?.click(); },
+      };
+    });
+  } catch { return []; }
+});
+
+// Settings cards, read from the DOM the same way the nav commands are — the settings view is
+// authored in index.html, so scraping it is what keeps this list from going stale the moment
+// a card is added or renamed. A hardcoded copy would be a second source of truth.
+registerSearchProvider('settings', (q): SearchHit[] => {
+  if (!q) return [];
+  const cards = document.querySelectorAll('#view-settings .settings-sections > .glass-card');
+  const hits: SearchHit[] = [];
+  cards.forEach((card, i) => {
+    const h = card.querySelector('.card-title');
+    // textContent picks up the inline <svg> too; the icon contributes no text, but trimming
+    // guards against whitespace-only titles on a card that has no heading yet.
+    const title = (h?.textContent || '').replace(/\s+/g, ' ').trim();
+    if (!title) return;
+    hits.push({
+      id: `setting:${i}`,
+      kind: 'setting' as HitKind,
+      title,
+      sub: tr({ en: 'Settings', fr: 'Paramètres' }),
+      run: () => {
+        (document.querySelector('.nav-item[data-view="settings"]') as HTMLElement | null)?.click();
+        // A card hidden from the layout (card-order.ts) is shown for this visit: you asked for it.
+        card.classList.add('stg-card-peek');
+        setTimeout(() => card.scrollIntoView({ block: 'center', behavior: 'smooth' }), 60);
+      },
+    });
+  });
+  return hits;
+});
+
+// Documentation pages. Silent on an empty query, like the other data providers: with no
+// query every hit scores the same, so returning 36 pages would interleave them with the
+// commands and bury the list the palette opens on. Discovering the docs hub is the nav
+// item's job; the palette's is to find a page you are already looking for.
+//
+// The manifest is fetched once and cached by docs-hub, so this costs one request per session.
+// A typed QUESTION (three words or more, or a question mark) gets one extra row: « Ask Laya: … »,
+// which opens the Ask dialog on it. Its keywords are the query itself, so it always matches, and
+// its boost keeps it under a real title match.
+registerSearchProvider('ask', (q): SearchHit[] => {
+  const words = q.trim().split(/\s+/).filter(Boolean);
+  if (!q.includes('?') && words.length < 3) return [];
+  return [{
+    id: 'ask:laya', kind: 'command' as HitKind, title: tr({ en: `Ask Laya: “${q.trim()}”`, fr: `Demander à Laya : « ${q.trim()} »` }),
+    sub: tr({ en: 'Help', fr: 'Aide' }), keywords: q, boost: 0.6,
+    run: () => { void import('../features/ai/ai-ask.js').then((m) => m.openAskLaya(q.trim())); },
+  }];
+});
+
+registerSearchProvider('docs', async (q): Promise<SearchHit[]> => {
+  if (!q) return [];
+  try {
+    const mod = await import('../docs/docs-hub.js') as { docsSearchHits?: () => Promise<SearchHit[]> };
+    return (await mod.docsSearchHits?.()) || [];
+  } catch { return []; }
+});
+
+registerSearchProvider('profiles', async (q): Promise<SearchHit[]> => {
+  if (!q) return [];
+  try {
+    const mod = await import('../features/profiles/profiles.js') as { getProfiles?: () => Promise<any[]> };
+    const list = (await mod.getProfiles?.()) || [];
+    return list.map((p: any) => ({
+      id: `profile:${p.id}`,
+      kind: 'profile' as HitKind,
+      title: String(p.name || p.id),
+      sub: typeof p.mod_count === 'number' ? `${p.mod_count} mods` : '',
+      run: () => { try { document.dispatchEvent(new CustomEvent('bmm:search:open-profile', { detail: { id: p.id } })); } catch { /* ignore */ } },
+    }));
+  } catch { return []; }
+});
+
+// ── In-page element search ──────────────────────────────────────────────────
+// "Search elements INSIDE the current page." The palette already finds commands, mods, docs…;
+// this finds the actual controls on the view you're looking at — a specific setting row, a
+// button, a section heading, a mod in the list — and jumps to it. It is the precise "where is
+// that thing on this screen" search, so a dense view (Settings, the mod library, Server-Repo)
+// is navigable by name instead of by scrolling.
+function flashElement(el: HTMLElement): void {
+  try {
+    // A hit in a hidden pane or a folded « More options » block is shown first (settings-tabs.ts).
+    el.dispatchEvent(new CustomEvent('bmm:reveal', { bubbles: true }));
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    el.classList.add('cp-flash');
+    setTimeout(() => el.classList.remove('cp-flash'), 1400);
+    // Focus if it can take focus, so keyboard users land ON it, not just near it.
+    const focusable = el.matches('a,button,input,select,textarea,summary,[tabindex]');
+    if (focusable) setTimeout(() => { try { (el as HTMLElement).focus({ preventScroll: true }); } catch { /* ignore */ } }, 260);
+  } catch { /* a detached node — nothing to do */ }
+}
+// A control hit should DO the thing, not just scroll to it. A Ctrl+K result for a button, a
+// link, a tab or a nav item that merely flashed read as broken — "clicking does nothing on
+// certain elements". Flash to show where it is, then click it: runActive() has already closed
+// the palette, so the overlay can't swallow the event.
+function activateElement(el: HTMLElement): void {
+  flashElement(el);
+  setTimeout(() => { try { el.click(); } catch { /* ignore */ } }, 120);
+}
+registerSearchProvider('page', (q: string): SearchHit[] => {
+  if (!q || q.trim().length < 1 || typeof document === 'undefined') return [];
+  // The active view (BMM toggles `.view.active`); fall back to the app root, never the whole doc.
+  const root = (document.querySelector('.view.active') as HTMLElement)
+    || (document.getElementById('app') as HTMLElement) || document.body;
+  if (!root) return [];
+  // Two families: STRUCTURED controls (headings, buttons, setting rows — jump to a thing), and
+  // CONTENT (paragraphs, list items, descriptions — jump to where the page SAYS something). The
+  // content family is what makes this "search the content of the page you're on", not just its
+  // controls.
+  const SEL = 'h1,h2,h3,h4,h5,.card-title,.section-title,.setting-title,[data-setting],'
+    + 'button,a[href],[role="button"],.nav-item,summary,legend,label,th,'
+    + '[data-searchable],[data-mod-id],[data-name],[data-tab],'
+    + 'p,li,td,dd,.setting-desc,.hint,.card-desc,.field-hint,.desc';
+  const CONTENT_TAG = new Set(['P', 'LI', 'TD', 'DD']);
+  const hits: SearchHit[] = [];
+  const seen = new Set<string>();
+  let n = 0;
+  for (const node of Array.from(root.querySelectorAll(SEL))) {
+    if (n > 600) break; // a hard scan cap so a giant list can't stall a keystroke
+    n++;
+    const el = node as HTMLElement;
+    // Skip the aria-hidden measuring copies (e.g. ActionBar's hidden button clones), and
+    // anything not currently laid out (display:none / collapsed) — you can't jump to it.
+    if (el.closest('[aria-hidden="true"]')) continue;
+    if (!el.offsetParent && getComputedStyle(el).position !== 'fixed') continue;
+    const isContent = CONTENT_TAG.has(el.tagName) || el.classList.contains('setting-desc')
+      || el.classList.contains('hint') || el.classList.contains('card-desc')
+      || el.classList.contains('field-hint') || el.classList.contains('desc');
+    // A content node that WRAPS a control (a <li> holding a button, a <p> with a link) is
+    // indexed through that control already — indexing the wrapper too would duplicate it and
+    // grab a blob of concatenated text. Let the leaf win.
+    if (isContent && el.querySelector('button,a[href],input,select,textarea,[role="button"]')) continue;
+    const raw = (el.getAttribute('aria-label') || el.getAttribute('data-name')
+      || el.textContent || '').replace(/\s+/g, ' ').trim();
+    // Skip empties and whole-container blobs (a paragraph over ~400 chars is a section, not a
+    // line to jump to — and it would be found via a heading anyway).
+    if (!raw || raw.length < 2 || raw.length > 400) continue;
+    const key = `${el.tagName}:${raw.slice(0, 60).toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    // Show a snippet, but MATCH the whole text: a query hits anywhere in a paragraph, and the
+    // full string rides in `keywords` (matched, not shown) when the title is truncated.
+    const title = raw.length > 80 ? `${raw.slice(0, 78).trimEnd()}…` : raw;
+    const isHeading = /^H[1-5]$/.test(el.tagName) || el.classList.contains('card-title') || el.classList.contains('section-title');
+    // Actionable controls get clicked, not just scrolled to; headings and prose only flash.
+    const isControl = !isContent && !isHeading && (el.matches('button,a[href],[role="button"],.nav-item,summary') || el.hasAttribute('data-tab'));
+    hits.push({
+      id: `page:${n}:${key}`,
+      kind: 'element' as HitKind,
+      title,
+      keywords: raw.length > 80 ? raw : undefined,
+      sub: tr(isHeading ? { en: 'Section', fr: 'Section' } : { en: 'On this page', fr: 'Sur la page' }),
+      // Content sits a touch below controls, and both below real commands — so "Settings" the
+      // command beats a "Settings" label, and a control beats a paragraph that mentions it.
+      boost: isContent ? 0.6 : 0.8,
+      run: isControl ? () => activateElement(el) : () => flashElement(el),
+    });
+  }
+  return hits;
+});
+
+export function refreshNavCommands() {
+  for (const id of [..._cmds.keys()]) if (id.startsWith('nav.')) _cmds.delete(id);
+  const seen = new Set<string>();
+  // Built-in views carry data-view; user-added custom buttons AND custom sandboxed pages carry
+  // data-custom-id (they have no data-view). Include both so a custom nav item is rebindable.
+  document.querySelectorAll('.nav-item[data-view], .nav-item[data-custom-id]').forEach((el) => {
+    const node = el as HTMLElement;
+    if (node.id === 'nav-customize-btn') return;                 // the "customize" button isn't a destination
+    const view = node.getAttribute('data-view');
+    const custom = node.getAttribute('data-custom-id');
+    const key = view || custom;                                  // stable id for the command + its binding
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    const lbl = ((node.querySelector('.nav-label') as HTMLElement | null)?.textContent
+      || node.getAttribute('title') || key).trim();
+    const clickIt = view
+      ? clickNav(view)
+      : () => (document.querySelector(`.nav-item[data-custom-id="${CSS.escape(custom!)}"]`) as HTMLElement | null)?.click();
+    registerCommand({
+      id: `nav.${key}`, category: 'nav', title: { en: `Go to ${lbl}`, fr: `Aller à ${lbl}` },
+      keywords: `${lbl} open navigate view page custom aller`, run: clickIt, defaultChord: null,
+    });
+  });
+}
+
+function registerCore() {
+  refreshNavCommands();
+
+  // The scheduler's task editor: its three mode switches and every shortcut of the flow mode.
+  // Registered here, at boot, so they are listed (and rebindable) before the editor is first
+  // opened; each is inert until the editor binds it and scoped by `when` to where it applies.
+  for (const k of FLOW_KEYS) {
+    registerCommand({
+      id: k.id, category: 'scheduler', title: k.title, keywords: `scheduler planificateur ${k.keywords}`,
+      run: () => flowKeyRun(k.id), defaultChord: k.chord, when: () => flowKeyActive(k.scope),
+    });
+  }
+
+  // The activation-order view: open it from anywhere, and its keys (scoped to the open view,
+  // like the flow keys above — listed and rebindable before it is first opened).
+  registerCommand({
+    id: 'profiles.loadOrder', category: 'profiles',
+    title: { en: 'Activation order (which mod wins)…', fr: 'Ordre d’activation (quel mod gagne)…' },
+    keywords: 'load order activation priority conflict wins overwrite reorder ordre activation priorité conflit gagne écrase réordonner',
+    run: () => { void import('../features/profiles/load-order.js').then((m) => m.openLoadOrder(null)); },
+    defaultChord: null,
+  });
+  // The conflicts view: who wins each shared file, and how to change it (features/mods/conflicts-view.ts).
+  registerCommand({
+    id: 'mods.conflicts', category: 'mods',
+    title: { en: 'Resolve conflicts (which mod wins each file)…', fr: 'Résoudre les conflits (quel mod gagne chaque fichier)…' },
+    keywords: 'conflict conflicts overwrite winner file pin exclude resolve conflit conflits écrase gagnant fichier épingler exclure résoudre',
+    run: () => { void import('../features/mods/conflicts-view.js').then((m) => m.openConflictsView(null)); },
+    defaultChord: null,
+  });
+  for (const k of ORDER_KEYS) {
+    registerCommand({
+      id: k.id, category: 'profiles', title: k.title, keywords: `activation order ordre ${k.keywords}`,
+      run: () => orderKeyRun(k.id), defaultChord: k.chord, when: () => orderKeysActive(),
+    });
+  }
+  // The same moves from the Mod Library, on its selected mod (features/mods/lib-order.ts).
+  for (const k of LIB_ORDER_KEYS) {
+    registerCommand({
+      id: k.id, category: 'mods', title: k.title, keywords: `activation order ordre ${k.keywords}`,
+      run: () => libOrderKeyRun(k.id), defaultChord: k.chord, when: () => libOrderKeysActive(),
+    });
+  }
+
+  registerCommand({
+    id: 'mods.graph', category: 'mods',
+    title: { en: 'Dependencies & conflicts…', fr: 'Dépendances et conflits…' },
+    keywords: 'dependency dependencies conflict conflicts tree graph require needs dépendance conflit arbre',
+    // Lazy, like style.open: this pulls in the graph module and reads the whole mod list,
+    // and most launches never open it.
+    run: () => { void import('../features/mods/mod-graph-view.js').then((m) => m.showModGraph()); },
+    defaultChord: null,
+  });
+  // The four legacy actions — same defaults as before (Ctrl+letter), now rebindable + in the palette.
+  registerCommand({
+    id: 'style.open', category: 'settings',
+    title: { en: 'Style your BMM…', fr: 'Style de ton BMM…' },
+    keywords: 'theme look style appearance tasky apparence thème couleur skin',
+    // Imported lazily: the palette registers at boot, and the modal is a screen most
+    // launches never open — same rule that got mermaid out of the boot path.
+    run: () => { void import('../ui/style-modal.js').then((m) => m.openStyleModal()); },
+    defaultChord: null,
+  });
+  registerCommand({ id: 'profiles.new', category: 'profiles', title: { en: 'New profile', fr: 'Nouveau profil' }, keywords: 'create profile add', run: clickAfterNav('profiles', 'btn-new-profile', 50), defaultChord: { ctrl: true, key: 'n' } });
+  registerCommand({ id: 'mods.add', category: 'mods', title: { en: 'Add a mod', fr: 'Ajouter un mod' }, keywords: 'import add mod install', run: clickAfterNav('library', 'btn-add-mod', 50), defaultChord: { ctrl: true, key: 'm' } });
+  registerCommand({ id: 'mods.export', category: 'mods', title: { en: 'Export mod list', fr: 'Exporter la liste' }, keywords: 'export modlist save', run: clickAfterNav('modlist', 'btn-export-mm', 100), defaultChord: { ctrl: true, key: 'e' } });
+  registerCommand({ id: 'mods.import', category: 'mods', title: { en: 'Import mod list', fr: 'Importer la liste' }, keywords: 'import modlist load', run: clickAfterNav('modlist', 'btn-import-mm', 100), defaultChord: { ctrl: true, key: 'i' } });
+
+  // ── Library / mods actions ──────────────────────────────────────────────────
+  registerCommand({ id: 'mods.scan', category: 'mods', title: { en: 'Scan mods folder', fr: 'Scanner le dossier de mods' }, keywords: 'scan rescan refresh detect library analyser', run: clickAfterNav('library', 'btn-scan-mods'), defaultChord: null });
+  registerCommand({ id: 'mods.verify', category: 'mods', title: { en: 'Verify mod integrity', fr: 'Vérifier l’intégrité des mods' }, keywords: 'verify integrity hash checksum corrupt vérifier', run: clickAfterNav('library', 'btn-verify-integrity'), defaultChord: null });
+  registerCommand({ id: 'mods.history', category: 'mods', title: { en: 'Show the history', fr: 'Afficher l’historique' }, keywords: 'history log recent activity changes undo timeline historique journal modifications annuler', run: callGlobal('openHistory'), defaultChord: null });
+  // « Translation sandbox » is the studio's old name: still a keyword, so the old habit finds it.
+  registerCommand({ id: 'tools.translationStudio', category: 'tools', title: { en: 'Translation studio', fr: 'Studio de traduction' }, keywords: 'translation translate language i18n sandbox locale traduction traduire langue bac à sable', run: callGlobal('openTranslationStudio'), defaultChord: null });
+  registerCommand({ id: 'mods.enableAll', category: 'mods', title: { en: 'Enable all mods', fr: 'Activer tous les mods' }, keywords: 'enable all activate deploy tout activer', run: clickAfterNav('library', 'btn-enable-all'), defaultChord: null });
+  registerCommand({ id: 'mods.disableAll', category: 'mods', title: { en: 'Disable all mods', fr: 'Désactiver tous les mods' }, keywords: 'disable all off remove tout désactiver', run: clickAfterNav('library', 'btn-disable-all-alt'), defaultChord: null });
+  // ── Cancelling what is running ──────────────────────────────────────────────
+  //
+  // Both of these existed and could only be reached with the mouse: the cancel button's
+  // click is "stop the current one", and its right-click is "stop everything". A long
+  // enable that is going to the wrong profile is exactly the moment somebody's hand is not
+  // on the mouse.
+  //
+  // NOT Ctrl+Z. The dispatcher runs on capture and fires modified chords even while typing,
+  // so binding it here would reach into the scheduler's editor and undo a step of somebody's
+  // task instead. Ctrl+Alt+Z is free, and every one of these is rebindable in Settings.
+  const cancelOps = (all: boolean) => () => {
+    void import('../features/mods/mods-actions.js').then((m) => {
+      if (!m.hasCancellableOps()) {
+        // Said out loud. A shortcut that does nothing when there is nothing to do is
+        // indistinguishable from one that is broken, and people press it again harder.
+        // window.toast, like the clash warning above: commands.ts is imported by the app
+        // shell, and reaching ui/app.js from here closes a cycle.
+        try { (window as any).toast?.(t('lib.cancelNothing') || 'Nothing is running to cancel.', 'info'); } catch { /* ignore */ }
+        return;
+      }
+      if (all) void m.requestCancelModOps(); else m.requestCancelCurrentOnly();
+    });
+  };
+  registerCommand({
+    id: 'mods.cancelLast', category: 'mods',
+    title: { en: 'Cancel the running mod operation', fr: 'Annuler l\u2019op\u00e9ration en cours' },
+    keywords: 'cancel stop abort undo last current annuler arr\u00eater stopper derni\u00e8re',
+    run: cancelOps(false),
+    defaultChord: { ctrl: true, alt: true, key: 'z' },
+  });
+  registerCommand({
+    id: 'mods.cancelAll', category: 'mods',
+    title: { en: 'Cancel every queued mod operation', fr: 'Annuler toutes les op\u00e9rations' },
+    keywords: 'cancel all stop everything abort queue annuler tout tous file',
+    run: cancelOps(true),
+    defaultChord: { ctrl: true, alt: true, shift: true, key: 'z' },
+  });
+  registerCommand({ id: 'mods.checkUpdates', category: 'mods', title: { en: 'Check mods for updates', fr: 'Vérifier les mises à jour des mods' }, keywords: 'update updates check mods mise à jour', run: clickAfterNav('library', 'btn-lib-check-updates'), defaultChord: null });
+  registerCommand({ id: 'mods.aiAnalyze', category: 'mods', title: { en: 'Analyse the library (Laya)', fr: 'Analyser la bibliothèque (Laya)' }, keywords: 'ai ia laya analyse analyze library bibliotheque suggest suggestions tags description readme metadata', run: clickAfterNav('library', 'btn-lib-ai-analyze'), defaultChord: null });
+
+  // ── Profiles ────────────────────────────────────────────────────────────────
+  registerCommand({ id: 'profiles.import', category: 'profiles', title: { en: 'Import a profile (OvGME / OMM)', fr: 'Importer un profil (OvGME / OMM)' }, keywords: 'import ovgme omm migrate profile importer', run: clickAfterNav('profiles', 'btn-import-menu'), defaultChord: null });
+  registerCommand({ id: 'profiles.disableAllGlobal', category: 'profiles', title: { en: 'Disable every profile', fr: 'Désactiver tous les profils' }, keywords: 'disable all profiles global clear tout désactiver', run: clickAfterNav('profiles', 'btn-disable-all-global'), defaultChord: null });
+
+  // ── Server Repo ─────────────────────────────────────────────────────────────
+  registerCommand({ id: 'repo.sync', category: 'repo', title: { en: 'Sync from a server repo', fr: 'Synchroniser depuis un dépôt serveur' }, keywords: 'sync subscribe download repo server synchroniser abonner', run: clickTab('repo', '[data-repo-tab="sync"]'), defaultChord: null });
+  registerCommand({ id: 'repo.host', category: 'repo', title: { en: 'Host a server repo', fr: 'Héberger un dépôt serveur' }, keywords: 'host publish serve share repo server héberger publier', run: clickTab('repo', '[data-repo-tab="host"]'), defaultChord: null });
+  registerCommand({ id: 'repo.browse', category: 'repo', title: { en: 'Browse saved repos', fr: 'Parcourir les dépôts enregistrés' }, keywords: 'browse repos saved list history parcourir', run: clickAfterNav('repo', 'btn-browse-repos'), defaultChord: null });
+  registerCommand({ id: 'repo.generateServer', category: 'repo', title: { en: 'Generate a standalone server', fr: 'Générer un serveur autonome' }, keywords: 'generate server standalone mini node docker générer', run: clickTabThen('repo', '[data-repo-tab="host"]', 'btn-generate-mini-server'), defaultChord: null });
+  registerCommand({ id: 'repo.toggleServer', category: 'repo', title: { en: 'Start / stop the built-in server', fr: 'Démarrer / arrêter le serveur intégré' }, keywords: 'start stop server toggle host démarrer arrêter', run: clickAfterNav('repo', 'btn-toggle-repo-server'), defaultChord: null });
+  registerCommand({ id: 'repo.monitoring', category: 'repo', title: { en: 'Open server monitoring', fr: 'Ouvrir le monitoring du serveur' }, keywords: 'monitoring dashboard traffic downloads stats surveiller', run: clickAfterNav('repo', 'btn-open-monitoring'), defaultChord: null });
+  registerCommand({ id: 'repo.checkUpdates', category: 'repo', title: { en: 'Check subscribed repos for updates', fr: 'Vérifier les mises à jour des dépôts' }, keywords: 'check updates repo sync new version mise à jour', run: clickAfterNav('repo', 'btn-check-mod-updates'), defaultChord: null });
+  registerCommand({ id: 'repo.copyCreatorId', category: 'repo', title: { en: 'Copy my creator ID', fr: 'Copier mon ID créateur' }, keywords: 'copy creator id whitelist identity copier', run: clickAfterNav('repo', 'btn-copy-my-creator-id'), defaultChord: null });
+
+  // ── Tools ───────────────────────────────────────────────────────────────────
+  registerCommand({ id: 'palette.open', category: 'tools', title: { en: 'Open command palette', fr: 'Ouvrir la palette de commandes' }, keywords: 'palette search command ctrl k', run: () => openCommandPalette(), defaultChord: { ctrl: true, key: 'k' } });
+  registerCommand({ id: 'tools.checkAppUpdates', category: 'tools', title: { en: 'Check for app updates', fr: 'Vérifier les mises à jour de l’app' }, keywords: 'update app version check upgrade mise à jour application', run: clickId('btn-check-updates'), defaultChord: null });
+  registerCommand({ id: 'tools.restartOnboarding', category: 'tools', title: { en: 'Restart the onboarding tour', fr: 'Relancer la visite d’accueil' }, keywords: 'onboarding tour welcome restart guide accueil tutoriel', run: clickId('btn-restart-onboarding'), defaultChord: null });
+
+  // BMM Tools (features/tools/tools-hub.ts): read-only diagnostics in one dialog, one palette
+  // entry per tool. Loaded on demand like style.open: the hub is not in the boot path.
+  const openTools = (tool?: string) => () => { void import('../features/tools/tools-hub.js').then((m) => m.openToolsHub(tool, allCommands)); };
+  if (typeof window !== 'undefined') (window as any).openToolsHub = (tool?: string) => openTools(tool)();
+  registerCommand({ id: 'tools.hub', category: 'tools', title: { en: 'BMM Tools…', fr: 'Outils BMM…' }, keywords: 'tools toolbox utilities diagnostics outils boîte à outils utilitaires diagnostic', run: openTools(), defaultChord: null });
+  registerCommand({ id: 'tools.duplicates', category: 'tools', title: { en: 'Find duplicate mods and files', fr: 'Trouver les mods et fichiers en double' }, keywords: 'duplicate duplicates same identical copy twice space wasted doublon doublons identique copie espace', run: openTools('duplicates'), defaultChord: null });
+  registerCommand({ id: 'tools.conflicts', category: 'tools', title: { en: 'Conflict summary for a profile', fr: 'Résumé des conflits d’un profil' }, keywords: 'conflict conflicts overwrite overlap files profile conflit écrase chevauchement fichiers profil', run: openTools('conflicts'), defaultChord: null });
+  registerCommand({ id: 'tools.disk', category: 'tools', title: { en: 'Disk usage by profile and mod', fr: 'Espace disque par profil et par mod' }, keywords: 'disk usage size space weight backups cache folder espace disque taille poids sauvegardes dossier', run: openTools('disk'), defaultChord: null });
+  registerCommand({ id: 'tools.diff', category: 'tools', title: { en: 'Compare two profiles', fr: 'Comparer deux profils' }, keywords: 'diff compare profiles difference version order comparer profils différence ordre', run: openTools('diff'), defaultChord: null });
+  registerCommand({ id: 'tools.orphans', category: 'tools', title: { en: 'Find missing and orphaned mods', fr: 'Trouver les mods manquants et orphelins' }, keywords: 'orphan orphans missing broken dangling leftover unregistered folder orphelin manquant cassé restes dossier', run: openTools('orphans'), defaultChord: null });
+  registerCommand({ id: 'tools.hash', category: 'tools', title: { en: 'Hash checker (BLAKE3 / SHA-256)', fr: 'Vérificateur d’empreinte (BLAKE3 / SHA-256)' }, keywords: 'hash checksum sha256 sha-256 blake3 verify compare file empreinte somme contrôle vérifier fichier', run: openTools('hash'), defaultChord: null });
+  registerCommand({ id: 'tools.validate', category: 'tools', title: { en: 'Validate a manifest or catalogue', fr: 'Valider un manifeste ou un catalogue' }, keywords: 'validate validator manifest modpack modlist catalog catalogue json check valider validateur manifeste vérifier', run: openTools('validate'), defaultChord: null });
+  registerCommand({ id: 'tools.deployed', category: 'tools', title: { en: 'Check deployed files of active mods', fr: 'Vérifier les fichiers déployés des mods actifs' }, keywords: 'deployed files missing broken symlink link stale active game folder déployés fichiers manquants lien cassé actifs jeu', run: openTools('deployed'), defaultChord: null });
+  registerCommand({ id: 'tools.names', category: 'tools', title: { en: 'Mod names and versions report', fr: 'Rapport des noms et versions de mods' }, keywords: 'name names version versions normalise normalize rename format nom noms version normaliser renommer', run: openTools('names'), defaultChord: null });
+  registerCommand({ id: 'tools.dupprofiles', category: 'tools', title: { en: 'Find duplicate profiles', fr: 'Trouver les profils en double' }, keywords: 'duplicate profiles same identical similar folder profils doublon identique semblable dossier', run: openTools('dupprofiles'), defaultChord: null });
+  registerCommand({ id: 'tools.largefiles', category: 'tools', title: { en: 'Find large files in a profile', fr: 'Trouver les gros fichiers d’un profil' }, keywords: 'large big files size biggest heavy space gros fichiers taille lourds espace', run: openTools('largefiles'), defaultChord: null });
+  registerCommand({ id: 'tools.cache', category: 'tools', title: { en: 'Clean BMM caches', fr: 'Nettoyer les caches de BMM' }, keywords: 'cache caches clean clear temp temporary space free nettoyer vider temporaire espace libérer', run: openTools('cache'), defaultChord: null });
+  registerCommand({ id: 'tools.logs', category: 'tools', title: { en: 'View and filter BMM logs', fr: 'Voir et filtrer les journaux de BMM' }, keywords: 'log logs journal journaux errors warnings session crash erreurs avertissements', run: openTools('logs'), defaultChord: null });
+  registerCommand({ id: 'tools.jsondiff', category: 'tools', title: { en: 'Compare two catalogue or repo.json files', fr: 'Comparer deux fichiers catalogue ou repo.json' }, keywords: 'diff compare catalog catalogue repo json changes added removed comparer modifications ajouté retiré', run: openTools('jsondiff'), defaultChord: null });
+  // The same hub as a DevTools section. debug-sections is already loaded (ui/app.ts imports
+  // debug-menu at boot), so this import costs nothing; the section's body loads on first view.
+  void import('../features/debug/debug-sections.js').then((m) => m.registerDebugSection({
+    id: 'tools', titleKey: 'tools.title',
+    icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>',
+    mount: (host: HTMLElement) => import('../features/tools/tools-hub.js').then((h) => h.mountToolsDebug(host)),
+  })).catch(() => { /* no DevTools in this build */ });
+
+  // ── Settings ────────────────────────────────────────────────────────────────
+  registerCommand({ id: 'settings.graphics', category: 'settings', title: { en: 'Graphics & display', fr: 'Graphismes et affichage' }, keywords: 'graphics gpu card webview hardware acceleration animations reduce motion display graphismes carte graphique accélération matérielle animations affichage', run: callGlobal('openGraphicsSettings'), defaultChord: null });
+  registerCommand({ id: 'settings.storage', category: 'settings', title: { en: 'Storage & disk usage', fr: 'Stockage & espace disque' }, keywords: 'storage disk space usage dedupe stockage disque', run: callGlobal('openStorageManager'), defaultChord: null });
+  registerCommand({ id: 'settings.hashing', category: 'settings', title: { en: 'Hashing statistics', fr: 'Statistiques de hachage' }, keywords: 'hash hashing blake3 cache stats hachage', run: callGlobal('showHashingStats'), defaultChord: null });
+
+  // The CSP panel sits at the bottom of the Identity & API card, which is the right place
+  // for it and not a place anyone browses. Reachable by typing "CSP" is the difference
+  // between a setting that exists and a setting that can be used.
+  registerCommand({
+    id: 'settings.csp',
+    category: 'settings',
+    title: { en: 'Content-Security-Policy', fr: 'Politique de sécurité du contenu' },
+    keywords: 'csp content security policy script-src harden strict sécurité politique durcir',
+    run: () => {
+      // Click the real nav item rather than toggling classes: it is what every other jump
+      // in this app does, so whatever else switching views entails happens too. (An earlier
+      // draft called `window.showSettings()`, which does not exist — with `?.` that opens
+      // nothing at all, silently.)
+      document.querySelector<HTMLElement>('.nav-item[data-view="settings"]')?.click();
+      // The card is built asynchronously by initSecurityInfoCard(); wait for it rather than
+      // scrolling to nothing on a cold open.
+      // Scroll, then CHECK, then retry. Switching views resets the content area's scroll
+      // position, and it does so after this runs — so a single scrollIntoView lands and is
+      // immediately undone, leaving the user at the top of a very long page with no sign
+      // anything happened. Verifying the rect is the difference between issuing a scroll
+      // and having scrolled.
+      let tries = 0;
+      const go = () => {
+        const el = document.getElementById('csp-extra')?.closest('.setting-card') as HTMLElement | null;
+        if (el) {
+          // Instant, not smooth: the panel sits ~8700px down, and a smooth ride that long
+          // is a journey to somewhere the user already asked to be.
+          el.scrollIntoView({ block: 'center' });
+          const r = el.getBoundingClientRect();
+          // isConnected and a real height, not just `top` in range. Switching views detaches
+          // and rebuilds this card, and a DETACHED element reports a rect of all zeros — so
+          // `top === 0` passed for "it is at the top of the screen" and the loop stopped
+          // proudly, having scrolled nothing, every single time.
+          if (el.isConnected && r.height > 0 && r.top > -50 && r.top < window.innerHeight) return;
+        }
+        if (++tries < 40) setTimeout(go, 100);
+      };
+      go();
+    },
+  });
+
+  // ── Help ────────────────────────────────────────────────────────────────────
+  registerCommand({ id: 'help.search', category: 'help', title: { en: 'Search the documentation', fr: 'Rechercher dans la documentation' }, keywords: 'docs help search find', run: () => { (window as any).openDocsHome?.(); (document.querySelector('.nav-item[data-view="docs"]') as HTMLElement)?.click(); setTimeout(() => (document.querySelector('#view-docs .dh-search') as HTMLInputElement)?.focus(), 80); }, defaultChord: null });
+  // « Ask Laya » (features/ai/ai-ask.ts): a question about BMM or your mods, answered from the docs,
+  // the settings, the commands and your mods' files — offline, never invented text.
+  registerCommand({ id: 'help.askLaya', category: 'help', title: { en: 'Ask Laya (offline)', fr: 'Demander à Laya (hors ligne)' }, keywords: 'ask laya question ai ia assistant help aide which mod file conflict rule demander question quel fichier conflit regle', run: () => { void import('../features/ai/ai-ask.js').then((m) => m.openAskLaya()); }, defaultChord: null });
+  // Loaded on demand: the palette is core and this screen is not, so importing it here
+  // would put an unused module in the boot path for a command most people never run.
+  // The title says what it DOES, and the keywords carry both languages plus the words people
+  // actually reach for. It was findable only by typing "bettercommunity" — a question-shaped
+  // title with English-only keywords, so "écran", "accueil", "modal" or "bienvenue" found
+  // nothing, and the screen you are looking for is the one you cannot name.
+  // The launch deck, on demand: this version's release notes and BetterCommunity's current
+  // announcements, in the same Previous / Next dialog BMM opens at start-up.
+  registerCommand({ id: 'help.whatsnew', category: 'help', title: { en: 'Show what’s new', fr: 'Afficher les nouveautés' }, keywords: 'whats new what\'s new news release notes changelog announcements launch deck startup start-up welcome nouveautés nouveautes notes de version changements annonces démarrage demarrage accueil quoi de neuf', run: () => { void import('../ui/launch-steps.js').then((m) => m.openWhatsNew()); }, defaultChord: null });
+  registerCommand({ id: 'help.bettercommunity', category: 'help', title: { en: 'Open the BetterCommunity screen', fr: 'Ouvrir l’écran BetterCommunity' }, keywords: 'bettercommunity better community site web discord bot about who what welcome intro splash startup start-up modal dialog screen reopen open communauté site bienvenue accueil démarrage écran fenêtre rouvrir ouvrir presentation présentation', run: () => { void import('../ui/bettercommunity-modal.js').then((m) => m.openBetterCommunity()); }, defaultChord: null });
+}
+
+/** Wire the command system: register commands + start the global keyboard dispatcher. */
+export function initCommands() {
+  registerCore();
+  ensureCustomRegistered();
+  document.addEventListener('keydown', onKeydown, true);
+  // Mouse buttons, the wheel and gamepads: each source listens only while one of its kind is bound.
+  startDeviceDispatch();
+  // Run a command by id from a module that must not import this one (« Ask Laya » results:
+  // features/ai/ai-ask.ts is itself loaded from here, so an import back would be a cycle).
+  document.addEventListener('bmm:command:run', (e: Event) => {
+    const id = String((e as CustomEvent).detail?.id || '');
+    const c = _cmds.get(id);
+    if (c && (!c.when || c.when())) { try { c.run(); } catch { /* the command reports its own errors */ } }
+  });
+}
+
+// ── palette styles (self-contained, injected once) ────────────────────────────────
+function ensurePaletteStyles() {
+  if (document.getElementById('cp-styles')) return;
+  const s = document.createElement('style');
+  s.id = 'cp-styles';
+  s.textContent = `
+  .cp-overlay{position:absolute;inset:0;z-index:2147483646;isolation:isolate;pointer-events:auto;
+    display:flex;align-items:flex-start;justify-content:center;
+    padding-top:14vh;background:rgba(0,0,0,.5);backdrop-filter:blur(3px);
+    border-radius:inherit;overflow:hidden;}
+  .cp-box{width:min(620px,92vw);max-height:66vh;display:flex;flex-direction:column;border-radius:16px;overflow:hidden;
+    background:var(--bmm-bg-elevated,#1a2130);border:1px solid var(--bmm-border,#2a3242);box-shadow:0 24px 70px -18px rgba(0,0,0,.7);
+    font-family:var(--bmm-font-sans,system-ui,sans-serif);animation:cp-in .12s ease;}
+  @keyframes cp-in{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+  .cp-search{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--bmm-border,#2a3242);}
+  .cp-search>svg{color:var(--bmm-text-muted,#7c8698);flex-shrink:0;}
+  .cp-input{flex:1;border:0;background:transparent;outline:none;font-size:16px;color:var(--bmm-text-primary,#e6edf3);font-family:inherit;}
+  .cp-input::placeholder{color:var(--bmm-text-muted,#7c8698);}
+  .cp-modes{display:inline-flex;gap:2px;padding:3px;border-radius:8px;background:var(--bmm-bg-base,#0f1420);border:1px solid var(--bmm-border,#2a3242);}
+  .cp-mode{cursor:pointer;font-family:inherit;font-size:11px;font-weight:600;padding:3px 8px;border-radius:6px;border:0;background:transparent;color:var(--bmm-text-secondary,#a3adba);}
+  .cp-mode.on{background:var(--bmm-accent,#3b82f6);color:var(--bmm-text-on-accent);}
+  .cp-list{overflow:auto;padding:8px;}
+  .cp-item{display:flex;align-items:center;gap:12px;width:100%;text-align:left;cursor:pointer;font-family:inherit;
+    padding:10px 12px;border-radius:10px;border:0;background:transparent;color:var(--bmm-text-primary,#e6edf3);}
+  .cp-item.on,.cp-item:hover{background:var(--bmm-bg-hover,#222b3b);}
+  .cp-cat{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--bmm-accent,#3b82f6);min-width:70px;}
+  .cp-title{flex:1;font-size:14px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  /* Second line for non-command hits: a mod's author and version, a page's path. It must not
+     compete with the title, and it must not push the shortcut off the row — hence the cap and
+     the ellipsis rather than letting a long path grow the item. */
+  .cp-sub{font-size:11.5px;color:var(--bmm-text-muted,#7c8698);max-width:38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:none;}
+  /* The kind chip takes the colour of what it is, so a mixed list is scannable by shape and
+     colour rather than by reading every row. Tokens only — a theme moves these. */
+  .cp-kind-mod{color:var(--bmm-success,#22c55e);}
+  .cp-kind-profile{color:var(--bmm-purple,#a855f7);}
+  .cp-kind-doc{color:var(--bmm-info,#3b82f6);}
+  .cp-kind-theme{color:var(--bmm-warning,#f59e0b);}
+  .cp-kind-plugin{color:var(--bmm-accent,#3b82f6);}
+  .cp-kbd,.cp-foot kbd{font-family:var(--bmm-font-mono,ui-monospace,monospace);font-size:11px;font-weight:600;padding:2px 7px;border-radius:6px;
+    border:1px solid var(--bmm-border,#2a3242);background:var(--bmm-bg-base,#0f1420);color:var(--bmm-text-secondary,#a3adba);}
+  .cp-empty{padding:26px;text-align:center;color:var(--bmm-text-muted,#7c8698);font-size:14px;}
+  .cp-foot{padding:9px 16px;border-top:1px solid var(--bmm-border,#2a3242);font-size:11px;color:var(--bmm-text-muted,#7c8698);display:flex;gap:6px;align-items:center;}
+  .cp-foot kbd{padding:1px 6px;}
+  /* Flash a page element the palette jumped to (in-page 'element' hits). Global, not scoped to
+     the overlay — the target lives out on the page. */
+  .cp-flash{animation:cp-flash-kf 1.4s ease-out;border-radius:8px;}
+  @keyframes cp-flash-kf{
+    0%,100%{box-shadow:0 0 0 0 transparent;background-color:transparent;}
+    12%{box-shadow:0 0 0 3px var(--bmm-accent,#3b82f6),0 0 0 7px var(--bmm-accent-glow,rgba(59,130,246,.28));background-color:var(--bmm-accent-glow,rgba(59,130,246,.12));}
+  }
+  `;
+  document.head.appendChild(s);
+}

@@ -1,0 +1,245 @@
+// Server Repo → Host → "Update from the server".
+//
+// The third publish route, alongside the two that already existed and are untouched:
+//   • Full export  — BMM copies every mod into a folder you upload.
+//   • Manifest only — BMM describes a folder it can read on this machine.
+//   • This one     — the mods are ONLY on the server, and BMM never sees them locally.
+//
+// It reads the server's own directory listing, works out what actually changed, downloads
+// only that, and rewrites repo.json. You then upload that single file with the client you
+// already use. BMM never needs write access to your server.
+
+import { invoke, pickFolder } from '../../core/api.js';
+import { sourceAccessHtml, wireSourceAccess } from '../../core/source-access.js';
+import { sshSourceHtml, wireSshSource, readSshSource } from './ssh-source.js';
+import { toast } from '../../ui/app.js';
+import { t } from '../../core/i18n.js';
+import { uiIconEl, type IconName } from '../../ui/icons.js';
+import { formatBytes } from '../../core/utils.js';
+import { openKeyManager } from '../../core/settings-link.js';
+
+interface PlanReport {
+    summary: string;
+    toHash: string[];
+    added: string[];
+    changed: string[];
+    reused: number;
+    removed: string[];
+    fullRehash: string | null;
+    warnings: string[];
+    downloadBytes: number;
+}
+
+interface RefreshReport {
+    created: boolean;
+    manifestPath: string;
+    previousFromServer: boolean;
+    mods: number;
+    files: number;
+    hashed: number;
+    added: number;
+    changed: number;
+    reused: number;
+    removed: string[];
+    downloadedBytes: number;
+    signed: boolean;
+    warnings: string[];
+}
+
+const $ = (id: string) => document.getElementById(id);
+
+function inputs(): Record<string, unknown> | null {
+    const baseUrl = ($('remote-base-url') as HTMLInputElement | null)?.value?.trim() || '';
+    const manifestPath = ($('remote-manifest-path') as HTMLInputElement | null)?.value?.trim() || '';
+    // An SSH server carries its own directory, so the URL above is not needed in that case —
+    // demanding one would be asking for an address nobody is going to use.
+    const viaSsh = readSshSource('remote').ssh !== null;
+    if (!baseUrl && !viaSsh) {
+        toast(t('repo.remoteNeedUrl') || 'Enter the URL of the mods folder', 'error');
+        return null;
+    }
+    // No local file is FINE now. Empty means "the repo.json is already on the server" —
+    // BMM fetches it, checks its signature like any other, and writes the updated one beside
+    // the app data. Requiring a local copy first was three steps to obtain a file BMM can
+    // obtain, and skipping it meant every mod came back unverified because there was no
+    // previous manifest to carry hashes forward from.
+    return {
+        baseUrl,
+        manifestPath,
+        // Read at call time from the shared block. Session-only, like every other download
+        // password here — it is never written anywhere.
+        password: ($('remote-access-pw') as HTMLInputElement | null)?.value?.trim() || null,
+        forceFull: ($('remote-force-full') as HTMLInputElement | null)?.checked || false,
+        // Only consulted when no manifest exists yet; the backend ignores them otherwise so
+        // a stray value here can never rename a repo people already subscribe to.
+        name: ($('remote-repo-name') as HTMLInputElement | null)?.value?.trim() || null,
+        gameName: ($('remote-game-name') as HTMLInputElement | null)?.value?.trim() || null,
+        // When a server is chosen here the backend reads the listing over SFTP instead of an
+        // HTTP autoindex. Both go through the SAME inputs() so preview and run cannot end up
+        // on different transports — the split that makes a preview succeed and the run fail.
+        ...readSshSource('remote'),
+    };
+}
+
+/// Build the result box. Every value goes in as text — a server-supplied path must never
+/// become markup in the window that is about to sign a manifest describing it.
+type Row = [string, string, string?, IconName?];
+
+function show(lines: Row[], title: string, tone: string) {
+    const box = $('remote-result');
+    if (!box) return;
+    box.textContent = '';
+    box.style.display = '';
+
+    const head = document.createElement('div');
+    head.style.cssText = `font-weight:700;margin-bottom:6px;color:${tone}`;
+    head.textContent = title;
+    box.append(head);
+
+    for (const [label, value, colour, icon] of lines) {
+        if (!value && !icon) continue;
+        const row = document.createElement('div');
+        row.style.cssText = colour ? `color:${colour}` : '';
+        // A status glyph from the registry, not a ✓/⚠ character in whatever font is loaded.
+        if (icon) row.append(uiIconEl(icon, 14, { style: 'vertical-align:-2px;margin-right:6px' }));
+        row.append(label && value ? `${label}: ${value}` : (label || value));
+        box.append(row);
+    }
+}
+
+/// Offer to open the folder holding the file that was just written.
+///
+/// The path was printed and nothing more, so the next step — find it, upload it — started
+/// with reading a long path out of a box and retyping it into a file manager. It is a button.
+function offerToOpen(path: string) {
+    const box = $('remote-result');
+    if (!box || !path) return;
+    const row = document.createElement('div');
+    row.style.cssText = 'margin-top:8px;display:flex;gap:8px;flex-wrap:wrap';
+
+    const open = document.createElement('button');
+    open.className = 'btn btn-sm';
+    open.textContent = t('repo.remoteOpenFolder');
+    open.addEventListener('click', () => {
+        // The FOLDER, not the file: opening a .json launches whatever is registered for it,
+        // which is an editor nobody asked for. The folder is where the next step happens.
+        void invoke('open_folder', { path: path.replace(/[\\/][^\\/]+$/, '') }).catch(() => {});
+    });
+
+    const copy = document.createElement('button');
+    copy.className = 'btn btn-sm';
+    copy.textContent = t('repo.remoteCopyPath');
+    copy.addEventListener('click', () => {
+        void navigator.clipboard?.writeText(path).then(
+            () => toast(t('repo.remotePathCopied'), 'success'),
+            () => {},
+        );
+    });
+
+    row.append(open, copy);
+    box.append(row);
+}
+
+/// A handful of names plus a count, never the whole list — a repo with 400 changed files
+/// would otherwise push the buttons off the card.
+const preview = (ids: string[]) =>
+    ids.length ? `${ids.length} — ${ids.slice(0, 5).join(', ')}${ids.length > 5 ? '…' : ''}` : '';
+
+async function run(which: 'plan' | 'refresh') {
+    const args = inputs();
+    if (!args) return;
+    const btn = $(which === 'plan' ? 'btn-remote-plan' : 'btn-remote-refresh') as HTMLButtonElement | null;
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+
+    try {
+        if (which === 'plan') {
+            const r = (await invoke('plan_remote_repo_refresh', args)) as PlanReport;
+            show([
+                // "Missing" first: a repo that never covered part of the server is a
+                // different problem from one that is merely out of date, and it is the one
+                // people do not realise they have.
+                [t('repo.remoteMissing') || 'Missing from the manifest', preview(r.added), 'var(--accent)'],
+                [t('repo.remoteChanged') || 'Changed on the server', preview(r.changed), 'var(--warning)'],
+                [t('repo.remoteReused') || 'Already covered', String(r.reused), 'var(--success)'],
+                [t('repo.remoteRemoved') || 'Gone from the server', preview(r.removed), 'var(--danger)'],
+                [t('repo.remoteDownload') || 'To download', formatBytes(r.downloadBytes)],
+                [t('repo.remoteFull') || 'Everything will be re-hashed', r.fullRehash || ''],
+                ...r.warnings.map((w): Row => ['', w, 'var(--warning)', 'warning']),
+            ], t('repo.remotePlanned') || 'Nothing changed yet', 'var(--text)');
+        } else {
+            const r = (await invoke('refresh_repo_from_server', args)) as RefreshReport;
+            show([
+                ['', r.manifestPath, 'var(--text-muted)'],
+                // Where the previous manifest came from changes what "already covered" means:
+                // those hashes were carried forward from a document the SERVER handed us, and
+                // the reader deserves to know that rather than infer it.
+                ...(r.previousFromServer
+                    ? [[t('repo.remoteFromServer') || 'Updated the repo.json already on the server', '', 'var(--success)', 'check'] as Row]
+                    : []),
+                ['', `${r.mods} mods · ${r.files} files`],
+                [t('repo.remoteMissing') || 'Newly published', String(r.added), 'var(--accent)'],
+                [t('repo.remoteChanged') || 'Updated', String(r.changed), 'var(--warning)'],
+                [t('repo.remoteReused') || 'Already covered', String(r.reused), 'var(--success)'],
+                [t('repo.remoteRemoved') || 'Gone from the server', preview(r.removed), 'var(--danger)'],
+                [t('repo.remoteDownload') || 'Downloaded', formatBytes(r.downloadedBytes)],
+                ...(r.signed ? [] : [['', t('repo.manifestUnsigned') || 'Written unsigned', 'var(--warning)', 'warning'] as Row]),
+                ...r.warnings.map((w): Row => ['', w, 'var(--warning)', 'warning']),
+            ], r.created
+                ? (t('repo.remoteCreated') || 'repo.json created — upload it to your server')
+                : (t('repo.remoteDone') || 'repo.json updated — upload it to your server'),
+                'var(--success)');
+            // The path is written above; this makes it actionable. Reading a long path out of
+            // a box and retyping it into a file manager was the next step for everybody.
+            offerToOpen(r.manifestPath);
+
+            // Removals are the one outcome worth interrupting for: a mistyped URL produces a
+            // perfectly valid manifest describing an empty server, and it looks like success.
+            if (r.removed.length) {
+                toast(`${r.removed.length} ${t('repo.manifestRemovedWarn') || 'mods are gone from the server and were dropped from the manifest'}`, 'warning');
+            } else {
+                toast(t('repo.remoteDone') || 'repo.json updated', 'success');
+            }
+        }
+    } catch (e) {
+        toast(String(e), 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+    }
+}
+
+export function initRemoteRefresh() {
+    // The protected-source block, mounted and wired together so the two cannot separate —
+    // markup with no listeners is the failure mode that shipped on two catalogue screens.
+    const mount = $('remote-access-mount');
+    if (mount && !mount.innerHTML) {
+        mount.innerHTML = sourceAccessHtml('remote-access');
+        wireSourceAccess('remote-access', (m, k) => toast(m, k === 'warning' ? 'warning' : 'success'),
+            () => {
+                openKeyManager();
+            },
+            () => ($('remote-base-url') as HTMLInputElement | null)?.value?.trim() || '');
+
+        // The SSH block goes BESIDE the protected-source one, not inside it.
+        //
+        // They answer different questions and were being confused for each other: the fold
+        // above carries what a SUBSCRIBER presents to a protected HTTP repo — a download
+        // password and an identity key. This one carries what an AUTHOR needs to reach their
+        // own machine: an account and either a password or a private key. Merging them would
+        // make one control mean two things depending on the address typed above it.
+        mount.insertAdjacentHTML('beforeend', sshSourceHtml('remote'));
+        wireSshSource('remote', () => {
+            openKeyManager();
+        });
+    }
+
+    $('btn-remote-browse')?.addEventListener('click', async () => {
+        const dir = await pickFolder();
+        if (!dir) return;
+        const input = $('remote-manifest-path') as HTMLInputElement | null;
+        // A folder picker, then repo.json inside it: there is no file picker wired here, and
+        // the manifest always sits at that name.
+        if (input) input.value = `${dir.replace(/[\\/]+$/, '')}/repo.json`;
+    });
+    $('btn-remote-plan')?.addEventListener('click', () => void run('plan'));
+    $('btn-remote-refresh')?.addEventListener('click', () => void run('refresh'));
+}

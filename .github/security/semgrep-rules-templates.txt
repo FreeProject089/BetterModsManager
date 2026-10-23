@@ -1,0 +1,41 @@
+# Semgrep rules used by .github/workflows/security.yml (BMM, mini-server templates (Express), IN ADDITION to semgrep-rules.txt).
+#
+# Source: https://github.com/semgrep/semgrep-rules at the commit pinned as SEMGREP_RULES_REF in
+# security.yml (a84ff9cc2453ca91d581380de4b8b3f272f6f4be, 2026-09-25). One rule file per line,
+# relative to that repository; lines starting with # are ignored.
+#
+# Selection: every rule file under the directories below whose rules are NOT tagged
+# `subcategory: audit`. Audit rules flag every use of a sink (each innerHTML, each temp_dir)
+# for a human to review; on this codebase they produced 3,700 hits, 1,480 of them at ERROR, with
+# no way to tell a real one from the rest. They belong in a manual review, not a CI gate.
+# To regenerate after bumping the pin, see "Semgrep rules" in the Security CI docs.
+#
+# Directories: javascript/express/security
+javascript/express/security/cors-misconfiguration.yaml
+javascript/express/security/express-expat-xxe.yaml
+javascript/express/security/express-insecure-template-usage.yaml
+javascript/express/security/express-phantom-injection.yaml
+javascript/express/security/express-puppeteer-injection.yaml
+javascript/express/security/express-sandbox-injection.yaml
+javascript/express/security/express-vm-injection.yaml
+javascript/express/security/express-vm2-injection.yaml
+javascript/express/security/express-wkhtml-injection.yaml
+javascript/express/security/express-xml2json-xxe.yaml
+javascript/express/security/require-request.yaml
+javascript/express/security/x-frame-options-misconfiguration.yaml
+javascript/express/security/audit/express-check-directory-listing.yaml
+javascript/express/security/audit/express-cookie-settings.yaml
+javascript/express/security/audit/express-jwt-not-revoked.yaml
+javascript/express/security/audit/express-libxml-noent.yaml
+javascript/express/security/audit/express-open-redirect.yaml
+javascript/express/security/audit/express-path-join-resolve-traversal.yaml
+javascript/express/security/audit/express-res-sendfile.yaml
+javascript/express/security/audit/express-session-hardcoded-secret.yaml
+javascript/express/security/audit/express-ssrf.yaml
+javascript/express/security/audit/express-third-party-object-deserialization.yaml
+javascript/express/security/audit/express-xml2json-xxe-event.yaml
+javascript/express/security/audit/remote-property-injection.yaml
+javascript/express/security/audit/res-render-injection.yaml
+javascript/express/security/audit/xss/direct-response-write.yaml
+javascript/express/security/injection/raw-html-format.yaml
+javascript/express/security/injection/tainted-sql-string.yaml

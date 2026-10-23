@@ -1,44 +1,76 @@
 /**
  * debug.css — Styles for BMM DevTools Overlay
- * Premium glassmorphism and integrated look.
+ *
+ * The panel follows the app theme. Every --debug-* colour is an alias of a --bmm-* token,
+ * so a light theme gets a light panel and a dark theme a dark one — the old always-dark
+ * literals made the panel the one surface that ignored the user's theme.
  */
 
 :root {
-    --debug-bg: rgba(10, 14, 23, 0.95);
-    --debug-border: rgba(255, 255, 255, 0.1);
-    --debug-accent: #3b82f6;
-    --debug-success: #10b981;
-    --debug-warn: #f59e0b;
-    --debug-error: #ef4444;
+    --debug-bg: var(--bmm-bg-elevated);
+    --debug-sunken: var(--bmm-s04);
+    --debug-border: var(--bmm-border-hover);
+    --debug-accent: var(--bmm-accent);
+    --debug-success: var(--bmm-success);
+    --debug-warn: var(--bmm-warning);
+    --debug-error: var(--bmm-danger);
+    /* PREFIXED, and it matters. These three used to be declared here as --text-primary /
+       --text-secondary / --text-muted, on :root, in a file that loads AFTER tokens.css.
+       Same specificity, later wins — so the app-wide aliases were permanently overridden,
+       in every theme, whether or not DevTools was ever opened. */
+    --debug-text-primary: var(--bmm-text-primary);
+    --debug-text-secondary: var(--bmm-text-secondary);
+    --debug-text-muted: var(--bmm-text-muted);
 }
 
+/* ── The panel ───────────────────────────────────────────────────────────────
+   Mounted inside #app-window-outer (contain: paint makes the frame its containing
+   block), so `position: fixed` places it within the rounded app card. A size
+   container, so the layout answers to the PANEL's width, not the window's: the user
+   resizes the panel, and a narrow panel needs the compact sidebar even on a wide
+   screen. */
 #bmm-debug-overlay {
     position: fixed;
     bottom: 20px;
     right: 20px;
-    width: 600px;
-    height: 450px;
-    min-width: 300px;
-    min-height: 200px;
+    width: 720px;
+    height: 500px;
+    min-width: 320px;
+    min-height: 220px;
+    max-width: calc(100% - 16px);
+    max-height: calc(100% - 16px);
     background: var(--debug-bg);
-    backdrop-filter: blur(20px);
+    color: var(--debug-text-primary);
     border: 1px solid var(--debug-border);
-    border-radius: 16px;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-    z-index: 20000;
+    border-radius: 14px;
+    box-shadow: var(--bmm-shadow-modal);
+    z-index: 200000;
     pointer-events: auto;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    transform: translateY(20px) scale(0.98);
+    container-type: inline-size;
+    container-name: devtools;
+    /* Layout containment makes the panel the containing block of its position:fixed
+       children. The crash screen inside it is `position: fixed; inset: 0`, and without
+       this it covered the WHOLE app (100vw x 100vh of "system halt") instead of the panel —
+       an app that looks dead because DevTools saw one uncaught error. The open state has no
+       transform any more, so nothing else provided that boundary. */
+    contain: layout;
+    transform: translateY(12px) scale(0.98);
     opacity: 0;
     visibility: hidden;
-    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s;
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s;
 }
 
-.debug-header {
-    cursor: move;
-    user-select: none;
+#bmm-debug-overlay.open {
+    transform: none;
+    opacity: 1;
+    visibility: visible;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #bmm-debug-overlay { transition: none; }
 }
 
 .debug-resizer {
@@ -48,118 +80,190 @@
     bottom: 0;
     right: 0;
     cursor: nwse-resize;
-    background: linear-gradient(135deg, transparent 50%, rgba(255,255,255,0.1) 50%);
-    border-radius: 0 0 16px 0;
+    background: linear-gradient(135deg, transparent 50%, var(--bmm-s15) 50%);
+    border-radius: 0 0 14px 0;
+    z-index: 2;
 }
 
-#bmm-debug-overlay.open {
-    transform: translateY(0) scale(1);
-    opacity: 1;
-    visibility: visible;
+/* ── Production mode: hide dev-only tabs ── */
+#bmm-debug-overlay.debug-prod-mode .debug-tab[data-tab="playground"],
+#bmm-debug-overlay.debug-prod-mode .debug-tab[data-tab="sources"] {
+    display: none !important;
+}
+#bmm-debug-overlay.debug-prod-mode .debug-subtab[data-sub="js"] {
+    display: none !important;
 }
 
-/* Header */
+/* ── Header: title on the left, one toolbar on the right ── */
 .debug-header {
-    padding: 12px 16px;
-    background: rgba(255,255,255,0.03);
+    padding: 8px 10px 8px 14px;
+    background: var(--bmm-s03);
     border-bottom: 1px solid var(--debug-border);
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 10px;
+    cursor: move;
+    user-select: none;
+    flex: none;
 }
 
 .debug-title {
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 800;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
     color: var(--debug-accent);
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 7px;
+    text-transform: uppercase;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
+/* Square icon targets. The last pair (clear everything, close) sits after a hairline
+   and gets its own hover colour, so destruction and dismissal read differently from
+   the tools pressed all the time. */
 .debug-controls {
     display: flex;
-    gap: 8px;
+    align-items: center;
+    gap: 4px;
+    flex: none;
+    cursor: default;
+}
+.debug-controls .debug-btn {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    flex: none;
+}
+.debug-controls-sep {
+    width: 1px;
+    height: 18px;
+    margin: 0 4px;
+    background: var(--debug-border);
 }
 
+/* ── Buttons ── */
 .debug-btn {
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #e2e8f0;
+    background: var(--bmm-s05);
+    border: 1px solid var(--debug-border);
+    color: var(--debug-text-primary);
     padding: 6px 12px;
-    border-radius: 6px;
-    font-size: 11px;
-    font-weight: 600;
+    border-radius: 7px;
+    font: 600 11px/1.2 var(--bmm-font-sans, system-ui), sans-serif;
     cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 6px;
     white-space: nowrap;
     outline: none;
-    backdrop-filter: blur(4px);
 }
-
 .debug-btn:hover {
-    background: rgba(255, 255, 255, 0.15);
-    border-color: rgba(255, 255, 255, 0.2);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    background: var(--bmm-s10);
+    border-color: var(--bmm-s20);
 }
-
-.debug-btn:active {
-    transform: translateY(0);
-}
-
-.debug-btn#debug-btn-close:hover {
-    background: rgba(239, 68, 68, 0.1);
-    border-color: rgba(239, 68, 68, 0.3);
-    color: var(--debug-error);
-}
-
+.debug-btn:disabled { opacity: 0.55; cursor: default; }
 .debug-btn.active {
     background: var(--debug-accent);
-    color: white;
+    color: var(--bmm-text-on-accent);
     border-color: var(--debug-accent);
-    box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
 }
 
-/* Tabs */
-.debug-tabs {
+/* ── Body: sidebar + content ── */
+.debug-body {
+    flex: 1;
+    min-height: 0;
     display: flex;
-    background: rgba(0,0,0,0.2);
-    padding: 0 12px;
-    border-bottom: 1px solid var(--debug-border);
 }
+
+.debug-nav {
+    flex: none;
+    width: 148px;
+    padding: 8px 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: var(--bmm-s02);
+    border-right: 1px solid var(--debug-border);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.debug-nav-group {
+    padding: 10px 8px 4px;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--debug-text-muted);
+}
+.debug-nav-group:first-child { padding-top: 2px; }
+.debug-nav-ext { display: contents; }
 
 .debug-tab {
-    padding: 10px 14px;
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--debug-text-secondary);
+    font: 600 11.5px/1.2 var(--bmm-font-sans, system-ui), sans-serif;
+    text-align: left;
     cursor: pointer;
-    border-bottom: 2px solid transparent;
-    transition: all 0.2s;
+    position: relative;
+    transition: background 0.12s ease, color 0.12s ease;
 }
-
+.debug-tab > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+.debug-tab-icon { flex: none; opacity: 0.8; }
 .debug-tab:hover {
-    color: var(--text-primary);
+    background: var(--bmm-s05);
+    color: var(--debug-text-primary);
+}
+.debug-tab.active {
+    background: color-mix(in srgb, var(--debug-accent) 14%, transparent);
+    color: var(--debug-accent);
+}
+.debug-tab.active .debug-tab-icon { opacity: 1; }
+.debug-tab:focus-visible {
+    outline: 2px solid var(--debug-accent);
+    outline-offset: -2px;
 }
 
-.debug-tab.active {
-    color: var(--debug-accent);
-    border-bottom-color: var(--debug-accent);
+/* Narrow panel: the sidebar becomes an icon rail. Labels stay in the DOM (and in the
+   accessibility tree), only visually hidden. */
+@container devtools (max-width: 520px) {
+    .debug-nav { width: 44px; padding: 6px 4px; }
+    .debug-nav-group { height: 1px; padding: 0; margin: 6px 6px; background: var(--debug-border); font-size: 0; overflow: hidden; }
+    .debug-nav-group:first-child { display: none; }
+    .debug-tab { justify-content: center; padding: 8px 0; }
+    .debug-tab > span {
+        position: absolute; width: 1px; height: 1px; overflow: hidden;
+        clip: rect(0 0 0 0); white-space: nowrap;
+    }
+    .debug-footer { gap: 12px; }
 }
 
 /* Content Area */
 .debug-content {
     flex: 1;
+    min-width: 0;
     overflow-y: auto;
     padding: 0;
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--bmm-font-mono, 'JetBrains Mono'), monospace;
     font-size: 11px;
+    position: relative;
 }
 
 .debug-pane {
@@ -168,31 +272,122 @@
 }
 
 .debug-pane.active {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
 }
+
+.debug-pane-ext.active { display: block; overflow-y: auto; }
+/* The wrapper of the extension panes takes the content's height only while one of them
+   shows, so that pane is the scroller (its sticky header then sticks) instead of growing
+   past the panel and handing the scroll to .debug-content. */
+#debug-ext-panes:has(> .debug-pane.active) { height: 100%; }
+.debug-section-host { min-height: 100%; }
+.debug-section-error { color: var(--debug-error); }
+
+.debug-pane-pad { padding: 14px; }
+.debug-pane-intro {
+    margin: 0 0 12px;
+    font-family: var(--bmm-font-sans, system-ui), sans-serif;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--debug-text-secondary);
+}
+
+/* Empty states: the list says what will appear in it instead of being a blank box. */
+.debug-list:empty::before,
+.debug-empty-state {
+    display: block;
+    margin: 18px auto;
+    max-width: 320px;
+    padding: 14px;
+    text-align: center;
+    font-family: var(--bmm-font-sans, system-ui), sans-serif;
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: var(--debug-text-muted);
+    border: 1px dashed var(--debug-border);
+    border-radius: 10px;
+}
+.debug-list:empty::before { content: attr(data-empty-text); }
+
+/* ── Studios pane ── */
+.debug-studio-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 10px;
+}
+.debug-studio-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid var(--debug-border);
+    border-radius: 12px;
+    background: var(--bmm-s02);
+    font-family: var(--bmm-font-sans, system-ui), sans-serif;
+}
+.debug-studio-card .debug-btn { align-self: flex-start; }
+.debug-studio-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.debug-studio-head h4 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--debug-text-primary);
+}
+.debug-studio-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    color: var(--debug-accent);
+    background: color-mix(in srgb, var(--debug-accent) 14%, transparent);
+}
+.debug-studio-state {
+    margin-left: auto;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--debug-success);
+}
+.debug-studio-state:empty { display: none; }
 
 /* Console Entries */
 .log-entry {
     padding: 6px 12px;
-    border-bottom: 1px solid rgba(255,255,255,0.02);
+    border-bottom: 1px solid var(--bmm-s02);
     white-space: pre-wrap;
-    word-break: break-all;
     display: flex;
     gap: 8px;
 }
+/* Time in a fixed gutter, the message wraps under itself (a hanging indent); long paths and
+   URLs break anywhere instead of pushing the line past the right edge. Words stay whole
+   where they fit (break-all used to split every word mid-way). */
+.log-entry > span:first-child { flex: none; white-space: nowrap; }
+.log-entry > span:last-child { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+/* A timeline row's expanded ARGS / RESULT: a long JSON string wraps, never runs off the row. */
+.timeline-detail { min-width: 0; overflow-wrap: anywhere; }
 
-.log-entry.INFO { color: #cbd5e1; border-left: 2px solid transparent; }
-.log-entry.WARN { background: rgba(245, 158, 11, 0.08); color: #fbbf24; border-left: 2px solid #fbbf24; }
-.log-entry.ERROR { background: rgba(239, 68, 68, 0.08); color: #fca5a5; border-left: 2px solid #ef4444; }
-.log-entry:hover { background: rgba(255,255,255,0.03); }
+.log-entry.INFO { color: var(--debug-text-secondary); }
+.log-entry.WARN { background: rgba(245, 158, 11, 0.08); color: var(--warning); }
+.log-entry.ERROR { background: rgba(239, 68, 68, 0.08); color: var(--danger); }
+.log-entry:hover { background: var(--bmm-s03); }
 
 /* IPC Entries */
 .ipc-entry {
-    padding: 8px 12px;
-    border-bottom: 1px solid rgba(255,255,255,0.02);
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--bmm-s02);
     display: grid;
-    grid-template-columns: 1fr 60px 80px;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.8fr) minmax(0, 1.2fr);
     align-items: center;
+    column-gap: 6px;
 }
 
 .ipc-cmd { 
@@ -205,13 +400,13 @@
 .ipc-cmd.action { color: var(--debug-success); }
 .ipc-cmd.rpc { color: var(--debug-accent); }
 
-.ipc-time { color: var(--text-muted); font-size: 10px; text-align: right; font-family: 'JetBrains Mono'; }
+.ipc-time { color: var(--debug-text-muted); font-size: 10px; text-align: right; font-family: 'JetBrains Mono'; }
 .ipc-status { 
     font-size: 9px; 
     text-transform: uppercase; 
     padding: 2px 6px; 
     border-radius: 4px; 
-    background: rgba(255,255,255,0.05); 
+    background: var(--bmm-s05); 
     text-align: center; 
     width: fit-content;
     max-width: 150px;
@@ -221,20 +416,36 @@
 }
 .ipc-status.success { color: var(--debug-success); }
 .ipc-status.error { color: var(--debug-error); }
-.ipc-status.pending { color: var(--text-muted); animation: pulse 1s infinite; }
+.ipc-status.pending { color: var(--debug-text-muted); animation: pulse 1s infinite; }
+.ipc-status.info { color: var(--debug-text-muted); }
+
+/* Timeline enhanced entries */
+.timeline-entry { cursor: default; transition: background 0.1s; flex-wrap: wrap; }
+.timeline-entry:hover { background: var(--bmm-s03); }
+.timeline-entry .ipc-time { display: flex; align-items: center; gap: 4px; justify-content: flex-end; }
+.timeline-expand-btn { font-size: 10px; line-height: 1; color: var(--debug-text-muted); opacity: 0.6; transition: opacity 0.15s; }
+.timeline-expand-btn:hover { opacity: 1; }
+.timeline-detail { font-size: 10px !important; line-height: 1.45 !important; }
+
+/* Sources: line numbers */
+.src-line { line-height: 1.6; }
+.src-line:hover { background: var(--bmm-s03); }
+.src-gutter { font-size: 10px; }
+.tree-row:hover { background: var(--bmm-s04); border-radius: 4px; }
+.tree-row.active { background: rgba(59,130,246,0.12); border-radius: 4px; color: var(--debug-accent); }
 
 /* Metrics Footer */
 .debug-footer {
     padding: 8px 16px;
-    background: rgba(255,255,255,0.02);
+    background: var(--bmm-s02);
     border-top: 1px solid var(--debug-border);
     display: flex;
     gap: 20px;
     font-size: 10px;
-    color: var(--text-muted);
+    color: var(--debug-text-muted);
 }
 
-.metric-item b { color: var(--text-primary); }
+.metric-item b { color: var(--debug-text-primary); }
 
 @keyframes pulse {
     0% { opacity: 0.5; }
@@ -267,21 +478,22 @@
 
 /* Crash Overlay */
 .debug-crash-overlay {
+    /* Fills the PANEL (its containing block, see `contain: layout` above), never the app:
+       an error report must not make the app it reports on look dead. Scrolls when the
+       panel is small. */
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
+    inset: 0;
+    overflow-y: auto;
     background: radial-gradient(circle at center, rgba(30, 0, 0, 0.95) 0%, rgba(10, 0, 0, 0.98) 100%);
     backdrop-filter: blur(25px) saturate(1.5);
     z-index: 99999;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     color: white;
     text-align: center;
-    padding: 40px;
+    padding: 28px 20px;
     visibility: hidden;
     opacity: 0;
     transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
@@ -292,6 +504,12 @@
     visibility: visible;
     opacity: 1;
     pointer-events: all;
+}
+
+.debug-crash-overlay button {
+    pointer-events: auto;
+    position: relative;
+    z-index: 1;
 }
 
 .crash-title {
@@ -307,7 +525,7 @@
 
 .crash-subtitle {
     font-size: 14px;
-    color: var(--text-muted);
+    color: var(--debug-text-muted);
     margin-bottom: 32px;
     letter-spacing: 0.1em;
     font-weight: 600;
@@ -317,7 +535,7 @@
     max-width: 650px;
     width: 100%;
     background: rgba(0, 0, 0, 0.4);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--bmm-s08);
     border-radius: 16px;
     padding: 24px;
     margin-bottom: 40px;
@@ -326,7 +544,7 @@
     line-height: 1.6;
     word-break: break-all;
     box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
-    color: #fca5a5;
+    color: var(--danger);
     position: relative;
     overflow: hidden;
 }
@@ -343,8 +561,8 @@
 
 @keyframes crash-glitch {
     0%, 90%, 100% { transform: translate(0); opacity: 1; }
-    92% { transform: translate(-2px, 1px); opacity: 0.8; color: #3b82f6; }
-    94% { transform: translate(2px, -1px); opacity: 0.8; color: #10b981; }
+    92% { transform: translate(-2px, 1px); opacity: 0.8; color: var(--cyan); }
+    94% { transform: translate(2px, -1px); opacity: 0.8; color: var(--success); }
     96% { transform: translate(-1px, -2px); opacity: 0.9; }
 }
 
@@ -356,7 +574,7 @@
 }
 
 .sources-tree {
-    background: rgba(0,0,0,0.2);
+    background: var(--debug-sunken);
     border-right: 1px solid var(--debug-border);
     overflow-y: auto;
 }
@@ -367,7 +585,7 @@
 }
 
 .tree-row:hover {
-    background: rgba(255,255,255,0.05);
+    background: var(--bmm-s05);
 }
 
 .tree-row.active {
@@ -386,12 +604,12 @@
 }
 
 #bmm-debug-overlay *::-webkit-scrollbar-thumb {
-    background: rgba(255,255,255,0.1);
+    background: var(--bmm-s10);
     border-radius: 3px;
 }
 
 #bmm-debug-overlay *::-webkit-scrollbar-thumb:hover {
-    background: rgba(255,255,255,0.2);
+    background: var(--bmm-s20);
 }
 
 /* Modals Scoped to DevTools */
@@ -401,13 +619,13 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.6);
+    background: var(--bmm-bg-overlay);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     display: none;
     align-items: center;
     justify-content: center;
-    z-index: 10000;
+    z-index: 21000;
     opacity: 0;
     transition: opacity 0.3s ease;
 }
@@ -417,15 +635,16 @@
 }
 
 .debug-modal-content {
-    background: #111214;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: var(--debug-bg);
+    border: 1px solid var(--bmm-s08);
     border-radius: 12px;
     padding: 24px 28px;
     width: 90%;
     max-width: 420px;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 1), 0 0 0 1px rgba(255,255,255,0.02) inset;
+    box-shadow: var(--bmm-shadow-modal);
     transform: translateY(20px) scale(0.95);
     transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    pointer-events: auto;
 }
 
 .debug-modal-overlay.active .debug-modal-content {
@@ -436,24 +655,24 @@
     font-size: 18px;
     font-weight: 700;
     margin-bottom: 12px;
-    color: white;
+    color: var(--debug-text-primary);
     letter-spacing: -0.3px;
 }
 
 .debug-modal-text {
     font-size: 14px;
     line-height: 1.6;
-    color: #b5bac1;
+    color: var(--debug-text-secondary);
     margin-bottom: 24px;
 }
 
 .debug-modal-input {
     width: 100%;
-    background: rgba(0,0,0,0.3);
+    background: var(--debug-sunken);
     border: 1px solid var(--debug-border);
     border-radius: 6px;
     padding: 10px 12px;
-    color: white;
+    color: var(--debug-text-primary);
     font-family: inherit;
     font-size: 13px;
     outline: none;
@@ -464,12 +683,18 @@
     border-color: var(--debug-accent);
 }
 
+.debug-modal-content button {
+    pointer-events: auto;
+    position: relative;
+    z-index: 1;
+}
+
 /* Debugger Tab specific styles */
 .debugger-subtabs {
     display: flex;
     overflow-x: auto;
     gap: 8px;
-    border-bottom: 2px solid rgba(255,255,255,0.05);
+    border-bottom: 2px solid var(--bmm-s05);
 }
 
 .debug-subtab {
@@ -477,7 +702,7 @@
     margin: 0 8px;
     font-size: 11px;
     font-weight: 600;
-    color: var(--text-muted);
+    color: var(--debug-text-muted);
     cursor: pointer;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -495,18 +720,18 @@
 }
 
 .dom-tree-node:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--bmm-s05);
 }
 
 .dom-toggle {
     transition: transform 0.1s;
 }
 .dom-toggle:hover {
-    color: white !important;
+    color: var(--debug-text-primary) !important;
 }
 
 .js-watcher-row:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--bmm-s05);
 }
 
 /* CSS Tools Toggles */
@@ -523,12 +748,12 @@
 .debug-toggle-title {
     font-size: 13px;
     font-weight: 600;
-    color: white;
+    color: var(--debug-text-primary);
     margin-bottom: 2px;
 }
 .debug-toggle-desc {
     font-size: 11px;
-    color: var(--text-muted);
+    color: var(--debug-text-muted);
     line-height: 1.4;
 }
 
@@ -537,13 +762,13 @@
     -webkit-appearance: none;
     width: 40px;
     height: 24px;
-    background: rgba(255,255,255,0.1);
+    background: var(--bmm-s10);
     border-radius: 20px;
     position: relative;
     cursor: pointer;
     outline: none;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
+    box-shadow: inset 0 0 0 1px var(--debug-border);
     flex-shrink: 0;
 }
 .debug-switch::after {
@@ -559,17 +784,14 @@
     box-shadow: 0 1px 2px rgba(0,0,0,0.3);
 }
 
-.debug-switch.debug-switch-pink:checked {
-    background: #007aff; 
+/* ONE switch, one look. There used to be three variants: pink and blue had already
+   converged on the same colour, and 'warning' was orange with a 12px knob travel —
+   short of the track end, so checked read as half-on. The variant classes stay in
+   the markup (harmless), but every switch now renders identically. */
+.debug-switch:checked {
+    background: var(--debug-accent);
 }
-.debug-switch.debug-switch-pink:checked::after {
-    transform: translateX(16px);
-}
-
-.debug-switch.debug-switch-blue:checked {
-    background: #007aff;
-}
-.debug-switch.debug-switch-blue:checked::after {
+.debug-switch:checked::after {
     transform: translateX(16px);
 }
 
@@ -635,7 +857,7 @@
 .custom-range {
     appearance: none;
     -webkit-appearance: none;
-    background: linear-gradient(to right, #007aff 0%, #007aff var(--val, 25%), white var(--val, 25%), white 100%);
+    background: linear-gradient(to right, var(--debug-accent) 0%, var(--debug-accent) var(--val, 25%), var(--bmm-s15) var(--val, 25%), var(--bmm-s15) 100%);
     height: 4px;
     border-radius: 2px;
     outline: none;
@@ -645,7 +867,7 @@
     appearance: none;
     width: 12px;
     height: 12px;
-    background: white;
+    background: var(--debug-accent);
     border-radius: 50%;
     cursor: pointer;
 }
@@ -667,7 +889,7 @@
 .debug-btn-success { background: var(--debug-success); color: white; border-color: transparent; }
 .debug-btn-success:hover { background: #059669; }
 .debug-btn-ghost { background: transparent; border-color: transparent; }
-.debug-btn-ghost:hover { background: rgba(255,255,255,0.05); }
+.debug-btn-ghost:hover { background: var(--bmm-s05); }
 
 /* Accessibility Warnings */
 .bmm-hardcoded-error {
@@ -692,7 +914,7 @@
     pointer-events: none;
     white-space: nowrap;
     box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-    border: 1px solid rgba(255,255,255,0.2);
+    border: 1px solid var(--bmm-s20);
 }
 .bmm-a11y-error-outline {
     outline: 2px solid #ef4444 !important;
@@ -724,8 +946,8 @@
 }
 
 .rule-inspect-btn:hover {
-    background: rgba(255,255,255,0.1) !important;
-    color: white !important;
+    background: var(--bmm-s10) !important;
+    color: var(--debug-text-primary) !important;
     transform: scale(1.1);
 }
 
@@ -775,5 +997,442 @@
     background-color: rgba(59, 130, 246, 0.1) !important;
 }
 
-.debug-switch-warning:checked { background-color: #f59e0b; }
-.debug-switch-warning:checked::after { transform: translateX(12px); }
+/* .debug-switch-warning folded into the single .debug-switch:checked rule above. */
+
+/* ── Button sizes, so a button never has to argue with its own class ──────────
+   Twenty-nine .debug-btn instances each carried an inline style re-specifying
+   font-size, padding and border — slightly differently each time. The class defined
+   a look and every button overrode it, which is why the panel read as a pile of
+   controls rather than a toolbar. Two size variants replace all of it; a button now
+   says WHAT it is, not how to draw itself. */
+.debug-btn-sm {
+    padding: 4px 12px;
+    font-size: 10px;
+}
+.debug-btn-xs {
+    padding: 2px 8px;
+    font-size: 10px;
+    font-weight: 500;
+}
+
+/* Rows of buttons line up and wrap as whole buttons — never mid-label, and never a
+   lone orphan pushed onto its own line by a stray margin. */
+.debug-actions,
+.debug-btn-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+/* The hover lift was `transform: translateY(-1px)` on `transition: all`, which
+   animates every property including colour and border — the browser cannot know
+   which ones matter, so it watches them all. Naming them is both cheaper and
+   steadier, and it stops the 1px nudge from jittering a row of buttons that share a
+   baseline. */
+.debug-btn {
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.debug-btn:hover {
+    transform: none;
+}
+.debug-btn:active {
+    transform: translateY(1px);
+}
+/* Keyboard users get the same affordance as the mouse — a debug panel is where you
+   end up when something is already wrong, and it should not also fight you. */
+.debug-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+/* A type scale, instead of every label choosing its own size.
+   The same kind of secondary text appeared at 9, 10, 11 and 12px depending on where
+   it was written — that spread is what makes a panel look assembled rather than
+   designed. Two roles cover all of it. */
+.debug-label {
+    font-size: 11px;
+    color: var(--debug-text-muted);
+}
+.debug-hint {
+    font-size: 10px;
+    color: var(--debug-text-muted);
+    line-height: 1.45;
+}
+
+/* Repeated layout idioms, named once.
+   Each of these was written out verbatim in several places. Naming them changes
+   nothing on screen — that is the point: it is the difference between a panel whose
+   layout is stated once and one where the same three declarations are retyped and
+   then drift apart the first time somebody tunes one of them. */
+.debug-fill { flex: 1; }
+.debug-fill-scroll { flex: 1; overflow-y: auto; }
+.debug-row { display: flex; gap: 8px; }
+.debug-row-split {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+.debug-empty {
+    padding: 10px;
+    color: var(--debug-text-muted);
+}
+
+/* Context-menu items.
+   These were styled inline, and the declaration was TRUNCATED: it ended on a bare
+   `transition:` with no value, so the style attribute ran on and swallowed the
+   `onmouseover=` that followed it. The remaining handler text became stray attributes
+   and the hover never worked at all — the items have been inert since they were
+   written. Nothing reports this: it is valid-enough HTML, just not what anyone meant.
+
+   In CSS, where a missing value is a rule the browser drops rather than a quote that
+   eats the next attribute. */
+.ctx-item {
+    padding: 8px 12px;
+    font-size: 11px;
+    color: var(--debug-text-primary);
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.12s ease, color 0.12s ease;
+}
+.ctx-item:hover,
+.ctx-item:focus-visible {
+    background: var(--bmm-s10);
+    color: var(--debug-text-primary);
+}
+
+/* Rust log lines — same density as the Console tab, which they never had.
+   The markup put the text on its own line inside a template literal while the row
+   was `white-space: pre-wrap`. Under pre-wrap the template's own indentation IS
+   content: every row rendered a leading newline and ~24 spaces, which is where the
+   huge vertical gaps and the left offset came from. The text touches its tags now;
+   pre-wrap stays, because a log line genuinely needs its own spacing preserved. */
+.debug-rustline {
+    font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+    font-size: 10px;
+    line-height: 1.5;
+    padding: 1px 4px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+.debug-rustline:nth-child(even) { background: var(--bmm-s02); }
+
+/* Header toolbar hover colours for the destructive pair. */
+#dbg-clear-all:hover {
+    background: color-mix(in srgb, var(--debug-warn) 18%, transparent);
+    border-color: color-mix(in srgb, var(--debug-warn) 45%, transparent);
+    color: var(--debug-warn);
+}
+#debug-btn-close:hover {
+    background: color-mix(in srgb, var(--debug-error) 18%, transparent);
+    border-color: color-mix(in srgb, var(--debug-error) 45%, transparent);
+    color: var(--debug-error);
+}
+
+/* ── The sandbox pair, calmed down ────────────────────────────────────────────
+   "Apply CSS" and "Run JS" were a saturated gradient blue and a flat green, full
+   width, in a panel that is otherwise greys and hairlines. They read as the loudest
+   thing on screen while being two of the least dangerous actions in it — a patch you
+   can undo with the Reset button sitting above them.
+
+   Tinted rather than filled: still obviously the primary pair, still distinguishable
+   from each other, no longer shouting over the code they act on. `color-mix` keeps
+   them tied to the same tokens as everything else, so a theme change carries them
+   along instead of leaving two hard-coded blocks behind. */
+.debug-btn-primary {
+    background: color-mix(in srgb, var(--debug-accent) 16%, transparent);
+    border-color: color-mix(in srgb, var(--debug-accent) 45%, transparent);
+    color: var(--debug-accent);
+}
+.debug-btn-primary:hover {
+    background: color-mix(in srgb, var(--debug-accent) 26%, transparent);
+    border-color: var(--debug-accent);
+}
+.debug-btn-success {
+    background: color-mix(in srgb, var(--debug-success) 16%, transparent);
+    border-color: color-mix(in srgb, var(--debug-success) 45%, transparent);
+    color: var(--debug-success);
+}
+.debug-btn-success:hover {
+    background: color-mix(in srgb, var(--debug-success) 26%, transparent);
+    border-color: var(--debug-success);
+}
+
+/* ── Debugger sub-tabs: the same mechanism as the sidebar, horizontal ── */
+.debug-subtab {
+    font: 600 10.5px/1.2 var(--bmm-font-sans, system-ui), sans-serif;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 7px 12px;
+    margin: 0;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    color: var(--debug-text-muted);
+    background: transparent;
+    border-radius: 0;
+    cursor: pointer;
+}
+.debug-subtab:hover { color: var(--debug-text-primary); }
+.debug-subtab.active {
+    color: var(--debug-accent);
+    border-bottom-color: var(--debug-accent);
+}
+.debug-subtab:focus-visible { outline: 2px solid var(--debug-accent); outline-offset: -2px; }
+
+/* ── Replay Studio, collapsed ─────────────────────────────────────────────────
+   The bar sits over the app while recording, which is exactly the app you are
+   trying to record. Minimising had to exist, and it had to be obvious that the
+   capture keeps running — a control that might have stopped your take is worse than
+   no control, because you cannot tell without checking.
+
+   So the pill keeps a live dot and stays in the accent colour while recording. The
+   whole pill is the restore target; there is no separate button to hunt for. */
+.rstudio-bar.rstudio-mini {
+    width: auto;
+    min-width: 0;
+    padding: 5px 10px;
+    cursor: pointer;
+    border-radius: 999px;
+}
+.rstudio-bar.rstudio-mini .rstudio-main { gap: 8px; }
+/* Everything except the title and the two window buttons folds away. */
+.rstudio-bar.rstudio-mini .rstudio-main > *:not(.rstudio-title):not(.rstudio-min):not(.rstudio-x),
+.rstudio-bar.rstudio-mini .rstudio-hide {
+    display: none;
+}
+.rstudio-bar.rstudio-mini .rstudio-title { margin: 0; font-size: 11px; }
+
+/* The live dot: only while actually capturing, so the pill answers "is it still
+   running?" without being expanded. */
+.rstudio-bar.rstudio-mini.rstudio-live .rstudio-title::before {
+    content: '';
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-right: 6px;
+    border-radius: 50%;
+    background: var(--debug-error);
+    vertical-align: middle;
+}
+.rstudio-bar.rstudio-mini.rstudio-live { border-color: var(--debug-error); }
+
+/* The minimise glyph flips to a restore chevron once collapsed. */
+.rstudio-bar.rstudio-mini .rstudio-min svg { transform: rotate(90deg); }
+
+/* ── Debugger tab ─────────────────────────────────────────────────────────────
+   One header language for every sub-pane, and for the extension sections (Laya):
+   a sunken bar with the title and one line of what the pane is on the left, its
+   actions on the right, a hairline under it. It wraps as whole groups at narrow
+   widths instead of squeezing the buttons. Below it an optional filter bar, then a
+   body that scrolls on its own, so the bar never scrolls away. */
+.debugger-layout { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.debugger-subtabs { display: flex; gap: 2px; padding: 0 8px; border-bottom: 1px solid var(--bmm-s05); background: var(--debug-sunken); flex-shrink: 0; }
+.debugger-subcontent { flex: 1; min-height: 0; position: relative; overflow: hidden; }
+.debug-subpane { display: none; flex-direction: column; height: 100%; min-height: 0; }
+.debug-subpane.active { display: flex; }
+
+.dbg-bar {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--bmm-s05);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--debug-sunken);
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    flex-shrink: 0;
+    font-family: var(--bmm-font-sans, system-ui), sans-serif;
+}
+.dbg-bar-text { flex: 1 1 220px; min-width: 0; }
+.dbg-bar-title { margin: 0 0 2px; font-size: 13px; font-weight: 600; line-height: 1.3; color: var(--debug-text-primary); }
+.dbg-bar-desc { margin: 0; font-size: 11px; line-height: 1.45; color: var(--debug-text-muted); }
+.dbg-bar .debug-btn-row { justify-content: flex-end; }
+.dbg-bar-section .dbg-bar-title { font-size: 12px; letter-spacing: 0.01em; }
+
+.dbg-subbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--bmm-s05);
+    background: var(--debug-bg);
+    flex-shrink: 0;
+    font-family: var(--bmm-font-sans, system-ui), sans-serif;
+}
+.dbg-subbar-sticky { position: sticky; top: 0; z-index: 1; }
+.dbg-subbar-title { font-size: 11px; font-weight: 600; color: var(--debug-text-secondary); }
+.dbg-grow { flex: 1 1 140px; }
+.dbg-body { flex: 1; min-height: 0; overflow: auto; }
+
+.dbg-input {
+    min-width: 0;
+    max-width: 100%;
+    padding: 4px 8px;
+    border: 1px solid var(--debug-border);
+    border-radius: 6px;
+    background: var(--debug-sunken);
+    color: var(--debug-text-primary);
+    font: 11px/1.4 var(--bmm-font-sans, system-ui), sans-serif;
+    outline: none;
+}
+.dbg-input:focus-visible { border-color: var(--debug-accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--debug-accent) 30%, transparent); }
+textarea.dbg-input { resize: vertical; width: 100%; font-family: var(--bmm-font-mono, 'JetBrains Mono'), monospace; }
+
+.dbg-count {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 7px;
+    border-radius: 999px;
+    border: 1px solid var(--debug-border);
+    background: var(--bmm-s02);
+    font: 600 10px/1.5 var(--bmm-font-mono, 'JetBrains Mono'), monospace;
+    color: var(--debug-text-secondary);
+    white-space: nowrap;
+}
+.dbg-count:empty { display: none; }
+.dbg-error { color: var(--debug-error); border-color: color-mix(in srgb, var(--debug-error) 45%, transparent); }
+
+/* Rust log: time, a level mark, the text. The mark carries the colour; the text stays
+   in the readable ink of the theme, so a light theme does not get yellow on white. */
+/* Not `.dbg-log`: that name is the scheduler debugger's step list (main.css), whose
+   `max-height: 130px` and 26px left padding leaked in here and cut the log to a 130px strip
+   with the rest of the pane left empty. Long lines wrap (paths break anywhere) under the
+   message column, so the time stays a clean left gutter: nothing is ever cut on the right. */
+.dbg-rustlog { padding: 4px 0; font-family: var(--bmm-font-mono, 'JetBrains Mono'), monospace; font-size: 10.5px; user-select: text; overflow-x: hidden; }
+.dbg-rustlog:focus-visible { outline: 2px solid var(--debug-accent); outline-offset: -2px; }
+.dbg-logline {
+    display: grid;
+    grid-template-columns: auto 3px minmax(0, 1fr);
+    gap: 8px;
+    align-items: stretch;
+    padding: 2px 16px;
+    line-height: 1.5;
+}
+.dbg-logline[hidden] { display: none; }
+.dbg-logline:hover { background: var(--bmm-s04); }
+.dbg-logline-time { color: var(--debug-text-muted); white-space: nowrap; }
+.dbg-logline-msg { color: var(--debug-text-primary); white-space: pre-wrap; overflow-wrap: anywhere; }
+.dbg-lvl { border-radius: 2px; background: transparent; }
+.dbg-lvl[data-lvl="error"] { background: var(--debug-error); }
+.dbg-lvl[data-lvl="warn"] { background: var(--debug-warn); }
+.dbg-lvl[data-lvl="info"] { background: color-mix(in srgb, var(--debug-accent) 60%, transparent); }
+.dbg-lvl[data-lvl="ok"] { background: var(--debug-success); }
+.dbg-logline[data-lvl="error"] { background: color-mix(in srgb, var(--debug-error) 7%, transparent); }
+.dbg-logline[data-lvl="error"]:hover { background: color-mix(in srgb, var(--debug-error) 13%, transparent); }
+
+/* DOM tree: real buttons (Tab + Enter), a guide line per level, hover per row. */
+.dbg-tree { padding: 8px 8px 12px; font-family: var(--bmm-font-mono, 'JetBrains Mono'), monospace; font-size: 11px; }
+.dom-node { margin-left: 12px; }
+.dbg-tree > .dom-node { margin-left: 0; }
+.dom-children { margin-left: 5px; border-left: 1px solid var(--bmm-s05); }
+.dom-children[hidden] { display: none; }
+.dom-tree-node { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 1px 4px; border-radius: 4px; }
+.dom-toggle {
+    flex: 0 0 14px;
+    width: 14px;
+    height: 14px;
+    padding: 0;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--debug-text-muted);
+    cursor: pointer;
+    position: relative;
+}
+span.dom-toggle { cursor: default; }
+button.dom-toggle::before {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 3px;
+    border-style: solid;
+    border-width: 4px 0 4px 6px;
+    border-color: transparent transparent transparent currentColor;
+    transition: transform 0.12s ease;
+}
+button.dom-toggle[aria-expanded="true"]::before { transform: rotate(90deg); }
+.dom-tag {
+    padding: 0 2px;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+    font: 600 11px/1.6 var(--bmm-font-mono, 'JetBrains Mono'), monospace;
+    color: var(--debug-text-primary);
+    cursor: pointer;
+    white-space: nowrap;
+}
+.dom-tag:hover { background: color-mix(in srgb, var(--debug-accent) 16%, transparent); }
+.dom-cls { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--debug-text-muted); }
+.dom-toggle:focus-visible, .dom-tag:focus-visible { outline: 2px solid var(--debug-accent); outline-offset: 1px; }
+
+/* CSS sub-pane: the tool switches as a grid of rows (the whole row is the switch's
+   label), then the rule list under a sticky filter bar. */
+.dbg-section { padding: 12px 16px 14px; border-bottom: 1px solid var(--bmm-s05); }
+.dbg-toggle-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 8px; }
+.dbg-toggle-grid .debug-toggle-row {
+    margin: 0;
+    padding: 9px 10px;
+    gap: 10px;
+    border: 1px solid var(--bmm-s05);
+    border-radius: 8px;
+    background: var(--bmm-s02);
+    cursor: pointer;
+    font-family: var(--bmm-font-sans, system-ui), sans-serif;
+}
+.dbg-toggle-grid .debug-toggle-row:hover { background: var(--bmm-s04); border-color: var(--debug-border); }
+.dbg-toggle-grid .debug-toggle-row:focus-within { border-color: var(--debug-accent); }
+.dbg-toggle-grid .debug-toggle-info { display: flex; flex-direction: column; min-width: 0; padding-right: 0; }
+.dbg-toggle-grid .debug-toggle-title { font-size: 12px; }
+.dbg-toggle-ctl { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.dbg-color { width: 20px; height: 20px; padding: 0; border: 1px solid var(--debug-border); border-radius: 4px; background: transparent; cursor: pointer; }
+.debug-switch:focus-visible, .dbg-color:focus-visible { outline: 2px solid var(--debug-accent); outline-offset: 2px; }
+.dbg-grid-config { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--bmm-s10); }
+.dbg-field-label { font: 600 12px/1.4 var(--bmm-font-sans, system-ui), sans-serif; color: var(--debug-text-primary); }
+.dbg-range { width: 100%; }
+
+.dbg-rules { padding: 10px 16px 16px; display: flex; flex-direction: column; gap: 8px; }
+.css-rule-block {
+    padding: 8px 10px;
+    border: 1px solid var(--bmm-s05);
+    border-radius: 8px;
+    background: var(--bmm-s02);
+    font-family: var(--bmm-font-mono, 'JetBrains Mono'), monospace;
+    font-size: 11px;
+}
+.css-rule-block[hidden] { display: none; }
+.css-rule-block:hover { border-color: var(--debug-border); }
+.css-rule-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.css-rule-sel { font-weight: 700; color: var(--debug-text-primary); overflow-wrap: anywhere; }
+.rule-inspect-btn {
+    flex-shrink: 0;
+    display: inline-flex;
+    padding: 3px;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--debug-text-muted);
+    cursor: pointer;
+}
+.rule-inspect-btn:hover { color: var(--debug-text-primary); background: var(--bmm-s05); border-color: var(--debug-border); }
+.rule-inspect-btn:focus-visible { outline: 2px solid var(--debug-accent); outline-offset: 1px; }
+.live-css-editor {
+    margin: 4px 0;
+    padding: 4px 6px;
+    border: 1px dashed transparent;
+    border-radius: 4px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    color: var(--debug-text-secondary);
+    outline: none;
+}
+.live-css-editor:hover { border-color: var(--bmm-s10); }
+.live-css-editor:focus { border-color: var(--debug-accent); color: var(--debug-text-primary); background: var(--debug-sunken); }
+
+@container devtools (max-width: 520px) {
+    .dbg-bar, .dbg-subbar { padding-left: 12px; padding-right: 12px; }
+    .dbg-bar .debug-btn-row { justify-content: flex-start; }
+    .dbg-logline { grid-template-columns: 3px minmax(0, 1fr); padding: 2px 12px; }
+    .dbg-logline-time { display: none; }
+    .dbg-section, .dbg-rules { padding-left: 12px; padding-right: 12px; }
+}

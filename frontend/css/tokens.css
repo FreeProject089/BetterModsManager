@@ -1,0 +1,300 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   BMM — Design Tokens  (the ONLY file themes need to override)
+   All --bmm-* variables are the official theming surface.
+   Everything in main.css references these via var(--bmm-*).
+   Themes override them on :root to restyle the entire app instantly.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+    /* ── Backgrounds ──────────────────────────────────────────────────────── */
+    --bmm-bg-base:      #0a0e17;   /* outermost app background */
+    --bmm-bg-elevated:  #111827;   /* cards, panels */
+    /* Overlay/glass surface — derives from bg-elevated so every theme that sets
+       bg-elevated automatically restyles all cards & modals. Themes can still
+       override --bmm-bg-overlay directly for a custom translucency.            */
+    --bmm-bg-overlay:   var(--bmm-bg-elevated);
+    /* Hover/active surfaces derive from the surface tint → follow the theme   */
+    --bmm-bg-hover:     rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.04);
+    --bmm-bg-active:    rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.12);
+    --bmm-bg-sidebar:   #0d1117;   /* left navigation */
+    --bmm-bg-titlebar:  #080c14;
+
+    /* ── Borders (derive from surface tint so light themes invert) ────────── */
+    --bmm-border:        rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.07);
+    --bmm-border-hover:  rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.13);
+    --bmm-border-accent: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.4);
+
+    /* ── Accent (blue by default) ─────────────────────────────────────────── */
+    --bmm-accent:      #3b82f6;
+    --bmm-accent-dim:  rgba(59, 130, 246, 0.18);
+    --bmm-accent-glow: 0 0 20px rgba(59, 130, 246, 0.4);
+    /* RGB components for dynamic rgba() composition */
+    --bmm-accent-r: 59;
+    --bmm-accent-g: 130;
+    --bmm-accent-b: 246;
+
+    /* ── Semantic colours ─────────────────────────────────────────────────── */
+    --bmm-cyan:    #06b6d4;
+    --bmm-cyan-dim: rgba(6, 182, 212, 0.18);
+    --bmm-cyan-r: 6;   --bmm-cyan-g: 182; --bmm-cyan-b: 212;
+    --bmm-success: #10b981;
+    --bmm-success-r: 16; --bmm-success-g: 185; --bmm-success-b: 129;
+    --bmm-warning: #f59e0b;
+    --bmm-warning-r: 245; --bmm-warning-g: 158; --bmm-warning-b: 11;
+    --bmm-danger:  #ef4444;
+    --bmm-danger-r: 239; --bmm-danger-g: 68; --bmm-danger-b: 68;
+    --bmm-danger-dim: rgba(239, 68, 68, 0.15);
+    --bmm-amber:   #f59e0b;
+    --bmm-purple:  #a855f7;
+    /* Info = a fixed blue (stays semantic even when a theme recolours --bmm-accent).
+       Completes the semantic set: blue=info, green=success, yellow=warning, red=error. */
+    --bmm-info:    #3b82f6;
+    --bmm-info-r: 59; --bmm-info-g: 130; --bmm-info-b: 246;
+    --bmm-info-dim: rgba(59, 130, 246, 0.15);
+    --bmm-success-dim: rgba(16, 185, 129, 0.15);
+    --bmm-warning-dim: rgba(245, 158, 11, 0.15);
+
+    /* ── Brand wordmark (FIXED — never theme-overridable) ─────────────────────
+       The "Better ModManager" logo must read the same under every theme, so it
+       uses its own tokens that the theme system + theme editor deliberately do
+       NOT expose. Neutral grey stays legible on dark AND light sidebars; the
+       amber is the brand accent. Do not point these at --bmm-surface/-warning. */
+    --bmm-brand-better: #9ca3af;   /* neutral, legible on dark and light */
+    --bmm-brand-mm:     #f59e0b;   /* fixed brand amber */
+    --bmm-brand-mm-2:   #fbbf24;   /* lighter amber for the wordmark gradient */
+    /* The sidebar wordmark is one SVG (index.html, .bmm-wordmark) with two inks: the pair
+       above on a dark theme, this pair on a light one (body.bmm-theme-light), where the grey
+       and the amber above fall to about 2:1 on a white sidebar. Same hues, darker: 7.6:1 and
+       5:1 on white. A theme that needs its own ink sets --bmm-wordmark-better / -mm (and
+       --bmm-wordmark-highlight for a band behind "Mod.Manager"); nothing defines those by
+       default, so every theme, custom ones included, gets the ink for its mode. */
+    --bmm-brand-better-light: #4b5563;
+    --bmm-brand-mm-light:     #b45309;
+    --bmm-brand-mm-glow:      rgba(245, 158, 11, 0.3);   /* the halo behind "Mod.Manager", dark themes only */
+    --bmm-brand-font:         'Bricolage Grotesque', 'Inter', 'Segoe UI', system-ui, sans-serif;   /* bundled (main.css @font-face); fixed: a wordmark does not follow the theme font */
+
+    /* ── Diagrams (Help & other interactive flowcharts) ──────────────────── */
+    --bmm-diagram-node:        var(--bmm-bg-elevated);   /* node fill — follows theme */
+    --bmm-diagram-node-border: var(--bmm-border-accent);
+    --bmm-diagram-node-text:   var(--bmm-text-primary);
+
+    /* ── Benchmark / performance chart series ─────────────────────────────── */
+    --bmm-chart-cpu:        #3b82f6;
+    /* RAM is the chart's neutral series: it follows the theme's INK, not a fixed white.
+       Fixed #ffffff was invisible on every light theme — the 32px live value and the
+       whole RAM line, gone — and no built-in theme overrides chart tokens (0/12), so
+       nothing ever corrected it. On dark themes this resolves to near-white: unchanged.
+       Same family as debug.css's --text-primary pin and the inline washes. */
+    --bmm-chart-ram:        var(--bmm-text-primary);
+    --bmm-chart-disk-read:  #fbbf24;
+    --bmm-chart-disk-write: #f87171;
+
+    /* ── Text ─────────────────────────────────────────────────────────────── */
+    --bmm-text-primary:   #f1f5f9;
+    --bmm-text-secondary: #94a3b8;
+    --bmm-text-muted:     #475569;
+    /* Text that sits ON a coloured accent/badge fill (buttons, chips). Fixed white
+       by default; a light-accent theme can override it to a dark colour. This is
+       what hard-coded `color:#fff` on accent surfaces should point at. */
+    --bmm-text-on-accent: #ffffff;
+
+    /* ── Typography ───────────────────────────────────────────────────────── */
+    --bmm-font-sans:      'Inter', system-ui, sans-serif;
+    --bmm-font-mono:      'JetBrains Mono', 'Fira Code', monospace;
+    --bmm-font-size-base: 13px;
+    --bmm-font-scale:     1;       /* multiply all font sizes by this */
+
+    /* ── Spacing scale (4-pt grid) ────────────────────────────────────────────
+       Adopt incrementally on new/edited components so paddings/margins/gaps
+       land on a consistent rhythm. Do NOT mass-rewrite existing inline values. */
+    --space-1:  4px;
+    --space-2:  8px;
+    --space-3:  12px;
+    --space-4:  16px;
+    --space-5:  20px;
+    --space-6:  24px;
+    --space-8:  32px;
+    --space-10: 40px;
+    --space-12: 48px;
+    --space-16: 64px;
+
+    /* ── Spacing / Shape ──────────────────────────────────────────────────── */
+    /* One coherent rounding scale — "rounded rectangles", not lozenges. Reach for a token,
+       not a raw px, so the app reads as one family: badge (tiny labels) < input/btn < card. */
+    --bmm-radius-badge:  5px;
+    --bmm-radius-card:  14px;
+    --bmm-radius-btn:   10px;
+    --bmm-radius-input: 9px;
+    --bmm-radius-chip:  20px;
+    --bmm-sidebar-w:    240px;
+    /* 38px left 5px above a 28px button, which reads as glued to the frame. 42 gives 7px
+       above and below — the buttons stay centred, so the spacing cannot go lopsided. */
+    --bmm-titlebar-h:   42px;
+
+    /* ── Shadows / Glows ──────────────────────────────────────────────────── */
+    --bmm-shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
+    --bmm-shadow-modal: 0 20px 60px rgba(0, 0, 0, 0.7);
+    --bmm-glow-accent:  0 0 20px rgba(59, 130, 246, 0.4);
+    --bmm-glow-cyan:    0 0 20px rgba(6, 182, 212, 0.35);
+
+    /* ── Images / Backgrounds ─────────────────────────────────────────────── */
+    --bmm-app-bg-image: none;      /* set to url('...') for a wallpaper */
+    --bmm-app-bg-size:  cover;
+    /* Per-asset placement. The assets themselves are pickable images; these decide
+       how each one SITS, which is the difference between a wallpaper that works
+       and one you have to re-crop outside the app. */
+    --bmm-app-bg-position: center;    /* center | top | bottom | 50% 20% … */
+    --bmm-nav-logo-h:      52px;      /* sidebar logo block height */
+    --bmm-mascot-w:        110px;     /* floating Tasky width */
+    --bmm-app-bg-blur:  0px;       /* backdrop-filter blur on content above bg */
+    --bmm-sidebar-bg-image: none;
+    --bmm-nav-logo-url: none;      /* url(...) to replace the BMM logo */
+
+    /* ── Title bar ────────────────────────────────────────────────────────── */
+    --bmm-titlebar-bg:     rgba(10, 14, 23, 0.95);
+    --bmm-titlebar-blur:   12px;
+
+    /* ── Tasky tooltip bubble ─────────────────────────────────────────────── */
+    --bmm-tasky-bubble-bg:     rgba(15, 23, 42, 0.7);
+    --bmm-tasky-bubble-border: rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.3);
+    --bmm-tasky-bubble-text:   #e2e8f0;
+    --bmm-tasky-bubble-blur:   30px;
+    --bmm-tasky-bubble-radius: 12px;
+
+    /* ── Toasts (notifications) ───────────────────────────────────────────── */
+    --bmm-toast-bg:        var(--bmm-bg-elevated);
+    --bmm-toast-border:    var(--bmm-border);
+    --bmm-toast-text:      var(--bmm-text-primary);
+    --bmm-toast-shadow:    0 8px 24px rgba(0, 0, 0, 0.4);
+    --bmm-toast-blur:      12px;
+
+    /* ── Loader / boot mascot ─────────────────────────────────────────────── */
+    --bmm-loader-img:      none;          /* url('...') to replace spinning Tasky */
+    --bmm-loader-bg:       #08080f;       /* boot screen background */
+    --bmm-mascot-img:      none;          /* url('...') to replace the corner Tasky */
+
+    /* ── Effects (holo / glow / shadows) ──────────────────────────────────── */
+    --bmm-holo-1:          rgba(var(--bmm-accent-r),var(--bmm-accent-g),var(--bmm-accent-b),0.15);
+    --bmm-holo-2:          rgba(var(--bmm-cyan-r,6),var(--bmm-cyan-g,182),var(--bmm-cyan-b,212),0.1);
+    --bmm-card-glow:       0 0 0 transparent;   /* extra glow on cards (off by default) */
+    --bmm-card-hover-lift: -2px;                /* translateY on card hover */
+
+    /* ── Animations (intro / exit / transitions) ──────────────────────────── */
+    --bmm-anim-speed:      1;             /* multiplier — 0 disables all animations */
+    --bmm-intro-duration:  0.65s;         /* boot loader fade */
+    --bmm-modal-anim:      0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    /* ── DevTools ─────────────────────────────────────────────────────────── */
+    --bmm-devtools-bg:     #0d1117;
+    --bmm-devtools-accent: var(--bmm-accent);
+
+    /* ── Transitions ──────────────────────────────────────────────────────── */
+    --bmm-transition:      all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    --bmm-transition-fast: all 0.12s ease;
+
+    /* ── Surface overlay tint (255,255,255 in dark / 0,0,0 in light) ─────── */
+    /* All the rgba(255,255,255,0.05) glass effects use these so light themes
+       can invert them to rgba(0,0,0,0.05) by changing a single token.        */
+    --bmm-surface-r: 255;
+    --bmm-surface-g: 255;
+    --bmm-surface-b: 255;
+
+    /* color-scheme for native controls (select popups, scrollbars). Light themes
+       set this to "light" so the OS renders dropdowns with light surfaces.      */
+    --bmm-color-scheme: dark;
+
+    /* Pre-built surface values used most frequently — themes override these   */
+    --bmm-s02:  rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.02);
+    --bmm-s03:  rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.03);
+    --bmm-s04:  rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.04);
+    --bmm-s05:  rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.05);
+    --bmm-s06:  rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.06);
+    --bmm-s07:  rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.07);
+    --bmm-s08:  rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.08);
+    --bmm-s09:  rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.09);
+    --bmm-s10:  rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.10);
+    --bmm-s12:  rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.12);
+    --bmm-s15:  rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.15);
+    --bmm-s20:  rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.20);
+
+    /* ── Glass card background & border ──────────────────────────────────── */
+    --bmm-glass-bg:     rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.03);
+    --bmm-glass-border: rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.08);
+
+    /* ── Backward-compat aliases (keep existing code working) ─────────────── */
+    --bg-primary:    var(--bmm-bg-base);
+    --bg-secondary:  var(--bmm-bg-elevated);
+    --bg-card:       var(--bmm-bg-overlay);
+    --bg-hover:      var(--bmm-bg-hover);
+    --bg-active:     var(--bmm-bg-active);
+    --border:        var(--bmm-border);
+    --border-accent: var(--bmm-border-accent);
+    --border-hover:  var(--bmm-border-hover);
+    --accent:        var(--bmm-accent);
+    --accent-dim:    var(--bmm-accent-dim);
+    --accent-glow:   var(--bmm-accent-glow);
+    --cyan:          var(--bmm-cyan);
+    --cyan-dim:      var(--bmm-cyan-dim);
+    --success:       var(--bmm-success);
+    --success-dim:   var(--bmm-success-dim);
+    --warning:       var(--bmm-warning);
+    --warning-dim:   var(--bmm-warning-dim);
+    --danger:        var(--bmm-danger);
+    --danger-dim:    var(--bmm-danger-dim);
+    --error:         var(--bmm-danger);
+    --info:          var(--bmm-info);
+    --info-dim:      var(--bmm-info-dim);
+    --amber:         var(--bmm-amber);
+    --text-primary:  var(--bmm-text-primary);
+    --text-secondary: var(--bmm-text-secondary);
+    --text-muted:    var(--bmm-text-muted);
+    --text-on-accent: var(--bmm-text-on-accent);
+    --font-sans:     var(--bmm-font-sans);
+    --font-mono:     var(--bmm-font-mono);
+    --radius-badge:  var(--bmm-radius-badge);
+    --radius-card:   var(--bmm-radius-card);
+    --radius-btn:    var(--bmm-radius-btn);
+    --radius-input:  var(--bmm-radius-input);
+    --radius-chip:   var(--bmm-radius-chip);
+    --sidebar-w:     var(--bmm-sidebar-w);
+    --titlebar-h:    var(--bmm-titlebar-h);
+    --transition:    var(--bmm-transition);
+    --transition-fast: var(--bmm-transition-fast);
+}
+
+/* ── Boot loader background follows the theme ─────────────────────────────── */
+#app-loader { background: var(--bmm-loader-bg) !important; }
+
+/* ── Animation kill-switch (--bmm-anim-speed: 0) ──────────────────────────── */
+body.bmm-no-anim *,
+body.bmm-no-anim *::before,
+body.bmm-no-anim *::after {
+    animation-duration: 0.001s !important;
+    animation-delay: 0s !important;
+    transition-duration: 0.001s !important;
+}
+
+/* Same exemption as the prefers-reduced-motion rule in main.css: a spinner is a
+   status signal. Turning the app's animations off must not make a busy app look
+   like a dead one, so the progress indicators keep turning — slowly. */
+body.bmm-no-anim [style*="animation:spin"],
+body.bmm-no-anim [style*="animation: spin"],
+body.bmm-no-anim .community-spinner,
+body.bmm-no-anim .bh-submit-btn.loading::after {
+    animation-duration: 2.4s !important;
+}
+
+/* ── App background image / wallpaper support ─────────────────────────────── */
+#app-window-outer::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: var(--bmm-app-bg-image);
+    background-size: var(--bmm-app-bg-size);
+    background-position: var(--bmm-app-bg-position, center);
+    background-repeat: no-repeat;
+    filter: blur(var(--bmm-app-bg-blur));
+    z-index: 0;
+    pointer-events: none;
+    opacity: var(--bmm-app-bg-opacity, 0.3);
+}

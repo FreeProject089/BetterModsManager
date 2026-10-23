@@ -1,0 +1,548 @@
+// Reading a catalog index, against the COMPILED module.
+//
+// The document comes from whatever server the user pasted a URL for, so every assertion
+// here is about refusing something rather than accepting it. The one thing this must
+// never do is hand a URL it did not check to something that will fetch it.
+import { test, describe } from 'node:test';
+import assert from 'node:assert/strict';
+import { pathToFileURL } from 'node:url';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const { parseCatalogIndex, planImport, INDEX_TYPES, STORE_KEY, ROUTABLE, looksLikeIndex, hasSource, addSource, removeSource, readHistory, recordHistory, clearHistory, HISTORY_MAX,
+  readDisabled, isDisabled, setDisabled, enabledOnly, catalogLooksLike, CATALOG_SHAPES, importIndexForType, originOf, catalogLabel, describeKinds } = await import(
+  pathToFileURL(join(ROOT, 'frontend/js/features/catalogs/catalog-index.js')).href
+);
+
+const doc = (catalogs) => ({ version: '1.0', name: 'idx', catalogs });
+
+describe('parseCatalogIndex', () => {
+  test('keeps a well-formed entry of each routable type', () => {
+    const { index, dropped } = parseCatalogIndex(doc([
+      { type: 'app', url: 'https://e.com/a.json', name: 'A' },
+      { type: 'plugin', url: 'https://e.com/p.json' },
+      { type: 'theme', url: 'http://localhost:5176/t.json' },
+    ]));
+    assert.equal(index.catalogs.length, 3);
+    assert.deepEqual(index.catalogs.map((c) => c.type), ['app', 'plugin', 'theme']);
+    assert.deepEqual(dropped, []);
+  });
+
+  test('drops a url that is not http(s)', () => {
+    // The attack this exists for: an index is a list of addresses handed to a fetcher.
+    for (const url of ['file:///etc/passwd', 'javascript:alert(1)', 'data:text/json,{}', 'ftp://e.com/a.json', '']) {
+      const { index } = parseCatalogIndex(doc([{ type: 'app', url }]));
+      assert.equal(index.catalogs.length, 0, `${url} was kept`);
+    }
+  });
+
+  test('drops an unknown type instead of guessing it', () => {
+    // "plugins" looks like "plugin"; guessing is how a preset catalog lands in themes.
+    //
+    // `preset` used to be in this list, with a comment explaining that it had no store to
+    // route it to. It has one now, so it belongs in the accepted set — the rule was never
+    // "preset is not a real type", it was "do not accept what you cannot deliver", and the
+    // second half of that changed.
+    for (const type of ['plugins', 'repos', 'themes', '', null, 5, {}]) {
+      const { index } = parseCatalogIndex(doc([{ type, url: 'https://e.com/a.json' }]));
+      assert.equal(index.catalogs.length, 0, `type ${JSON.stringify(type)} was kept`);
+    }
+  });
+
+  test('normalises case and stray whitespace, which are formatting not meaning', () => {
+    // This test started life asserting that 'app ' was DROPPED, and it failed — correctly.
+    // A trailing space in a JSON field is an artefact of whoever wrote the file, not a
+    // different type, and dropping it would be the same guessing the test above forbids,
+    // pointed the other way.
+    for (const type of ['APP', 'app ', ' App']) {
+      const { index } = parseCatalogIndex(doc([{ type, url: 'https://e.com/a.json' }]));
+      assert.equal(index.catalogs[0]?.type, 'app', `type ${JSON.stringify(type)} was dropped`);
+    }
+  });
+
+  test('never carries `official` through, whatever the document claims', () => {
+    // Trust in BMM comes from the source URL — apply_trust overrides what a catalog says.
+    // An index that could grant it would be a way around that, not an extension of it.
+    const { index } = parseCatalogIndex(doc([{ type: 'app', url: 'https://e.com/a.json', official: true }]));
+    assert.equal('official' in index.catalogs[0], false);
+  });
+
+  test('collapses a duplicate url, keeping the first', () => {
+    const { index, dropped } = parseCatalogIndex(doc([
+      { type: 'app', url: 'https://e.com/a.json', name: 'first' },
+      { type: 'app', url: 'HTTPS://E.COM/A.JSON', name: 'second' },
+    ]));
+    assert.equal(index.catalogs.length, 1);
+    assert.equal(index.catalogs[0].name, 'first');
+    assert.equal(dropped.length, 1);
+  });
+
+  test('survives a document that is not an index at all', () => {
+    for (const junk of [null, undefined, 42, 'nope', [], {}, { catalogs: 'no' }, { catalogs: [null, 3] }]) {
+      const { index } = parseCatalogIndex(junk);
+      assert.deepEqual(index.catalogs, [], `${JSON.stringify(junk)} produced entries`);
+    }
+  });
+
+  test('says what it dropped, rather than dropping silently', () => {
+    const { dropped } = parseCatalogIndex(doc([{ type: 'nope', url: 'https://e.com/x.json' }]));
+    assert.equal(dropped.length, 1);
+    assert.match(dropped[0], /unknown type/);
+  });
+});
+
+describe('planImport', () => {
+  test('separates what is new from what is already there', () => {
+    const { index } = parseCatalogIndex(doc([
+      { type: 'plugin', url: 'https://e.com/p1.json' },
+      { type: 'plugin', url: 'https://e.com/p2.json' },
+    ]));
+    const { add, already } = planImport(index, { plugin: ['https://E.COM/p1.json'] });
+    assert.deepEqual(add.map((c) => c.url), ['https://e.com/p2.json']);
+    assert.deepEqual(already.map((c) => c.url), ['https://e.com/p1.json']);
+  });
+
+  test('a type with no store yet is all-new, not an error', () => {
+    const { index } = parseCatalogIndex(doc([{ type: 'theme', url: 'https://e.com/t.json' }]));
+    assert.equal(planImport(index, {}).add.length, 1);
+  });
+
+  test('a type MISSING from `existing` reports everything as new', () => {
+    // Not a bug in planImport — a trap for its callers, and one that was live. The importer
+    // built `existing` for plugin and theme only, so preset and repo catalogs you already
+    // followed were previewed as "will add" and then counted as added. Pinned so the shape of
+    // the mistake is written down somewhere.
+    const { index } = parseCatalogIndex(doc([{ type: 'preset', url: 'https://e.com/p.json' }]));
+    assert.equal(planImport(index, { plugin: [], theme: [] }).add.length, 1);
+    assert.equal(planImport(index, { preset: ['https://e.com/p.json'] }).already.length, 1);
+  });
+});
+
+describe('hasSource / addSource — the preview and the writer must agree', () => {
+  test('differing only in case is the SAME source', () => {
+    // THE ONE. The preview lowercased and the writer used Array.includes, so a URL differing
+    // only in case was announced as already-followed and then appended anyway — a duplicate
+    // fetched on every start and visible on no screen.
+    assert.equal(hasSource(['https://E.com/A.json'], 'https://e.com/a.json'), true);
+    const list = ['https://E.com/A.json'];
+    assert.equal(addSource(list, 'https://e.com/a.json'), false);
+    assert.equal(list.length, 1);
+  });
+
+  test('a genuinely new source is appended, and says so', () => {
+    const list = ['https://e.com/a.json'];
+    assert.equal(addSource(list, 'https://e.com/b.json'), true);
+    assert.deepEqual(list, ['https://e.com/a.json', 'https://e.com/b.json']);
+  });
+
+  test('planImport asks the same question, so the two cannot drift', () => {
+    const { index } = parseCatalogIndex(doc([{ type: 'plugin', url: 'https://e.com/p.json' }]));
+    const existing = { plugin: ['HTTPS://E.COM/P.JSON'] };
+    assert.equal(planImport(index, existing).already.length, 1);
+    assert.equal(addSource(existing.plugin, 'https://e.com/p.json'), false);
+  });
+
+  test('removeSource takes a source out by the same name addSource refused it under', () => {
+    // THE ONE for removal. An exact-match filter would leave a source that was added under a
+    // different case unremovable by the button that says it removes it — and there is no other
+    // screen that lists all five types, so unremovable there means unremovable.
+    const { list, removed } = removeSource(['https://E.com/A.json', 'https://e.com/b.json'], 'https://e.com/a.json');
+    assert.equal(removed, true);
+    assert.deepEqual(list, ['https://e.com/b.json']);
+  });
+
+  test('removing something that is not there changes nothing, and says so', () => {
+    // The caller skips the write AND the history entry on false. Returning true here would
+    // write "removed" into the history for something that was never followed.
+    const { list, removed } = removeSource(['https://e.com/a.json'], 'https://e.com/zz.json');
+    assert.equal(removed, false);
+    assert.deepEqual(list, ['https://e.com/a.json']);
+  });
+
+  test('add then remove leaves the list as it started', () => {
+    const list = ['https://e.com/a.json'];
+    addSource(list, 'https://e.com/b.json');
+    assert.deepEqual(removeSource(list, 'https://E.COM/B.JSON').list, ['https://e.com/a.json']);
+  });
+});
+
+describe('catalogLooksLike — what kind of document is this?', () => {
+  test('each kind is recognised by the array its own reader looks for', () => {
+    assert.equal(catalogLooksLike({ apps: [] }, 'app'), true);
+    assert.equal(catalogLooksLike({ plugins: [] }, 'plugin'), true);
+    assert.equal(catalogLooksLike({ themes: [] }, 'theme'), true);
+    assert.equal(catalogLooksLike({ presets: [] }, 'preset'), true);
+    assert.equal(catalogLooksLike({ repos: [] }, 'repo'), true);
+  });
+
+  test('a bare array is a theme catalogue — the one kind that allows it', () => {
+    // theme-catalog.ts accepts `[...]` as well as `{ themes: [...] }`, so this must too, or
+    // a real theme catalogue would be reported as not one.
+    assert.equal(catalogLooksLike([{ id: 't' }], 'theme'), true);
+    assert.equal(catalogLooksLike([{ id: 't' }], 'plugin'), false);
+  });
+
+  test('an automation catalogue answers to presets OR tasks', () => {
+    assert.equal(catalogLooksLike({ tasks: [] }, 'preset'), true);
+  });
+
+  test('the wrong kind is refused — which is the whole point', () => {
+    // THE ONE. A file called catalog.json can be anything, and an index pasted where a
+    // plugin catalogue belongs would otherwise parse, hold no plugins, and read as empty.
+    const index = { version: '1', kind: 'catalog-index', catalogs: [{ type: 'plugin', url: 'https://e.com/p.json' }] };
+    assert.equal(catalogLooksLike(index, 'plugin'), false);
+    assert.equal(catalogLooksLike(index, 'index'), true);
+    assert.equal(catalogLooksLike({ plugins: [] }, 'index'), false);
+  });
+
+  test('index defers to looksLikeIndex rather than repeating its rule', () => {
+    const doc = { version: '1', kind: 'catalog-index', catalogs: [{ type: 'app', url: 'https://e.com/a.json' }] };
+    assert.equal(CATALOG_SHAPES.index(doc), looksLikeIndex(doc));
+    assert.equal(CATALOG_SHAPES.index({ nope: 1 }), looksLikeIndex({ nope: 1 }));
+  });
+
+  test('"any" accepts any recognised shape and still refuses junk', () => {
+    assert.equal(catalogLooksLike({ apps: [] }, 'any'), true);
+    assert.equal(catalogLooksLike({ hello: 'world' }, 'any'), false);
+    assert.equal(catalogLooksLike(null, 'any'), false);
+  });
+
+  test('an unknown kind is false, not "anything goes"', () => {
+    // Answering true would hide a condition the editor should never have produced.
+    assert.equal(catalogLooksLike({ apps: [] }, 'wat'), false);
+  });
+});
+
+describe('disabled sources — follow the index, not that one catalog', () => {
+  const store = new Map();
+  globalThis.localStorage = globalThis.localStorage || {
+    getItem: (k) => (store.has(k) ? store.get(k) : null),
+    setItem: (k, v) => store.set(k, String(v)),
+    removeItem: (k) => store.delete(k),
+  };
+  const reset = () => { localStorage.setItem('bmm_catalog_disabled', '[]'); };
+
+  test('a source nobody disabled is enabled — that is the default for every existing one', () => {
+    reset();
+    assert.equal(isDisabled('https://e.com/a.json'), false);
+    assert.deepEqual(enabledOnly(['https://e.com/a.json']), ['https://e.com/a.json']);
+  });
+
+  test('disabling keeps the source and only stops it being fetched', () => {
+    // The whole distinction: removed is forgotten, disabled is remembered and skipped.
+    reset();
+    setDisabled('https://e.com/a.json', true);
+    assert.equal(isDisabled('https://e.com/a.json'), true);
+    assert.deepEqual(enabledOnly(['https://e.com/a.json', 'https://e.com/b.json']), ['https://e.com/b.json']);
+  });
+
+  test('case-insensitively, like every other question asked of a URL here', () => {
+    reset();
+    setDisabled('https://E.COM/A.json', true);
+    assert.equal(isDisabled('https://e.com/a.json'), true);
+    assert.deepEqual(enabledOnly(['https://e.com/a.json']), []);
+  });
+
+  test('re-enabling puts it back', () => {
+    reset();
+    setDisabled('https://e.com/a.json', true);
+    setDisabled('https://e.com/a.json', false);
+    assert.equal(isDisabled('https://e.com/a.json'), false);
+    assert.deepEqual(readDisabled(), []);
+  });
+
+  test('disabling twice does not list it twice', () => {
+    reset();
+    setDisabled('https://e.com/a.json', true);
+    setDisabled('https://E.com/A.json', true);
+    assert.equal(readDisabled().length, 1);
+  });
+
+  test('enabledOnly returns the SAME array when nothing is disabled', () => {
+    // Not a micro-optimisation for its own sake: this runs on every catalogue fetch at
+    // startup, for five types, and the overwhelmingly common case is an empty set.
+    reset();
+    const urls = ['a', 'b'];
+    assert.equal(enabledOnly(urls), urls);
+  });
+
+  test('junk in the key means nothing is disabled, not a crash', () => {
+    localStorage.setItem('bmm_catalog_disabled', 'not json');
+    assert.deepEqual(readDisabled(), []);
+    localStorage.setItem('bmm_catalog_disabled', '{"not":"an array"}');
+    assert.deepEqual(readDisabled(), []);
+    assert.deepEqual(enabledOnly(['a']), ['a']);
+  });
+});
+
+describe('history', () => {
+  // localStorage is not in node. A minimal stand-in is enough: these functions only get, set
+  // and remove one key, and a full mock would test the mock.
+  const store = new Map();
+  globalThis.localStorage = {
+    getItem: (k) => (store.has(k) ? store.get(k) : null),
+    setItem: (k, v) => store.set(k, String(v)),
+    removeItem: (k) => store.delete(k),
+  };
+  const reset = () => store.clear();
+
+  test('newest first, so the list reads as a log without being reversed at every call site', () => {
+    reset();
+    recordHistory({ action: 'add', type: 'plugin', url: 'a', at: 1 });
+    recordHistory({ action: 'remove', type: 'plugin', url: 'a', at: 2 });
+    assert.deepEqual(readHistory().map((e) => [e.at, e.action]), [[2, 'remove'], [1, 'add']]);
+  });
+
+  test('capped, oldest dropped', () => {
+    reset();
+    for (let i = 0; i <= HISTORY_MAX + 10; i++) recordHistory({ action: 'add', type: 'x', url: `u${i}`, at: i });
+    const h = readHistory();
+    assert.equal(h.length, HISTORY_MAX);
+    assert.equal(h[0].url, `u${HISTORY_MAX + 10}`, 'the newest survives');
+  });
+
+  test('malformed rows are dropped rather than rendered blank', () => {
+    reset();
+    store.set('bmm_catalog_history', JSON.stringify([
+      { action: 'add', type: 'p', url: 'good', at: 1 },
+      { action: 'wat', type: 'p', url: 'bad-action', at: 2 },
+      { action: 'add', type: 'p', at: 3 },
+      null,
+    ]));
+    assert.deepEqual(readHistory().map((e) => e.url), ['good']);
+  });
+
+  test('junk in the key is an empty history, not a crash', () => {
+    reset();
+    store.set('bmm_catalog_history', 'not json');
+    assert.deepEqual(readHistory(), []);
+    store.set('bmm_catalog_history', '{"not":"an array"}');
+    assert.deepEqual(readHistory(), []);
+  });
+
+  test('clearing empties it', () => {
+    reset();
+    recordHistory({ action: 'add', type: 'p', url: 'a' });
+    clearHistory();
+    assert.deepEqual(readHistory(), []);
+  });
+});
+
+describe('which app an entry is for', () => {
+  const mixed = () => doc([
+    { type: 'plugin', url: 'https://e.com/bmm.json', app: 'bmm' },
+    { type: 'theme', url: 'https://e.com/bsm.json', app: 'bsm' },
+    { type: 'app', url: 'https://e.com/anyone.json' },
+  ]);
+
+  test('drops what another product published', () => {
+    // An index lists catalogs for every Better* product. Pulling a BSM theme catalog into
+    // BMM puts things in front of people that their app cannot install.
+    const { index } = parseCatalogIndex(mixed(), 'bmm');
+    assert.deepEqual(index.catalogs.map((c) => c.url), ['https://e.com/bmm.json', 'https://e.com/anyone.json']);
+  });
+
+  test('keeps an entry that names no app at all', () => {
+    // Absent means "nobody said" — the state of every catalog published before the field
+    // existed. Dropping those would empty the index for the people using it longest.
+    const { index } = parseCatalogIndex(doc([{ type: 'app', url: 'https://e.com/x.json' }]), 'bmm');
+    assert.equal(index.catalogs.length, 1);
+    assert.equal('app' in index.catalogs[0], false);
+  });
+
+  test('says which app it dropped it for, not just that it did', () => {
+    const { dropped } = parseCatalogIndex(mixed(), 'bmm');
+    assert.equal(dropped.length, 1);
+    assert.match(dropped[0], /for bsm, not bmm/);
+  });
+
+  test('matches the app case-insensitively', () => {
+    const { index } = parseCatalogIndex(doc([{ type: 'app', url: 'https://e.com/x.json', app: 'BMM' }]), 'bmm');
+    assert.equal(index.catalogs.length, 1);
+    assert.equal(index.catalogs[0].app, 'bmm');
+  });
+});
+
+describe('the two types the feed gained', () => {
+  test('repo and preset are accepted, not thrown away', () => {
+    // Both were already being published while the reader refused them — a failure that
+    // looks like the server not sending them.
+    const { index } = parseCatalogIndex(doc([
+      { type: 'repo', url: 'https://e.com/repos.json', app: 'bmm' },
+      { type: 'preset', url: 'https://e.com/presets.json', app: 'bmm' },
+    ]), 'bmm');
+    assert.deepEqual(index.catalogs.map((c) => c.type), ['repo', 'preset']);
+  });
+
+  test('every accepted type has somewhere to go', () => {
+    // The guard against INDEX_TYPES and STORE_KEY drifting apart: a type the parser keeps
+    // with no store is dropped by the CALLER instead, which looks identical to the server
+    // never sending it. 'app' is the one exception — a backend command, not a local store.
+    assert.deepEqual([...ROUTABLE], [...INDEX_TYPES], 'a type is accepted with nowhere to route it');
+    for (const t of INDEX_TYPES) {
+      assert.ok(t === 'app' || STORE_KEY[t], `${t} has no store`);
+    }
+  });
+});
+
+describe('telling an index from a catalog', () => {
+  test('recognises one BCWEB sends', () => {
+    assert.equal(looksLikeIndex({ kind: 'catalog-index', catalogs: [{ type: 'app', url: 'https://e.com/a.json' }] }), true);
+  });
+
+  test('recognises a hand-written one with no kind field', () => {
+    // Self-declaration is enough on its own but must not be required, or only our own
+    // server could publish an index.
+    assert.equal(looksLikeIndex({ version: '1.0', catalogs: [{ type: 'plugin', url: 'https://e.com/p.json' }] }), true);
+  });
+
+  test('does NOT mistake a real catalog for one', () => {
+    // The expensive direction. Misidentifying a working app catalog would take a source
+    // away from somebody and tell them it was the wrong kind of file.
+    for (const doc of [
+      { version: '1.0', name: 'x', apps: [{ id: 'a', download: { url: 'u' } }] },
+      { version: '1.0', plugins: [{ id: 'p' }] },
+      { version: '1.0', themes: [] },
+      { version: '1.0', presets: [{ id: 'q' }] },
+    ]) {
+      assert.equal(looksLikeIndex(doc), false, `${JSON.stringify(doc).slice(0, 40)} was called an index`);
+    }
+  });
+
+  test('a bare mention of "catalogs" is not an index', () => {
+    // A document that lists catalog NAMES is not one that lists their addresses. Requiring
+    // both url and type on every entry is what separates them.
+    assert.equal(looksLikeIndex({ catalogs: ['one', 'two'] }), false);
+    assert.equal(looksLikeIndex({ catalogs: [{ name: 'one' }] }), false);
+    assert.equal(looksLikeIndex({ catalogs: [{ url: 'https://e.com/a.json' }] }), false);
+    assert.equal(looksLikeIndex({ catalogs: [] }), false);
+  });
+
+  test('one bad entry disqualifies the document', () => {
+    // every(), not some(): a catalog feed that happened to carry one index-shaped object
+    // would otherwise be adopted whole.
+    assert.equal(looksLikeIndex({ catalogs: [{ type: 'app', url: 'https://e.com/a.json' }, { name: 'not an entry' }] }), false);
+  });
+
+  test('survives anything that is not an object', () => {
+    for (const junk of [null, undefined, 0, '', 'catalogs', [], [{ type: 'app', url: 'u' }]]) {
+      assert.equal(looksLikeIndex(junk), false, `${JSON.stringify(junk)} was called an index`);
+    }
+  });
+});
+
+describe('importIndexForType — one type out of an index', () => {
+  // Cleared through the localStorage INTERFACE, not through a Map of this block's own. An
+  // earlier describe already installed the stub, so `globalThis.localStorage || {...}` keeps
+  // THAT one — and a reset that empties a map nothing reads leaves the previous test's writes
+  // standing, which is what the last assertion here caught.
+  const reset = () => {
+    for (const k of [...Object.values(STORE_KEY), 'bmm_catalog_origins', 'bmm_catalog_history', 'bmm_catalog_disabled']) {
+      localStorage.removeItem(k);
+    }
+  };
+  const mixed = () => doc([
+    { type: 'plugin', url: 'https://e.com/p1.json' },
+    { type: 'plugin', url: 'https://e.com/p2.json' },
+    { type: 'theme', url: 'https://e.com/t.json' },
+    { type: 'app', url: 'https://e.com/a.json' },
+  ]);
+
+  test('follows ONLY its own type, and leaves the rest of the index alone', () => {
+    // A plugin browser quietly following theme catalogues would be a bigger action than the
+    // one that was asked for.
+    reset();
+    return importIndexForType(mixed(), 'plugin', 'https://e.com/idx.json').then((r) => {
+      assert.equal(r.added, 2);
+      assert.equal(r.ofType, 2);
+      assert.equal(r.total, 4);
+      assert.deepEqual(JSON.parse(localStorage.getItem(STORE_KEY.plugin)), ['https://e.com/p1.json', 'https://e.com/p2.json']);
+      assert.equal(localStorage.getItem(STORE_KEY.theme), null, 'the theme store is untouched');
+    });
+  });
+
+  test('an entry already followed is counted, not added twice', async () => {
+    reset();
+    localStorage.setItem(STORE_KEY.plugin, JSON.stringify(['https://E.COM/P1.JSON']));
+    const r = await importIndexForType(mixed(), 'plugin', 'https://e.com/idx.json');
+    assert.equal(r.added, 1);
+    assert.equal(r.already, 1, 'case-insensitively, like everywhere else');
+    assert.equal(JSON.parse(localStorage.getItem(STORE_KEY.plugin)).length, 2);
+  });
+
+  test('what it followed carries its provenance and a history line', async () => {
+    reset();
+    await importIndexForType(mixed(), 'theme', 'https://e.com/idx.json');
+    assert.equal(originOf('https://e.com/t.json'), 'https://e.com/idx.json');
+    assert.equal(readHistory()[0].url, 'https://e.com/t.json');
+    assert.equal(readHistory()[0].via, 'https://e.com/idx.json');
+  });
+
+  test('an index with none of your type adds nothing and says how many it held', async () => {
+    reset();
+    const r = await importIndexForType(doc([{ type: 'app', url: 'https://e.com/a.json' }]), 'plugin', 'https://e.com/idx.json');
+    assert.equal(r.added, 0);
+    assert.equal(r.ofType, 0);
+    assert.equal(r.total, 1);
+  });
+
+  test('apps go through the backend, never localStorage', async () => {
+    // STORE_KEY has no `app` entry on purpose — app sources live in Rust. Without the
+    // callback there is nowhere to put them, and inventing a key would create a list
+    // nothing reads.
+    reset();
+    const seen = [];
+    const r = await importIndexForType(mixed(), 'app', 'https://e.com/idx.json', async (u) => { seen.push(u); });
+    assert.deepEqual(seen, ['https://e.com/a.json']);
+    assert.equal(r.added, 1);
+    assert.equal(localStorage.getItem('bmm_app_catalogs'), null);
+  });
+
+  test('junk is not an index, and nothing is written', async () => {
+    reset();
+    const r = await importIndexForType({ plugins: [] }, 'plugin', 'https://e.com/idx.json');
+    assert.equal(r.added, 0);
+    assert.equal(r.total, 0);
+    assert.equal(localStorage.getItem(STORE_KEY.plugin), null);
+  });
+});
+
+describe('what a catalogue chip says', () => {
+  // The strip showed `originLabel`, which is the HOST — right for "where did this come from",
+  // wrong for a list: four feeds from one server read `localhost` four times, and the address
+  // that tells them apart lived in a tooltip nobody hovers.
+  test('the file and the kind are what distinguish two feeds on one host', () => {
+    assert.equal(catalogLabel('http://localhost:5176/api/catalog.json?project=bmm&kind=PLUGIN'),
+      'localhost:5176 · catalog.json bmm/PLUGIN');
+    assert.equal(catalogLabel('http://localhost:5176/api/catalog.json?project=bmm&kind=THEME'),
+      'localhost:5176 · catalog.json bmm/THEME');
+  });
+
+  test('a bare host stays a bare host', () => {
+    assert.equal(catalogLabel('https://example.com/'), 'example.com');
+  });
+
+  test('noise in the query is not carried onto a chip', () => {
+    assert.equal(catalogLabel('https://x.dev/feed.json?utm_source=twitter&sig=abcdef'), 'x.dev · feed.json');
+  });
+
+  test('something that is not a URL is shown as it was typed', () => {
+    // Better than an empty chip: whatever they pasted is the only thing that identifies it.
+    assert.equal(catalogLabel('not a url'), 'not a url');
+  });
+});
+
+describe('describeKinds', () => {
+  test('the biggest group is named first', () => {
+    assert.equal(describeKinds({ app: 2, plugin: 3 }), '3 plugin catalogues, 2 app catalogues');
+  });
+
+  test('singular and plural are both right', () => {
+    assert.equal(describeKinds({ theme: 1 }), '1 theme catalogue');
+  });
+
+  test('an empty index describes nothing', () => {
+    assert.equal(describeKinds({}), '');
+  });
+});

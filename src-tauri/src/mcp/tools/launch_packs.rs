@@ -1,0 +1,138 @@
+use crate::mcp::state_bridge;
+use anyhow::Result;
+use std::path::Path;
+
+pub fn list_launch_packs() -> Result<Vec<state_bridge::LaunchPack>> {
+    let data = state_bridge::read_app_data()?;
+    Ok(data.launch_packs)
+}
+
+pub fn run_launch_pack(id: &str) -> Result<String> {
+    let data = state_bridge::read_app_data()?;
+    let pack = data.launch_packs.iter().find(|p| p.id == id || p.name == id)
+        .ok_or_else(|| anyhow::anyhow!("Launch pack not found"))?;
+
+    let app_data_dir = state_bridge::get_bmm_data_dir();
+    let pack_dir = app_data_dir.join("LaunchPacks").join(&pack.id);
+    let vbs_path = pack_dir.join("launcher.vbs");
+
+    if !vbs_path.exists() {
+        return Err(anyhow::anyhow!("VBS launcher missing at {:?}", vbs_path));
+    }
+
+    crate::commands::proc::hidden_command("wscript")
+        .arg(&vbs_path)
+        .spawn()
+        .map_err(|e| anyhow::anyhow!("Failed to run pack: {}", e))?;
+
+    Ok(format!("Launch pack '{}' started (invisible).", pack.name))
+}
+
+pub fn delete_launch_pack(id: &str) -> Result<String> {
+    let mut data = state_bridge::read_app_data()?;
+    let index = data.launch_packs.iter().position(|p| p.id == id || p.name == id)
+        .ok_or_else(|| anyhow::anyhow!("Launch pack not found"))?;
+    
+    let pack = data.launch_packs.remove(index);
+    let pack_id = pack.id.clone();
+    
+    state_bridge::write_app_data(&data)?;
+
+    // One plain folder name or no folder deleted: the id is whatever data.json says, and
+    // `remove_dir_all(LaunchPacks/..)` is the whole data folder. The app's rule is
+    // fs_utils::safe_folder_name, which this binary does not compile; this is its core.
+    let plain = !pack_id.trim_end_matches(['.', ' ']).is_empty()
+        && !pack_id.contains(['/', '\\', ':', '\0']);
+    let app_data_dir = state_bridge::get_bmm_data_dir();
+    let pack_dir = app_data_dir.join("LaunchPacks").join(&pack_id);
+    if plain && pack_dir.exists() {
+        let _ = std::fs::remove_dir_all(pack_dir);
+    }
+
+    Ok(format!("Launch pack '{}' deleted.", pack.name))
+}
+
+pub fn create_launch_pack(
+    name: String,
+    exe_paths: Vec<String>,
+    icon_source_path: Option<String>,
+) -> Result<state_bridge::LaunchPack> {
+    let id = uuid::Uuid::new_v4().to_string();
+    let app_data_dir = state_bridge::get_bmm_data_dir();
+    let pack_dir = app_data_dir.join("LaunchPacks").join(&id);
+    
+    std::fs::create_dir_all(&pack_dir)?;
+
+    let mut icon_path = None;
+    if let Some(src) = icon_source_path {
+        let src_path = Path::new(&src);
+        if src_path.exists() {
+            let ico_filename = "icon.ico";
+            let target_ico = pack_dir.join(ico_filename);
+            
+            let img = image::open(src_path)?;
+            let resized = img.resize(256, 256, image::imageops::FilterType::Lanczos3);
+            resized.save_with_format(&target_ico, image::ImageFormat::Ico)?;
+            
+            icon_path = Some(target_ico);
+        }
+    }
+
+    // Create the .vbs launcher (Invisible)
+    let vbs_path = pack_dir.join("launcher.vbs");
+    let mut vbs_content = String::from("Set WshShell = CreateObject(\"WScript.Shell\")\n");
+    for exe in &exe_paths {
+        let path = Path::new(exe);
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+        
+        let cmd = match ext.as_str() {
+            "ps1" => format!("powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{}\"", exe),
+            _ => format!("cmd /c start \"\" \"{}\"", exe),
+        };
+        let escaped_cmd = cmd.replace("\"", "\"\"");
+        vbs_content.push_str(&format!("WshShell.Run \"{}\", 0, False\n", escaped_cmd));
+    }
+    vbs_content.push_str("Set WshShell = Nothing\n");
+    std::fs::write(&vbs_path, vbs_content)?;
+
+    // Create the .lnk Shortcut via PowerShell
+    // The app's rule for the file name: the raw name placed the shortcut wherever it said.
+    let lnk_path = pack_dir.join(format!("{}.lnk", crate::commands::proc::safe_lnk_stem(&name)));
+    let _ = crate::commands::proc::create_wscript_shortcut(&lnk_path, &vbs_path, &pack_dir, icon_path.as_deref());
+
+    let pack = state_bridge::LaunchPack {
+        id,
+        name,
+        executable_paths: exe_paths.into_iter().map(std::path::PathBuf::from).collect(),
+        icon_path,
+        created_at: chrono::Local::now().to_rfc3339(),
+        extra: Default::default(),
+    };
+
+    let mut data = state_bridge::read_app_data()?;
+    data.launch_packs.push(pack.clone());
+    state_bridge::write_app_data(&data)?;
+
+    Ok(pack)
+}
+
+pub fn open_launch_pack_folder(id: &str) -> Result<String> {
+    let data = state_bridge::read_app_data()?;
+    let pack = data.launch_packs.iter().find(|p| p.id == id || p.name == id)
+        .ok_or_else(|| anyhow::anyhow!("Launch pack not found"))?;
+
+    let app_data_dir = state_bridge::get_bmm_data_dir();
+    let pack_dir = app_data_dir.join("LaunchPacks").join(&pack.id);
+
+    if pack_dir.exists() {
+        #[cfg(target_os = "windows")]
+        {
+            crate::commands::proc::hidden_command("explorer")
+                .arg(pack_dir)
+                .spawn()
+                .map_err(|e| anyhow::anyhow!("Failed to open folder: {}", e))?;
+        }
+    }
+
+    Ok(format!("Opened folder for pack '{}'.", pack.name))
+}

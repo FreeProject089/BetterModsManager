@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>inline-actions — delegation check</title>
+</head>
+<body>
+<!--
+  A bench for frontend/src/core/inline-actions.ts, run in a real browser engine.
+
+  It exists because the thing worth checking cannot be checked by reading: whether a
+  delegated mouseover/mouseout pair behaves like the mouseenter/mouseleave it replaced.
+  The difference is `relatedTarget` — moving the pointer from a parent onto its own child
+  fires mouseout then mouseover, and a naive delegate would hide and re-show the tooltip
+  on every internal move. That is a flicker nobody would find by inspection.
+
+  Open it directly; it prints its own results. Not part of the app.
+-->
+<h1>inline-actions delegation</h1>
+<div id="fixtures">
+    <span id="plain" data-tasky="msg.plain">plain</span>
+    <span id="iconed" data-tasky="msg.iconed" data-tasky-icon="package">with icon</span>
+    <span id="literal" data-tasky="C:\path\file.txt" data-tasky-literal="1">literal</span>
+    <span id="fromattr" data-tasky-from="path" data-path="D:\from\dataset">from dataset</span>
+    <span id="parent" data-tasky="msg.parent">parent <b id="child">child</b></span>
+    <span id="none">no tooltip here</span>
+    <button id="act" data-act="testFn" data-act-args='["a","b"]'>act</button>
+    <button id="actstop" data-act="testFn" data-act-stop="1">act+stop</button>
+    <button id="actbad" data-act="testFn" data-act-args='{{{not json'>bad args</button>
+    <img id="img" data-onerror="hide" src="does-not-exist.png" alt="">
+</div>
+<pre id="out"></pre>
+
+<script type="module">
+import { initInlineActions } from '../frontend/js/core/inline-actions.js';
+
+const log = [];
+let shown = [], hidden = 0, called = [];
+window.showTaskyHelp = (key, icon, literal) => { shown.push({ key, icon, literal }); };
+window.hideTaskyHelp = () => { hidden++; };
+window.testFn = (...args) => { called.push(args); };
+
+initInlineActions();
+
+const $ = (id) => document.getElementById(id);
+const over = (el, from) => el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, relatedTarget: from || null }));
+const out_ = (el, to) => el.dispatchEvent(new MouseEvent('mouseout', { bubbles: true, relatedTarget: to || null }));
+
+let fails = 0;
+const check = (label, cond, detail = '') => {
+    log.push(`${cond ? 'PASS' : 'FAIL'}  ${label}${detail ? '  ' + detail : ''}`);
+    if (!cond) fails++;
+};
+
+// ── tooltips ──
+shown = []; over($('plain'));
+check('plain key + default icon', shown.length === 1 && shown[0].key === 'msg.plain' && shown[0].icon === 'info' && shown[0].literal === false, JSON.stringify(shown[0]));
+
+shown = []; over($('iconed'));
+check('custom icon is passed', shown[0]?.icon === 'package', JSON.stringify(shown[0]));
+
+shown = []; over($('literal'));
+check('literal flag is passed', shown[0]?.literal === true, JSON.stringify(shown[0]));
+
+shown = []; over($('fromattr'));
+check('data-tasky-from reads another attribute', shown[0]?.key === 'D:\\from\\dataset', JSON.stringify(shown[0]));
+
+// The one that matters: moving INSIDE the element must not re-fire.
+shown = []; hidden = 0;
+over($('parent'));                     // enter from outside
+over($('child'), $('parent'));         // parent -> child, still inside
+out_($('child'), $('parent'));         // child -> parent, still inside
+check('moving within the element does not re-show', shown.length === 1, `shown ${shown.length}x`);
+check('moving within the element does not hide', hidden === 0, `hidden ${hidden}x`);
+
+hidden = 0; out_($('parent'), $('none'));   // genuinely leaving
+check('leaving the element hides once', hidden === 1, `hidden ${hidden}x`);
+
+shown = []; over($('none'));
+check('an element with no data-tasky shows nothing', shown.length === 0);
+
+// ── click actions ──
+called = []; $('act').click();
+check('args are parsed from JSON', called.length === 1 && called[0][0] === 'a' && called[0][1] === 'b', JSON.stringify(called[0]));
+
+called = []; $('actstop').click();
+check('no args = called with none', called.length === 1 && called[0].length === 0);
+
+called = []; $('actbad').click();
+check('malformed args still call, with none', called.length === 1 && called[0].length === 0);
+
+// ── round trip: what actAttrs writes, bindActions must read back unchanged ──
+// Escaping that mangles the value is not a fix, it is a different bug.
+{
+    const { actAttrs, actAttrsStop } = await import('../frontend/js/core/inline-actions.js');
+    const nasty = "x'); alert(1); ('" + '"</b><img src=x onerror=alert(2)>';
+    const host = document.createElement('div');
+    host.innerHTML = `<button id="rt" ${actAttrs('testFn', nasty, 'second')}></button>`;
+    document.body.appendChild(host);
+    called = [];
+    document.getElementById('rt').click();
+    check('round trip: the value survives escaping', called[0]?.[0] === nasty, JSON.stringify(called[0]?.[0]));
+    check('round trip: the second argument survives', called[0]?.[1] === 'second');
+    check('round trip: no element was injected', host.querySelectorAll('img').length === 0,
+          `${host.querySelectorAll('img').length} img`);
+
+    const host2 = document.createElement('div');
+    host2.innerHTML = `<div id="outer"><button id="inner" ${actAttrsStop('testFn', 'x')}></button></div>`;
+    document.body.appendChild(host2);
+    let outerSaw = 0;
+    document.getElementById('outer').addEventListener('click', () => { outerSaw++; });
+    called = [];
+    document.getElementById('inner').click();
+    check('data-act-stop stops the click bubbling', outerSaw === 0, `outer saw ${outerSaw}`);
+}
+
+// ── hover styles ──
+{
+    const h = document.createElement('div');
+    // A full inline style attribute already present, as most of these elements have.
+    h.innerHTML = `<div id="hv" style="background:red;color:white;padding:4px"
+        data-hover="background:blue;border-color:rgba(1,2,3,0.4)"
+        data-hover-out="background:green"><b id="hvchild">c</b></div>`;
+    document.body.appendChild(h);
+    const hv = document.getElementById('hv');
+    over(hv);
+    check('hover applies its declarations', hv.style.background === 'blue', hv.style.background);
+    check('hover applies a kebab-case property', hv.style.borderColor === 'rgba(1, 2, 3, 0.4)', hv.style.borderColor);
+    check('hover leaves other inline styles alone', hv.style.color === 'white' && hv.style.padding === '4px',
+          `color=${hv.style.color} padding=${hv.style.padding}`);
+    over(document.getElementById('hvchild'), hv);
+    out_(document.getElementById('hvchild'), hv);
+    check('moving within does not run the out styles', hv.style.background === 'blue', hv.style.background);
+    out_(hv, document.body);
+    check('leaving applies the out declarations', hv.style.background === 'green', hv.style.background);
+}
+
+// ── focus / press states ──
+{
+    const h = document.createElement('div');
+    h.innerHTML = `<input id="fx" style="border-color:transparent" data-focus="border-color:rgb(1,2,3)" data-blur="border-color:transparent">
+        <button id="pr" style="transform:none" data-press="transform:scale(0.96)" data-press-out="transform:none"><b id="prkid">x</b></button>`;
+    document.body.appendChild(h);
+    const fx = document.getElementById('fx'), pr = document.getElementById('pr');
+    fx.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+    check('focus applies its declarations', fx.style.borderColor === 'rgb(1, 2, 3)', fx.style.borderColor);
+    fx.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+    check('blur restores', fx.style.borderColor === 'transparent', fx.style.borderColor);
+
+    // Pressing on a child of the button must still press the button.
+    document.getElementById('prkid').dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    check('press reaches the button from a child', pr.style.transform === 'scale(0.96)', pr.style.transform);
+    // Release far away: the inline version left the button stuck pressed.
+    document.body.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    check('release anywhere un-presses', pr.style.transform === 'none', pr.style.transform);
+}
+
+// ── contextual arguments, preventDefault, and the change binding ──
+{
+    const h = document.createElement('div');
+    h.innerHTML = `<a id="pv" href="#nope" data-act="testFn" data-act-args='["u"]' data-act-prevent="1">l</a>
+        <button id="ctx" data-act="testFn" data-act-args='["tail"]' data-act-with="element,next"></button><i id="sib"></i>
+        <button id="evb" data-act="testFn" data-act-with="event"></button>
+        <input id="chg" type="checkbox" data-act-change="testFn" data-act-change-args='["m1"]' data-act="testFn">`;
+    document.body.appendChild(h);
+
+    called = [];
+    const ev = new MouseEvent('click', { bubbles: true, cancelable: true });
+    document.getElementById('pv').dispatchEvent(ev);
+    check('data-act-prevent prevents the default', ev.defaultPrevented);
+    check('data-act-prevent still calls', called[0]?.[0] === 'u', JSON.stringify(called[0]));
+
+    called = []; document.getElementById('ctx').click();
+    check('data-act-with prepends element then next',
+          called[0]?.[0] === document.getElementById('ctx') && called[0]?.[1] === document.getElementById('sib')
+          && called[0]?.[2] === 'tail', `${called[0]?.length} args`);
+
+    called = []; document.getElementById('evb').click();
+    check('data-act-with=event passes the event', called[0]?.[0] instanceof Event, typeof called[0]?.[0]);
+
+    // A checkbox fires click AND change; separate attributes are what keeps it to one call
+    // each rather than the same function twice.
+    called = [];
+    const cb = document.getElementById('chg');
+    cb.dispatchEvent(new Event('change', { bubbles: true }));
+    check('change binding fires once', called.length === 1 && called[0][0] === 'm1', JSON.stringify(called));
+}
+
+// ── the DOM behaviours that replaced handlers calling no function ──
+{
+    const h = document.createElement('div');
+    h.innerHTML = `<button id="realbtn"></button><a id="proxy" href="#x" data-click-proxy="#realbtn">p</a>
+        <div id="mdl" class="open"></div><button id="closer" data-close-modal="#mdl"></button>
+        <div class="modal-overlay" id="ov"><button id="rmbtn" data-remove-closest=".modal-overlay"></button></div>
+        <form id="frm" data-no-submit="1"></form>
+        <button id="cp" data-copy="sha-256-value" data-copy-flash="tick">orig</button>`;
+    document.body.appendChild(h);
+
+    let proxied = 0;
+    document.getElementById('realbtn').addEventListener('click', () => { proxied++; });
+    const pe = new MouseEvent('click', { bubbles: true, cancelable: true });
+    document.getElementById('proxy').dispatchEvent(pe);
+    check('data-click-proxy forwards the click', proxied === 1, `${proxied}x`);
+    check('data-click-proxy prevents the link default', pe.defaultPrevented);
+
+    document.getElementById('closer').click();
+    check('data-close-modal drops the open class', !document.getElementById('mdl').classList.contains('open'));
+
+    document.getElementById('rmbtn').click();
+    check('data-remove-closest removes the ancestor', document.getElementById('ov') === null);
+
+    const se = new Event('submit', { bubbles: true, cancelable: true });
+    document.getElementById('frm').dispatchEvent(se);
+    check('data-no-submit prevents submission', se.defaultPrevented);
+
+    let copied = null;
+    // Stub: the real clipboard needs a user gesture and a permission this page has neither of.
+    // defineProperty, not assignment: navigator.clipboard is an accessor with no setter,
+    // and assigning to it throws in strict mode (a module IS strict) — which killed the
+    // whole run, silently, after the assertions above had already passed.
+    Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText: (v) => { copied = v; return Promise.resolve(); } },
+        configurable: true,
+    });
+    document.getElementById('cp').click();
+    setTimeout(() => {
+        check('data-copy copies the attribute value', copied === 'sha-256-value', String(copied));
+        check('data-copy flashes a tick', document.getElementById('cp').textContent === '\u2713',
+              document.getElementById('cp').textContent);
+    }, 10);
+}
+
+// ── the new image fallback modes ──
+{
+    const h = document.createElement('div');
+    h.innerHTML = `<img id="flag" data-onerror="text" data-onerror-text="FR" src="nope-a.png" alt="">
+        <span id="badgeslot"></span>
+        <img id="swap" data-onerror="swap-next" src="nope-b.png" alt=""><span id="ph" style="display:none"></span>`;
+    document.body.appendChild(h);
+    // Fire the error directly rather than waiting on the network: the listener is what is
+    // under test, not the loader.
+    document.getElementById('flag').dispatchEvent(new Event('error'));
+    check('data-onerror=text replaces the image with its badge',
+          !document.getElementById('flag') && h.querySelector('span')?.textContent === 'FR',
+          h.innerHTML.slice(0, 60));
+    document.getElementById('swap').dispatchEvent(new Event('error'));
+    check('data-onerror=swap-next reveals the placeholder',
+          document.getElementById('swap').style.display === 'none'
+          && document.getElementById('ph').style.display === 'flex');
+}
+
+// ── image fallback (error does not bubble; the listener is on capture) ──
+$('img').addEventListener('error', () => {
+    setTimeout(() => {
+        check('a broken image is hidden', $('img').style.display === 'none', `display=${$('img').style.display}`);
+        setTimeout(finish, 50);   // the clipboard assertions resolve on a later tick
+    }, 0);
+});
+setTimeout(finish, 1500);   // in case the image resolves some other way
+
+let done = false;
+function finish() {
+    if (done) return;
+    done = true;
+    log.push('', fails ? `${fails} FAILED` : 'all passed');
+    document.getElementById('out').textContent = log.join('\n');
+    window.__RESULT__ = { fails, log };
+}
+</script>
+</body>
+</html>

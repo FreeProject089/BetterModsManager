@@ -1,0 +1,45 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>BMM Mini-Monitor</title>
+    <!-- The benchmark's mini monitor, in its own always-on-top window (commands/benchmark.rs
+         open_mini_monitor). Everything it shows, its words and its colours come from the main
+         window: the theme tokens and the labels are handed over in localStorage
+         (bmm.mini.boot, written by features/bench/benchmark.ts), the samples arrive as the
+         same `benchmark-point` events the full monitor draws. -->
+    <style>
+        html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+        body { font-family: var(--font-sans, system-ui, sans-serif); color: var(--bmm-text-primary); user-select: none; }
+        .mm { box-sizing: border-box; height: 100%; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px 12px; border-radius: 14px; border: 1px solid var(--bmm-border-hover); background: var(--bmm-bg-elevated); }
+        .mm-h { display: flex; align-items: center; gap: 6px; cursor: grab; }
+        .mm-title { flex: 1; min-width: 0; font-size: 12px; font-weight: 700; color: var(--bmm-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .mm-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bmm-success); flex: none; }
+        .mm.is-paused .mm-dot { background: var(--bmm-text-secondary); }
+        .mm-btn { display: inline-grid; place-items: center; width: 26px; height: 26px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--bmm-text-secondary); cursor: pointer; padding: 0; }
+        .mm-btn:hover, .mm-btn:focus-visible { color: var(--bmm-text-primary); background: var(--bmm-s06); outline: none; }
+        .mm-row { display: grid; grid-template-columns: 42px 1fr 74px; align-items: center; gap: 8px; }
+        .mm-lbl { font-size: 11.5px; font-weight: 600; color: var(--bmm-text-secondary); }
+        .mm-row canvas { width: 100%; height: 26px; display: block; }
+        .mm-v { font-family: var(--bmm-font-mono, monospace); font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 700; text-align: right; white-space: nowrap; }
+        .mm-foot { margin-top: auto; font-size: 11px; color: var(--bmm-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    </style>
+</head>
+<body>
+    <div class="mm" id="mm" role="region">
+        <div class="mm-h" data-tauri-drag-region>
+            <span class="mm-dot" aria-hidden="true" data-tauri-drag-region></span>
+            <span class="mm-title" id="mm-title" data-tauri-drag-region></span>
+            <button type="button" class="mm-btn" id="mm-rec"></button>
+            <button type="button" class="mm-btn" id="mm-expand"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M15 3h6v6M10 14L21 3M9 21H3v-6M21 21L13 13"/></svg></button>
+            <button type="button" class="mm-btn" id="mm-close"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
+        <div class="mm-row"><span class="mm-lbl" id="mm-l-cpu"></span><canvas id="mm-c-cpu" data-c="--bmm-chart-cpu"></canvas><span class="mm-v" id="mm-v-cpu"></span></div>
+        <div class="mm-row"><span class="mm-lbl" id="mm-l-ram"></span><canvas id="mm-c-ram" data-c="--bmm-chart-ram"></canvas><span class="mm-v" id="mm-v-ram"></span></div>
+        <div class="mm-row"><span class="mm-lbl" id="mm-l-disk"></span><canvas id="mm-c-disk" data-c="--bmm-chart-disk-read"></canvas><span class="mm-v" id="mm-v-disk"></span></div>
+        <div class="mm-foot" id="mm-foot" aria-live="polite"></div>
+    </div>
+    <script type="module" src="js/features/bench/mini-window.js"></script>
+</body>
+</html>

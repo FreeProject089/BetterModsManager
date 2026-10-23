@@ -1,0 +1,21 @@
+{
+  "catalog_version": "1.0",
+  "format": "bmm-catalog",
+  "format_version": 1,
+  "items": [
+    {
+      "author": "Ed",
+      "download": {
+        "sha256": "9999999999999999999999999999999999999999999999999999999999999999",
+        "url": "lists/campaign.mm"
+      },
+      "extra": {
+        "mods": 40
+      },
+      "id": "campaign",
+      "kind": "list",
+      "name": "Campaign set"
+    }
+  ],
+  "name": "Mod lists"
+}

@@ -5,14 +5,18 @@ html, body {
     pointer-events: none; /* Allow click-through on transparent areas */
 }
 
-/* Native-feel Resizing Strips (Inner Frame) */
+/* Native-feel Resizing Strips (Inner Frame).
+   Hit zones are biased OUTSIDE the visible app rectangle so the user
+   doesn't accidentally trigger a resize when clicking near the app
+   border (titlebar buttons, sidebar items, etc).  The strips container
+   is shifted out by 3px on top/left and overflows 3px past the app on
+   bottom/right where there's only a 2px transparent margin. */
 .resize-strips {
     position: absolute;
-    /* Align with #app-window-outer boundaries */
-    top: 40px;
-    left: 40px;
-    right: 2px;
-    bottom: 2px;
+    top: 37px;
+    left: 37px;
+    right: -3px;
+    bottom: -3px;
     pointer-events: none;
     z-index: 10005;
     box-shadow: none !important;
@@ -24,18 +28,23 @@ html, body {
     background: transparent;
 }
 
-/* Edges (Inner boundaries) */
-.rs-top { top: 0; left: 10px; right: 10px; height: 6px; cursor: ns-resize; }
-.rs-bottom { bottom: 0; left: 10px; right: 10px; height: 6px; cursor: ns-resize; }
-.rs-left { left: 0; top: 10px; bottom: 10px; width: 6px; cursor: ew-resize; }
-.rs-right { right: 0; top: 10px; bottom: 10px; width: 6px; cursor: ew-resize; }
+/* Edges — slim (4px) and start at the strips container origin, which
+   already lives 3px outside the app, so the bulk of the hit zone is in
+   the transparent margin, not over interactive UI. */
+.rs-top    { top: 0;    left: 14px; right: 14px; height: 4px; cursor: ns-resize; }
+.rs-bottom { bottom: 0; left: 14px; right: 14px; height: 4px; cursor: ns-resize; }
+.rs-left   { left: 0;   top: 14px;  bottom: 14px; width: 4px; cursor: ew-resize; }
+.rs-right  { right: 0;  top: 14px;  bottom: 14px; width: 4px; cursor: ew-resize; }
 
-/* Corners */
-.rs-corner { width: 15px; height: 15px; z-index: 10006; }
-.rs-tl { top: 0; left: 0; cursor: nwse-resize; }
-.rs-tr { top: 0; right: 0; cursor: nesw-resize; }
-.rs-bl { bottom: 0; left: 0; cursor: nesw-resize; }
-.rs-br { bottom: 0; right: 0; cursor: nwse-resize; }
+/* Corners — smaller hit boxes (10×10 instead of 15×15) so brushing a
+   corner of the app no longer flips into diagonal resize mode. */
+.rs-corner { width: 10px; height: 10px; z-index: 10006; }
+.rs-tl { top: 0;    left: 0;    cursor: nwse-resize; }
+.rs-tr { top: 0;    right: 0;   cursor: nesw-resize; }
+.rs-bl { bottom: 0; left: 0;    cursor: nesw-resize; }
+/* Bottom-right has a visible grip icon — keep it a bit larger and
+   intentional, since users *do* want to grab this one on purpose. */
+.rs-br { bottom: 0; right: 0;   cursor: nwse-resize; width: 16px; height: 16px; }
 
 /* Discrete Resize Handle Visual (Bottom Right) */
 #resize-handle-br {
@@ -45,7 +54,7 @@ html, body {
     align-items: flex-end;
     justify-content: flex-end;
     padding: 2px;
-    color: rgba(255, 255, 255, 0.2);
+    color: var(--bmm-text-muted);
     transition: color 0.2s;
     background: transparent !important; /* Ensure it stays transparent */
 }
@@ -85,11 +94,26 @@ body.is-maximized .resize-strips {
     display: none;
 }
 
+/* Tasky hidden (and windowed): the 40px top/left inset only exists so the corner
+   mascot can peek out of it. With no mascot, that band is dead space around the app —
+   collapse it to the same slim 2px margin as the right/bottom edges so the window uses
+   its full area. The resize strips follow (they sit 3px outside the app rectangle, i.e.
+   5px past a 2px inset → -3px, mirroring the existing bottom/right strips). The
+   #app-window-outer `transition: all` makes this animate smoothly when you toggle Tasky. */
+body.tasky-hidden:not(.is-maximized) #app-window-outer {
+    top: 2px;
+    left: 2px;
+}
+body.tasky-hidden:not(.is-maximized) .resize-strips {
+    top: -3px;
+    left: -3px;
+}
+
 #app-mascot-container {
     position: absolute;
     top: 0px;
     left: 0px;
-    z-index: 10001;
+    z-index: 1000000;
     pointer-events: none;
     animation: mascot-bounce 4s ease-in-out infinite;
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
@@ -102,22 +126,53 @@ body.is-maximized #app-mascot-container {
 }
 
 #app-mascot {
-    width: 110px;
+    width: var(--bmm-mascot-w, 110px);
     height: auto;
     filter: drop-shadow(2px 4px 12px rgba(0,0,0,0.6));
     transform: rotate(-3deg);
+    /* The mascot moves the WINDOW. Its container stays click-through so the empty box
+       around him never eats a click, but the image itself has to receive one or the drag
+       attribute on it does nothing at all — which is exactly what it did before this line.
+       Safe to make solid: he sits in the corner and does not roam, and what is under him
+       is the title-bar gutter, which drags the window too. */
+    pointer-events: auto;
+    cursor: grab;
 }
+
+#app-mascot:active { cursor: grabbing; }
 
 @keyframes mascot-bounce {
     0%, 100% { transform: translateY(0) rotate(-5deg); }
     50% { transform: translateY(-5px) rotate(-3deg); }
 }
 
+@keyframes mascot-loading-spin {
+    0% { transform: translateY(0) rotate(-5deg); }
+    100% { transform: translateY(0) rotate(355deg); }
+}
+
+@keyframes mascot-loading-spin-reverse {
+    0% { transform: translateY(0) rotate(-5deg); }
+    100% { transform: translateY(0) rotate(-365deg); }
+}
+
+#app-mascot-container.is-loading {
+    animation: mascot-loading-spin 1s cubic-bezier(0.4, 0, 0.2, 1) infinite !important;
+}
+
+#app-mascot-container.is-loading-reverse {
+    animation: mascot-loading-spin-reverse 1s cubic-bezier(0.4, 0, 0.2, 1) infinite !important;
+}
+
 /* Adjustments for existing elements inside the wrapper */
 #app-window-outer .titlebar {
     position: absolute; /* Relative to #app-window-outer */
     top: 0;
-    left: 0;
+    /* The sidebar runs the full height of the window, so the bar stops at its edge — the
+       same value main.css sets. This rule only exists to re-anchor `position` to the wrapper,
+       and repeating `left: 0` here quietly beat that: higher specificity, and the bar drew
+       over the top of the rail with nothing to say it had. */
+    left: var(--sidebar-w);
     right: 0;
 }
 

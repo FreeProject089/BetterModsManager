@@ -1,0 +1,15 @@
+{
+    "$schema": "../gen/schemas/desktop-schema.json",
+    "identifier": "popout",
+    "description": "A panel popped out of BMM's window (frontend/popout.html, commands/popout.rs). It runs none of the panel's code: it receives the panel's markup and theme as events, sends the clicks and keystrokes back as events, and moves, resizes, minimises and closes itself.",
+    "windows": ["popout-*"],
+    "permissions": [
+        "core:event:default",
+        "core:window:allow-start-dragging",
+        "core:window:allow-start-resize-dragging",
+        "core:window:allow-minimize",
+        "core:window:allow-close",
+        "core:window:allow-destroy",
+        "core:window:allow-set-focus"
+    ]
+}

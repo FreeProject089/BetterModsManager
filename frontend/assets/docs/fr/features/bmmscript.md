@@ -1,0 +1,520 @@
+# BMMScript — les automatisations en code
+
+
+> Les mêmes automatisations que les briques du [planificateur](doc-page:features/scheduler.fr), écrites en
+> texte. Tout ce que vous pouvez construire en cliquant, vous pouvez le taper — et tout ce
+> que vous tapez, vous pouvez le rouvrir en briques.
+
+
+**[Toutes les actions, conditions et valeurs](doc-page:features/bmmscript-reference.fr)** — la liste complète, générée depuis le registre de BMM pour qu'elle ne puisse pas devenir fausse.
+
+## Pourquoi ce n'est pas un langage à part
+
+BMMScript **se compile vers les briques**. Ce n'est pas un second moteur avec ses propres
+actions : le texte que vous écrivez devient exactement les étapes que produit l'éditeur de
+briques, et c'est le même exécuteur qui les fait tourner.
+
+Trois conséquences, et c'est toute la raison de ce choix.
+
+- **Il n'est jamais en retard sur les briques.** Une action s'écrit `do <nom>(…)`, et le
+  langage ne contient aucune liste de noms d'actions. Une action ajoutée à BMM demain
+  s'écrit déjà aujourd'hui.
+- **Vous pouvez changer de mode.** Une tâche écrite en code s'ouvre en briques ; une tâche
+  construite en briques s'imprime en code. Aucun sens ne perd quoi que ce soit.
+- **Il ne peut pas faire plus qu'une brique.** Permissions, substitution des variables,
+  limites de boucle et gestion d'erreur sont celles de l'exécuteur, inchangées. Le code est
+  une façon d'*écrire* une automatisation, pas de contourner ses règles.
+
+Ce qu'il ne gère volontairement **pas** : vos propres fonctions, et la récursion. Tout ce
+qu'une brique sait faire, il sait le faire — y compris les variables, l'arithmétique et
+les comparaisons, qui sont de la syntaxe au-dessus des briques `var.set`, `math.set` et
+`value` plutôt qu'un second évaluateur.
+
+## Une tâche complète
+
+```bmms
+task "Ménage nocturne" {
+    every day at 03:00
+    describe "Scanner, puis désactiver ce qui est énorme"
+    allow script
+
+    do mods.scan()
+
+    if online and not modEnabled(id: "garde-moi") {
+        do notify(message: "Analyse…")
+        wait 30s
+    } else {
+        stop
+    }
+
+    for item in enabledMods {
+        try {
+            do mod.disable(id: "{item.id}")
+        } catch {
+            do notify(message: "Impossible de désactiver {item.name}")
+        }
+    }
+}
+```
+
+## L'en-tête
+
+Tout ce qui précède la première instruction.
+
+| Ligne | Signifie |
+|---|---|
+| `every day at 03:00` | chaque jour, à cette heure |
+| `every week on mon, fri at 09:30` | ces jours — `mon tue wed thu fri sat sun` |
+| `every month on 1 at 00:00` | ce jour du mois |
+| `every 30m` · `every 2h` | un intervalle. Un nombre entier d'heures devient un déclencheur horaire |
+| `once at "2026-01-01T09:00"` | un instant unique |
+| `on app start` | une fois par lancement de BMM |
+| `on feed "https://…/feed.xml" every 15m` | quand ce flux RSS ou Atom a un nouvel élément (au plus toutes les 5 minutes) ; ajoutez `lan` après pour un flux sur votre réseau local. Nécessite `allow network` |
+| `manual` | seulement sur le bouton Exécuter, ou via un deeplink |
+| `describe "…"` | la description affichée dans la liste |
+| `disabled` | garder la tâche sans l'exécuter |
+| `allow command, script, deeplink, stopProcess` | ce que la tâche peut faire hors de BMM (aussi `delete`, `resources`, `tasks`, `network`, `ai`) |
+
+`allow` correspond aux quatre mêmes permissions que les cases de l'éditeur de briques, et
+elles sont exigées pour les mêmes étapes. Une tâche qui lance un script sans `allow script`
+échoue à cette étape, exactement comme une tâche en briques.
+
+## Les instructions
+
+### Actions
+
+```bmms
+do mods.scan()
+do notify(message: "terminé", level: info)
+do mod.disable(id: "{item.id}")
+```
+
+`do <action>(nom: valeur, …)`. Le nom de l'action est celui de l'éditeur de briques, et les
+noms de paramètres sont ceux de son formulaire — ouvrez une étape en code une fois et vous
+aurez l'orthographe exacte.
+
+Les valeurs sont du texte entre guillemets, des nombres, `true` / `false`, ou un mot nu (qui
+est du texte — `level: info` et `level: "info"` sont identiques).
+
+### Choix
+
+```bmms
+if online { do mods.scan() }
+if not fileExists(path: "C:\mods\sortie.txt") { do mods.scan() } else { stop }
+if online and modEnabled(id: "x") { do mods.scan() } else if always { stop }
+```
+
+Les conditions s'écrivent comme les actions. `and` / `or` les combinent, `not` en inverse
+une, les parenthèses regroupent. `a and b and c` fait un seul groupe de trois, ce qui est
+ce qu'affiche l'éditeur de briques.
+
+### Variables et arithmétique
+
+```bmms
+set count = 0
+set count = count + 1
+set moyenne = (a + b) / 2
+set label = "bonjour"
+shared set equipe = "rouge"
+clear count
+```
+
+La règle pour distinguer les deux est celle que vous devineriez : **une valeur entre
+guillemets est du texte, une valeur sans guillemets est un nombre**. `set n = 0` compte ;
+`set s = "0"` est le caractère zéro.
+
+Les nombres passent par le même évaluateur d'expressions que l'action `math.set` —
+parenthèses, `+ - * / % ^`, et ses fonctions. Le texte va dans `var.set`, et `shared set`
+écrit la variable que toutes les tâches peuvent lire. `clear` en supprime une.
+
+Un nom doit être fait de lettres, chiffres et `_`, en commençant par une lettre. Tout le
+reste est refusé pendant que vous tapez plutôt qu'à l'exécution : un nom que le
+substituteur ne sait pas retrouver stockerait quelque chose qui a l'air enregistré et ne
+pourra jamais être relu.
+
+Une expression s'arrête en fin de ligne. Il n'y a pas de continuation — l'alternative
+serait de deviner où s'arrête une instruction.
+
+### Comparer
+
+```bmms
+if count >= 3 { stop }
+if disk.write_mbps < 50 { do notify(message: "disque lent") }
+```
+
+`== != > >= < <=` contre un nombre ou un nom. C'est la ligne de comparaison de l'éditeur de
+briques, donc une comparaison écrite ici s'y ouvre comme telle.
+
+### Boucles
+
+```bmms
+for item in enabledMods { do mod.disable(id: "{item.id}") }   # mods, enabledMods, disabledMods, profiles, modpacks, themes
+for item in list "file" { do notify(message: "{item.name}") }  # une liste construite avec list.push
+repeat 3 times { do mods.scan() }
+repeat while online { wait 1m }
+repeat until fileExists(path: "x") { wait 10s }
+```
+
+Dans une boucle, `{item.id}` et `{item.name}` sont remplacés dans chaque valeur texte.
+`break` quitte la boucle, `continue` passe à l'élément suivant, `stop` termine la tâche.
+
+### En même temps
+
+```bmms
+parallel {
+    branch { do repo.sync() }
+    branch { do benchmark.run() }
+}
+
+parallel settle {
+    branch { do mods.checkUpdates() }
+    branch { do mods.scan() }
+}
+```
+
+Chaque branche démarre en même temps et l'étape se termine quand toutes ont fini.
+
+`parallel` seul arrête l'étape dès qu'une branche échoue — ce qu'aurait fait une séquence.
+`parallel settle` les laisse toutes finir puis indique combien ont échoué, ce qui est le
+choix honnête pour « fais ces cinq-là, dis-moi lesquelles n'ont pas marché ».
+
+Les branches partagent les variables de la tâche. Deux branches qui écrivent la même se font
+la course, et la dernière écriture gagne — servez-vous en pour du travail indépendant.
+
+### Les autres tâches
+
+```bmms
+run "Ménage nocturne"    # attend, et note si ça a marché
+spawn "Long téléchargement"  # démarre et continue
+```
+
+`run` attend ; un `if lasttask.ok == 1` derrière peut brancher sur le résultat. `spawn`
+n'attend pas, et refuse une tâche déjà en cours — y compris elle-même.
+
+### Du vrai code, sur place
+
+```bmms
+script python {
+    import os
+    print(os.getcwd())
+}
+
+script bash {
+    for f in *.zip; do echo "$f"; done
+}
+```
+
+`powershell`, `cmd`, `bash`, `python`, `node`, `rust`. Le corps est pris **exactement tel
+qu'écrit** — pas d'échappement, pas de guillemets à doubler, les accolades à l'intérieur ne
+posent pas de problème. Il faut `allow script`, comme pour la forme en briques.
+
+L'indentation est désindentée de la marge commune et restaurée quand le fichier est
+réimprimé, donc Python garde sa forme à travers un aller-retour.
+
+### Les types
+
+```bmms
+set count: number = 0
+set essais: whole = 3
+set ratio: decimal = 1.5
+set pret: yesno = 1
+set label: text = "bonjour"
+```
+
+Cinq types, et quatre orthographes alternatives pour que l'habitude que vous avez déjà
+fonctionne : `string` pour `text`, `integer` ou `int` pour `whole`, `float` pour `decimal`,
+`boolean` ou `bool` pour `yesno`. Ce que vous écrivez est stocké sous le nom canonique, donc
+`int` et `whole` donnent la même tâche — deux personnes qui l'ont écrit différemment n'ont
+pas construit deux automatisations.
+
+| Type | Contient | Vérifié |
+|---|---|---|
+| `text` | une valeur entre guillemets | refuse une valeur sans guillemets |
+| `number` | toute valeur sans guillemets | refuse les guillemets |
+| `whole` | un compte — 3, 0, 12 | refuse `1.5` |
+| `decimal` | une fraction — 1.5, 0.25 | refuse les guillemets |
+| `yesno` | 1 ou 0 | refuse `true`, `false`, et tout autre nombre |
+
+Optionnels, et vérifiés à l'écriture — `set n: number = "0"` est refusé, `set s: text = 5`
+aussi. L'exécuteur n'a pas de types à l'exécution, donc c'est le seul endroit où l'erreur
+peut être attrapée, et ça dit au lecteur suivant à quoi sert la variable.
+
+Deux choses à savoir :
+
+**`yesno` vaut 1 ou 0, pas true/false.** Un `set` s'évalue en nombre, et un `true` nu se lit
+comme le nom d'une variable qui n'existe pas — donc 0. Écrire `true` est refusé ici plutôt
+que de vouloir dire silencieusement faux pour tout le reste de la tâche.
+
+**La vérification s'arrête où l'analyseur cesse de savoir.** `set n: whole = a / b` est
+accepté : trancher à l'écriture supposerait d'évaluer une expression dont les variables
+n'existent pas encore. Seule une valeur littérale est jugée.
+
+### Attendre
+
+```bmms
+wait 30s                                    # aussi 5m, 2h, ou un nombre nu de secondes
+waitfor fileExists(path: "x") timeout 2h poll 10s
+waitfor online timeout 30s orcontinue       # continuer au lieu d'échouer
+```
+
+### S'assurer d'une chose
+
+Pour une tâche dont le travail est un **état** plutôt qu'un script. Elle se déclenche selon sa
+planification, trouve tout dans l'état voulu, et ne fait absolument rien — puis remet en ordre
+le jour où quelque chose dérive.
+
+```bmms
+ensure modEnabled(id: "big-map-pack") {
+    do mod.enable(id: "big-map-pack")
+}
+
+ensure fileExists(path: "{game}/config/ready.txt") {
+    do script.run(engine: "powershell", code: "New-Item ...")
+} orcontinue
+```
+
+!!! note "Pourquoi ce n'est pas `if not …`"
+
+    Un `if` exécute son bloc et ne se retourne jamais : une correction qui a **échoué**
+    ressemble exactement à une correction qui a marché. `ensure` revérifie la condition
+    ensuite, et une condition toujours fausse devient un échec visible.
+
+    C'est tout l'intérêt d'une tâche qui tourne toutes les heures : pas qu'elle fasse le
+    travail, mais qu'elle te dise le jour où elle n'a plus réussi à le faire.
+
+`orcontinue` laisse le run continuer après un `ensure` en échec — pour une tâche qui s'assure
+de plusieurs choses indépendantes et veut toutes les tenter plutôt que de s'arrêter à la
+première qu'elle n'a pas pu corriger.
+
+Dans l'éditeur en blocs, c'est la brique **S'assurer que**.
+
+### Les valeurs que toute tâche a
+
+| Écrit | C'est |
+|---|---|
+| `{date}` · `{time}` · `{now}` · `{stamp}` | Aujourd'hui, l'heure, un horodatage ISO, et un lisible par un humain. |
+| `{nl}` · `{tab}` | Un vrai saut de ligne et une vraie tabulation — un champ texte ne peut porter ni l'un ni l'autre. |
+
+Une variable définie par ta tâche l'emporte sur un intégré du même nom : les ajouter n'a donc
+rien changé pour une tâche qui en avait déjà un.
+
+### Dire ce qui s'est passé
+
+```bmms
+print "vérification de {n} mods"
+do file.write(path: "rapport.txt", text: "{n} mods le {date}")
+do file.write(path: "run.log", text: "fini{nl}", append: true)
+```
+
+`print` met une ligne dans le panneau d'exécution et dans le `run.log` de la tâche. C'est
+l'instruction qu'on écrit vingt fois en cherchant pourquoi une tâche a fait ce qu'elle a fait —
+c'est la différence entre un langage dans lequel on débugue et un langage qu'on débugue en le
+fixant du regard.
+
+**Un chemin relatif atterrit dans le dossier de sortie de la tâche.** Un chemin absolu, ou un nom
+d'endroit comme `mods:notes.txt`, va exactement où il dit. Un simple nom de fichier sans règle
+finirait à côté de l'exécutable : au mauvais endroit, et introuvable ensuite.
+
+Le dossier de sortie est par défaut un dossier par tâche dans les données de BMM, et peut être
+mis n'importe où — y compris un nom d'endroit, pour que « écrire dans le dossier que livre ce
+plugin » soit un réglage plutôt qu'un chemin qui casse sur la machine suivante.
+
+!!! note "Un chemin relatif ne peut pas remonter"
+
+    `../ailleurs/run.log` est refusé. C'est la seule forme que personne n'écrit par accident, et
+    la seule qui transforme « écrire dans mon dossier » en « écrire n'importe où ».
+
+### Réessayer
+
+```bmms
+retry 4 times every 30s {
+    do repo.syncNow()
+}
+```
+
+Un repo brièvement injoignable, un fichier qu'un autre programme tient encore ouvert, un serveur
+qui redémarre. Aucun n'est une erreur à traiter — chacun est une tentative à refaire.
+
+Les gens construisaient ça avec deux tâches qui s'appellent. Ça marche, et ça coûte deux tâches,
+un compteur partagé, et un lecteur qui doit tenir les deux en tête pour voir une boucle.
+
+`every` est optionnel et vaut par défaut une vraie attente, jamais zéro : trois tentatives
+instantanées contre une panne réseau, ce sont trois échecs dans la même milliseconde.
+`orcontinue` poursuit le reste de la tâche après l'échec de la dernière tentative.
+
+`{retry.attempts}` dit combien il en a fallu. Un veut dire que ça a marché du premier coup — et
+pouvoir brancher là-dessus a de la valeur : une étape qui a eu besoin de trois essais fonctionne,
+et ça vaut la peine de le savoir.
+
+!!! note "Arrêter n'est jamais retenté"
+
+    Ni Annuler, ni un arrêt de débogage, ni un `break` en train de sortir d'une boucle. Ce sont
+    des décisions, ou un doigt sur un bouton, et rexécuter le bloc est l'inverse de ce qui a été
+    demandé. Une tâche annulée qui réessaie trois fois est une tâche qui ignore Arrêter.
+
+### Erreurs et branches
+
+```bmms
+try {
+    do repo.sync()
+} catch {
+    do notify(message: "échec de la synchro")
+}
+
+switch {
+    case online { do repo.sync() }
+    case fileExists(path: "cache.json") { do modlist.import() }
+    default { do notify(message: "rien à faire") }
+}
+```
+
+Un `switch` exécute le **premier** cas dont la condition est vraie, puis s'arrête.
+
+### Blocs partagés
+
+```bmms
+call "repair/fetch"
+```
+
+Exécute un bloc nommé du magasin de blocs du planificateur, dans cette tâche et avec les
+permissions de cette tâche.
+
+Un nom de bloc s'écrit comme un nom de variable — lettres, chiffres, tirets bas — éventuellement
+plusieurs joints par `/`. Un nom avec des espaces n'a jamais pu être enregistré.
+
+!!! warning "Un bloc appartient à toutes les tâches, pas à celle-ci"
+
+    Ils sont stockés une seule fois pour toute l'application. Le panneau te montre les blocs de
+    toutes les tâches : enregistrer sur un nom existant remplace donc ce qu'exécute
+    l'automatisation de quelqu'un d'autre — et ça demande d'abord, en nommant les tâches qui
+    l'appellent.
+
+    En supprimer un est refusé tant que N'IMPORTE QUOI l'appelle encore : une autre tâche, ou un
+    autre bloc. Ce contrôle ne regardait que la tâche ouverte — le seul cas où tu sais déjà.
+
+### Des dossiers, pour quand il y en a onze
+
+`repair/fetch` et `repair/verify` se retrouvent dans un dossier `repair` dans le panneau, et
+`call "repair/fetch"` l'exécute exactement comme avant.
+
+Quand quelqu'un a onze blocs, il a déjà inventé une convention de nommage pour les grouper —
+`repair_fetch`, `repair_verify` — parce que la liste plate ne lui laissait nulle part où mettre
+la structure. C'est cette convention, rendue réelle.
+
+!!! note "Rien ne stocke l'arbre"
+
+    Il est lu depuis les noms à chaque fois. Renommer un bloc le DÉPLACE donc, supprimer le
+    dernier bloc d'un dossier supprime le dossier, et il n'y a pas de seconde structure qui
+    pourrait finir en désaccord avec les blocs qu'elle prétend décrire.
+
+Un `.bmmpa` porte déjà les blocs qu'une tâche appelle : en exporter une exporte tout son arbre —
+dossiers compris, puisque les dossiers sont les noms.
+
+
+## L'écrire dans l'app
+
+La zone de code n'est pas un simple champ texte.
+
+**Elle propose pendant la frappe.** Deux caractères ouvrent la liste ; **Tab** accepte, les
+flèches déplacent, Échap ferme. **Entrée n'accepte jamais** — ça veut dire nouvelle ligne, et
+ça le restera. **Ctrl+Espace** ouvre la liste à la demande, même sur un mot vide.
+
+Ce qu'elle propose dépend de l'endroit où est le curseur :
+
+| Où | Quoi |
+|---|---|
+| après `do ` | les noms d'actions |
+| dans les parenthèses d'une action | **les paramètres de cette action**, dès zéro caractère, moins ceux déjà écrits |
+| après `if`, `while`, `case`, `and`… | conditions, valeurs, et les variables que ce script a définies |
+| après `for x in ` | ce qu'une boucle peut parcourir |
+| après `set n: ` | les cinq types |
+| après `script ` | les moteurs |
+| début de ligne | mots-clés, valeurs, variables |
+
+Elle reste fermée dans une chaîne et dans un corps `script` — une liste de noms d'actions BMM
+par-dessus du Python, c'est du bruit. Si rien ne correspond par préfixe ou par sous-chaîne,
+elle se rabat sur les lettres dans l'ordre : `mss` trouve `mods.scan`. La ligne sous la liste
+dit ce qu'est l'élément sélectionné, dans votre langue, avec les mêmes mots que l'éditeur de
+briques.
+
+**Référence** ouvre la liste complète à côté de l'éditeur — chaque action, condition, valeur et
+source de boucle de cette version, groupées et cherchables, avec les paramètres. Un clic
+l'écrit. Le panneau est généré depuis le registre de BMM : il ne peut pas lister quelque chose
+que l'app n'a pas.
+
+**Plan** montre la forme du script. Il est scanné, pas compilé, donc il fonctionne encore
+pendant que le script est à moitié modifié — c'est-à-dire quand on en a besoin.
+
+## Commentaires
+
+`//` et `#` vont tous deux jusqu'à la fin de la ligne.
+
+## Exécuter du code depuis un enchaînement de briques
+
+Vous n'avez pas à choisir. L'action **Exécuter du BMMScript (avancé)** prend un extrait sans
+enveloppe `task` :
+
+```bmms
+do mods.scan()
+if online {
+    do notify(message: "bonjour")
+}
+```
+
+Il s'exécute dans la tâche qui l'entoure : mêmes variables, mêmes permissions, mêmes
+garde-fous de boucle. L'éditeur le compile pendant que vous tapez et affiche le numéro de
+ligne de la première erreur, pour qu'une faute se trouve pendant que vous la regardez plutôt
+qu'à 3 h du matin.
+
+## Exécuter un autre langage
+
+BMMScript sert aux étapes *propres à BMM*. Pour exécuter du vrai code, utilisez l'action
+**Exécuter un script**, qui accepte PowerShell, CMD, Bash, Python, JavaScript (Node) ou
+Rust. BMM n'en embarque aucun — l'éditeur indique si chacun peut réellement tourner sur
+cette machine, et quel binaire il a trouvé, avant même que vous enregistriez la tâche.
+
+Rust est compilé avant de s'exécuter, donc il démarre bien plus lentement que les autres ;
+pour une tâche qui se déclenche toutes les quelques minutes, un moteur interprété est
+généralement le meilleur choix.
+
+## Partager un script
+
+Un `.bmmscript` est un simple fichier texte, il se partage comme n'importe quel autre.
+Double-cliquez dessus et BMM l'ouvre — il ne l'**exécute pas**.
+
+Ce que vous obtenez est un écran de relecture : le fichier est compilé d'abord (s'il est
+cassé, il nomme la ligne au lieu de s'exécuter à moitié), chaque étape est listée, et chaque
+corps de `script` est imprimé en entier plutôt que résumé en « exécute un script ».
+
+Ensuite, deux cas :
+
+- **Il ne demande rien** — un clic pour l'exécuter. Tout ce qu'il peut faire, vous pourriez
+  le faire à la main avec les boutons déjà présents ; l'exécuter n'ajoute aucune capacité.
+- **Il s'accorde quelque chose** — `command`, `script`, `deeplink` ou `stopProcess` — et le
+  bouton reste désactivé tant que vous n'avez pas coché *J'ai lu ce qu'il fait*. Ces quatre
+  capacités sont les seules qu'une tâche peut avoir et que les boutons de l'app n'ont pas.
+
+**Exécuter maintenant** et **Ajouter à mes tâches** sont deux boutons distincts : exécuter
+un fichier une fois et le garder pour toujours sont deux intentions différentes. Ni l'un ni
+l'autre n'hérite d'`osSchedule` : enregistrer une tâche planifiée Windows est votre
+décision, jamais celle de l'auteur du fichier.
+
+Un fichier écrit par un BMM plus ancien, qui ne porte que l'ancien drapeau de permission,
+est lu correctement — il annonce ce qu'il accorde vraiment, pas rien.
+
+## Les erreurs
+
+Chaque erreur nomme une ligne et une colonne. Deux méritent d'être connues parce qu'elles
+ressemblent à autre chose :
+
+- **« There is more text after the task ended »** — presque toujours une `}` qui ferme une
+  ligne trop tôt. BMM refuse plutôt que d'abandonner silencieusement le reste de votre
+  automatisation.
+- **« `x` is given twice »** — un paramètre en double. Garder le dernier en silence rendrait
+  la faute de frappe invisible.
+
+## Ce que l'aller-retour ne garde pas
+
+Les commentaires et les lignes vides. Ils sont à vous, pas à la tâche, et l'arbre de briques
+n'a nulle part où les mettre : ouvrez une tâche en briques puis réimprimez-la en code, et
+les commentaires ont disparu. Gardez une copie de ce à quoi vous tenez.

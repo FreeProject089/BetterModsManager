@@ -1,106 +1,212 @@
+use tauri_plugin_fs::FsExt;
 use crate::models::profile::Profile;
 use crate::state::AppState;
 use crate::commands::crash::log_line;
 use std::path::PathBuf;
-use tauri::State;
+use tauri::{State, Manager};
+use serde::Deserialize;
+use crate::error::AppError;
+use tracing::{info, warn, error};
 
-#[tauri::command]
-pub fn get_profiles(state: State<AppState>) -> Vec<Profile> {
-    state.data.lock().unwrap().profiles.clone()
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfilePayload {
+    pub name: String,
+    pub game_name: String,
+    pub game_path: String,
+    pub mods_path: String,
+    pub backup_path: String,
+    pub color: Option<String>,
+    pub icon: Option<String>,
 }
 
 #[tauri::command]
-pub fn get_active_profile_id(state: State<AppState>) -> Option<String> {
-    state.data.lock().unwrap().active_profile_id.clone()
+pub fn get_profiles(state: State<AppState>) -> Result<Vec<Profile>, AppError> {
+    let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+    Ok(data.profiles.clone())
 }
 
 #[tauri::command]
-pub fn set_active_profile(state: State<AppState>, profile_id: String) -> Result<(), String> {
+pub fn get_active_profile_id(state: State<AppState>) -> Result<Option<String>, AppError> {
+    let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+    Ok(data.active_profile_id.clone())
+}
+
+#[tauri::command]
+pub fn set_active_profile(state: State<AppState>, profile_id: String) -> Result<(), AppError> {
     {
-        let mut data = state.data.lock().unwrap();
+        let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
         if let Some(p) = data.profiles.iter().find(|p| p.id == profile_id) {
+            info!("Switched active profile to '{}' ({})", p.name, profile_id);
             log_line(format!("[PROFILE] Switched active profile to '{}' ({})", p.name, profile_id));
             data.active_profile_id = Some(profile_id);
         } else {
-            return Err("Profile not found".to_string());
+            warn!("Profile not found: {}", profile_id);
+            return Err(AppError::NotFound("Profile not found".to_string()));
         }
     }
-    state.save().map_err(|e| e.to_string())
+    state.save()?;
+    Ok(())
 }
 
 #[tauri::command]
 pub fn create_profile(
+    app: tauri::AppHandle,
     state: State<AppState>,
-    name: String,
-    game_name: String,
-    game_path: String,
-    mods_path: String,
-    backup_path: String,
-    color: Option<String>,
-    icon: Option<String>,
-) -> Result<Profile, String> {
+    payload: ProfilePayload,
+) -> Result<Profile, AppError> {
+    // Validate paths
+    let game_p = PathBuf::from(&payload.game_path);
+    let mods_p = PathBuf::from(&payload.mods_path);
+    let backup_given = !payload.backup_path.trim().is_empty();
+    let backup_p = PathBuf::from(&payload.backup_path);
+
+    if !game_p.exists() {
+        error!("Game path does not exist: {}", payload.game_path);
+        return Err(AppError::NotFound(format!("Le dossier de destination n'existe pas : {}", payload.game_path)));
+    }
+    if !mods_p.exists() {
+        error!("Mods path does not exist: {}", payload.mods_path);
+        return Err(AppError::NotFound(format!("Le dossier des mods n'existe pas : {}", payload.mods_path)));
+    }
+
     let mut profile = Profile::new(
-        name,
-        game_name,
-        PathBuf::from(&game_path),
-        PathBuf::from(&mods_path),
-        PathBuf::from(&backup_path),
+        payload.name,
+        payload.game_name,
+        game_p.clone(),
+        mods_p.clone(),
+        backup_p.clone(),
     );
-    profile.color = color;
-    profile.icon = icon;
+
+    // No backup folder given → one under the app's own data directory, named after the
+    // profile, created here.
+    //
+    // The backup folder holds the game files a mod REPLACED, so it is the thing that makes
+    // disabling a mod reversible — which is why it can never be shared between profiles, and
+    // why leaving it blank used to be an error. But the only requirements are "it exists" and
+    // "it is this profile's alone", and `Backups/<profile id>` satisfies both: the id is
+    // unique by construction, so two profiles cannot collide even if they are named the same.
+    //
+    // The game and mods folders stay required — BMM cannot invent where your game lives.
+    // This one it can, so it does.
+    let backup_p = if backup_given {
+        backup_p
+    } else {
+        let dir = app.path().app_data_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join("Backups")
+            .join(&profile.id);
+        std::fs::create_dir_all(&dir).map_err(|e| {
+            AppError::Internal(format!("Impossible de créer le dossier de sauvegarde {} : {}", dir.display(), e))
+        })?;
+        profile.backup_path = dir.clone();
+        info!("No backup folder given for '{}' — using {}", profile.name, dir.display());
+        dir
+    };
+
+    profile.color = payload.color;
+    profile.icon = payload.icon;
     let result = profile.clone();
     {
-        let mut data = state.data.lock().unwrap();
+        let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
         if data.active_profile_id.is_none() {
             data.active_profile_id = Some(profile.id.clone());
         }
         data.profiles.push(profile);
     }
-    state.save().map_err(|e| e.to_string())?;
+    state.save()?;
+    info!("Created profile '{}' (game: {}, id: {})", result.name, result.game_name, result.id);
     log_line(format!("[PROFILE] Created profile '{}' (game: {}, id: {})", result.name, result.game_name, result.id));
+
+    // Dynamic Scope Extension
+    let mode = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?.settings.fs_security_mode.clone();
+    if mode.as_deref() == Some("limited") {
+        let _ = app.fs_scope().allow_directory(&game_p, true);
+        let _ = app.fs_scope().allow_directory(&mods_p, true);
+        let _ = app.fs_scope().allow_directory(&backup_p, true);
+        let _ = app.asset_protocol_scope().allow_directory(&game_p, true);
+        let _ = app.asset_protocol_scope().allow_directory(&mods_p, true);
+        let _ = app.asset_protocol_scope().allow_directory(&backup_p, true);
+    }
+
     Ok(result)
 }
 
 #[tauri::command]
 pub fn update_profile(
+    app: tauri::AppHandle,
     state: State<AppState>,
     profile_id: String,
-    name: String,
-    game_name: String,
-    game_path: String,
-    mods_path: String,
-    backup_path: String,
-    color: Option<String>,
-    icon: Option<String>,
-) -> Result<(), String> {
-    log_line(format!("[PROFILE] Updated profile '{}' ({})", name, profile_id));
-    {
-        let mut data = state.data.lock().unwrap();
-        if let Some(p) = data.profiles.iter_mut().find(|p| p.id == profile_id) {
-            p.name = name;
-            p.game_name = game_name;
-            p.game_path = PathBuf::from(&game_path);
-            p.mods_path = PathBuf::from(&mods_path);
-            p.backup_path = PathBuf::from(&backup_path);
-            p.color = color;
-            p.icon = icon;
-        } else {
-            return Err("Profile not found".to_string());
-        }
+    payload: ProfilePayload,
+) -> Result<(), AppError> {
+    log_line(format!("[PROFILE] Updated profile '{}' ({})", payload.name, profile_id));
+    
+    // Validate paths
+    let game_p = PathBuf::from(&payload.game_path);
+    let mods_p = PathBuf::from(&payload.mods_path);
+    
+    if !game_p.exists() {
+        error!("Game path does not exist: {}", payload.game_path);
+        return Err(AppError::NotFound(format!("Le dossier de destination n'existe pas : {}", payload.game_path)));
     }
-    state.save().map_err(|e| e.to_string())
+    if !mods_p.exists() {
+        error!("Mods path does not exist: {}", payload.mods_path);
+        return Err(AppError::NotFound(format!("Le dossier des mods n'existe pas : {}", payload.mods_path)));
+    }
+
+    let mods_path_changed = {
+        let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+        if let Some(p) = data.profiles.iter_mut().find(|x| x.id == profile_id) {
+            let changed = p.mods_path != mods_p;
+            p.name = payload.name;
+            p.game_name = payload.game_name;
+            p.game_path = game_p.clone();
+            p.mods_path = mods_p.clone();
+            p.backup_path = PathBuf::from(&payload.backup_path);
+            p.color = payload.color;
+            p.icon = payload.icon;
+            changed
+        } else {
+            warn!("Profile not found for update: {}", profile_id);
+            return Err(AppError::NotFound("Profile not found".to_string()));
+        }
+    };
+    state.save()?;
+
+    // If the mods folder changed, rescan it and detect mods missing a hash — they
+    // get queued for the THROTTLED background hashing (no UI freeze).
+    if mods_path_changed {
+        crate::commands::mods::invalidate_cache(&state);
+        crate::commands::mods::populate_sha_queue(state.clone());
+        log_line(format!("[PROFILE] Mods folder changed for '{}' → cache invalidated, unhashed mods queued for background hashing", profile_id));
+    }
+
+    // Dynamic Scope Extension
+    let mode = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?.settings.fs_security_mode.clone();
+    if mode.as_deref() == Some("limited") {
+        let _ = app.fs_scope().allow_directory(&game_p, true);
+        let _ = app.fs_scope().allow_directory(&mods_p, true);
+        let _ = app.fs_scope().allow_directory(&PathBuf::from(&payload.backup_path), true);
+        let _ = app.asset_protocol_scope().allow_directory(&game_p, true);
+        let _ = app.asset_protocol_scope().allow_directory(&mods_p, true);
+        let _ = app.asset_protocol_scope().allow_directory(&PathBuf::from(&payload.backup_path), true);
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
-pub fn delete_profile(state: State<AppState>, profile_id: String) -> Result<(), String> {
+pub fn delete_profile(state: State<AppState>, profile_id: String) -> Result<(), AppError> {
+    info!("Deleting profile {}", profile_id);
     log_line(format!("[PROFILE] Deleting profile ({})", profile_id));
     {
-        let mut data = state.data.lock().unwrap();
+        let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
         data.profiles.retain(|p| p.id != profile_id);
         if data.active_profile_id.as_deref() == Some(&profile_id) {
             data.active_profile_id = data.profiles.first().map(|p| p.id.clone());
         }
     }
     crate::commands::mods::invalidate_cache(&state);
-    state.save().map_err(|e| e.to_string())
+    state.save()?;
+    Ok(())
 }

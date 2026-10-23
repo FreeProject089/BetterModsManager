@@ -1,0 +1,21 @@
+{
+  "catalog_version": "1.0",
+  "catalogs": [
+    {
+      "items": 4,
+      "kind": "plugin",
+      "name": "Plugins",
+      "url": "https://group.example/plugins.json"
+    },
+    {
+      "app": "bmm",
+      "kind": "theme",
+      "url": "https://group.example/themes.json"
+    }
+  ],
+  "description": "Everything we publish",
+  "format": "bmm-catalog",
+  "format_version": 1,
+  "items": [],
+  "name": "Group index"
+}

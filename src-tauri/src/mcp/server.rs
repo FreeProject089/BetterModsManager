@@ -1,0 +1,1976 @@
+use rmcp::{ServerHandler, model::*, service::RequestContext, RoleServer};
+use serde_json::json;
+
+use crate::mcp::tools::{profiles, mods, diagnostics, launch_packs, search};
+use crate::mcp::tools::ai as ai_tools;
+use crate::mcp::tools::ai_api as ai_api_tools;
+use crate::mcp::state_bridge;
+
+/// The BMMScript vocabulary, as `scripts/gen-bmms-reference.mjs` generates it.
+///
+/// Baked into the binary because an MCP client is usually somewhere else entirely — reading
+/// it from a path beside the executable would make the one tool whose whole job is "tell me
+/// what the words are" the one that fails when it is needed.
+pub const BMMS_VOCABULARY: &str = include_str!("../../../dist-assets/bmms-vocabulary.json");
+
+#[derive(Clone)]
+pub struct BmmMcpServer;
+
+/// Helper to serialize any Serialize type to a tool result
+fn ok_json<T: serde::Serialize>(val: &T) -> Result<rmcp::model::CallToolResult, rmcp::ErrorData> {
+    let text = serde_json::to_string_pretty(val)
+        .map_err(|e| rmcp::ErrorData::internal_error(format!("Serialization error: {}", e), None))?;
+    Ok(CallToolResult::success(vec![Content::text(text)]))
+}
+
+fn err_result(msg: &str) -> Result<rmcp::model::CallToolResult, rmcp::ErrorData> {
+    Ok(CallToolResult::error(vec![Content::text(msg.to_string())]))
+}
+
+impl BmmMcpServer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    // ── Profile Tools ────────────────────────────────────────────────
+
+    fn tool_list_profiles(&self) -> Result<CallToolResult, rmcp::ErrorData> {
+        match profiles::list_profiles() {
+            Ok(profiles) => ok_json(&profiles),
+            Err(e) => err_result(&e),
+        }
+    }
+
+    fn tool_get_profile(&self, profile_id: &str) -> Result<CallToolResult, rmcp::ErrorData> {
+        match profiles::get_profile_details(profile_id) {
+            Ok(details) => ok_json(&details),
+            Err(e) => err_result(&e),
+        }
+    }
+
+    fn tool_get_active_profile(&self) -> Result<CallToolResult, rmcp::ErrorData> {
+        match profiles::get_active_profile() {
+            Ok(Some(profile)) => ok_json(&profile),
+            Ok(None) => ok_json(&json!({"message": "No active profile set"})),
+            Err(e) => err_result(&e),
+        }
+    }
+
+    fn tool_set_active_profile(&self, profile_id: &str) -> Result<CallToolResult, rmcp::ErrorData> {
+        match profiles::set_active_profile(profile_id) {
+            Ok(msg) => Ok(CallToolResult::success(vec![Content::text(msg)])),
+            Err(e) => err_result(&e),
+        }
+    }
+
+    // ── Mods Tools ───────────────────────────────────────────────────
+
+    fn tool_list_mods(&self, profile_id: Option<&str>, filter: Option<&str>) -> Result<CallToolResult, rmcp::ErrorData> {
+        match mods::list_mods(profile_id, filter) {
+            Ok(mods_list) => {
+                let count = mods_list.len();
+                let result = json!({
+                    "count": count,
+                    "mods": mods_list,
+                });
+                ok_json(&result)
+            }
+            Err(e) => err_result(&e),
+        }
+    }
+
+    fn tool_get_mod(&self, mod_id: &str) -> Result<CallToolResult, rmcp::ErrorData> {
+        match mods::get_mod_details(mod_id) {
+            Ok(details) => ok_json(&details),
+            Err(e) => err_result(&e),
+        }
+    }
+
+    fn tool_search_mods(&self, query: &str) -> Result<CallToolResult, rmcp::ErrorData> {
+        match mods::search_mods(query) {
+            Ok(results) => {
+                let result = json!({
+                    "query": query,
+                    "result_count": results.len(),
+                    "results": results,
+                });
+                ok_json(&result)
+            }
+            Err(e) => err_result(&e),
+        }
+    }
+
+    fn tool_search(&self, query: &str, limit: usize) -> Result<CallToolResult, rmcp::ErrorData> {
+        match search::search_all(query, limit) {
+            Ok(res) => ok_json(&serde_json::to_value(&res).unwrap_or_default()),
+            Err(e) => err_result(&e),
+        }
+    }
+
+    fn tool_set_mod_enabled(&self, mod_id: &str, enabled: bool) -> Result<CallToolResult, rmcp::ErrorData> {
+        match mods::set_mod_enabled(mod_id, enabled) {
+            Ok(msg) => Ok(CallToolResult::success(vec![Content::text(msg)])),
+            Err(e) => err_result(&e),
+        }
+    }
+
+    fn tool_sync_active_profile(&self) -> Result<CallToolResult, rmcp::ErrorData> {
+        match mods::sync_active_profile() {
+            Ok(msg) => Ok(CallToolResult::success(vec![Content::text(msg)])),
+            Err(e) => err_result(&e),
+        }
+    }
+
+    // ── Documentation & Lang Tools ────────────────────────────────────
+
+    fn tool_get_documentation_list(&self) -> Result<CallToolResult, rmcp::ErrorData> {
+        match mods::get_documentation_list() {
+            Ok(docs) => ok_json(&docs),
+            Err(e) => err_result(&e),
+        }
+    }
+
+    fn tool_read_documentation(&self, file_name: &str) -> Result<CallToolResult, rmcp::ErrorData> {
+        match mods::read_documentation(file_name) {
+            Ok(content) => Ok(CallToolResult::success(vec![Content::text(content)])),
+            Err(e) => err_result(&e),
+        }
+    }
+
+    fn tool_get_language_list(&self) -> Result<CallToolResult, rmcp::ErrorData> {
+        match mods::get_language_list() {
+            Ok(langs) => ok_json(&langs),
+            Err(e) => err_result(&e),
+        }
+    }
+
+    fn tool_read_language_file(&self, lang_code: &str) -> Result<CallToolResult, rmcp::ErrorData> {
+        match mods::read_language_file(lang_code) {
+            Ok(content) => Ok(CallToolResult::success(vec![Content::text(content)])),
+            Err(e) => err_result(&e),
+        }
+    }
+
+    // ── Diagnostics Tools ────────────────────────────────────────────
+
+    fn tool_get_statistics(&self) -> Result<CallToolResult, rmcp::ErrorData> {
+        match diagnostics::get_statistics() {
+            Ok(stats) => ok_json(&stats),
+            Err(e) => err_result(&e),
+        }
+    }
+
+    fn tool_list_crash_reports(&self, limit: Option<usize>) -> Result<CallToolResult, rmcp::ErrorData> {
+        let reports = diagnostics::list_crash_reports(limit);
+        let result = json!({
+            "count": reports.len(),
+            "reports": reports,
+        });
+        ok_json(&result)
+    }
+
+    fn tool_analyze_crash_report(&self, report_path: &str) -> Result<CallToolResult, rmcp::ErrorData> {
+        match diagnostics::analyze_crash_report(report_path) {
+            Ok(analysis) => ok_json(&analysis),
+            Err(e) => err_result(&e),
+        }
+    }
+
+    fn tool_read_crash_report(&self, report_path: &str) -> Result<CallToolResult, rmcp::ErrorData> {
+        match diagnostics::read_crash_report_raw(report_path) {
+            Ok(content) => ok_json(&content),
+            Err(e) => err_result(&e),
+        }
+    }
+
+    fn tool_generate_diagnostic_report(&self, title: &str, description: &str) -> Result<CallToolResult, rmcp::ErrorData> {
+        match mods::generate_diagnostic_report(title, description) {
+            Ok(report) => ok_json(&report),
+            Err(e) => err_result(&e),
+        }
+    }
+
+    fn tool_export_config(&self, target_path: &str) -> Result<CallToolResult, rmcp::ErrorData> {
+        match mods::export_config(target_path) {
+            Ok(msg) => Ok(CallToolResult::success(vec![Content::text(msg)])),
+            Err(e) => err_result(&e),
+        }
+    }
+
+    // ── Launch Packs Tools ───────────────────────────────────────────
+
+    fn tool_list_launch_packs(&self) -> Result<CallToolResult, rmcp::ErrorData> {
+        match launch_packs::list_launch_packs() {
+            Ok(packs) => ok_json(&packs),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    fn tool_run_launch_pack(&self, id: &str) -> Result<CallToolResult, rmcp::ErrorData> {
+        match launch_packs::run_launch_pack(id) {
+            Ok(msg) => Ok(CallToolResult::success(vec![Content::text(msg)])),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    fn tool_delete_launch_pack(&self, id: &str) -> Result<CallToolResult, rmcp::ErrorData> {
+        match launch_packs::delete_launch_pack(id) {
+            Ok(msg) => Ok(CallToolResult::success(vec![Content::text(msg)])),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    fn tool_create_launch_pack(&self, name: &str, exes: Vec<String>, icon: Option<&str>) -> Result<CallToolResult, rmcp::ErrorData> {
+        match launch_packs::create_launch_pack(name.to_string(), exes, icon.map(|s| s.to_string())) {
+            Ok(pack) => ok_json(&pack),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    fn tool_open_launch_pack_folder(&self, id: &str) -> Result<CallToolResult, rmcp::ErrorData> {
+        match launch_packs::open_launch_pack_folder(id) {
+            Ok(msg) => Ok(CallToolResult::success(vec![Content::text(msg)])),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    // ── Plugins & API ───────────────────────────────────────────────────
+    fn tool_list_plugins(&self) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::list_plugins() {
+            Ok(v) => ok_json(&v),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+    fn tool_get_api_info(&self, reveal: bool) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::get_api_info(reveal) {
+            Ok(v) => ok_json(&v),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    // ── App Catalog ─────────────────────────────────────────────────────
+    fn tool_list_apps(&self) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::list_apps() {
+            Ok(v) => ok_json(&v),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    // ── Feature-parity tools (modpacks, tags, repos, themes, plugins, live API) ──
+
+    fn tool_list_modpacks(&self) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::list_modpacks() {
+            Ok(v) => ok_json(&serde_json::json!({ "count": v.len(), "modpacks": v })),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    fn tool_create_modpack(&self, name: &str, mod_ids: Vec<String>) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::create_modpack(name, mod_ids) {
+            Ok(msg) => Ok(CallToolResult::success(vec![Content::text(msg)])),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    fn tool_delete_mod(&self, mod_id: &str, delete_files: bool) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::delete_mod(mod_id, delete_files) {
+            Ok(msg) => Ok(CallToolResult::success(vec![Content::text(msg)])),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    fn tool_verify_mod_integrity(&self, mod_id: &str) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::verify_integrity(mod_id) {
+            Ok(map) => {
+                let corrupted: Vec<&String> = map.iter().filter(|(_, ok)| !**ok).map(|(f, _)| f).collect();
+                ok_json(&serde_json::json!({ "files_checked": map.len(), "corrupted": corrupted, "ok": corrupted.is_empty(), "files": map }))
+            }
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    fn tool_list_tags(&self) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::list_tags() {
+            Ok(v) => ok_json(&v),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    fn tool_list_connected_repos(&self) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::list_connected_repos() {
+            Ok(v) => ok_json(&v),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    fn tool_list_themes(&self) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::list_themes() {
+            Ok(v) => ok_json(&v),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    fn tool_get_plugin(&self, plugin_id: &str) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::get_plugin(plugin_id) {
+            Ok(v) => ok_json(&v),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    async fn tool_api_call(&self, method: &str, path: &str, body: Option<serde_json::Value>) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::api_call(method, path, body).await {
+            Ok(v) => ok_json(&v),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    fn tool_list_schedules(&self) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::list_schedules() {
+            Ok(v) => ok_json(&v),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    fn tool_create_schedule(&self, task: serde_json::Value) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::save_schedule(task) {
+            Ok(v) => ok_json(&v),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    fn tool_delete_schedule(&self, id: &str) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::delete_schedule(id) {
+            Ok(v) => ok_json(&v),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    fn tool_create_plugin_scaffold(&self, manifest: serde_json::Value, scripts: Vec<(String, String)>) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::create_plugin_scaffold(manifest, scripts) {
+            Ok(v) => ok_json(&v),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    fn tool_list_sessions(&self) -> Result<CallToolResult, rmcp::ErrorData> {
+        let sessions: Vec<_> = state_bridge::list_crash_reports().into_iter()
+            .filter(|r| r.category.contains("Session")).collect();
+        ok_json(&serde_json::json!({ "count": sessions.len(), "sessions": sessions }))
+    }
+
+    fn tool_apply_theme(&self, theme_id: &str) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::apply_theme(theme_id) {
+            Ok(msg) => Ok(CallToolResult::success(vec![Content::text(msg)])),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+
+    fn tool_get_theme(&self, theme_id: &str) -> Result<CallToolResult, rmcp::ErrorData> {
+        match state_bridge::get_theme(theme_id) {
+            Ok(v) => ok_json(&v),
+            Err(e) => err_result(&e.to_string()),
+        }
+    }
+}
+
+// ── MCP ServerHandler Implementation ─────────────────────────────────────
+
+impl ServerHandler for BmmMcpServer {
+    fn get_info(&self) -> ServerInfo {
+        // rmcp 1.x marks ServerInfo/Implementation #[non_exhaustive], so they can't be
+        // built with a struct literal from outside the crate — mutate from Default instead.
+        let mut imp = Implementation::default();
+        imp.name = "bmm-mcp-server".to_string();
+        imp.version = env!("CARGO_PKG_VERSION").to_string();
+        imp.title = Some("Better Mods Manager MCP Server".to_string());
+        imp.description = Some("Provides full access to BMM's data and lifecycle for AI agents.".to_string());
+        imp.icons = None;
+        imp.website_url = Some("https://github.com/FreeProject089/BetterModsManager".to_string());
+
+        let mut info = ServerInfo::default();
+        info.protocol_version = ProtocolVersion::V_2024_11_05;
+        info.capabilities = ServerCapabilities::builder().enable_tools().build();
+        info.server_info = imp;
+        info.instructions = Some(
+            "Better Mods Manager (BMM) MCP Server. \
+             Allows AI agents to manage profiles, mods, and analyze crashes. \
+             Now includes support for reading UI translation files (Lang) \
+             and documentation (.md)."
+                .to_string(),
+        );
+        info
+    }
+
+    fn list_tools(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> impl std::future::Future<Output = Result<ListToolsResult, rmcp::ErrorData>> + Send + '_ {
+        let tools = vec![
+            // Profiles
+            Tool::new(
+                "bmm_list_profiles",
+                "List every BMM profile with its id, name, game and folders. Start here: almost every other tool takes a profile_id from this list.",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_get_active_profile",
+                "Get the currently active profile.",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_get_profile",
+                "Get details of a specific profile.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "profile_id": { "type": "string", "description": "The profile's id, as returned by bmm_list_profiles. Not its name." } },
+                    "required": ["profile_id"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_set_active_profile",
+                "Make one profile the active one. This changes which mods are enabled on disk, so it is an action and not a view change.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "profile_id": { "type": "string", "description": "The profile's id, as returned by bmm_list_profiles. Not its name." } },
+                    "required": ["profile_id"]
+                })).unwrap()),
+            ),
+
+            // Mods
+            Tool::new(
+                "bmm_list_mods",
+                "List mods with optional filters.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "profile_id": { "type": "string", "description": "The profile's id, as returned by bmm_list_profiles. Not its name." },
+                        "filter": { "type": "string", "enum": ["all", "enabled", "disabled"], "description": "Which mods to return. Omit for all of them." }
+                    }
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_get_mod",
+                "Get details of a specific mod.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "mod_id": { "type": "string", "description": "The mod's id, as returned by bmm_list_mods. Not its folder name or title." } },
+                    "required": ["mod_id"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_search_mods",
+                "Search the installed mods by free text across name, author and description. Returns the same shape as bmm_list_mods.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "query": { "type": "string", "description": "Free text matched against a mod's name, author and description. Case-insensitive." } },
+                    "required": ["query"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_search",
+                "Search EVERYTHING BMM knows about in one call: installed mods, profiles, and the bundled documentation pages. Use this when you do not know which kind of thing you are looking for, or to find the id to pass to a more specific tool — each hit carries a `next` field naming it. Ranking is a match quality within one response, not a rating; it is a simpler matcher than the app's own Ctrl+K palette, which stays the reference. `sources` lists which sources actually answered: a source missing there was unavailable (the docs manifest is a bundled resource and is not always locatable), which is not the same as having no matches.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "query": { "type": "string", "description": "What to look for. Every word must match, so extra words narrow the results." },
+                        "limit": { "type": "integer", "description": "Maximum hits (1-100, default 20)." }
+                    },
+                    "required": ["query"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_set_mod_enabled",
+                "Enable or disable one installed mod in the active profile. Writes to disk; there is no toggle, so send the state you want.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "mod_id": { "type": "string", "description": "The mod's id, as returned by bmm_list_mods. Not its folder name or title." },
+                        "enabled": { "type": "boolean", "description": "true turns it on, false turns it off. There is no toggle: send the state you want." }
+                    },
+                    "required": ["mod_id", "enabled"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_sync",
+                "Synchronize files for the active profile (apply mods).",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_get_mod_order",
+                "The activation order of the active profile in the running BMM app: `mods` in deployment order (position 0 is applied first, the LAST one wins a file two mods share), each with the mods it overrides and is overridden by, plus `contested`: every shared file and which mod is on disk for it.",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_set_mod_order",
+                "Set the activation order in the running BMM app. `order` must list exactly the active mods (the same set bmm_get_mod_order returns, rearranged): anything else is refused. The last mod wins a shared file; BMM re-copies the files that change hands and answers how many moved.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "order": { "type": "array", "items": { "type": "string" }, "description": "Every active mod id, first applied first. The last one wins a file several mods ship." },
+                        "profile_id": { "type": "string", "description": "Which profile. Default: the active one." },
+                        "reapply": { "type": "boolean", "description": "Also re-copy the winner of every contested file, not only the ones that change hands (a repair)." }
+                    },
+                    "required": ["order"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_export_mod_order",
+                "Export the activation order of a profile in the running BMM app as a portable document that another machine can import: `doc` (mods named by content fingerprint, repo id and name, never by local path), `code` (one line, BMMORDER1.…), `link` (bmm://order?d=…) and `text` (a numbered list of names).",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "profile_id": { "type": "string", "description": "Which profile. Default: the active one." }
+                    }
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_import_mod_order",
+                "Import a shared activation order into the running BMM app. `text` is a BMMORDER1 code, a bmm://order link, the JSON document or a list of mod names, one per line. The active mods it names take its order in the slots they already hold; mods it does not name stay where they are; nothing is enabled or disabled. Answers the plan (matched, missing, inactive, extra, the resulting order, files changing hands) and how many files moved. Use dry_run to see the plan without applying it.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "text": { "type": "string", "description": "The order: code, link, JSON or names." },
+                        "profile_id": { "type": "string", "description": "Which profile. Default: the active one." },
+                        "dry_run": { "type": "boolean", "description": "Only answer the plan; change nothing." }
+                    },
+                    "required": ["text"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_arrange_mod_order",
+                "Place a block of ACTIVE mods in the activation order of the running BMM app, the way a modpack or \"Enable all\" does: `top` (the block wins what it shares, in the given order), `bottom` (under everything already active), `keep` (nothing moves). No mode = the user's default (see bmm_order_bulk_mode). Only files that change hands are re-copied. Answers how many moved.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "ids": { "type": "array", "items": { "type": "string" }, "description": "Active mod ids, first applied first." },
+                        "mode": { "type": "string", "enum": ["top", "bottom", "keep"], "description": "Where the block goes. Default: the setting." },
+                        "profile_id": { "type": "string", "description": "Which profile. Default: the active one." }
+                    },
+                    "required": ["ids"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_order_bulk_mode",
+                "Read, or set with `mode`, where a bulk enable (modpack, Enable all, a mod list, a scheduled task, a script) puts its mods in the activation order when it does not say: top | bottom | keep.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "mode": { "type": "string", "enum": ["top", "bottom", "keep"], "description": "Set this default. Omit to read it." }
+                    }
+                })).unwrap()),
+            ),
+
+            // Writing an automation as CODE, reading one back as code, and being told the
+            // vocabulary rather than guessing it.
+            //
+            // `bmm_create_schedule` takes the shape the app SAVES: a nested tree of steps,
+            // conditions and loops. That is the right shape to store and a poor one to
+            // AUTHOR — composing a five-step task with a loop in it means assembling a tree
+            // by hand and finding out whether it was right only when the task runs.
+            //
+            // BMMScript is the same task as text, and its compiler reports the line and
+            // column that is wrong. So the loop becomes: read the vocabulary, write the
+            // source, compile it, fix what it names, save what compiled. None of these three
+            // needs BMM to be running — the compiler and the vocabulary are both in this
+            // binary.
+            Tool::new(
+                "bmm_bmms_reference",
+                "The complete BMMScript vocabulary: every action type with its parameter names, every condition, every value source, the loop sources, the reserved keywords, the five permissions and the script engines. Read this BEFORE writing a task — it is generated from the same table the app's builder renders, so it cannot name an action the runner does not have, while a guessed action name produces a task that compiles and then fails at run time. It is a VOCABULARY, not a grammar: for the syntax see the shape described on bmm_compile_bmms. Works with BMM closed.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {}
+                })).unwrap()),
+            ),
+
+            Tool::new(
+                "bmm_compile_bmms",
+                "Compile BMMScript into the task object bmm_create_schedule takes. Returns { ok, task?, tasks?, errors:[{line,col,message}] } — pass `task` straight to bmm_create_schedule. This is the way to AUTHOR an automation: the saved JSON is a nested tree that is easy to get subtly wrong and reports nothing until the task runs, while this names the line and the column. A source file looks like: task \"Nightly scan\" { every day at 03:00 / allow script / do mods.scan() / if file exists \"C:/x\" { do app.launch(id: \"dcs\") } } — one statement per line, braces as shown. Triggers: manual | on app start | once at \"ISO\" | every 30m | every 2h | every day at HH:MM | every week on mon,tue at HH:MM | every month on 1 at HH:MM | on file \"path\" | on event \"name\" | after task \"id\" [ok|failed] | when <condition> | probe powershell every 5m { code }. Get the action and condition names from bmm_bmms_reference. Works with BMM closed.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "source": { "type": "string", "description": "BMMScript source: one whole `task \"...\" { ... }` block, or several." }
+                    },
+                    "required": ["source"]
+                })).unwrap()),
+            ),
+
+            Tool::new(
+                "bmm_decompile_bmms",
+                "Print a saved task back as BMMScript. The inverse of bmm_compile_bmms, and the way to EDIT an existing automation without rebuilding its tree by hand: read it with bmm_list_schedules, decompile it, change the text, compile it, then save it with bmm_create_schedule under the SAME id. Works with BMM closed.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "task": { "type": "object", "description": "A task object, in the shape bmm_list_schedules returns." }
+                    },
+                    "required": ["task"]
+                })).unwrap()),
+            ),
+
+            Tool::new(
+                "bmm_create_schedule",
+                "Create or update a scheduler automation (upsert by id into schedules.json). `task` is the same shape the in-app builder saves: { id?, name, description?, enabled?, trigger, steps[], perms? }. perms is { command?, script?, deeplink?, stopProcess?, delete?, resources?, tasks?, network?, ai?, navigate?, files? } (tasks = may run, start or switch on OTHER tasks by id; network = may send webhooks / Discord / Slack messages and read feeds, http(s) only, never a private address unless the step sets allowLan; navigate = may open allow-listed dialogs and click allow-listed controls on BMM screens (the nav.modal and nav.click steps; the other nav.* steps only show and need nothing); ai = may ask Laya, the local AI, on this PC: the ai.* steps, whose answers are data and never run; files = may place the files an automation package carries into the DCS Saved Games, game or mods folder, and write the join-gate report: the pkg.install and gate.report steps, path-confined, each placement asked once) — each one false unless set, and a step needing a capability the task was not granted FAILS with a message instead of running. `allowCustomCommands` is the older single flag and means command+deeplink. trigger, one of: {type:'manual'} | {type:'appStart'} | {type:'once', at:'2026-01-01T09:00'} | {type:'interval', everyMinutes:30} | {type:'hourly', everyHours:2} | {type:'dailyAt', time:'03:00'} | {type:'weeklyAt', time:'08:00', days:[1,3]} (0=Sunday) | {type:'monthlyAt', day:1, time:'00:00'} | {type:'watchFile', path:'C:/.../dcs.log'} | {type:'onEvent', event:'...', where?:'family=disk|memory'} (BMM's own events: bmm.mod.missing, bmm.task.done, bmm.ai.crashLabelled, bmm.ai.crashGroup, bmm.ai.ready…; `where` fires only when the event carries those values, `,` between keys, `|` between alternatives) | {type:'afterTask', taskId:'...', outcome:'any'|'ok'|'fail'} | {type:'condition', condition:{type,params}} (fires on the CHANGE to true, not repeatedly while it is true) | {type:'script', engine:'powershell'|'cmd'|'bash'|'python'|'node'|'rust', everyMinutes:5, code:'...'} (exit code 0 runs the task; needs the `script` permission) | {type:'rss', url:'https://…/feed.xml', everyMinutes:15, allowLan?:false} (fires once per NEW feed item, which the steps read as {event.title} {event.link} {event.id} {event.published}; needs the `network` permission). steps[] nest freely: {kind:'action', action:{type, params}} | {kind:'delay', seconds} | {kind:'waitFor', condition, timeoutSec} | {kind:'if', condition, then[], else[]} | {kind:'repeat', mode:'while'|'until'|'doWhile'|'times', condition?, times?, maxIters, everySec, steps[]} | {kind:'forEach', source:'mods'|'enabledMods'|'disabledMods'|'profiles'|'modpacks'|'themes', maxIters, everySec, steps[]} (use {item.id}/{item.name} placeholders in the body's action params) | {kind:'switch', cases:[{condition, steps[]}], default[]}. Use bmm_list_actions / bmm_list_schedules to discover action types and existing tasks. SAFETY: without an explicit enabled:true the task is created DISABLED for the user to inspect and switch on.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "task": { "type": "object", "description": "The full task object (see tool description for the shape)." }
+                    },
+                    "required": ["task"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_delete_schedule",
+                "Delete a scheduler automation by id (see bmm_list_schedules for ids).",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "id": { "type": "string", "description": "The scheduled task's id, as returned by bmm_list_schedules." } },
+                    "required": ["id"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_create_plugin_scaffold",
+                "Scaffold a COMPLETE BMM plugin DRAFT: writes plugin.json (+ README, + bundled scripts) into <app-data>/plugin-drafts/<id>/. This is authoring, NOT installation — the user zips the draft and installs it through the app's normal permission-gated flow, and scripts only ever run behind the unsafe-plugins permission. `manifest` needs at least { id, name }; optional: version, author, description, game, permissions[], tags[], website, modlist ({ required_mods:[{id,name?,optional?}], strict? }), apply_mode ('modlist'|'script'|'both'). `scripts` is an array of { name, content } written under scripts/ and auto-declared in the manifest (has_scripts is derived, never trusted). To COUPLE a plugin to an automation, create it here and then bmm_create_schedule a task whose step is { kind:'action', action:{ type:'plugin.apply', params:{ plugin:'<id>' } } } — see bmm_list_actions for everything a step can do.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "manifest": { "type": "object", "description": "The plugin.json content ({ id, name, version?, author?, description?, game?, permissions?, tags?, website?, modlist?, apply_mode? })." },
+                        "scripts": { "type": "array", "items": { "type": "object", "properties": { "name": { "type": "string", "description": "File name, written under scripts/. A plain name, not a path." }, "content": { "type": "string", "description": "The script itself, as text." } }, "required": ["name", "content"] }, "description": "Script files to bundle (plain filenames; written under scripts/)." }
+                    },
+                    "required": ["manifest"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_list_actions",
+                "List every action type a scheduler task step may use ({ type, label, needs, group }) — the same registry the in-app builder shows. Generated from the app's source at build time. Use with bmm_create_schedule: a step is { kind:'action', action:{ type:<one of these>, params:{...} } }. Notable groups: mods/profiles, repo (sync, publish over SSH), plugins (plugin.apply couples a plugin to an automation), system (http.request, custom.script — the escape hatches into everything else BMM exposes; there is no generic deeplink step, it was removed, and a saved task holding one skips it).",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+
+            Tool::new(
+        "bmm_generate_repo",
+        "Generate a repository from a list of mods.",
+        std::sync::Arc::new(serde_json::from_value(json!({
+            "type": "object",
+            "properties": {
+                "name": { "type": "string", "description": "Name written into repo.json and shown to whoever connects to it." },
+                "zip_mods": { "type": "boolean", "description": "Pack each mod into one mods/<id>.zip instead of copying its files — smaller downloads, unpacked by the receiver. Default false." },
+                "compression": { "type": "string", "enum": crate::commands::zipping::ZipMethod::NAMES, "description": "How those zips are compressed. deflate (default) is read by every unzipper; zstd is much faster and about as small; bzip2 smaller and slower; stored is no compression. Only meaningful with zip_mods." },
+                "mod_ids": { "type": "array", "items": { "type": "string" }, "description": "The mods to publish, by id (from bmm_list_mods). Empty or absent publishes the active profile's mods." }
+            },
+            "required": ["name", "mod_ids"]
+        })).unwrap()),
+    ),
+    // What a plugin ships besides its code.
+    Tool::new(
+        "bmm_plugin_assets",
+        "List the files a plugin ships in its `assets/` folder — a README, config templates, sample lists, tools, sometimes a script. Each is { path, kind, size, readable } where kind is doc/script/image/data/archive/other. Reads the FOLDER, not the manifest, so a file the manifest never mentioned still appears. Works with BMM closed.",
+        std::sync::Arc::new(serde_json::from_value(json!({
+            "type": "object",
+            "properties": { "plugin_id": { "type": "string", "description": "The plugin's id, as returned by bmm_list_plugins. Lists the files it ships." } },
+            "required": ["plugin_id"]
+        })).unwrap()),
+    ),
+    Tool::new(
+        "bmm_read_plugin_asset",
+        "Read one of a plugin's shipped files as text — use bmm_plugin_assets first for the paths. Only text kinds (doc, data, script) can be read; an image or an archive is refused by kind rather than returned as noise. Nothing is executed: reading a shipped script shows you what it would do. Works with BMM closed.",
+        std::sync::Arc::new(serde_json::from_value(json!({
+            "type": "object",
+            "properties": {
+                "plugin_id": { "type": "string", "description": "The plugin's id, as returned by bmm_list_plugins." },
+                "path": { "type": "string", "description": "Relative to assets/, e.g. \"README.md\" or \"docs/codes.csv\"." }
+            },
+            "required": ["plugin_id", "path"]
+        })).unwrap()),
+    ),
+    // Arming a task, and the doorbell one can wait on.
+    //
+    // Listing them is `bmm_list_schedules`, which already existed and reads data.json
+    // directly — so it answers with BMM closed, which is the better behaviour for "did my
+    // nightly task even exist". A second one here would have been a worse copy.
+    Tool::new(
+        "bmm_set_schedule_enabled",
+        "Arm or disarm one saved task by id. Only `enabled` can be changed — nothing here can write a task's steps, because installing an automation with a script step in it is a decision that belongs to somebody reading it on screen.",
+        std::sync::Arc::new(serde_json::from_value(json!({
+            "type": "object",
+            "properties": {
+                "id": { "type": "string", "description": "The scheduled task's id, as returned by bmm_list_schedules." },
+                "enabled": { "type": "boolean", "description": "true turns it on, false turns it off. There is no toggle: send the state you want." }
+            },
+            "required": ["id", "enabled"]
+        })).unwrap()),
+    ),
+    Tool::new(
+        "bmm_signal",
+        "Ring a named doorbell a scheduled task may be waiting on (`wait.hook`). Use it to tell BMM that something you were doing has finished. `data` is free-form and reaches the waiting task as text.",
+        std::sync::Arc::new(serde_json::from_value(json!({
+            "type": "object",
+            "properties": {
+                "name": { "type": "string", "description": "The signal name the task waits on, e.g. \"build-done\"." },
+                "data": { "description": "Anything the task should receive." }
+            },
+            "required": ["name"]
+        })).unwrap()),
+    ),
+    Tool::new(
+        "bmm_signals_seen",
+        "Read what a doorbell was rung with. Give a `name` for the rings themselves — what was sent and when, the same view a waiting task gets — or omit it for every name with a count. Use it after `bmm_signal` to confirm the ring landed under the name a task is actually waiting on: BMM narrows a name to something that can be a key, so \"build/done\" is filed as \"build_done\" and a task waiting on the first waits forever. Reading does not consume a ring.",
+        std::sync::Arc::new(serde_json::from_value(json!({
+            "type": "object",
+            "properties": {
+                "name": { "type": "string", "description": "One doorbell. Omit to list every name with how many times it rang." },
+                "since": { "type": "integer", "description": "Unix milliseconds. Only rings at or after this. Omit for every ring still held." }
+            }
+        })).unwrap()),
+    ),
+    // Catalogues.
+    Tool::new(
+        "bmm_list_catalogs",
+        "List the catalogues this BMM follows, grouped by type (plugin, theme, preset, modpack, repo, tutorial, list). Returns `{ sources: { <type>: [url, …] }, written_at }`. `written_at` is when the app last pushed this — the lists live in the interface's own storage, so an ABSENT written_at means the app has not run since this mirror existed, which is different from following nothing.",
+        std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+    ),
+    Tool::new(
+        "bmm_follow_catalog",
+        "Follow a catalogue, or stop following one. Goes through the app's own screens, so the source appears in the following list with an origin and can be removed there like any other. Requires the app to be running.",
+        std::sync::Arc::new(serde_json::from_value(json!({
+            "type": "object",
+            "properties": {
+                "type": { "type": "string", "enum": ["app", "plugin", "theme", "preset", "modpack", "repo", "tutorial", "list"], "description": "Which catalogue this address is. NOT an index: an index lists catalogues of several kinds and is read by bmm_import_catalog, which decides the kind itself." },
+                "url": { "type": "string", "description": "The catalogue's address (http/https)." },
+                "follow": { "type": "boolean", "description": "false to stop following it. Default true." }
+            },
+            "required": ["type", "url"]
+        })).unwrap()),
+    ),
+    // Everything a repo carries that is NOT a mod.
+    Tool::new(
+        "bmm_repo_extras",
+        "List what a repo carries besides mods: plugins, scheduled automations, themes, mod lists, catalogue bundles, catalogues to follow and app sources. Each entry is { kind, id, name, description?, author?, version?, locked?, url? }. `locked: true` on a mod list means its contents are encrypted and opening it needs a passphrase. Reads the manifest only — nothing is downloaded or installed. Use bmm_repo_extra_take to act on one.",
+        std::sync::Arc::new(serde_json::from_value(json!({
+            "type": "object",
+            "properties": {
+                "url": { "type": "string", "description": "The repo URL, with or without /repo.json." },
+                "password": { "type": "string", "description": "Download password, if the repo has one." }
+            },
+            "required": ["url"]
+        })).unwrap()),
+    ),
+    Tool::new(
+        "bmm_repo_extra_take",
+        "Install ONE thing a repo carries besides mods, named by its kind and id from bmm_repo_extras. A plugin or an automation arrives DISABLED and a plugin arrives with no permissions — taking one is not a decision to run it. A catalogue or an app source is followed rather than downloaded. A mod list or a bundle is saved to disk and its path returned, because opening one asks questions (a passphrase, which credentials to accept) that belong to a person.",
+        std::sync::Arc::new(serde_json::from_value(json!({
+            "type": "object",
+            "properties": {
+                "url": { "type": "string", "description": "The repo's repo.json URL, or the folder that holds it." },
+                "kind": { "type": "string", "enum": ["plugin", "task", "theme", "modlist", "bundle", "catalog", "app"], "description": "What to take out of the repo. It must be listed under `extras` in that repo's manifest; read it first with bmm_repo_info." },
+                "id": { "type": "string", "description": "The entry's id, as listed in that repo's manifest under extras." },
+                "password": { "type": "string", "description": "The repo's download password, if it has one. Used for this call and never stored." }
+            },
+            "required": ["url", "kind", "id"]
+        })).unwrap()),
+    ),
+    // Repo manifest format: detect, plan, convert.
+    Tool::new(
+        "bmm_repo_convert",
+        "Convert a repo FOLDER's repo.json (on this machine) to the current manifest format, 1.0. Detects the format first: 'format 1.0' (current, nothing to do), 'legacy 0.1'…'legacy 0.4' (written by an older BMM, before manifests declared a format). Converting fills the keys older BMMs left out, re-hashes every listed file from the folder, stamps format_version, keeps the old manifest as repo.json.v<old>-<stamp>.bak and re-signs with this BMM's key — so a repo that was signed by someone else changes author id. Call with dry_run: true FIRST and show the person the plan (works with BMM closed); the real conversion needs the running app. Returns { from, changes[], counts, warnings, written, backupPath, signature }.",
+        std::sync::Arc::new(serde_json::from_value(json!({
+            "type": "object",
+            "properties": {
+                "path": { "type": "string", "description": "The repo folder, or its repo.json." },
+                "dry_run": { "type": "boolean", "description": "Plan only: report the detected format and every change, write nothing. Default false." },
+                "rehash": { "type": "boolean", "description": "Re-hash the files from the folder. Default true." },
+                "sign": { "type": "boolean", "description": "Sign with this BMM's key. Default true; false writes an unsigned manifest." }
+            },
+            "required": ["path"]
+        })).unwrap()),
+    ),
+    Tool::new(
+        "bmm_repo_validate",
+        "Check a repo FOLDER on this machine without changing it: manifest format, whether BMM can read it, the signature (valid / invalid / unsigned / legacy), duplicate mod ids, empty profiles, and every listed file against its size and sha256 (hashed in parallel; unchanged files answered from a cache unless deep is true). Needs the running app. Returns { ok, report: { format, readable, signature, profiles, mods, files, filesMissing, hashesChanged, hashesFilled, problems[], elapsedMs } }. When it reports stale hashes, an old format or a bad signature, bmm_repo_convert (dry_run first) is the fix.",
+        std::sync::Arc::new(serde_json::from_value(json!({
+            "type": "object",
+            "properties": {
+                "path": { "type": "string", "description": "The repo folder, or its repo.json." },
+                "deep": { "type": "boolean", "description": "Re-read every file even when its size and date say it has not changed. Default false." }
+            },
+            "required": ["path"]
+        })).unwrap()),
+    ),
+    Tool::new(
+        "bmm_repo_follow",
+        "Followed repos: BMM checks them on a schedule and says when one of the user's installed mods has an update there. op 'list' returns each followed repo with its switch, interval (minutes), action and last check. op 'set' follows a repo or changes how (enabled, interval_min >= 15, action: notify (default) | download | apply). op 'remove' stops following it. op 'check' checks one now and returns the updates found and the install plan; it never installs anything (the app does that per the repo's action, never while a game runs). Needs the running app.",
+        std::sync::Arc::new(serde_json::from_value(json!({
+            "type": "object",
+            "properties": {
+                "op": { "type": "string", "enum": ["list", "set", "remove", "check"], "description": "What to do. Default list." },
+                "url": { "type": "string", "description": "The repo's address (required except for list)." },
+                "enabled": { "type": "boolean", "description": "set: check it on its schedule (true) or pause it (false)." },
+                "interval_min": { "type": "integer", "description": "set: minutes between two checks (15 to 43200)." },
+                "action": { "type": "string", "enum": ["notify", "download", "apply"], "description": "set: what BMM does when a mod has an update." },
+                "force": { "type": "boolean", "description": "check: ignore the stored ETag and read the manifest in full." }
+            }
+        })).unwrap()),
+    ),
+    // Identity keys.
+    Tool::new(
+        "bmm_list_keys",
+        "List the identity keys BMM can prove with: each is { name, path }, plus which one is active. NAMES AND PATHS ONLY — no key material is ever returned, and there is no tool that reads a private key.",
+        std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+    ),
+    Tool::new(
+        "bmm_create_key",
+        "Make an identity keypair and add it to the ring. Returns the PUBLIC line — the one you give to whoever runs a protected source — and the path the private half was written to. The private half never leaves the machine and is never returned. Pick ed25519 unless a server says otherwise: every source in this protocol accepts it. A name already on the ring is refused rather than overwritten.",
+        std::sync::Arc::new(serde_json::from_value(json!({
+            "type": "object",
+            "properties": {
+                "name": { "type": "string", "description": "What to call it on the ring, e.g. \"work\"." },
+                "kind": { "type": "string", "enum": ["ed25519", "ecdsa", "rsa"], "description": "ed25519 by default. ECDSA (nistp256) and RSA 4096 are for a host that predates ed25519 support; RSA takes a few seconds to generate." }
+            },
+            "required": ["name"]
+        })).unwrap()),
+    ),
+    Tool::new(
+        "bmm_start_repo_server",
+        "Serve an exported repo folder over HTTP so others can sync from it. The folder must already hold a repo.json - use bmm_generate_repo first.",
+        std::sync::Arc::new(serde_json::from_value(json!({
+            "type": "object",
+            "properties": {
+                "path": { "type": "string", "description": "The exported repo folder to serve - the one that holds repo.json." },
+                "port": { "type": "integer", "description": "TCP port to listen on. Omit for 8080." }
+            },
+            "required": ["path", "port"]
+        })).unwrap()),
+    ),
+
+    // Documentation & Languages
+            Tool::new(
+                "bmm_get_documentation_list",
+                "List internal .md documentation.",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_read_documentation",
+                "Read an internal documentation file.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "file_name": { "type": "string", "description": "A file name from bmm_list_documentation, e.g. 'features/scheduler.md'. A path that climbs out of the docs folder is refused." } },
+                    "required": ["file_name"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_get_language_list",
+                "List the UI language codes BMM ships, for bmm_read_language_file. These are interface translations, not mod languages.",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_read_language_file",
+                "Read a language file (UI text/FAQs).",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "lang_code": { "type": "string", "description": "A code from bmm_get_language_list, e.g. 'en' or 'fr'." } },
+                    "required": ["lang_code"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_generate_lightweight_server",
+                "Generate a standalone lightweight server script (.bat) for a given repo.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "repo_path": { "type": "string", "description": "The exported repo folder the generated server will serve." },
+                        "port": { "type": "integer", "description": "TCP port the generated server listens on. Omit for 8080." },
+                        "auto_start": { "type": "boolean", "description": "Start the server when BMM starts." },
+                        "use_cloudflare": { "type": "boolean", "description": "Generate the Cloudflare Tunnel start-up as well." },
+                        "use_upnp": { "type": "boolean", "description": "Ask the router to open the port automatically." },
+                        "upload_limit": { "type": "integer", "description": "Outbound cap in KB/s. 0 or absent means unlimited." },
+                        "server_version": { "type": "integer", "description": "1 or 2. Version 2 is the current generator." },
+                        "admin_password": { "type": "string", "description": "Password for the generated server's admin page. Omit for none." },
+                        "enable_docker": { "type": "boolean", "description": "Write a Dockerfile beside the scripts." },
+                        "docker_host_type": { "type": "string", "description": "'linux' or 'windows' - which host the Dockerfile targets." },
+                        "server_type": { "type": "string", "description": "'std' (standard) or 'lux' (premium)." }
+                    },
+                    "required": ["repo_path", "port", "auto_start", "use_cloudflare", "use_upnp", "upload_limit", "server_version", "admin_password"]
+                })).unwrap()),
+            ),
+
+            // Diagnostics
+            Tool::new(
+                "bmm_get_statistics",
+                "Counts and sizes across every profile: mods, enabled mods, disk used, and when each was last synced.",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_list_crash_reports",
+                "List the crash reports BMM has collected, newest first. Each entry carries the report_path the other crash tools take.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "limit": { "type": "integer", "description": "How many reports to return, newest first. Omit for all of them." } }
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_analyze_crash_report",
+                "Read one crash report and summarise what most likely caused it, including which mods were loaded at the time.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "report_path": { "type": "string", "description": "A path from bmm_list_crash_reports. Reads the report and summarises the likely cause." } },
+                    "required": ["report_path"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_read_crash_report",
+                "Read raw content of a crash report.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "report_path": { "type": "string", "description": "A path from bmm_list_crash_reports. Returns the raw text." } },
+                    "required": ["report_path"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_generate_diagnostic_report",
+                "Build a diagnostic report (system, BMM version, active profile, mod counts) to paste into a bug report. Returns JSON; sends nothing.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "title": { "type": "string", "description": "One line naming the problem, as a person would report it." },
+                        "description": { "type": "string", "description": "What happened, what was expected, and how to reproduce it." }
+                    },
+                    "required": ["title", "description"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_export_config",
+                "Write a copy of BMM data.json to a path you choose. It holds profiles, mods and settings - treat it as sensitive.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "target_path": { "type": "string", "description": "Where to write data.json. An existing file at that path is overwritten." } },
+                    "required": ["target_path"]
+                })).unwrap()),
+            ),
+            // Launch Packs
+            Tool::new(
+                "bmm_list_launch_packs",
+                "List all configured Launch Packs.",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_create_launch_pack",
+                "Create a new Launch Pack (group of apps to launch).",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "name": { "type": "string", "description": "Name of the pack" },
+                        "executable_paths": { "type": "array", "items": { "type": "string" }, "description": "List of full paths to executables" },
+                        "icon_source_path": { "type": "string", "description": "Optional path to an image for the icon" }
+                    },
+                    "required": ["name", "executable_paths"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_run_launch_pack",
+                "Launch all apps in a Launch Pack.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "id": { "type": "string", "description": "ID or Name of the pack" } },
+                    "required": ["id"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_delete_launch_pack",
+                "Delete a Launch Pack by id. The pack is removed; the games and mods it pointed at are untouched.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "id": { "type": "string", "description": "ID or Name of the pack" } },
+                    "required": ["id"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_open_launch_pack_folder",
+                "Open the folder containing the Launch Pack files.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "id": { "type": "string", "description": "ID or Name of the pack" } },
+                    "required": ["id"]
+                })).unwrap()),
+            ),
+            // ── Plugins & API ──────────────────────────────────────────
+            Tool::new(
+                "bmm_list_plugins",
+                "List installed BMM plugins (id, name, version, permissions, target game).",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_get_api_info",
+                "Get the local Plugin API connection info (base URL, port, and token). Set reveal=true to return the full token instead of a masked preview.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "reveal": { "type": "boolean", "description": "Return the full API token (default false → masked)" } }
+                })).unwrap()),
+            ),
+            // ── App Catalog ────────────────────────────────────────────
+            Tool::new(
+                "bmm_list_apps",
+                "List the App Catalog state: installed companion apps, favourites, and community catalog sources.",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+
+            // ── Modpacks ───────────────────────────────────────────────
+            Tool::new(
+                "bmm_list_modpacks",
+                "List the user's modpacks (name, mods, share settings).",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_create_modpack",
+                "Create a modpack from a list of mod ids.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "name": { "type": "string", "description": "Name of the modpack, shown in BMM." },
+                        "mod_ids": { "type": "array", "items": { "type": "string" }, "description": "The mods the modpack contains, by id (from bmm_list_mods)." }
+                    },
+                    "required": ["name", "mod_ids"]
+                })).unwrap()),
+            ),
+
+            // ── Mods (extra) ───────────────────────────────────────────
+            Tool::new(
+                "bmm_delete_mod",
+                "Delete a mod from BMM. Set delete_files=true to also remove its folder from disk (irreversible).",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "mod_id": { "type": "string", "description": "The mod's id, as returned by bmm_list_mods. This deletes its files." },
+                        "delete_files": { "type": "boolean", "description": "Also delete the mod folder on disk (default false)" }
+                    },
+                    "required": ["mod_id"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_verify_mod_integrity",
+                "Verify a mod's on-disk files against its stored SHA-256 hashes. Returns per-file ok/corrupted.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "mod_id": { "type": "string", "description": "The mod's id, as returned by bmm_list_mods. Re-hashes its files and reports what changed." } },
+                    "required": ["mod_id"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_list_tags",
+                "List the user's custom mod tags.",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+
+            // ── Server-Repos & Themes ──────────────────────────────────
+            Tool::new(
+                "bmm_list_connected_repos",
+                "List the Server-Repos this BMM is connected to (name, url, sync state).",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_list_themes",
+                "List installed UI themes and which one is active.",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_get_plugin",
+                "Get one installed plugin's full record (manifest, permissions, state) by id.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "plugin_id": { "type": "string", "description": "The plugin's id, as returned by bmm_list_plugins." } },
+                    "required": ["plugin_id"]
+                })).unwrap()),
+            ),
+
+            // ── Session recorder / Privacy & telemetry (live app) ──────
+            Tool::new(
+                "bmm_recorder_set",
+                "Configure the local Session recorder in the running BMM app. All fields optional: on (master switch), full (full-session capture), rust (Rust-side traces), js (frontend traces).",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "on": { "type": "boolean", "description": "Turn the session recorder on or off." }, "full": { "type": "boolean", "description": "true records everything, false masks text in the recording." },
+                        "rust": { "type": "boolean", "description": "Also record the backend's log lines." }, "js": { "type": "boolean", "description": "Also record the frontend's console." }
+                    }
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_telemetry_consent",
+                "Enable/disable the anonymous-usage telemetry consent in the running BMM app (GDPR opt-in).",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "enabled": { "type": "boolean", "description": "true opts in to telemetry, false opts out. This is the consent itself, not a setting behind it." } },
+                    "required": ["enabled"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_telemetry_settings",
+                "Set Privacy & telemetry sub-options in the running BMM app. Omitted fields stay unchanged: replay (session replays), full (full capture), bench (benchmark sharing).",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "replay": { "type": "boolean", "description": "Include session replays." }, "full": { "type": "boolean", "description": "Send full payloads rather than counts only." }, "bench": { "type": "boolean", "description": "Include benchmark results." }
+                    }
+                })).unwrap()),
+            ),
+
+            // ── Scheduling & automation ────────────────────────────────
+            Tool::new(
+                "bmm_list_schedules",
+                "List the saved Scheduling & automation tasks (works offline).",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_run_schedule",
+                "Trigger a saved scheduler task by id in the running BMM app.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "id": { "type": "string", "description": "The scheduled task's id, as returned by bmm_list_schedules. Runs it once, now, whether or not it is armed." } },
+                    "required": ["id"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_schedule_runs",
+                "Read a task's run log, newest first: the last 50 runs, each with its steps (label, duration, status, captured output with secrets removed, and the error when one failed). Use it to answer \"why did my nightly task fail\" — bmm_list_schedules only says THAT it failed. Works with BMM closed.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "id": { "type": "string", "description": "The scheduled task's id, as returned by bmm_list_schedules." } },
+                    "required": ["id"]
+                })).unwrap()),
+            ),
+
+            // ── Resources (the governor) ───────────────────────────────
+            Tool::new(
+                "bmm_resources_status",
+                "Read the resource governor in the running app: the stored preset, the one in force right now (game mode or a task may differ), the task-scoped preset and its time left, whether game mode is active (and its manual setting), and the queue of heavy operations. Requires the app to be running.",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_resources_set_preset",
+                "Pick a NAMED resource preset in the running app: silent (quiet while playing), balanced (the default, today's behaviour), max (everything for BMM) or custom (the rules alone). A preset never overrides game mode. Fine-grained per-disk rules are not set here: they are the user's, in Settings. Requires the app to be running; the user sees a notification.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "name": { "type": "string", "enum": ["silent", "balanced", "max", "custom"], "description": "The preset." },
+                        "scope": { "type": "string", "enum": ["persistent", "task"], "description": "`persistent` (default) is stored and survives a restart; `task` ends by itself after ttl_secs." },
+                        "ttl_secs": { "type": "integer", "description": "For scope=task: how long it lasts, capped at 7200 (2 h). Default 7200." }
+                    },
+                    "required": ["name"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_hardware_info",
+                "What hardware BMM runs on: CPU cores and instruction sets (AVX2, AVX-512, SHA-NI…), GPUs (listed only — BMM runs no compute on them), and each disk's bus (nvme, sata, usb…) and whether it is a spinning disk. The first call can take up to 3 seconds while the GPU driver answers. Works with BMM closed.",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+
+            // ── Benchmark ──────────────────────────────────────────────
+            Tool::new(
+                "bmm_run_benchmark",
+                "Launch a BMM benchmark in the running app. dataset: 'sandbox' (generated) or 'real' (my mods). size: S|M|L|XL|CUSTOM (mb required for CUSTOM). sources: custom mod-folder paths (dataset=real). profiles: profile ids/names whose mods folders are added. mode: 'manual' (opens pre-filled UI) or 'auto' (runs now, returns results).",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "dataset": { "type": "string", "enum": ["sandbox", "real"], "description": "`sandbox` generates throwaway files; `real` measures against the mods actually installed. Use sandbox unless the question is about this machine's own library." },
+                        "size": { "type": "string", "enum": ["S", "M", "L", "XL", "CUSTOM"], "description": "How much data to move. XL takes minutes and writes several GB; CUSTOM reads `mb`." },
+                        "mb": { "type": "integer", "description": "Dataset size in MB when size=CUSTOM" },
+                        "sources": { "type": "array", "items": { "type": "string" }, "description": "Custom mod folder paths (dataset=real)" },
+                        "profiles": { "type": "array", "items": { "type": "string" }, "description": "Profile ids/names to benchmark (dataset=real)" },
+                        "mode": { "type": "string", "enum": ["manual", "auto"], "description": "`auto` picks the dataset size from what this machine can take; `manual` uses the `size` given here." }
+                    }
+                })).unwrap()),
+            ),
+
+            // ── Sessions (recorder output) ─────────────────────────────
+            Tool::new(
+                "bmm_list_sessions",
+                "List recorded session reports (the Session recorder's output zips).",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+
+            // ── Translation sandbox ────────────────────────────────────
+            Tool::new(
+                "bmm_get_language_template",
+                "Download the translation template JSON from the running BMM app (translate it, then import with bmm_import_language).",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_import_language",
+                "Import a translated language .json file into the running BMM app.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "path": { "type": "string", "description": "Path to the translated .json file" } },
+                    "required": ["path"]
+                })).unwrap()),
+            ),
+
+            // ── Themes & appearance ────────────────────────────────────
+            Tool::new(
+                "bmm_apply_theme",
+                "Set the active BMM theme by id (e.g. bmm-indigo, bmm-void, or an installed custom theme). Applies when BMM reloads themes.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "theme_id": { "type": "string", "description": "The theme's id, as returned by bmm_list_themes." } },
+                    "required": ["theme_id"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_get_theme",
+                "Read an INSTALLED custom theme's full definition (vars, element overrides).",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": { "theme_id": { "type": "string", "description": "The theme's id, as returned by bmm_list_themes." } },
+                    "required": ["theme_id"]
+                })).unwrap()),
+            ),
+
+            // ── Optional AI (Laya) ─────────────────────────────────────
+            Tool::new(
+                "bmm_ai_status",
+                "Optional AI features (Laya / an external API): whether the master switch is on, which provider is chosen, which features may reach the network and why not, and where API keys are stored (never the keys). Off by default. Works with BMM closed.",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_ai_suggest_mod_metadata",
+                "Propose metadata for ONE installed mod: name, version, author, description, tags and links read from its own files (mod.json / modinfo / descriptor.mod / About.xml / ModInfo.xml / entry.lua / VERSION.txt / README / folder name), then — only if the user turned AI on in BMM and chose a provider — tags ranked from the user's EXISTING tag vocabulary by the Laya classifier, a language and an adult-content hint, and optionally a description draft from the user's external API. Each suggestion carries field, value, source (file|folder|laya|bettercommunity|api), origin, confidence and applicable (false = a hint that cannot be written). NEVER writes anything: show the list to the user and apply only what they pick with bmm_ai_apply_mod_metadata. Laya is a classifier; it never writes text.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "mod_id": { "type": "string", "description": "The mod's id, as returned by bmm_list_mods. Not its folder name or title." },
+                        "use_providers": { "type": "boolean", "description": "Default true: call the provider the user configured (only when AI is on). false = files only, no network, whatever the settings." },
+                        "draft": { "type": "boolean", "description": "Default false: also ask the user's generator (« Rédaction »: a local OpenAI-compatible server such as Ollama / LM Studio, or their remote API) for a description draft, only when configured and enabled. The draft is checked (no link, file or command absent from the mod's files, tags from the user's vocabulary only) and judged by Laya before it is returned, with note \"draft\"." }
+                    },
+                    "required": ["mod_id"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_ai_apply_mod_metadata",
+                "Write the fields the USER chose from bmm_ai_suggest_mod_metadata to one mod. Writes to data.json like bmm_set_mod_enabled; only the fields listed are touched. `fields` may hold name, version, author, description (strings, same limits as the mod editor: 100/30/50/2000 chars), tags (existing tag ids only, added up to 3 per mod) and links ([{url, label?}], http(s) only, appended). Any other key (language, nsfw…) is refused. Do not call this without the user's choice.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "mod_id": { "type": "string", "description": "The mod's id, as returned by bmm_list_mods. Not its folder name or title." },
+                        "fields": { "type": "object", "description": "Only the fields to write, e.g. { \"description\": \"…\", \"tags\": [\"<tag id>\"] }. Tag ids come from bmm_list_tags or the suggestion's value." }
+                    },
+                    "required": ["mod_id", "fields"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_ai_ask",
+                "« Ask Laya », offline: answer a question about BMM or the user's own mods from what exists — BMM's documentation (bundled pages, help articles), its commands, and the user's mods, profiles and their scanned file lists. Returns structured results, never generated text: `intent` (docs | setting | files | conflicts | mods | command), `hits` (kind doc|article|command|setting|mod|profile, id, title, snippet quoted from the source, score 0..1, action), `files` (for « which mod modifies X? »: mod_id, mod_name, enabled, matching files), `conflicts` (pairs of mods that provide the same files, both_enabled first, sample files). Retrieval (BM25 + exact file matching) always runs; the embedded Laya model also routes the intent and ranks the top candidates only when the user turned AI on in BMM and the model pack is installed (`laya` says whether it did, `laya_off` why not). Nothing leaves the machine. Works with BMM closed.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "question": { "type": "string", "description": "The user's question, in any language, e.g. \"which mod modifies engine.ogg?\", \"quels mods sont en conflit ?\", \"what is game mode?\" (max 300 characters)." },
+                        "lang": { "type": "string", "enum": ["en", "fr"], "description": "Language to show bilingual results in (both are searched). Default en." },
+                        "scope": { "type": "string", "enum": ["all", "docs", "mods"], "description": "all (default), docs = documentation only, mods = the user's mods and profiles only." },
+                        "limit": { "type": "integer", "description": "Results to return, 1-30. Default 8." },
+                        "use_laya": { "type": "boolean", "description": "Default true: let the embedded model rank when the user's settings allow it. false = retrieval only." },
+                        "write": { "type": "boolean", "description": "Default false. true = also return `written`: an answer worded by the user's generator from the numbered retrieved sources only, with [n] citations (`cites`), when the user enabled « Rédaction » and « Réponse rédigée ». Refused (`written_off` says why) when Laya abstains, when nothing cites a real source, or when the text names a link, file or command the sources do not contain. With a remote generator the question and the sources leave the PC." }
+                    },
+                    "required": ["question"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_ai_analyze_library",
+                "« Analyser la bibliothèque »: metadata suggestions for many mods at once (all installed mods, or the ids given), with the same pipeline as bmm_ai_suggest_mod_metadata (files first; Laya when the user turned AI on) but never a generated draft. Returns only the mods that have something to suggest. NEVER writes: show the list and apply what the user picks, mod by mod, with bmm_ai_apply_mod_metadata.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "mod_ids": { "type": "array", "items": { "type": "string" }, "description": "Mod ids (or exact names). Empty or absent = every mod." },
+                        "use_providers": { "type": "boolean", "description": "Default false here: files only, offline. true = also Laya, when the user's settings allow it." },
+                        "limit": { "type": "integer", "description": "At most this many mods, 1-2000. Default 200." }
+                    }
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_ai_classify",
+                "Classify one text among labels YOU give, or with one of the user's saved custom tasks (`task`: its labels, wording and settings), with Laya (the embedded model, or the user's own laya-serve; never a remote server). Returns the labels best first with a probability (\"none\" when Laya finds that none fits), and the decision under the user's answer settings (Settings, AI, Laya answers: threshold, margin, temperature): `label` (\"none\" when Laya abstained), `p`, `abstained`, `uncertain`, `reason`. Laya only picks; it never writes text. Needs the user's AI master switch; refused under --no-ai. Works with BMM closed.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "text": { "type": "string", "description": "The text to classify (the first 4000 characters are read). Treated as data, never as instructions." },
+                        "labels": { "type": "array", "maxItems": 32, "items": { "type": "object", "properties": { "id": { "type": "string" }, "meaning": { "type": "string" } }, "required": ["id"] }, "description": "The choices (2 to 32, unless `task` is given), e.g. [{\"id\":\"bug\",\"meaning\":\"a bug report\"},{\"id\":\"idea\",\"meaning\":\"a feature idea\"}]." },
+                        "task": { "type": "string", "description": "The id of a saved custom task (see bmm_ai_laya_config, action get). Its labels are used instead of `labels`." }
+                    },
+                    "required": ["text"]
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_ai_laya_config",
+                "Laya's answer settings (Settings, AI, Laya answers): presets (prudent, balanced, permissive, custom), threshold, top-k, margin, temperature, abstain, multi-label, per feature; the user's label descriptions and examples; their saved custom tasks. action get = the config as a versioned export plus the task list; set = store a config or an export (strictly validated, unknown fields refused); reset = the defaults. set and reset are REFUSED unless the user ticked \"Programs may change these settings\" in BMM; a program can never tick it. Ask the user before set or reset.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "action": { "type": "string", "enum": ["get", "set", "reset"], "description": "get (default), set or reset" },
+                        "config": { "type": "object", "description": "For set: the config, or the export object returned by get (its `export` field)." }
+                    }
+                })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_ai_pack_install",
+                "Download, verify and install the embedded Laya model pack (« Laya intégré », about 327 MB download, 404 MB on disk) into the user's local app data — the same pinned file (SHA-256 checked, mirrors tried in order) as Settings → Install. Checks free disk space first; resumes a partial download. Refused under --no-ai / BMM_NO_AI. The only network request is to the pinned pack URLs and carries nothing about the user. Ask the user before calling: it is a large download.",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_ai_pack_remove",
+                "Remove the embedded Laya model pack downloaded from Settings (or bmm_ai_pack_install). The copy installed by the BMM installer is left to the uninstaller. If the embedded model was the classifier, the classifier goes back to off. Ask the user before calling.",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_ai_api_status",
+                "Status of the local Laya API (off by default): enabled, port, whether a token exists (never the token), whether AI is on, and whether it answers on 127.0.0.1 right now. The API lets programs on this PC classify text with the embedded Laya (POST /v1/systemone, laya-serve compatible).",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_ai_api_start",
+                "Turn the local Laya API on (127.0.0.1 only). The running BMM app starts it within seconds, and only while AI is on in BMM. No token is ever returned here: if none exists yet, tell the user to make one in Settings (Local Laya API, New token) or with `bmm ai-api rotate`. Ask the user before calling.",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": { "port": { "type": "integer", "description": "1024 to 65535 (default 51275)" } } })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_ai_api_stop",
+                "Turn the local Laya API off. The running BMM app stops it within seconds.",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+            Tool::new(
+                "bmm_ai_test",
+                "Test the installed embedded Laya model: classify a fixed sample (a French livery readme: which of four tags, which language) and report the answers, whether they are the expected ones (`ok`) and the timings (load, answer). None of the user's data is used; no network.",
+                std::sync::Arc::new(serde_json::from_value(json!({ "type": "object", "properties": {} })).unwrap()),
+            ),
+
+            // ── Live app bridge ────────────────────────────────────────
+            Tool::new(
+                "bmm_api_call",
+                "Call the RUNNING BMM app's local API (requires the BMM app to be open). Covers every live feature: GET /api/status, /api/repo/list, GET /api/repo/info?url=&password= (password optional, for a password-protected repo), POST /api/repo/sync {url, …, password?}, /api/repo/connect {url}, /api/modpacks/enable {id}, /api/mods/enable {mod_id}, /api/mod/check-updates, /api/apps/launch {id}, /api/schedule/run, … For a password-protected self-hosted repo, pass \"password\" in the sync body or as the info query param. Only GET/POST to 127.0.0.1/api/* is possible.",
+                std::sync::Arc::new(serde_json::from_value(json!({
+                    "type": "object",
+                    "properties": {
+                        "method": { "type": "string", "enum": ["GET", "POST"], "description": "GET reads, POST acts. Only these two: the bridge does not carry PUT or DELETE." },
+                        "path": { "type": "string", "description": "API path starting with /api/ (query string allowed)" },
+                        "body": { "type": "object", "description": "JSON body for POST requests" }
+                    },
+                    "required": ["method", "path"]
+                })).unwrap()),
+            ),
+        ];
+
+        std::future::ready(Ok(ListToolsResult {
+            tools,
+            next_cursor: None,
+            meta: None,
+        }))
+    }
+
+    fn call_tool(
+        &self,
+        request: CallToolRequestParams,
+        _context: RequestContext<RoleServer>,
+    ) -> impl std::future::Future<Output = Result<CallToolResult, rmcp::ErrorData>> + Send + '_ {
+        let name = request.name.clone();
+        let args = request.arguments.unwrap_or_default();
+
+        async move {
+            match name.as_ref() {
+                // Profiles
+                "bmm_list_profiles" => self.tool_list_profiles(),
+                "bmm_get_active_profile" => self.tool_get_active_profile(),
+                "bmm_get_profile" => {
+                    let id = args.get("profile_id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing profile_id", None))?;
+                    self.tool_get_profile(id)
+                }
+                "bmm_set_active_profile" => {
+                    let id = args.get("profile_id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing profile_id", None))?;
+                    self.tool_set_active_profile(id)
+                }
+
+        // Mods
+        "bmm_list_mods" => {
+            let pid = args.get("profile_id").and_then(|v| v.as_str());
+            let filter = args.get("filter").and_then(|v| v.as_str());
+            self.tool_list_mods(pid, filter)
+        }
+        "bmm_get_mod" => {
+            let id = args.get("mod_id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing mod_id", None))?;
+            self.tool_get_mod(id)
+        }
+        "bmm_search_mods" => {
+            let q = args.get("query").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing query", None))?;
+            self.tool_search_mods(q)
+        }
+        "bmm_search" => {
+            let q = args.get("query").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing query", None))?;
+            let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(20) as usize;
+            self.tool_search(q, limit)
+        }
+        "bmm_set_mod_enabled" => {
+            let id = args.get("mod_id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing mod_id", None))?;
+            let enabled = args.get("enabled").and_then(|v| v.as_bool()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing enabled", None))?;
+            self.tool_set_mod_enabled(id, enabled)
+        }
+        "bmm_sync" => self.tool_sync_active_profile(),
+        "bmm_get_mod_order" => self.tool_api_call("GET", "/api/mods/order", None).await,
+        "bmm_set_mod_order" => {
+            let order = args.get("order").and_then(|v| v.as_array()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing order", None))?;
+            let order: Vec<String> = order.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+            let mut body = json!({ "order": order });
+            if let Some(p) = args.get("profile_id").and_then(|v| v.as_str()) { body["profileId"] = p.into(); }
+            if let Some(r) = args.get("reapply").and_then(|v| v.as_bool()) { body["reapply"] = r.into(); }
+            self.tool_api_call("POST", "/api/mods/order", Some(body)).await
+        }
+        "bmm_export_mod_order" => {
+            let path = match args.get("profile_id").and_then(|v| v.as_str()) {
+                Some(p) => format!(
+                    "/api/mods/order/export?profileId={}",
+                    percent_encoding::utf8_percent_encode(p, percent_encoding::NON_ALPHANUMERIC)
+                ),
+                None => "/api/mods/order/export".to_string(),
+            };
+            self.tool_api_call("GET", &path, None).await
+        }
+        "bmm_arrange_mod_order" => {
+            let ids = args.get("ids").and_then(|v| v.as_array()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing ids", None))?;
+            let mut body = json!({ "ids": ids });
+            if let Some(m) = args.get("mode").and_then(|v| v.as_str()) { body["mode"] = m.into(); }
+            if let Some(p) = args.get("profile_id").and_then(|v| v.as_str()) { body["profileId"] = p.into(); }
+            self.tool_api_call("POST", "/api/mods/order/arrange", Some(body)).await
+        }
+        "bmm_order_bulk_mode" => match args.get("mode").and_then(|v| v.as_str()) {
+            Some(m) => self.tool_api_call("POST", "/api/mods/order/mode", Some(json!({ "mode": m }))).await,
+            None => self.tool_api_call("GET", "/api/mods/order/mode", None).await,
+        },
+        "bmm_import_mod_order" => {
+            let text = args.get("text").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing text", None))?;
+            let mut body = json!({ "text": text });
+            if let Some(p) = args.get("profile_id").and_then(|v| v.as_str()) { body["profileId"] = p.into(); }
+            if let Some(d) = args.get("dry_run").and_then(|v| v.as_bool()) { body["dryRun"] = d.into(); }
+            self.tool_api_call("POST", "/api/mods/order/import", Some(body)).await
+        }
+        "bmm_generate_repo" => {
+            let name = args.get("name").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing name", None))?;
+            let ids = args.get("mod_ids").and_then(|v| v.as_array()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing mod_ids", None))?;
+            let ids_vec: Vec<String> = ids.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+            let zip_mods = args.get("zip_mods").and_then(|v| v.as_bool()).unwrap_or(false);
+            let compression = args.get("compression").and_then(|v| v.as_str());
+            match mods::generate_repo(name, ids_vec, zip_mods, compression) {
+                Ok(msg) => Ok(CallToolResult::success(vec![Content::text(msg)])),
+                Err(e) => err_result(&e),
+            }
+        }
+        "bmm_plugin_assets" => {
+            let id = args.get("plugin_id").and_then(|v| v.as_str())
+                .ok_or_else(|| rmcp::ErrorData::invalid_params("Missing plugin_id", None))?;
+            match state_bridge::plugin_assets(id) {
+                Ok(v) => ok_json(&v),
+                Err(e) => err_result(&e.to_string()),
+            }
+        }
+        "bmm_read_plugin_asset" => {
+            let id = args.get("plugin_id").and_then(|v| v.as_str())
+                .ok_or_else(|| rmcp::ErrorData::invalid_params("Missing plugin_id", None))?;
+            let path = args.get("path").and_then(|v| v.as_str())
+                .ok_or_else(|| rmcp::ErrorData::invalid_params("Missing path", None))?;
+            match state_bridge::plugin_asset(id, path) {
+                Ok(v) => ok_json(&v),
+                Err(e) => err_result(&e.to_string()),
+            }
+        }
+        "bmm_set_schedule_enabled" => {
+            let mut body = serde_json::Map::new();
+            for k in ["id", "enabled"] {
+                if let Some(v) = args.get(k) { body.insert(k.into(), v.clone()); }
+            }
+            self.tool_api_call("POST", "/api/schedules/enabled", Some(serde_json::Value::Object(body))).await
+        }
+        "bmm_signal" => {
+            let mut body = serde_json::Map::new();
+            for k in ["name", "data"] {
+                if let Some(v) = args.get(k) { body.insert(k.into(), v.clone()); }
+            }
+            self.tool_api_call("POST", "/api/hook", Some(serde_json::Value::Object(body))).await
+        }
+        "bmm_signals_seen" => {
+            // No name → the summary route, which takes no query at all. The docs said it took
+            // a `name` for a long time and it never did; that read now exists one path down,
+            // and this is the tool that reaches it.
+            let path = match args.get("name").and_then(|v| v.as_str()).map(str::trim).filter(|n| !n.is_empty()) {
+                None => "/api/hook".to_string(),
+                Some(name) => {
+                    // Narrowed HERE, with the writer's own function, rather than passed through
+                    // and encoded. A caller who rang "deploy/staging" saw it filed as
+                    // "deploy_staging"; asking for the name they typed used to answer `count: 0`
+                    // under "deploy_2Fstaging", which is a name that has never existed anywhere.
+                    //
+                    // The result is alphanumerics, `-`, `_` and `.`, so it needs no escaping to
+                    // be a path segment — the narrowing IS the escaping.
+                    let key = crate::commands::hooks::safe_hook_name(name);
+                    if key.is_empty() { "/api/hook".to_string() }
+                    else {
+                        match args.get("since").and_then(|v| v.as_i64()) {
+                            Some(ms) => format!("/api/hook/{key}?since={ms}"),
+                            None => format!("/api/hook/{key}"),
+                        }
+                    }
+                }
+            };
+            self.tool_api_call("GET", &path, None).await
+        }
+        "bmm_list_catalogs" => self.tool_api_call("GET", "/api/catalogs", None).await,
+        "bmm_follow_catalog" => {
+            let mut body = serde_json::Map::new();
+            for k in ["type", "url", "follow"] {
+                if let Some(v) = args.get(k) { body.insert(k.into(), v.clone()); }
+            }
+            self.tool_api_call("POST", "/api/catalogs", Some(serde_json::Value::Object(body))).await
+        }
+        "bmm_repo_extras" => {
+            // Percent-encoding for a query value, rather than a dependency for two call
+            // sites. A repo URL carries :// and ?, all three of which end the value early
+            // and turn "read this repo" into "read some other one".
+            fn enc(s: &str) -> String {
+                s.bytes().map(|b| match b {
+                    b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => (b as char).to_string(),
+                    _ => format!("%{:02X}", b),
+                }).collect()
+            }
+            let url = args.get("url").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing url", None))?;
+            let mut q = format!("/api/repo/info?url={}", enc(url));
+            if let Some(pw) = args.get("password").and_then(|v| v.as_str()) {
+                q.push_str(&format!("&password={}", enc(pw)));
+            }
+            // Through the live app's own API rather than a second fetcher, so the headers,
+            // the password handling and the fallbacks are the ones the app itself uses.
+            match state_bridge::api_call("GET", &q, None).await {
+                Ok(v) => ok_json(&json!({ "extras": v.get("extras").cloned().unwrap_or(json!([])) })),
+                Err(e) => err_result(&e.to_string()),
+            }
+        }
+        "bmm_repo_extra_take" => {
+            let mut body = serde_json::Map::new();
+            for k in ["url", "kind", "id", "password"] {
+                if let Some(v) = args.get(k) { body.insert(k.into(), v.clone()); }
+            }
+            self.tool_api_call("POST", "/api/repo/extras", Some(serde_json::Value::Object(body))).await
+        }
+        "bmm_repo_convert" => {
+            let path = args.get("path").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing path", None))?;
+            let dry_run = args.get("dry_run").and_then(|v| v.as_bool()).unwrap_or(false);
+            let rehash = args.get("rehash").and_then(|v| v.as_bool()).unwrap_or(true);
+            let sign = args.get("sign").and_then(|v| v.as_bool()).unwrap_or(true);
+            if dry_run {
+                // Offline, with the app's own converter: a plan needs no key.
+                let p = std::path::PathBuf::from(path);
+                let file = if p.is_dir() { p.join("repo.json") } else { p };
+                let text = match std::fs::read_to_string(&file) { Ok(t) => t, Err(e) => return err_result(&format!("cannot read {}: {}", file.display(), e)) };
+                let v: serde_json::Value = match serde_json::from_str(text.trim_start_matches('\u{feff}')) { Ok(v) => v, Err(e) => return err_result(&format!("not JSON: {}", e)) };
+                let dir = file.parent().map(|d| d.to_path_buf());
+                return match crate::commands::repo_format::convert(v, if rehash { dir.as_deref() } else { None }) {
+                    Ok(plan) => ok_json(&json!({ "dryRun": true, "fromLabel": plan.from.label(), "plan": plan })),
+                    Err(e) => err_result(&e),
+                };
+            }
+            self.tool_api_call("POST", "/api/repo/convert", Some(json!({ "path": path, "dryRun": false, "rehash": rehash, "sign": sign }))).await
+        }
+        "bmm_repo_validate" => {
+            let path = args.get("path").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing path", None))?;
+            let deep = args.get("deep").and_then(|v| v.as_bool()).unwrap_or(false);
+            self.tool_api_call("POST", "/api/repo/validate", Some(json!({ "path": path, "deep": deep }))).await
+        }
+        "bmm_repo_follow" => {
+            let op = args.get("op").and_then(|v| v.as_str()).unwrap_or("list");
+            if op == "list" { return self.tool_api_call("GET", "/api/repo/follow", None).await; }
+            let url = args.get("url").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing url", None))?;
+            match op {
+                "check" => {
+                    let force = args.get("force").and_then(|v| v.as_bool()).unwrap_or(false);
+                    self.tool_api_call("POST", "/api/repo/follow/check", Some(json!({ "url": url, "force": force }))).await
+                }
+                "remove" => self.tool_api_call("POST", "/api/repo/follow", Some(json!({ "url": url, "remove": true }))).await,
+                "set" => {
+                    let mut body = serde_json::Map::new();
+                    body.insert("url".into(), json!(url));
+                    if let Some(v) = args.get("enabled") { body.insert("enabled".into(), v.clone()); }
+                    if let Some(v) = args.get("interval_min") { body.insert("intervalMin".into(), v.clone()); }
+                    if let Some(v) = args.get("action") { body.insert("action".into(), v.clone()); }
+                    self.tool_api_call("POST", "/api/repo/follow", Some(serde_json::Value::Object(body))).await
+                }
+                other => err_result(&format!("unknown op '{}': list, set, remove or check", other)),
+            }
+        }
+        "bmm_list_keys" => self.tool_api_call("GET", "/api/keys", None).await,
+        "bmm_create_key" => {
+            let mut body = serde_json::Map::new();
+            for k in ["name", "kind"] {
+                if let Some(v) = args.get(k) { body.insert(k.into(), v.clone()); }
+            }
+            self.tool_api_call("POST", "/api/keys", Some(serde_json::Value::Object(body))).await
+        }
+        "bmm_start_repo_server" => {
+            let path = args.get("path").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing path", None))?;
+            let port = args.get("port").and_then(|v| v.as_u64()).map(|n| n as u16).unwrap_or(8000);
+            match mods::start_repo_server(path, port) {
+                Ok(msg) => Ok(CallToolResult::success(vec![Content::text(msg)])),
+                Err(e) => err_result(&e),
+            }
+        }
+        "bmm_generate_lightweight_server" => {
+            let repo_path = args.get("repo_path").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing repo_path", None))?;
+            let port = args.get("port").and_then(|v| v.as_u64()).map(|n| n as u16).unwrap_or(8000);
+            let auto_start = args.get("auto_start").and_then(|v| v.as_bool()).unwrap_or(false);
+            let use_cloudflare = args.get("use_cloudflare").and_then(|v| v.as_bool()).unwrap_or(false);
+            let use_upnp = args.get("use_upnp").and_then(|v| v.as_bool()).unwrap_or(false);
+            let upload_limit = args.get("upload_limit").and_then(|v| v.as_u64()).map(|n| n as u32).unwrap_or(0);
+            let server_version = args.get("server_version").and_then(|v| v.as_u64()).map(|n| n as u8).unwrap_or(2);
+            let admin_password = args.get("admin_password").and_then(|v| v.as_str()).unwrap_or("admin");
+            let enable_docker = args.get("enable_docker").and_then(|v| v.as_bool()).unwrap_or(false);
+            let docker_host_type = args.get("docker_host_type").and_then(|v| v.as_str()).unwrap_or("linux");
+            let server_type = args.get("server_type").and_then(|v| v.as_str()).unwrap_or("user");
+
+            let (final_cloudflare, final_upnp, final_auto_start) = if server_type == "server" {
+                (false, false, false)
+            } else {
+                (use_cloudflare, use_upnp, auto_start)
+            };
+
+            match mods::generate_lightweight_server(
+                repo_path, port, final_auto_start, final_cloudflare, final_upnp, upload_limit, server_version, admin_password, enable_docker, docker_host_type, server_type
+            ) {
+                Ok(msg) => Ok(CallToolResult::success(vec![Content::text(msg)])),
+                Err(e) => err_result(&e),
+            }
+        }
+
+                // Documentation & Lang
+                "bmm_get_documentation_list" => self.tool_get_documentation_list(),
+                "bmm_read_documentation" => {
+                    let f = args.get("file_name").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing file_name", None))?;
+                    self.tool_read_documentation(f)
+                }
+                "bmm_get_language_list" => self.tool_get_language_list(),
+                "bmm_read_language_file" => {
+                    let l = args.get("lang_code").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing lang_code", None))?;
+                    self.tool_read_language_file(l)
+                }
+
+                // Diagnostics
+                "bmm_get_statistics" => self.tool_get_statistics(),
+                "bmm_list_crash_reports" => {
+                    let limit = args.get("limit").and_then(|v| v.as_u64()).map(|n| n as usize);
+                    self.tool_list_crash_reports(limit)
+                }
+                "bmm_analyze_crash_report" => {
+                    let p = args.get("report_path").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing report_path", None))?;
+                    self.tool_analyze_crash_report(p)
+                }
+                "bmm_read_crash_report" => {
+                    let p = args.get("report_path").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing report_path", None))?;
+                    self.tool_read_crash_report(p)
+                }
+                "bmm_generate_diagnostic_report" => {
+                    let t = args.get("title").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing title", None))?;
+                    let d = args.get("description").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing description", None))?;
+                    self.tool_generate_diagnostic_report(t, d)
+                }
+                "bmm_export_config" => {
+                    let p = args.get("target_path").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing target_path", None))?;
+                    self.tool_export_config(p)
+                }
+
+                // Launch Packs
+                "bmm_list_launch_packs" => self.tool_list_launch_packs(),
+                "bmm_create_launch_pack" => {
+                    let name = args.get("name").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing name", None))?;
+                    let exes = args.get("executable_paths").and_then(|v| v.as_array()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing executable_paths", None))?;
+                    let exes_vec: Vec<String> = exes.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+                    let icon = args.get("icon_source_path").and_then(|v| v.as_str());
+                    self.tool_create_launch_pack(name, exes_vec, icon)
+                }
+                "bmm_run_launch_pack" => {
+                    let id = args.get("id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing id", None))?;
+                    self.tool_run_launch_pack(id)
+                }
+                "bmm_delete_launch_pack" => {
+                    let id = args.get("id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing id", None))?;
+                    self.tool_delete_launch_pack(id)
+                }
+                "bmm_open_launch_pack_folder" => {
+                    let id = args.get("id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing id", None))?;
+                    self.tool_open_launch_pack_folder(id)
+                }
+
+                // Plugins & API
+                "bmm_list_plugins" => self.tool_list_plugins(),
+                "bmm_get_api_info" => {
+                    let reveal = args.get("reveal").and_then(|v| v.as_bool()).unwrap_or(false);
+                    self.tool_get_api_info(reveal)
+                }
+
+                // App Catalog
+                "bmm_list_apps" => self.tool_list_apps(),
+
+                // Modpacks
+                "bmm_list_modpacks" => self.tool_list_modpacks(),
+                "bmm_create_modpack" => {
+                    let name = args.get("name").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing name", None))?;
+                    let mod_ids: Vec<String> = args.get("mod_ids").and_then(|v| v.as_array())
+                        .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+                        .unwrap_or_default();
+                    self.tool_create_modpack(name, mod_ids)
+                }
+
+                // Mods (extra)
+                "bmm_delete_mod" => {
+                    let id = args.get("mod_id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing mod_id", None))?;
+                    let files = args.get("delete_files").and_then(|v| v.as_bool()).unwrap_or(false);
+                    self.tool_delete_mod(id, files)
+                }
+                "bmm_verify_mod_integrity" => {
+                    let id = args.get("mod_id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing mod_id", None))?;
+                    self.tool_verify_mod_integrity(id)
+                }
+                "bmm_list_tags" => self.tool_list_tags(),
+
+                // Server-Repos & Themes
+                "bmm_list_connected_repos" => self.tool_list_connected_repos(),
+                "bmm_list_themes" => self.tool_list_themes(),
+                "bmm_get_plugin" => {
+                    let id = args.get("plugin_id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing plugin_id", None))?;
+                    self.tool_get_plugin(id)
+                }
+
+                // Session recorder / Privacy & telemetry (live app)
+                "bmm_recorder_set" => {
+                    let mut body = serde_json::Map::new();
+                    for k in ["on", "full", "rust", "js"] { if let Some(v) = args.get(k).and_then(|v| v.as_bool()) { body.insert(k.into(), v.into()); } }
+                    self.tool_api_call("POST", "/api/recorder", Some(serde_json::Value::Object(body))).await
+                }
+                "bmm_telemetry_consent" => {
+                    let enabled = args.get("enabled").and_then(|v| v.as_bool()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing enabled", None))?;
+                    self.tool_api_call("POST", "/api/telemetry/consent", Some(json!({ "enabled": enabled, "via": "mcp" }))).await
+                }
+                "bmm_telemetry_settings" => {
+                    let mut body = serde_json::Map::new();
+                    for k in ["replay", "full", "bench"] { if let Some(v) = args.get(k).and_then(|v| v.as_bool()) { body.insert(k.into(), v.into()); } }
+                    self.tool_api_call("POST", "/api/telemetry/settings", Some(serde_json::Value::Object(body))).await
+                }
+
+                // Scheduling & automation
+                "bmm_list_schedules" => self.tool_list_schedules(),
+                "bmm_bmms_reference" => {
+                    // Compiled in rather than read from disk: the generator writes this file
+                    // and a gate keeps it in step with the action table, so baking it into the
+                    // binary makes "the vocabulary is missing" unrepresentable — and this
+                    // server is routinely run with no BMM install beside it.
+                    match serde_json::from_str::<serde_json::Value>(BMMS_VOCABULARY) {
+                        Ok(v) => ok_json(&v),
+                        Err(e) => err_result(&format!(
+                            "the bundled BMMScript vocabulary is not valid JSON: {e}"
+                        )),
+                    }
+                }
+                "bmm_compile_bmms" => {
+                    let src = match args.get("source").and_then(|v| v.as_str()) {
+                        Some(x) => x.to_string(),
+                        None => return err_result("`source` is required"),
+                    };
+                    ok_json(&crate::commands::bmms::bmms_compile(src))
+                }
+                "bmm_decompile_bmms" => {
+                    let task = args.get("task").cloned().unwrap_or(serde_json::Value::Null);
+                    if !task.is_object() {
+                        return err_result("`task` must be a JSON object");
+                    }
+                    ok_json(&serde_json::Value::String(
+                        crate::commands::bmms::bmms_decompile(task),
+                    ))
+                }
+                "bmm_create_schedule" => {
+                    let task = args.get("task").cloned().unwrap_or(serde_json::Value::Null);
+                    if !task.is_object() { return err_result("`task` must be a JSON object"); }
+                    self.tool_create_schedule(task)
+                }
+                "bmm_delete_schedule" => {
+                    let id = match args.get("id").and_then(|v| v.as_str()) { Some(i) => i, None => return err_result("`id` is required") };
+                    self.tool_delete_schedule(id)
+                }
+                "bmm_create_plugin_scaffold" => {
+                    let manifest = args.get("manifest").cloned().unwrap_or(serde_json::Value::Null);
+                    if !manifest.is_object() { return err_result("`manifest` must be a JSON object"); }
+                    let scripts: Vec<(String, String)> = args.get("scripts")
+                        .and_then(|v| v.as_array())
+                        .map(|arr| arr.iter().filter_map(|it| Some((
+                            it.get("name")?.as_str()?.to_string(),
+                            it.get("content")?.as_str()?.to_string(),
+                        ))).collect())
+                        .unwrap_or_default();
+                    self.tool_create_plugin_scaffold(manifest, scripts)
+                }
+                "bmm_list_actions" => ok_json(&state_bridge::list_schedule_actions()),
+                "bmm_run_schedule" => {
+                    let id = args.get("id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing id", None))?;
+                    self.tool_api_call("POST", "/api/schedule/run", Some(json!({ "id": id }))).await
+                }
+                "bmm_schedule_runs" => {
+                    let id = args.get("id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing id", None))?;
+                    match state_bridge::schedule_runs(id) {
+                        Ok(v) => ok_json(&v),
+                        Err(e) => err_result(&e.to_string()),
+                    }
+                }
+
+                // Resources
+                "bmm_resources_status" => self.tool_api_call("GET", "/api/resources", None).await,
+                "bmm_resources_set_preset" => {
+                    let mut body = serde_json::Map::new();
+                    for (k, wire) in [("name", "name"), ("scope", "scope"), ("ttl_secs", "ttlSecs")] {
+                        if let Some(v) = args.get(k) { body.insert(wire.into(), v.clone()); }
+                    }
+                    self.tool_api_call("POST", "/api/resources/preset", Some(serde_json::Value::Object(body))).await
+                }
+                "bmm_hardware_info" => {
+                    // Blocking (an IOCTL per disk, up to the GPU's 3-second budget), in a separate
+                    // process with no governor to ask: tell the runtime and answer in place.
+                    ok_json(&tokio::task::block_in_place(state_bridge::hardware_info))
+                }
+
+                // Benchmark
+                "bmm_run_benchmark" => {
+                    let mut body = serde_json::Map::new();
+                    for k in ["dataset", "size", "mode"] { if let Some(v) = args.get(k).and_then(|v| v.as_str()) { body.insert(k.into(), v.into()); } }
+                    if let Some(mb) = args.get("mb").and_then(|v| v.as_u64()) { body.insert("mb".into(), mb.into()); }
+                    for k in ["sources", "profiles"] { if let Some(v) = args.get(k).and_then(|v| v.as_array()) { body.insert(k.into(), serde_json::Value::Array(v.clone())); } }
+                    self.tool_api_call("POST", "/api/benchmark", Some(serde_json::Value::Object(body))).await
+                }
+
+                // Sessions
+                "bmm_list_sessions" => self.tool_list_sessions(),
+
+                // Translation sandbox
+                "bmm_get_language_template" => self.tool_api_call("GET", "/api/language/template", None).await,
+                "bmm_import_language" => {
+                    let path = args.get("path").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing path", None))?;
+                    self.tool_api_call("POST", "/api/language/import", Some(json!({ "path": path }))).await
+                }
+
+                // Themes & appearance
+                "bmm_apply_theme" => {
+                    let id = args.get("theme_id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing theme_id", None))?;
+                    self.tool_apply_theme(id)
+                }
+                "bmm_get_theme" => {
+                    let id = args.get("theme_id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing theme_id", None))?;
+                    self.tool_get_theme(id)
+                }
+
+                // Optional AI (Laya)
+                "bmm_ai_status" => ok_json(&ai_tools::status()),
+                "bmm_ai_suggest_mod_metadata" => {
+                    let id = args.get("mod_id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing mod_id", None))?.to_string();
+                    let use_providers = args.get("use_providers").and_then(|v| v.as_bool()).unwrap_or(true);
+                    let draft = args.get("draft").and_then(|v| v.as_bool()).unwrap_or(false);
+                    // A provider call is blocking HTTP: off the async runtime.
+                    match tokio::task::spawn_blocking(move || ai_tools::suggest(&id, use_providers, draft)).await {
+                        Ok(Ok(v)) => ok_json(&v),
+                        Ok(Err(e)) => err_result(&e),
+                        Err(e) => err_result(&e.to_string()),
+                    }
+                }
+                "bmm_ai_apply_mod_metadata" => {
+                    let id = args.get("mod_id").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing mod_id", None))?;
+                    let fields = args.get("fields").cloned().ok_or_else(|| rmcp::ErrorData::invalid_params("Missing fields", None))?;
+                    match ai_tools::apply(id, &fields) {
+                        Ok(v) => ok_json(&v),
+                        Err(e) => err_result(&e),
+                    }
+                }
+                "bmm_ai_ask" => {
+                    let question = args.get("question").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing question", None))?.to_string();
+                    let lang = args.get("lang").and_then(|v| v.as_str()).unwrap_or("en").to_string();
+                    let scope = args.get("scope").and_then(|v| v.as_str()).unwrap_or("all").to_string();
+                    let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(8) as usize;
+                    let use_laya = args.get("use_laya").and_then(|v| v.as_bool()).unwrap_or(true);
+                    let write = args.get("write").and_then(|v| v.as_bool()).unwrap_or(false);
+                    match tokio::task::spawn_blocking(move || ai_tools::ask(&question, &lang, &scope, limit, use_laya, write)).await {
+                        Ok(Ok(v)) => ok_json(&v),
+                        Ok(Err(e)) => err_result(&e),
+                        Err(e) => err_result(&e.to_string()),
+                    }
+                }
+                "bmm_ai_analyze_library" => {
+                    let ids: Vec<String> = args.get("mod_ids").and_then(|v| v.as_array()).map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect()).unwrap_or_default();
+                    let use_providers = args.get("use_providers").and_then(|v| v.as_bool()).unwrap_or(false);
+                    let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(200) as usize;
+                    match tokio::task::spawn_blocking(move || ai_tools::analyze(&ids, use_providers, limit)).await {
+                        Ok(Ok(v)) => ok_json(&v),
+                        Ok(Err(e)) => err_result(&e),
+                        Err(e) => err_result(&e.to_string()),
+                    }
+                }
+                "bmm_ai_classify" => {
+                    let text = args.get("text").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing text", None))?.to_string();
+                    let labels: Vec<(String, String)> = args
+                        .get("labels")
+                        .and_then(|v| v.as_array())
+                        .map(|a| a.iter().filter_map(|l| {
+                            let id = l.get("id").and_then(|x| x.as_str()).or_else(|| l.as_str())?.to_string();
+                            let meaning = l.get("meaning").and_then(|x| x.as_str()).unwrap_or(&id).to_string();
+                            Some((id, meaning))
+                        }).collect())
+                        .unwrap_or_default();
+                    let task = args.get("task").and_then(|v| v.as_str()).map(str::to_string);
+                    match tokio::task::spawn_blocking(move || ai_tools::classify(&text, &labels, task.as_deref())).await {
+                        Ok(Ok(v)) => ok_json(&v),
+                        Ok(Err(e)) => err_result(&e),
+                        Err(e) => err_result(&e.to_string()),
+                    }
+                }
+                "bmm_ai_laya_config" => {
+                    let action = args.get("action").and_then(|v| v.as_str()).unwrap_or("get").to_string();
+                    let config = args.get("config").cloned();
+                    match ai_tools::laya_config(&action, config.as_ref()) {
+                        Ok(v) => ok_json(&v),
+                        Err(e) => err_result(&e),
+                    }
+                }
+                "bmm_ai_pack_install" => match tokio::task::spawn_blocking(|| ai_tools::pack_install(&|_| {})).await {
+                    Ok(Ok(v)) => ok_json(&v),
+                    Ok(Err(e)) => err_result(&e),
+                    Err(e) => err_result(&e.to_string()),
+                },
+                "bmm_ai_pack_remove" => match tokio::task::spawn_blocking(ai_tools::pack_remove).await {
+                    Ok(Ok(v)) => ok_json(&v),
+                    Ok(Err(e)) => err_result(&e),
+                    Err(e) => err_result(&e.to_string()),
+                },
+                "bmm_ai_api_status" => match tokio::task::spawn_blocking(ai_api_tools::status).await {
+                    Ok(v) => ok_json(&v),
+                    Err(e) => err_result(&e.to_string()),
+                },
+                "bmm_ai_api_start" => {
+                    let port = args.get("port").and_then(|v| v.as_u64()).map(|p| p.min(65535) as u16);
+                    match tokio::task::spawn_blocking(move || ai_api_tools::start(port, false)).await {
+                        Ok(Ok((v, _))) => ok_json(&v),
+                        Ok(Err(e)) => err_result(&e),
+                        Err(e) => err_result(&e.to_string()),
+                    }
+                }
+                "bmm_ai_api_stop" => match tokio::task::spawn_blocking(ai_api_tools::stop).await {
+                    Ok(Ok(v)) => ok_json(&v),
+                    Ok(Err(e)) => err_result(&e),
+                    Err(e) => err_result(&e.to_string()),
+                },
+                "bmm_ai_test" => match tokio::task::spawn_blocking(ai_tools::self_test).await {
+                    Ok(Ok(v)) => ok_json(&v),
+                    Ok(Err(e)) => err_result(&e),
+                    Err(e) => err_result(&e.to_string()),
+                },
+
+                // Live app bridge
+                "bmm_api_call" => {
+                    let method = args.get("method").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing method", None))?;
+                    let path = args.get("path").and_then(|v| v.as_str()).ok_or_else(|| rmcp::ErrorData::invalid_params("Missing path", None))?;
+                    let body = args.get("body").cloned();
+                    self.tool_api_call(method, path, body).await
+                }
+
+                _ => Err(rmcp::ErrorData::new(ErrorCode::METHOD_NOT_FOUND, format!("Tool not found: {}", name), None)),
+            }
+        }
+    }
+}

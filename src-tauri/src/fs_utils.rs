@@ -1,9 +1,376 @@
-use anyhow::{Context, Result};
+use tauri::Manager;
+use anyhow::{Context, Result, anyhow};
 use std::path::{Path, PathBuf};
-use walkdir::WalkDir;
+use jwalk::WalkDir;
 use std::fs;
 use rayon::prelude::*;
 use std::collections::HashSet;
+use std::io::Read;
+use sha2::{Digest, Sha256};
+use std::sync::atomic::{AtomicBool, Ordering};
+use serde::{Serialize, Deserialize};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Multi-process worker IPC
+// ─────────────────────────────────────────────────────────────────────────────
+// To keep the BMM UI responsive when applying / unapplying big mods on the
+// OS drive, the heavy file IO is delegated to a separate worker process
+// (re-execs the same exe with `--mod-worker IN OUT`).  The worker runs with
+// Windows BACKGROUND IO priority, so the kernel keeps disk bandwidth
+// available for the UI process.  Cancelling is a `taskkill /T` of the
+// worker PID — instant and reliable, no matter how stuck the IO is.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct WorkerInput {
+    pub op: String, // "apply" | "unapply"
+    pub mod_folder: PathBuf,
+    pub game_path: PathBuf,
+    pub backup_path: PathBuf,
+    pub other_mods_files: Vec<PathBuf>,
+    pub files_to_remove: Vec<String>,
+    pub other_active_mods: Vec<(String, PathBuf)>,
+    /// The backup roots of the OTHER profiles deploying into `game_path`
+    /// (`mod_order::game_folder_share`): an unapply looks for the original there too, because
+    /// the profile that first replaced a game file backed it up into its own folder.
+    #[serde(default)]
+    pub shared_backup_paths: Vec<PathBuf>,
+    pub smart_io: bool,
+    /// The parent's resources document (PLAN-BMM-RESOURCES-2026.md §2.2). The worker is a
+    /// separate process with its own governor, which would otherwise start at the default
+    /// document and know nothing of the disk rules: the per-disk MB/s limits (the old
+    /// `game_path_limit` / `backup_path_limit`, now the disk's `*` rule) travel here.
+    #[serde(default)]
+    pub io: Option<crate::governor::config::ResourcesConfig>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct WorkerOutput {
+    pub applied: Vec<PathBuf>,
+    pub error: Option<String>,
+}
+
+/// Global cancellation flag for active mod-apply / mod-unapply IO operations.
+/// Polled inside the chunked copy loops and parallel iterators so that the
+/// user's cancel click can interrupt big mod copies almost instantly instead
+/// of waiting for the whole file to finish.
+pub static MOD_OP_CANCELLED: AtomicBool = AtomicBool::new(false);
+
+/// The worker's progress line on stdout: `BMMPROG <bytes written so far>` (parsed by
+/// `commands::mods::parse_progress_line`).
+pub const PROGRESS_PREFIX: &str = "BMMPROG";
+
+/// Is the mod operation running here cancelled?
+///
+/// Inside a cancel scope (an activation job, an order-list batch: see `CancelScope`) that is the
+/// scope's own flag, or a global Cancel-all issued AFTER the scope began. Outside one it is the
+/// legacy global flag, as it always was.
+#[inline]
+pub fn is_mod_op_cancelled() -> bool {
+    match current_cancel_scope() {
+        Some(s) => s.is_cancelled(),
+        None => MOD_OP_CANCELLED.load(Ordering::Relaxed),
+    }
+}
+
+#[inline]
+pub fn reset_mod_op_cancel() {
+    MOD_OP_CANCELLED.store(false, Ordering::Relaxed);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cancel scopes: one cancel token per batch
+// ─────────────────────────────────────────────────────────────────────────────
+// The global flag above is one bit for every batch in the process, and whoever lowered it
+// (`clear_mod_op_cancel`, a batch starting with `reset_mod_op_cancel`) lowered it for all of
+// them: an activation job finishing its own cancel cleared the Stop of an order list running on
+// the backend at the same moment, which then went on enabling. A scope is a batch's own token:
+//
+//   · `cancel_mod_ops(scope)` raises that scope only; `clear_mod_op_cancel(scope)` forgets it.
+//   · A global Cancel-all (`request_mod_op_cancel`) bumps `CANCEL_EPOCH`, which reaches every
+//     scope that began before it, and none that begins after: nobody has to lower anything
+//     before the next batch, so no clear can race a stop.
+//   · The scope travels with the batch's async task (`in_cancel_scope`, a task-local, so the
+//     nested enable_mod / disable_mod calls see it) and into its blocking threads
+//     (`enter_thread_scope`), where the worker wait loop reads it and kills the worker.
+
+/// Bumped by every global cancel (`request_mod_op_cancel`).
+static CANCEL_EPOCH: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// How many scopes may be remembered at once; past it, the ones nobody holds are dropped
+/// (a frontend that never sends its clear cannot grow the map without bound).
+const MAX_CANCEL_SCOPES: usize = 256;
+
+#[derive(Debug)]
+pub struct CancelScope {
+    cancelled: AtomicBool,
+    /// `CANCEL_EPOCH` when the scope began: a global cancel after it reaches this scope.
+    epoch: u64,
+}
+
+impl CancelScope {
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled_at(CANCEL_EPOCH.load(Ordering::Relaxed))
+    }
+
+    /// Cancelled on its own, or by a global cancel numbered after the scope began.
+    fn cancelled_at(&self, epoch: u64) -> bool {
+        self.cancelled.load(Ordering::Relaxed) || epoch > self.epoch
+    }
+}
+
+#[cfg(test)]
+mod cancel_scope_tests {
+    use super::*;
+    use std::sync::Arc;
+
+    fn rt() -> tokio::runtime::Runtime {
+        tokio::runtime::Builder::new_current_thread().build().unwrap()
+    }
+
+    #[test]
+    fn scope_ids_are_bounded_and_plain() {
+        assert!(valid_scope_id("actjob-3-k2x9"));
+        assert!(valid_scope_id("a:b.c_d"));
+        assert!(!valid_scope_id(""));
+        assert!(!valid_scope_id(&"a".repeat(65)));
+        assert!(!valid_scope_id("a b"));
+        assert!(!valid_scope_id("a/b"));
+    }
+
+    #[test]
+    fn a_global_cancel_reaches_scopes_begun_before_it_only() {
+        let s = CancelScope { cancelled: AtomicBool::new(false), epoch: 7 };
+        assert!(!s.cancelled_at(7), "no global cancel since the scope began");
+        assert!(s.cancelled_at(8), "a Cancel-all after it began stops it");
+        let later = CancelScope { cancelled: AtomicBool::new(false), epoch: 8 };
+        assert!(!later.cancelled_at(8), "a Cancel-all before it began does not, and nobody had to lower a flag");
+        later.cancelled.store(true, Ordering::Relaxed);
+        assert!(later.cancelled_at(8));
+    }
+
+    #[test]
+    fn cancelling_one_scope_leaves_another_running() {
+        let (a, b) = ("test-scope-a-1", "test-scope-b-1");
+        let sb = cancel_scope(b);
+        request_scope_cancel(a);
+        assert!(cancel_scope(a).cancelled.load(Ordering::Relaxed));
+        assert!(!sb.cancelled.load(Ordering::Relaxed), "B's token is its own");
+        // Clearing A (its batch is over) does not touch B, and a scope begun again is fresh.
+        drop_cancel_scope(a);
+        assert!(!cancel_scope(a).cancelled.load(Ordering::Relaxed));
+        drop_cancel_scope(a);
+        drop_cancel_scope(b);
+    }
+
+    #[test]
+    fn the_scope_follows_the_task_and_nested_calls_keep_it() {
+        let id = "test-scope-task-1";
+        let seen = rt().block_on(in_cancel_scope(Some(id), async {
+            request_scope_cancel(id);
+            // A nested call passes None: it stays in the batch's scope.
+            in_cancel_scope(None, async { is_mod_op_cancelled() }).await
+        }));
+        assert!(seen, "the batch's own Stop is seen inside it");
+        // Outside the scope, the legacy global flag answers (not this scope's).
+        assert!(current_cancel_scope().is_none());
+        drop_cancel_scope(id);
+    }
+
+    #[test]
+    fn a_blocking_thread_enters_the_scope_and_leaves_it() {
+        let id = "test-scope-thread-1";
+        let s = cancel_scope(id);
+        let s2 = s.clone();
+        std::thread::spawn(move || {
+            assert!(current_cancel_scope().is_none());
+            {
+                let _g = enter_thread_scope(Some(s2.clone()));
+                assert!(Arc::ptr_eq(&current_cancel_scope().unwrap(), &s2));
+            }
+            assert!(current_cancel_scope().is_none(), "the guard restores the previous scope");
+        }).join().unwrap();
+        drop_cancel_scope(id);
+    }
+}
+
+lazy_static::lazy_static! {
+    static ref CANCEL_SCOPES: std::sync::Mutex<std::collections::HashMap<String, std::sync::Arc<CancelScope>>> =
+        std::sync::Mutex::new(std::collections::HashMap::new());
+}
+
+tokio::task_local! {
+    static TASK_SCOPE: std::sync::Arc<CancelScope>;
+}
+
+thread_local! {
+    static THREAD_SCOPE: std::cell::RefCell<Option<std::sync::Arc<CancelScope>>> = std::cell::RefCell::new(None);
+}
+
+/// A scope id from the frontend: 1 to 64 characters of `[A-Za-z0-9_.:-]`.
+pub fn valid_scope_id(id: &str) -> bool {
+    !id.is_empty() && id.len() <= 64 && id.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.' | b':'))
+}
+
+/// The scope named `id`, created (beginning now) on first use.
+pub fn cancel_scope(id: &str) -> std::sync::Arc<CancelScope> {
+    let mut map = CANCEL_SCOPES.lock().unwrap_or_else(|p| p.into_inner());
+    if let Some(s) = map.get(id) { return s.clone(); }
+    if map.len() >= MAX_CANCEL_SCOPES {
+        map.retain(|_, s| std::sync::Arc::strong_count(s) > 1);
+    }
+    let s = std::sync::Arc::new(CancelScope { cancelled: AtomicBool::new(false), epoch: CANCEL_EPOCH.load(Ordering::Relaxed) });
+    map.insert(id.to_string(), s.clone());
+    s
+}
+
+/// Cancel one scope (created cancelled if its batch has not started yet). Nothing else stops.
+pub fn request_scope_cancel(id: &str) {
+    cancel_scope(id).cancelled.store(true, Ordering::Relaxed);
+}
+
+/// Forget a scope once its batch is over.
+pub fn drop_cancel_scope(id: &str) {
+    CANCEL_SCOPES.lock().unwrap_or_else(|p| p.into_inner()).remove(id);
+}
+
+/// The scope of the code running here: the task's, else the blocking thread's.
+pub fn current_cancel_scope() -> Option<std::sync::Arc<CancelScope>> {
+    TASK_SCOPE.try_with(|s| s.clone()).ok()
+        .or_else(|| THREAD_SCOPE.with(|c| c.borrow().clone()))
+}
+
+/// Run `fut` inside the scope `id`. `None` keeps whatever scope is already current (a nested
+/// call from a scoped batch stays in the batch's scope).
+pub async fn in_cancel_scope<F: std::future::Future>(id: Option<&str>, fut: F) -> F::Output {
+    match id {
+        Some(id) => TASK_SCOPE.scope(cancel_scope(id), fut).await,
+        None => fut.await,
+    }
+}
+
+/// Restores the blocking thread's previous scope when dropped.
+pub struct ThreadScopeGuard(Option<std::sync::Arc<CancelScope>>);
+
+impl Drop for ThreadScopeGuard {
+    fn drop(&mut self) {
+        let prev = self.0.take();
+        THREAD_SCOPE.with(|c| *c.borrow_mut() = prev);
+    }
+}
+
+/// Carry a scope into a blocking thread (`spawn_blocking` does not inherit task-locals):
+/// capture `current_cancel_scope()` before spawning, enter it first thing in the closure.
+pub fn enter_thread_scope(scope: Option<std::sync::Arc<CancelScope>>) -> ThreadScopeGuard {
+    let prev = THREAD_SCOPE.with(|c| std::mem::replace(&mut *c.borrow_mut(), scope));
+    ThreadScopeGuard(prev)
+}
+
+/// Raise the flag AND cancel every Deploy ticket in this process. The flag is checked between
+/// files; the tickets are what the governed copy checks between CHUNKS, so a big file stops
+/// mid-copy (and its partial destination is removed) as the old copy loops did when they
+/// polled this flag themselves.
+pub fn request_mod_op_cancel() {
+    MOD_OP_CANCELLED.store(true, Ordering::Relaxed);
+    CANCEL_EPOCH.fetch_add(1, Ordering::Relaxed);
+    let q = crate::governor::runtime::global().queue();
+    for t in q.snapshot() {
+        if t.kind == crate::governor::config::OpKind::Deploy { q.cancel(t.id); }
+    }
+}
+
+/// Entry point used by the worker subprocess.  Reads its input JSON,
+/// performs the apply/unapply, writes the output JSON, returns an exit code
+/// (0 = ok, non-zero = error or cancelled).
+pub fn run_mod_worker(input_path: &str, output_path: &str) -> i32 {
+    // Drop our priority class so the OS gives the BMM UI process headroom.
+    #[cfg(target_os = "windows")]
+    unsafe {
+        extern "system" {
+            fn GetCurrentProcess() -> *mut std::ffi::c_void;
+            fn SetPriorityClass(h: *mut std::ffi::c_void, class: u32) -> i32;
+        }
+        // PROCESS_MODE_BACKGROUND_BEGIN — also lowers IO + paging priority.
+        let _ = SetPriorityClass(GetCurrentProcess(), 0x0010_0000);
+    }
+
+    let input_str = match std::fs::read_to_string(input_path) {
+        Ok(s) => s,
+        Err(e) => { eprintln!("worker: read input failed: {}", e); return 2; }
+    };
+    let input: WorkerInput = match serde_json::from_str(&input_str) {
+        Ok(v) => v,
+        Err(e) => { eprintln!("worker: parse input failed: {}", e); return 2; }
+    };
+
+    // The parent's rules and preset, so this process copies under the same policy (and the
+    // same per-disk limits) as the one that asked.
+    if let Some(cfg) = input.io.clone() {
+        crate::governor::runtime::global().configure(cfg);
+    }
+
+    // Progress for the parent (`run_mod_io_worker_with_mode` pipes our stdout when it wants
+    // it): the bytes the governed copies have counted on this process's tickets, a line every
+    // tenth of a second while it moves. A Write error (no pipe, parent gone) is ignored: the
+    // copy matters, the bar does not.
+    let reporting = std::sync::Arc::new(AtomicBool::new(true));
+    {
+        let reporting = reporting.clone();
+        std::thread::spawn(move || {
+            use std::io::Write;
+            let mut best = 0u64;
+            while reporting.load(Ordering::Relaxed) {
+                let now: u64 = crate::governor::runtime::global().queue().snapshot()
+                    .iter().map(|t| t.bytes_written).sum();
+                if now > best {
+                    best = now;
+                    let mut out = std::io::stdout().lock();
+                    let _ = writeln!(out, "{} {}", PROGRESS_PREFIX, best);
+                    let _ = out.flush();
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+        });
+    }
+
+    let result = match input.op.as_str() {
+        "apply" => {
+            let other: HashSet<PathBuf> = input.other_mods_files.into_iter().collect();
+            apply_mod_stacked(
+                &input.mod_folder,
+                &input.game_path,
+                &input.backup_path,
+                &other,
+                input.smart_io,
+            )
+        }
+        "unapply" => unapply_mod_stacked_shared(
+            &input.game_path,
+            &input.backup_path,
+            &input.shared_backup_paths,
+            input.files_to_remove,
+            &input.other_active_mods,
+            input.smart_io,
+        )
+        .map(|_| Vec::<PathBuf>::new()),
+        _ => {
+            eprintln!("worker: unknown op '{}'", input.op);
+            return 2;
+        }
+    };
+
+    reporting.store(false, Ordering::Relaxed);
+    let (output, code) = match result {
+        Ok(applied) => (WorkerOutput { applied, error: None }, 0),
+        Err(e) => {
+            let msg = e.to_string();
+            let code = if msg.contains("CANCELLED") { 3 } else { 1 };
+            (WorkerOutput { applied: vec![], error: Some(msg) }, code)
+        }
+    };
+    if let Ok(json) = serde_json::to_string(&output) {
+        let _ = std::fs::write(output_path, json);
+    }
+    code
+}
 
 fn ensure_removed(path: &Path) -> Result<()> {
     if !path.exists() { return Ok(()); }
@@ -17,60 +384,399 @@ fn ensure_removed(path: &Path) -> Result<()> {
     fs::remove_file(path).with_context(|| format!("Failed to remove file: {:?}", path))
 }
 
-pub fn copy_file_force_limited(src: &Path, dst: &Path, limit_mb_s: Option<u64>) -> Result<()> {
+// ── Governed copies (PLAN-BMM-RESOURCES-2026.md, phase G3a) ──────────────────────────────
+//
+// Every mod copy used to pick one of three private paths here: a 128 KiB loop that paced
+// ITSELF when the disk had a MB/s limit (so two copy threads wrote at twice the limit), the
+// Smart I/O loop (1 MiB chunks, 150 µs every 16 MiB), or a plain `fs::copy`. The first two
+// are now the governor's copy (`runtime::global().copy`): under the default Balanced preset
+// it resolves to exactly those two rhythms (config.rs, "Balanced is today"), but the limit is
+// a token bucket per VOLUME shared by every copy to that disk, and the copy stops at its
+// ticket's checkpoint when the user pauses or cancels it.
+
+/// The literal every mod-op caller and the frontend already recognise as "the user
+/// cancelled", not "it failed" (`msg.contains("CANCELLED")`, mods-actions.ts).
+pub const CANCELLED: &str = "CANCELLED";
+
+fn cancelled() -> anyhow::Error { anyhow!(CANCELLED) }
+
+/// A ticket checkpoint as an anyhow error, for the loops between files.
+pub fn checkpoint(ticket: &crate::governor::queue::Ticket) -> Result<()> {
+    ticket.checkpoint().map_err(|_| cancelled())
+}
+
+/// Smart I/O OFF under the Balanced preset keeps today's full-speed path: the global rayon
+/// pool and a plain `fs::copy` (CopyFileEx, which also carries timestamps and attributes).
+/// Any other preset is the user asking the governor to decide, and it does.
+fn legacy_full_speed(smart_io: bool) -> bool {
+    !smart_io && crate::governor::runtime::global().config().preset == crate::governor::config::Preset::Balanced
+}
+
+/// Copy one mod file, overwriting (a read-only destination is cleared first, as before),
+/// under `kind`'s policy for the destination disk. A cancelled copy leaves no partial file
+/// and answers `CANCELLED`.
+pub fn copy_file_governed(
+    kind: crate::governor::config::OpKind,
+    src: &Path,
+    dst: &Path,
+    ticket: Option<&crate::governor::queue::Ticket>,
+    smart_io: bool,
+) -> Result<()> {
+    use crate::governor::io::CopyError;
     if let Some(parent) = dst.parent() {
         std::fs::create_dir_all(parent).ok();
     }
-    if dst.exists() {
-        let _ = ensure_removed(dst); // Clear permissions and delete if possible before overwrite
-    }
-    
-    if let Some(limit) = limit_mb_s {
-        if limit > 0 {
-            use std::io::{Read, Write};
-            let mut src_file = std::fs::File::open(src).with_context(|| format!("Failed to open src: {:?}", src))?;
-            let mut dst_file = std::fs::File::create(dst).with_context(|| format!("Failed to create dst: {:?}", dst))?;
-            
-            let chunk_size: usize = 128 * 1024; // 128 KB buffer for smoother limiting
-            let mut buffer = vec![0u8; chunk_size];
-            
-            loop {
-                let start = std::time::Instant::now();
-                let bytes_read = src_file.read(&mut buffer)?;
-                if bytes_read == 0 {
-                    break;
-                }
-                dst_file.write_all(&buffer[..bytes_read])?;
-                
-                let elapsed = start.elapsed();
-                let fraction = bytes_read as f64 / 1_048_576.0;
-                let required_duration = std::time::Duration::from_secs_f64(fraction / limit as f64);
-                
-                if elapsed < required_duration {
-                    std::thread::sleep(required_duration - elapsed);
-                }
-            }
-            return Ok(());
-        }
-    }
+    // ensure_removed() already no-ops if dst doesn't exist, so skip the extra stat call.
+    let _ = ensure_removed(dst); // Clear permissions and delete if possible before overwrite
 
-    std::fs::copy(src, dst)
-        .with_context(|| format!("Failed to copy {:?} -> {:?}", src, dst))?;
-    Ok(())
+    let gov = crate::governor::runtime::global();
+    // Smart I/O off and no MB/s rule on that disk: today's full-speed copy.
+    if legacy_full_speed(smart_io) && gov.policy_for(kind, dst).rate_mb_s.is_none() {
+        if let Some(t) = ticket { checkpoint(t)?; }
+        if is_mod_op_cancelled() { return Err(cancelled()); }
+        let n = std::fs::copy(src, dst).map_err(|e| copy_failed(src, dst, e))?;
+        if let Some(t) = ticket { t.add_bytes(n, n); }
+        return Ok(());
+    }
+    match gov.copy(kind, src, dst, ticket) {
+        Ok(_) => Ok(()),
+        Err(CopyError::Cancelled) => Err(cancelled()),
+        Err(CopyError::Io(e)) => Err(copy_failed(src, dst, e)),
+    }
 }
 
-/// Backup a file from `game_path/rel` to `backup_root/_original/rel`. 
+/// « Failed to copy A -> B » WITH the operating system's reason and its kind. The message used to
+/// stop at the two paths: the worker reports `to_string()`, which is the outermost context only,
+/// so « Access is denied. (os error 5) » never reached the screen or the diagnostic export. The
+/// io::Error stays in the chain, for `io_error_of`.
+fn copy_failed(src: &Path, dst: &Path, e: std::io::Error) -> anyhow::Error {
+    let msg = format!("Failed to copy {:?} -> {:?}: {} [{:?}]", src, dst, e, e.kind());
+    anyhow::Error::new(e).context(msg)
+}
+
+/// The governed copy with `fs::copy`'s other guarantees: the destination keeps the source's
+/// modification time and permissions (read-only included). For the Install sites that used
+/// `fs::copy` / `fs_extra`, where a mod's files landing with "now" as their date would be a
+/// change nobody asked for. An existing destination is overwritten like `fs::copy` did (a
+/// read-only one fails the same way).
+pub fn copy_file_install(
+    kind: crate::governor::config::OpKind,
+    src: &Path,
+    dst: &Path,
+    ticket: Option<&crate::governor::queue::Ticket>,
+) -> Result<u64> {
+    use crate::governor::io::CopyError;
+    let n = match crate::governor::runtime::global().copy(kind, src, dst, ticket) {
+        Ok(n) => n,
+        Err(CopyError::Cancelled) => return Err(cancelled()),
+        Err(CopyError::Io(e)) => return Err(copy_failed(src, dst, e)),
+    };
+    if let Ok(meta) = std::fs::metadata(src) {
+        if let Ok(mtime) = meta.modified() {
+            if let Ok(f) = std::fs::OpenOptions::new().write(true).open(dst) {
+                let _ = f.set_modified(mtime);
+            }
+        }
+        let _ = std::fs::set_permissions(dst, meta.permissions());
+    }
+    Ok(n)
+}
+
+/// Copy the CONTENT of directory `src` into `dst` (what `fs_extra::dir::copy` with
+/// `content_only` did): every sub-directory is created, empty ones included; symlinks are
+/// followed; an unreadable entry fails the whole copy. One checkpoint per file.
+pub fn copy_dir_governed(
+    kind: crate::governor::config::OpKind,
+    src: &Path,
+    dst: &Path,
+    ticket: &crate::governor::queue::Ticket,
+) -> Result<u64> {
+    if !src.is_dir() {
+        return Err(anyhow!("Path {:?} is not a directory or you don't have access!", src));
+    }
+    std::fs::create_dir_all(dst).with_context(|| format!("Failed to create {:?}", dst))?;
+    let mut total = 0u64;
+    for entry in std::fs::read_dir(src).with_context(|| format!("Failed to read {:?}", src))? {
+        let path = entry?.path();
+        let target = dst.join(path.file_name().unwrap_or_default());
+        // `metadata` follows a symlink, like fs_extra's `is_dir()` / `fs::copy` did.
+        if std::fs::metadata(&path).with_context(|| format!("Failed to read {:?}", path))?.is_dir() {
+            total += copy_dir_governed(kind, &path, &target, ticket)?;
+        } else {
+            checkpoint(ticket)?;
+            total += copy_file_install(kind, &path, &target, Some(ticket))?;
+        }
+    }
+    Ok(total)
+}
+
+/// Stream `reader` into `writer` under a ticket: a checkpoint per chunk (pause / cancel) and
+/// the bytes counted for the dashboard. For downloads and archive entries, where there is no
+/// source path for the governed file copy. No rate limit: the disk rules govern file copies,
+/// and a download was never paced by them.
+pub fn copy_reader_ticketed<R: Read + ?Sized, W: std::io::Write + ?Sized>(
+    reader: &mut R,
+    writer: &mut W,
+    ticket: &crate::governor::queue::Ticket,
+) -> std::io::Result<u64> {
+    let mut buf = vec![0u8; 64 * 1024];
+    let mut total = 0u64;
+    loop {
+        if ticket.checkpoint().is_err() {
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, CANCELLED));
+        }
+        let n = match reader.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => n,
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(e) => return Err(e),
+        };
+        writer.write_all(&buf[..n])?;
+        total += n as u64;
+        ticket.add_bytes(n as u64, n as u64);
+    }
+    Ok(total)
+}
+
+// ── Download size cap (security summary §9, "No size caps on extraction and download") ──
+//
+// A server that never ends its response (or announces 200 GB) filled the disk, or the memory
+// for the downloads that buffer. Every download stops at 4 GiB, counted as it streams: the
+// announced Content-Length is checked first, but a server may send none or lie, so the bytes
+// actually received are what decides.
+
+/// The most a single download may bring in.
+pub const MAX_DOWNLOAD_BYTES: u64 = 4 << 30;
+/// The error a download past the cap stops with (an i18n key the frontend can show).
+pub const DOWNLOAD_TOO_LARGE: &str = "download.tooLarge";
+
+/// The running count of one download, against `MAX_DOWNLOAD_BYTES`.
+pub struct DownloadCap {
+    seen: u64,
+    limit: u64,
+}
+
+impl Default for DownloadCap {
+    fn default() -> Self { Self::new() }
+}
+
+impl DownloadCap {
+    pub fn new() -> Self { Self { seen: 0, limit: MAX_DOWNLOAD_BYTES } }
+    #[allow(dead_code)] // tests use a small limit
+    pub fn with_limit(limit: u64) -> Self { Self { seen: 0, limit } }
+    /// Refuse before the first byte when the server already says it is too big.
+    pub fn check_announced(&self, content_length: Option<u64>) -> Result<(), String> {
+        match content_length {
+            Some(n) if n > self.limit => Err(DOWNLOAD_TOO_LARGE.to_string()),
+            _ => Ok(()),
+        }
+    }
+    /// Count `n` more bytes; an error once the total passes the cap.
+    pub fn add(&mut self, n: u64) -> Result<(), String> {
+        self.seen = self.seen.saturating_add(n);
+        if self.seen > self.limit { Err(DOWNLOAD_TOO_LARGE.to_string()) } else { Ok(()) }
+    }
+}
+
+/// A reader that stops with `DOWNLOAD_TOO_LARGE` once it has handed over more than the cap:
+/// for the blocking downloads that are copied with `copy_reader_ticketed` or read to the end.
+pub struct CappedReader<R> {
+    inner: R,
+    cap: DownloadCap,
+}
+
+impl<R: Read> CappedReader<R> {
+    pub fn new(inner: R) -> Self { Self { inner, cap: DownloadCap::new() } }
+    #[allow(dead_code)] // tests use a small limit
+    pub fn with_limit(inner: R, limit: u64) -> Self { Self { inner, cap: DownloadCap::with_limit(limit) } }
+}
+
+impl<R: Read> Read for CappedReader<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let n = self.inner.read(buf)?;
+        self.cap
+            .add(n as u64)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        Ok(n)
+    }
+}
+
+#[cfg(test)]
+mod download_cap_tests {
+    use super::*;
+
+    #[test]
+    fn a_download_stops_past_the_cap_and_not_before() {
+        let mut cap = DownloadCap::with_limit(10);
+        assert!(cap.add(6).is_ok());
+        assert!(cap.add(4).is_ok(), "exactly the cap is fine");
+        assert_eq!(cap.add(1).unwrap_err(), DOWNLOAD_TOO_LARGE);
+        assert!(DownloadCap::with_limit(10).check_announced(Some(11)).is_err());
+        assert!(DownloadCap::with_limit(10).check_announced(None).is_ok());
+        assert_eq!(MAX_DOWNLOAD_BYTES, 4 * 1024 * 1024 * 1024);
+    }
+
+    #[test]
+    fn a_capped_reader_ends_an_endless_stream() {
+        // 64 MiB standing in for "never ends" (bounded, so a broken cap fails instead of hanging).
+        let endless = std::io::repeat(7u8).take(64 << 20);
+        let mut r = CappedReader::with_limit(endless, 1 << 20);
+        let mut sink = std::io::sink();
+        let err = std::io::copy(&mut r, &mut sink).unwrap_err();
+        assert_eq!(err.to_string(), DOWNLOAD_TOO_LARGE);
+        let mut ok = CappedReader::with_limit(&b"hello"[..], 5);
+        let mut out = Vec::new();
+        ok.read_to_end(&mut out).unwrap();
+        assert_eq!(out, b"hello");
+    }
+}
+
+// A governor ticket taken from async code goes through `governor::runtime::Governor::begin_async`
+// (pentest R13 card 3). The helper that lived here, `begin_ticket_async`, waited on a blocking
+// thread with `Queue::begin`: it skipped game mode's pause of background kinds and tied the
+// ticket to a pool thread, so whatever reused that thread looked "nested" and took no slot.
+
+/// The ticket subject for a mod folder: its name, as the user knows it.
+fn subject_of(p: &Path) -> String {
+    p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| p.to_string_lossy().to_string())
+}
+
+pub fn compute_file_sha256(path: &Path) -> Result<String> {
+    // 1 MB buffered reads — far fewer read syscalls than 64 KB on large mod files
+    // (e.g. ~1k vs ~16k for a 1 GB file), which speeds up integrity hashing.
+    use std::io::BufReader;
+    let file = std::fs::File::open(path)?;
+    let mut reader = BufReader::with_capacity(1 << 20, file);
+    let mut hasher = Sha256::new();
+    let mut buffer = vec![0u8; 1 << 20];
+    loop {
+        let n = reader.read(&mut buffer)?;
+        if n == 0 { break; }
+        hasher.update(&buffer[..n]);
+    }
+    Ok(format!("{:x}", hasher.finalize()))
+}
+
+// ── Local content hashing (BLAKE3, versioned format) ──────────────────────────
+// `file_hashes` and modpack hash-match values use BLAKE3, tagged `b3:` so the
+// algorithm is self-describing. BLAKE3 is a *tree* hash, so one very large file is
+// hashed across all cores (mmap + rayon) — the fix for mods dominated by a single
+// big file, where file-level parallelism can't help. Untagged digests are treated
+// as legacy SHA-256 so old baselines/modpacks still verify (dual-read).
+
+// ALL mod hashing runs on the governor's Hash pool (`pool(OpKind::Hash)`). It replaced a
+// private `hash_pool()` of `(cores / 2).clamp(1, 4)` threads, which is exactly what the
+// Balanced preset builds for Hash (config.rs `balanced_hash_threads`; the `cores - 1` ceiling
+// never binds, since cores / 2 < cores - 1 from 2 cores up): BLAKE3 would otherwise saturate
+// every core and freeze the UI while a profile is imported. Silent makes it one thread, Max
+// `cores - 1`.
+
+/// Tagged BLAKE3 digest (`b3:<hex>`) of one file.
+pub fn compute_file_hash(path: &Path) -> Result<String> {
+    let mut hasher = blake3::Hasher::new();
+    // Sequential mmap (NOT update_mmap_rayon): per-file work stays on a single
+    // pool thread so a big file can't grab every core. Parallelism comes from the
+    // bounded pool processing several files at once.
+    hasher.update_mmap(path)
+        .with_context(|| format!("Failed to hash: {:?}", path))?;
+    Ok(format!("b3:{}", hasher.finalize().to_hex()))
+}
+
+/// Bulk version: parallel ACROSS files on the governor's Hash pool, keeping the machine
+/// responsive even while hashing a freshly imported profile. No ticket: for a caller that
+/// measures raw hashing (the benchmark). Everything else uses `compute_file_hash_bulk_ticketed`.
+pub fn compute_file_hash_bulk<K: Clone + Send + Sync>(items: &[(K, PathBuf)]) -> Vec<(K, String)> {
+    match hash_bulk_in(crate::governor::runtime::global(), items, None) {
+        Ok(v) => v,
+        Err(_) => Vec::new(), // unreachable: without a ticket nothing can cancel it
+    }
+}
+
+/// `compute_file_hash_bulk` under a Hash ticket: paused, cancelled, and stepping aside for a
+/// deploy or install between files. A cancelled hash returns `CANCELLED` and nothing else,
+/// so a caller never stores a half baseline as if it were the mod's.
+pub fn compute_file_hash_bulk_ticketed<K: Clone + Send + Sync>(
+    gov: &crate::governor::runtime::Governor,
+    items: &[(K, PathBuf)],
+    ticket: &crate::governor::queue::Ticket,
+) -> Result<Vec<(K, String)>> {
+    hash_bulk_in(gov, items, Some(ticket)).map_err(|_| cancelled())
+}
+
+/// The one hashing loop. Same pool, same per-file function and same result (files that fail
+/// to hash are left out, the rest in input order) as the old `hash_pool()` loop; the ticket
+/// only adds WHEN it runs.
+///
+/// The pool's threads never wait in a checkpoint. They are shared: a deploy that hashes, or a
+/// second hash job, may need them, and pool threads all asleep "until the deploy ends" would
+/// never run the deploy's hashing. So each file first asks the ticket, without blocking,
+/// whether it must yield (`must_yield`); if so the pass stops taking files and returns, the
+/// CALLING thread waits in `checkpoint()`, and the next pass hashes only what is left.
+fn hash_bulk_in<K: Clone + Send + Sync>(
+    gov: &crate::governor::runtime::Governor,
+    items: &[(K, PathBuf)],
+    ticket: Option<&crate::governor::queue::Ticket>,
+) -> std::result::Result<Vec<(K, String)>, crate::governor::queue::Cancelled> {
+    use crate::governor::config::OpKind;
+    // done[i]: None = not hashed yet; Some(None) = tried and failed (left out, as before).
+    let mut done: Vec<Option<Option<String>>> = vec![None; items.len()];
+    let pool = gov.pool(OpKind::Hash);
+    loop {
+        if let Some(t) = ticket { t.checkpoint()?; }
+        let todo: Vec<usize> = (0..items.len()).filter(|i| done[*i].is_none()).collect();
+        if todo.is_empty() { break; }
+        let stop = AtomicBool::new(false);
+        let pass: Vec<(usize, Option<Option<String>>)> = pool.install(|| {
+            todo.par_iter().map(|&i| {
+                if let Some(t) = ticket {
+                    if stop.load(Ordering::Relaxed) || t.must_yield() {
+                        stop.store(true, Ordering::Relaxed);
+                        return (i, None);
+                    }
+                }
+                let p = &items[i].1;
+                let h = compute_file_hash(p).ok();
+                if let (Some(t), Some(_)) = (ticket, &h) {
+                    t.add_bytes(std::fs::metadata(p).map(|m| m.len()).unwrap_or(0), 0);
+                }
+                (i, Some(h))
+            }).collect()
+        });
+        for (i, r) in pass { if r.is_some() { done[i] = r; } }
+    }
+    Ok(items.iter().zip(done).filter_map(|((k, _), h)| h.flatten().map(|h| (k.clone(), h))).collect())
+}
+
+/// True if `path` matches a previously stored digest, using whatever algorithm the
+/// stored digest declares: `b3:`-tagged → BLAKE3, otherwise legacy SHA-256.
+pub fn file_matches_hash(path: &Path, stored: &str) -> bool {
+    if let Some(hex) = stored.strip_prefix("b3:") {
+        compute_file_hash(path)
+            .map(|h| h.strip_prefix("b3:").map(|x| x == hex).unwrap_or(false))
+            .unwrap_or(false)
+    } else {
+        compute_file_sha256(path).map(|h| h == stored).unwrap_or(false)
+    }
+}
+
+/// Backup a file from `game_path/rel` to `backup_root/_original/rel`.
 /// Only if it's NOT provided by another active mod.
+///
+/// `other_mods_files` must hold every file a mod has deployed into `game_path`, whichever
+/// profile enabled it (`mod_order::game_folder_share`): a profile that shares only the game
+/// folder has its mods' files there too, and seen from this profile alone they looked like
+/// game originals, were backed up as such and were later "restored" over the real thing.
 pub fn backup_original_file(
-    game_path: &Path, 
-    rel: &Path, 
+    game_path: &Path,
+    rel: &Path,
     profile_backup_root: &Path,
     other_mods_files: &HashSet<PathBuf>,
-    backup_path_limit: Option<u64>
+    smart_io: bool,
+    ticket: Option<&crate::governor::queue::Ticket>,
 ) -> Result<()> {
     let src = game_path.join(rel);
     let dst = profile_backup_root.join("_original").join(rel);
-    
+
     // If it's already backed up, we're good
     if dst.exists() { return Ok(()); }
     if !src.exists() { return Ok(()); }
@@ -81,26 +787,125 @@ pub fn backup_original_file(
         return Ok(());
     }
 
-    // It's a real game file! Secure it.
-    copy_file_force_limited(&src, &dst, backup_path_limit)
-        .with_context(|| format!("Failed to backup original file: {:?}", rel))?;
-    
+    // It's a real game file! Secure it. Under the Backup policy of the BACKUP disk (where
+    // the bytes are written), on the deploy's ticket: it is part of that operation.
+    copy_file_governed(crate::governor::config::OpKind::Backup, &src, &dst, ticket, smart_io)
+        .map_err(|e| if e.to_string() == CANCELLED { e } else { e.context(format!("Failed to backup original file: {:?}", rel)) })?;
+
     Ok(())
 }
 
+/// Run `body` over `items` with the deploy's parallelism.
+///
+/// This replaces `run_with_smart_pool_threads`, which BUILT A NEW rayon pool on every
+/// activation and deactivation. Balanced reproduces it exactly:
+///   · the game or the backup folder on the system drive → one at a time (the resolved
+///     policy's `parallel` is 1 there), run on the calling thread, which is what a one-thread
+///     pool did;
+///   · otherwise the governor's Deploy pool (two threads under Balanced, as before);
+///   · Smart I/O off under Balanced → the global rayon pool, as before.
+fn run_deploy_parallel<T, F>(items: &[T], game_path: &Path, backup_root: &Path, smart_io: bool, body: F) -> Result<()>
+where
+    T: Sync,
+    F: Fn(&T) -> Result<()> + Sync + Send,
+{
+    use crate::governor::config::OpKind;
+    let gov = crate::governor::runtime::global();
+    let parallel = gov.policy_for(OpKind::Deploy, game_path).parallel
+        .min(gov.policy_for(OpKind::Backup, backup_root).parallel);
+    if parallel <= 1 {
+        return items.iter().try_for_each(|x| body(x));
+    }
+    if legacy_full_speed(smart_io) {
+        return items.par_iter().try_for_each(|x| body(x));
+    }
+    gov.pool(OpKind::Deploy).install(|| items.par_iter().try_for_each(|x| body(x)))
+}
 
-/// Get all file paths (relative) inside a mod folder, recursively.
+
+/// How a jwalk directory walk fans out (G3b, the Scan kind).
+///
+/// Balanced and Custom: exactly as before, jwalk's default (the global rayon pool, 1 s busy
+/// timeout). Silent: `Serial`, the walk on the calling thread. NOT the governor's one-thread
+/// Scan pool: jwalk aborts a walk whose pool stays busy past its timeout, and on a one-thread
+/// pool a second concurrent walk would come back cut short instead of slower. Max keeps the
+/// default too: the global pool is already every core but one or two.
+///
+/// Not a ticket: this walk is a helper that deploys, hashes and scans all call while they
+/// hold their OWN ticket; a Scan ticket inside it would nest one ticket in another and, with
+/// two slots, two scans each waiting for a second slot would wait for ever.
+pub(crate) fn scan_parallelism() -> jwalk::Parallelism {
+    use crate::governor::config::Preset;
+    match crate::governor::runtime::global().effective_preset() {
+        Preset::Silent => jwalk::Parallelism::Serial,
+        _ => jwalk::Parallelism::RayonDefaultPool { busy_timeout: std::time::Duration::from_secs(1) },
+    }
+}
+
+/// Every entry under `root` (the root itself included, at depth 0), walked with the preset's
+/// fan-out (`scan_parallelism`). Never a walk cut short by a busy pool.
+///
+/// jwalk on a rayon pool waits `busy_timeout` for the pool to pick its walk up, and when it
+/// does not (the global pool held by a Smart-I/O-off deploy's `par_iter`, or the caller itself
+/// a worker of that pool) it gives up: the root, then `ThreadpoolBusy` in place of the whole
+/// tree. Callers used to `.filter_map(ok)` that away, so a saturated pool answered "this mod
+/// has no files", and `disable_mod` deletes `installed_files ∪ list_mod_files`.
+///
+/// So a busy walk is thrown away whole and done again `Serial`, on the calling thread, which
+/// needs no pool and cannot be busy. A pool that answers (the usual case) walks exactly as
+/// before, so Balanced's results and speed are unchanged; a saturated one costs the timeout
+/// plus a one-thread walk, and returns the same list.
+///
+/// An entry that cannot be read (a permission, a file gone mid-walk) is still skipped, as it
+/// always was: that is a fact about the disk, not about how busy the pool is.
+pub(crate) fn walk_entries(root: &Path, sort: bool) -> Vec<jwalk::DirEntry<((), ())>> {
+    walk_entries_with(root, sort, scan_parallelism())
+}
+
+fn walk_entries_with(root: &Path, sort: bool, parallelism: jwalk::Parallelism) -> Vec<jwalk::DirEntry<((), ())>> {
+    let serial = matches!(parallelism, jwalk::Parallelism::Serial);
+    let mut out = Vec::new();
+    for entry in WalkDir::new(root).sort(sort).parallelism(parallelism) {
+        match entry {
+            Ok(e) => out.push(e),
+            Err(e) if e.is_busy() && !serial => {
+                tracing::warn!("rayon pool busy, walking {:?} on the calling thread instead", root);
+                return walk_entries_with(root, sort, jwalk::Parallelism::Serial);
+            }
+            Err(_) => {}
+        }
+    }
+    out
+}
+
+/// Get all file paths (relative) inside a mod, recursively.
+///
+/// A mod is a FOLDER or an ARCHIVE, and this answers for both. It used to answer only for
+/// folders: handed a `.zip`, WalkDir yields the zip itself, `strip_prefix` reduces it to an
+/// empty path, and the caller receives a list of one nothing.
+///
+/// That was not a cosmetic difference. `disable_mod` builds what to delete from
+/// `installed_files` UNION this list, so "Disable all" left an archived mod's files sitting
+/// in the game folder while marking the mod off — the thing that gets reported as "disable
+/// all does not disable archived mods". Conflict detection compares two of these lists, so
+/// an archived mod also silently conflicted with nothing, ever.
+///
+/// The entries are read from the archive's index — nothing is extracted here. Callers that
+/// need real bytes go through `archive::mod_read_root` and get a directory; callers that need
+/// the file list get the same answer for both shapes, which is the point.
 pub fn list_mod_files(mod_folder: &Path) -> Result<Vec<PathBuf>> {
+    if crate::archive::is_archive(mod_folder) {
+        return Ok(crate::archive::archive_entries(mod_folder)?
+            .into_iter()
+            .map(|(rel, _)| PathBuf::from(rel))
+            .collect());
+    }
     let mut files = Vec::new();
-    for entry in WalkDir::new(mod_folder)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.file_type().is_file())
-    {
-        let rel = entry
-            .path()
+    for entry in walk_entries(mod_folder, false).into_iter().filter(|e| e.file_type().is_file()) {
+        let path = entry.path();
+        let rel = path
             .strip_prefix(mod_folder)
-            .unwrap_or(entry.path())
+            .unwrap_or(&path)
             .to_path_buf();
         files.push(rel);
     }
@@ -112,120 +917,515 @@ pub fn apply_mod_stacked(
     mod_folder: &Path,
     game_path: &Path,
     profile_backup_root: &Path,
-    other_active_mods: &[(String, PathBuf)],
-    game_path_limit: Option<u64>,
-    backup_path_limit: Option<u64>,
+    other_mods_files: &HashSet<PathBuf>,
+    smart_io: bool,
+) -> Result<Vec<PathBuf>> {
+    let ticket = crate::governor::runtime::global().begin(crate::governor::config::OpKind::Deploy, &subject_of(mod_folder));
+    apply_mod_stacked_ticketed(mod_folder, game_path, profile_backup_root, other_mods_files, smart_io, &ticket)
+}
+
+/// `apply_mod_stacked` on a ticket the caller holds (the tests cancel it). A checkpoint
+/// between files: a cancelled deploy stops there, and the copy in flight removes its partial
+/// file, so what is left in the game folder is whole files only.
+pub fn apply_mod_stacked_ticketed(
+    mod_folder: &Path,
+    game_path: &Path,
+    profile_backup_root: &Path,
+    other_mods_files: &HashSet<PathBuf>,
+    smart_io: bool,
+    ticket: &crate::governor::queue::Ticket,
 ) -> Result<Vec<PathBuf>> {
     let files = list_mod_files(mod_folder)?;
-    
-    // Pre-calculate other mods files into a HashSet for O(1) lookup during backup check
-    let mut other_mods_files = HashSet::new();
-    for (_, folder) in other_active_mods {
-        if let Ok(m_files) = list_mod_files(folder) {
-            for f in m_files {
-                other_mods_files.insert(f);
+    let roots = protected_roots();
+
+    // Before anything is copied: can this process write where the files go? A game under
+    // Program Files answers no to a BMM that is not elevated, and finding that out on the first
+    // copy left a backup made and, with parallel copies, files from the same pass in place.
+    probe_write_access_with(game_path, &files, &roots, &write_probe_file)?;
+
+    let journal = std::sync::Mutex::new(Vec::<Touched>::new());
+    let stash_root = profile_backup_root.join(format!("_rollback-{}", uuid::Uuid::new_v4().simple()));
+
+    let result = run_deploy_parallel(&files, game_path, profile_backup_root, smart_io, |rel| {
+        if is_mod_op_cancelled() { return Err(cancelled()); }
+        checkpoint(ticket)?;
+        let dst = game_path.join(rel);
+        let backup = profile_backup_root.join("_original").join(rel);
+        let existed = dst.symlink_metadata().is_ok();
+        let had_backup = backup.exists();
+        // Backup original if it's the first time BMM touches this file in this profile
+        let _ = backup_original_file(game_path, rel, profile_backup_root, other_mods_files, smart_io, Some(ticket));
+        let backup_made = existed && !had_backup && backup.exists();
+        // What a rollback puts back for a file that was there: its original backup when that
+        // IS what sits in the game folder, else a copy kept now (another mod's file, or a file
+        // whose backup could not be made). No copy, no overwrite: the deploy stops here.
+        let restore_from_backup = existed && (backup_made || (had_backup && !other_mods_files.contains(rel)));
+        let stash = if existed && !restore_from_backup {
+            let s = stash_root.join(rel);
+            copy_file_governed(crate::governor::config::OpKind::Backup, &dst, &s, Some(ticket), smart_io)
+                .map_err(|e| if e.to_string() == CANCELLED { e } else { e.context(format!("Failed to keep a copy of {:?} for a rollback", dst)) })?;
+            Some(s)
+        } else {
+            None
+        };
+        journal.lock().unwrap_or_else(|p| p.into_inner()).push(Touched { rel: rel.clone(), existed, backup_made, restore_from_backup, stash });
+
+        // Copy mod file to game dir (force overwrite)
+        let src = mod_folder.join(rel);
+        copy_file_governed(crate::governor::config::OpKind::Deploy, &src, &dst, Some(ticket), smart_io)
+            .map_err(|e| match io_error_of(&e).and_then(|io| classify_write_error(io, &dst, game_path, &roots)) {
+                Some(code) => anyhow!(code),
+                None => e,
+            })
+    });
+
+    let journal = journal.into_inner().unwrap_or_else(|p| p.into_inner());
+    match result {
+        Ok(()) => {
+            if stash_root.exists() { let _ = fs::remove_dir_all(&stash_root); }
+            Ok(files)
+        }
+        // A cancel keeps its own path: the parent kills the worker and runs the inverse undo,
+        // and the literal must stay exactly CANCELLED for every caller that compares it.
+        Err(e) if e.to_string() == CANCELLED => {
+            if stash_root.exists() { let _ = fs::remove_dir_all(&stash_root); }
+            Err(e)
+        }
+        Err(e) => {
+            let left = rollback_deploy(game_path, profile_backup_root, &journal, smart_io);
+            if left == 0 {
+                if stash_root.exists() { let _ = fs::remove_dir_all(&stash_root); }
+                Err(e)
+            } else {
+                // The stash is the only copy of what could not be put back: it stays.
+                Err(anyhow!("{} (rollback incomplete: {} file(s) could not be put back; copies kept in {:?})", e, left, stash_root))
             }
         }
     }
-
-    files.par_iter().try_for_each(|rel| {
-        // Backup original if it's the first time BMM touches this file in this profile
-        let _ = backup_original_file(game_path, rel, profile_backup_root, &other_mods_files, backup_path_limit);
-        
-        // Copy mod file to game dir (force overwrite)
-        let src = mod_folder.join(rel);
-        let dst = game_path.join(rel);
-        copy_file_force_limited(&src, &dst, game_path_limit)
-    })?;
-
-    Ok(files)
 }
 
-/// Strip Windows UNC prefix (\\?\) or (\??\) if present, and normalize to common format
+// ── Game folders Windows protects, and a deploy that fails safely ────────────────────────
+//
+// A game installed under C:\Program Files (DCS World's default) cannot be written by a program
+// that is not elevated: every copy into it fails with ERROR_ACCESS_DENIED (os error 5). The
+// worker reported only « Failed to copy A -> B » (the OS error dropped), after the activation had
+// started. Now:
+//   · the deploy probes the destination folders BEFORE it copies anything;
+//   · a denial under a protected folder is the typed `PROTECTED_FOLDER|<game>|<root>|<os error>`
+//     that the frontend turns into its dialog (features/mods/protected-folder.ts). Windows paths
+//     cannot contain `|`, so the fields split cleanly; the OS text is the last one;
+//   · a deploy that fails after it started puts back what it changed (`rollback_deploy`).
+
+/// The typed error's prefix (frontend: features/mods/protected-folder.ts).
+pub const PROTECTED_FOLDER: &str = "PROTECTED_FOLDER";
+
+/// The folders Windows keeps read-only for a program that is not elevated: Program Files (both)
+/// and the Windows folder, from the environment (the drive and language may differ).
+pub fn protected_roots() -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = Vec::new();
+    for var in ["ProgramFiles", "ProgramFiles(x86)", "ProgramW6432", "SystemRoot", "windir"] {
+        if let Some(v) = std::env::var_os(var) {
+            let p = PathBuf::from(v);
+            if !p.as_os_str().is_empty() && !out.iter().any(|o| path_key(o) == path_key(&p)) {
+                out.push(p);
+            }
+        }
+    }
+    out
+}
+
+/// A path as text to compare: no verbatim prefix, backslashes, lower case, no trailing slash.
+fn path_key(p: &Path) -> String {
+    let s = p.to_string_lossy();
+    let mut s = crate::commands::disk::strip_verbatim(&s).replace('/', "\\").to_lowercase();
+    while s.ends_with('\\') { s.pop(); }
+    s
+}
+
+/// The protected folder `path` is in (itself or below), if any. A segment boundary is required:
+/// `C:\Program Files (x86)` is not inside `C:\Program Files`.
+pub fn protected_root_of(path: &Path, roots: &[PathBuf]) -> Option<PathBuf> {
+    let k = path_key(path);
+    roots.iter().find(|r| {
+        let rk = path_key(r);
+        !rk.is_empty() && (k == rk || k.starts_with(&format!("{rk}\\")))
+    }).cloned()
+}
+
+/// `PROTECTED_FOLDER|<game root>|<protected root>|<os error>`.
+pub fn protected_folder_code(game_root: &Path, protected: &Path, os: &std::io::Error) -> String {
+    format!("{PROTECTED_FOLDER}|{}|{}|{}", game_root.display(), protected.display(), os)
+}
+
+/// Access denied, by kind or by the Windows number (ERROR_ACCESS_DENIED = 5).
+pub fn is_permission_denied(e: &std::io::Error) -> bool {
+    e.kind() == std::io::ErrorKind::PermissionDenied || e.raw_os_error() == Some(5)
+}
+
+/// The typed error for a write into `game_root` that failed with `e`, when it is a denial under a
+/// protected folder; None for anything else (a file in use, a full disk: the message says it).
+pub fn classify_write_error(e: &std::io::Error, target: &Path, game_root: &Path, roots: &[PathBuf]) -> Option<String> {
+    if !is_permission_denied(e) { return None; }
+    let root = protected_root_of(target, roots).or_else(|| protected_root_of(game_root, roots))?;
+    Some(protected_folder_code(game_root, &root, e))
+}
+
+/// The io::Error under an anyhow chain (`copy_failed` keeps it there).
+fn io_error_of(e: &anyhow::Error) -> Option<&std::io::Error> {
+    e.chain().find_map(|c| c.downcast_ref::<std::io::Error>())
+}
+
+/// At most this many folders are probed for one deploy (a probe is a create and a delete).
+const MAX_WRITE_PROBES: usize = 64;
+
+/// The folders a deploy of `files` writes into, each reduced to its deepest EXISTING ancestor
+/// (that is where `create_dir_all` and the copy will need the right), without repeats.
+fn probe_dirs(game_root: &Path, files: &[PathBuf]) -> Vec<PathBuf> {
+    let mut leaves = HashSet::new();
+    let mut seen = HashSet::new();
+    let mut out = Vec::new();
+    for rel in files {
+        let Some(parent) = game_root.join(rel).parent().map(|p| p.to_path_buf()) else { continue };
+        if !leaves.insert(parent.clone()) { continue; }
+        let mut d: &Path = &parent;
+        let existing = loop {
+            if d.is_dir() { break Some(d.to_path_buf()); }
+            match d.parent() { Some(p) => d = p, None => break None }
+        };
+        if let Some(e) = existing {
+            if seen.insert(path_key(&e)) {
+                out.push(e);
+                if out.len() >= MAX_WRITE_PROBES { break; }
+            }
+        }
+    }
+    out
+}
+
+/// Write and remove a small file in `dir`. The name is unique, `create_new` never touches an
+/// existing file.
+fn write_probe_file(dir: &Path) -> std::io::Result<()> {
+    let p = dir.join(format!(".bmm-write-probe-{}.tmp", uuid::Uuid::new_v4().simple()));
+    let mut f = fs::OpenOptions::new().write(true).create_new(true).open(&p)?;
+    let w = std::io::Write::write_all(&mut f, b"bmm");
+    drop(f);
+    let _ = fs::remove_file(&p);
+    w
+}
+
+/// Can this process write where `files` go under `game_root`? `probe` writes one test file in a
+/// folder (`write_probe_file`; the tests inject a refusal). The first refusal stops it: the typed
+/// PROTECTED_FOLDER error under a protected folder, else the folder and the OS reason in words.
+fn probe_write_access_with(
+    game_root: &Path,
+    files: &[PathBuf],
+    roots: &[PathBuf],
+    probe: &dyn Fn(&Path) -> std::io::Result<()>,
+) -> Result<()> {
+    for dir in probe_dirs(game_root, files) {
+        if let Err(e) = probe(&dir) {
+            if let Some(code) = classify_write_error(&e, &dir, game_root, roots) {
+                return Err(anyhow!(code));
+            }
+            return Err(anyhow!("BMM cannot write to {:?}: {} [{:?}]. Nothing was copied.", dir, e, e.kind()));
+        }
+    }
+    Ok(())
+}
+
+/// One file a deploy was about to change, and how to put it back.
+#[derive(Debug)]
+struct Touched {
+    rel: PathBuf,
+    /// Something was at the destination before.
+    existed: bool,
+    /// This deploy made its `_original` backup (removed again once restored).
+    backup_made: bool,
+    /// What was there is the `_original` backup's content.
+    restore_from_backup: bool,
+    /// Else a copy kept for the rollback.
+    stash: Option<PathBuf>,
+}
+
+/// Put back every file of `journal`: an added file goes, a replaced one returns from its backup
+/// or from the copy kept for it. Returns how many could NOT be put back.
+fn rollback_deploy(game_path: &Path, backup_root: &Path, journal: &[Touched], smart_io: bool) -> usize {
+    use crate::governor::config::OpKind;
+    let mut left = 0usize;
+    let mut dirs: Vec<PathBuf> = Vec::new();
+    let mut seen: HashSet<PathBuf> = HashSet::new();
+    for t in journal {
+        let dst = game_path.join(&t.rel);
+        if !t.existed {
+            if ensure_removed(&dst).is_err() { left += 1; }
+            let mut cur = t.rel.clone();
+            while let Some(parent) = cur.parent().map(|p| p.to_path_buf()) {
+                if parent.as_os_str().is_empty() { break; }
+                if seen.insert(parent.clone()) { dirs.push(parent.clone()); }
+                cur = parent;
+            }
+            continue;
+        }
+        if t.restore_from_backup {
+            let backup = backup_root.join("_original").join(&t.rel);
+            match copy_file_governed(OpKind::Deploy, &backup, &dst, None, smart_io) {
+                Ok(()) => { if t.backup_made { let _ = ensure_removed(&backup); } }
+                Err(_) => left += 1,
+            }
+        } else if let Some(s) = &t.stash {
+            if copy_file_governed(OpKind::Deploy, s, &dst, None, smart_io).is_err() { left += 1; }
+        }
+    }
+    // Folders the deploy created and that are empty again, deepest first (remove_dir only
+    // removes an empty folder, and the paths are relative to the game folder).
+    dirs.sort_by(|a, b| b.components().count().cmp(&a.components().count()));
+    for d in dirs { let _ = fs::remove_dir(game_path.join(&d)); }
+    let original_dir = backup_root.join("_original");
+    if original_dir.exists() { let _ = remove_empty_dirs(&original_dir); }
+    left
+}
+
+/// Strip a Windows verbatim prefix (\\?\ or \??\) and normalize separators.
+///
+/// The prefix strip is delegated rather than repeated: this file had its own four-character
+/// version, which is wrong for \\?\UNC\server\share - it leaves `UNC\server\share`
+/// instead of \\server\share. That copy was `#[allow(dead_code)]`, so the bug sat here
+/// unused while the same mistake was live in two other files.
+#[allow(dead_code)]
 fn normalize_path(path: PathBuf) -> PathBuf {
     let path_str = path.to_string_lossy();
-    let mut s = path_str.as_ref();
-    if s.starts_with(r"\\?\") {
-        s = &s[4..];
-    } else if s.starts_with(r"\??\") {
-        s = &s[4..];
-    }
+    let stripped = crate::commands::disk::strip_verbatim(path_str.as_ref());
+    let s = if let Some(rest) = stripped.strip_prefix(r"\??\") { rest } else { stripped.as_str() };
     
     // Normalize slashes to backslashes for consistency on Windows
     PathBuf::from(s.replace('/', "\\"))
 }
 
+/// A relative path that came from somebody else — a repo manifest, a server's directory
+/// listing — turned into one that can only name something UNDER the folder it is joined to.
+///
+/// `Path::join` is the trap this exists for: an absolute argument REPLACES the base
+/// (`mods.join("C:/Users/x/…/Startup/a.bat")` is that path, not one under `mods`), and a
+/// `..` segment walks out of it. A repo sync joined the manifest's `relative_path` straight
+/// onto the mod folder, so whoever served the manifest chose where on this disk a file landed.
+///
+/// Refused: empty; rooted (`/x`, `\x`, `\\server\x`); anything holding a `:` (a drive, `C:x`
+/// included, or an NTFS alternate data stream) or a NUL; a `..` segment, and any segment that
+/// is only dots and spaces, because Windows trims trailing dots and spaces and `.. ` would
+/// otherwise reach the filesystem as `..`. Empty and `.` segments are dropped. Both separators
+/// are accepted: a manifest written on Windows carries backslashes.
+///
+/// Returns the path with this platform's separators, never empty.
+pub fn safe_relative_path(rel: &str) -> Option<PathBuf> {
+    if rel.contains('\0') || rel.contains(':') {
+        return None;
+    }
+    let norm = rel.replace('\\', "/");
+    if norm.starts_with('/') {
+        return None;
+    }
+    let mut out = PathBuf::new();
+    for seg in norm.split('/') {
+        if seg.is_empty() || seg == "." {
+            continue;
+        }
+        if seg.trim_end_matches(['.', ' ']).is_empty() {
+            return None;
+        }
+        out.push(seg);
+    }
+    if out.as_os_str().is_empty() { None } else { Some(out) }
+}
+
+/// An id that is about to become ONE folder name — an app's, a launch pack's — or `None`.
+///
+/// `safe_relative_path` with the extra rule that it is a single component: `a/b` is a safe
+/// path and not a folder name. The callers then `remove_dir_all` that folder on uninstall or
+/// delete, so an id of `..` was a request to delete the folder ABOVE, and `C:\` the drive.
+pub fn safe_folder_name(id: &str) -> Option<String> {
+    let p = safe_relative_path(id)?;
+    let mut it = p.components();
+    match (it.next(), it.next()) {
+        (Some(std::path::Component::Normal(one)), None) => Some(one.to_string_lossy().into_owned()),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod safe_relative_path_tests {
+    use super::{safe_folder_name, safe_relative_path};
+    use std::path::PathBuf;
+
+    #[test]
+    fn a_folder_name_is_one_safe_component() {
+        assert_eq!(safe_folder_name("com.example.app").as_deref(), Some("com.example.app"));
+        assert_eq!(safe_folder_name("3f2a9c1e-77aa-4b00-9d1e-000000000000").as_deref(), Some("3f2a9c1e-77aa-4b00-9d1e-000000000000"));
+        for bad in ["..", ".", "", "a/b", "a\\b", "C:\\", "C:", "/", "..\\..\\Startup", " . "] {
+            assert_eq!(safe_folder_name(bad), None, "accepted {bad:?}");
+        }
+    }
+
+    /// What every manifest BMM, BCWEB or a directory crawl writes must still pass, unchanged
+    /// apart from the separator.
+    #[test]
+    fn ordinary_mod_paths_pass() {
+        assert_eq!(safe_relative_path("Data/a.dds"), Some(PathBuf::from("Data").join("a.dds")));
+        assert_eq!(safe_relative_path("Data\\sub\\b.lua"), Some(PathBuf::from("Data").join("sub").join("b.lua")));
+        assert_eq!(safe_relative_path("readme.txt"), Some(PathBuf::from("readme.txt")));
+        // A dot-file and a name with dots inside are names, not traversal.
+        assert_eq!(safe_relative_path(".gitkeep"), Some(PathBuf::from(".gitkeep")));
+        assert_eq!(safe_relative_path("v1..2/x"), Some(PathBuf::from("v1..2").join("x")));
+        // Redundant separators and `.` segments are tidied rather than refused.
+        assert_eq!(safe_relative_path("./a//b"), Some(PathBuf::from("a").join("b")));
+    }
+
+    /// Each of these, joined onto a mod folder, names a file outside it.
+    #[test]
+    fn anything_that_leaves_the_folder_is_refused() {
+        for bad in [
+            "", ".", "/", "../x", "a/../../x", "a\\..\\..\\x", "..",
+            "/etc/passwd", "\\Windows\\x", "\\\\server\\share\\x",
+            "C:\\Users\\x\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\a.bat",
+            "C:/x", "C:x", "a.txt:stream", "a\0b",
+            ".. /x", "a/.../b", "a/. /b",
+        ] {
+            assert_eq!(safe_relative_path(bad), None, "accepted {bad:?}");
+        }
+    }
+
+    /// The property the callers rely on, checked on the joined path itself: whatever passes
+    /// stays under the base.
+    #[test]
+    fn a_path_that_passes_stays_under_the_base() {
+        let base = std::env::temp_dir().join("bmm_safe_rel_base");
+        for ok in ["a", "a/b/c.txt", ".hidden/x", "x..y"] {
+            let joined = base.join(safe_relative_path(ok).unwrap());
+            assert!(joined.starts_with(&base), "{ok:?} escaped to {joined:?}");
+            assert!(joined.components().all(|c| c != std::path::Component::ParentDir));
+        }
+    }
+}
+
 /// Unapply a mod: for each file, find if another active mod provides it.
 /// If not, restore from _original.
+///
+/// `other_active_mods` must be in **activation order**, the same order deployment walks.
+/// Deployment is last-wins — a later mod overwrites an earlier one on any shared path — so
+/// the file actually visible in the game comes from the LAST mod in this list that has it,
+/// and that is the one to fall back to.
+///
+/// This used to scan forward and take the first match, which restored the oldest mod's copy:
+/// a version that had been overwritten and that the player had never seen. Stack three mods
+/// on one file, disable the top one, and the game silently dropped two layers instead of one.
+/// The loop below claimed "starting from most recent" while doing the opposite.
 pub fn unapply_mod_stacked(
     game_path: &Path,
     profile_backup_root: &Path,
     files_to_remove: Vec<String>,
     other_active_mods: &[(String, PathBuf)],
-    game_path_limit: Option<u64>,
+    smart_io: bool,
 ) -> Result<()> {
-    // Canonicalize to follow symlinks/junctions, then normalize to strip UNC prefixes
-    let game_path_norm = normalize_path(game_path.canonicalize().unwrap_or_else(|_| game_path.to_path_buf()));
-    
-    // Parallelize restoration/removal
-    files_to_remove.par_iter().try_for_each(|rel_str| {
-        let rel = PathBuf::from(rel_str);
-        let dst_path = game_path.join(&rel);
-        
-        let mut restored = false;
-        // 1. Try to find another mod that provides this file (starting from most recent)
-        for (_, mod_folder) in other_active_mods {
-            let mod_src = mod_folder.join(&rel);
-            if mod_src.exists() && mod_src.is_file() {
-                copy_file_force_limited(&mod_src, &dst_path, game_path_limit)?;
-                restored = true;
-                break;
-            }
-        }
+    unapply_mod_stacked_shared(game_path, profile_backup_root, &[], files_to_remove, other_active_mods, smart_io)
+}
 
-        // 2. If no other mod has it, restore original or DELETE
-        if !restored {
-            let original_src = profile_backup_root.join("_original").join(&rel);
-            if original_src.exists() {
-                copy_file_force_limited(&original_src, &dst_path, game_path_limit)?;
-            } else {
-                // File was added by mod and no original exists — DELETE IT
-                let _ = ensure_removed(&dst_path); 
-            }
-        }
-        Ok::<(), anyhow::Error>(())
-    })?;
+/// `unapply_mod_stacked` for a game folder other profiles deploy into too: when no mod provides
+/// a file any more, its original is taken from this profile's backup, else from the first of
+/// `shared_backups` (the other profiles' backup roots) that holds it. The profile that first
+/// replaced a game file is the one that backed it up, and it is not always this one.
+pub fn unapply_mod_stacked_shared(
+    game_path: &Path,
+    profile_backup_root: &Path,
+    shared_backups: &[PathBuf],
+    files_to_remove: Vec<String>,
+    other_active_mods: &[(String, PathBuf)],
+    smart_io: bool,
+) -> Result<()> {
+    let ticket = crate::governor::runtime::global().begin(crate::governor::config::OpKind::Deploy, &subject_of(game_path));
+    unapply_mod_stacked_shared_ticketed(game_path, profile_backup_root, shared_backups, files_to_remove, other_active_mods, smart_io, &ticket)
+}
 
-    // Sequential cleanup of empty directories (safer to do sequentially after all files are handled)
-    for rel_str in files_to_remove {
-        let rel = PathBuf::from(&rel_str);
-        let dst_path = game_path.join(&rel);
-        let mut current_p = Some(dst_path.clone());
-        while let Some(p) = current_p {
-            let p_norm = if let Ok(can) = p.canonicalize() { normalize_path(can) } else { normalize_path(p) };
-            
-            // Safety: Don't go above or out of game_path
-            if p_norm == game_path_norm || !p_norm.starts_with(&game_path_norm) { break; }
-            
-            if p_norm.exists() {
-                match fs::read_dir(&p_norm) {
-                    Ok(mut entries) => {
-                        if entries.next().is_none() {
-                            let _ = fs::remove_dir(&p_norm);
-                            current_p = p_norm.parent().map(|parent| parent.to_path_buf());
-                        } else {
-                            // Directory is not empty
-                            break;
-                        }
-                    }
-                    Err(_) => break, // Permission denied or other error
+/// `unapply_mod_stacked_shared` on a ticket the caller holds.
+pub fn unapply_mod_stacked_shared_ticketed(
+    game_path: &Path,
+    profile_backup_root: &Path,
+    shared_backups: &[PathBuf],
+    files_to_remove: Vec<String>,
+    other_active_mods: &[(String, PathBuf)],
+    smart_io: bool,
+    ticket: &crate::governor::queue::Ticket,
+) -> Result<()> {
+    use crate::governor::config::OpKind;
+
+    // Parallelize restoration/removal (the Deploy pool, or one at a time when the game or
+    // backup folder lives on the OS drive; see run_deploy_parallel).
+    let result: Result<()> = run_deploy_parallel(&files_to_remove, game_path, profile_backup_root, smart_io, |rel_str| {
+            if is_mod_op_cancelled() { return Err(cancelled()); }
+            checkpoint(ticket)?;
+            let rel = PathBuf::from(rel_str);
+            let dst_path = game_path.join(&rel);
+
+            let mut restored = false;
+            // 1. Fall back to the last-enabled mod that still provides this file, mirroring
+            //    the last-wins deployment rule.
+            for (_, mod_folder) in other_active_mods.iter().rev() {
+                let mod_src = mod_folder.join(&rel);
+                if mod_src.metadata().map(|m| m.is_file()).unwrap_or(false) {
+                    copy_file_governed(OpKind::Deploy, &mod_src, &dst_path, Some(ticket), smart_io)?;
+                    restored = true;
+                    break;
                 }
-            } else {
-                // Already deleted?
-                current_p = p_norm.parent().map(|parent| parent.to_path_buf());
             }
+
+            // 2. If no other mod has it, restore original or DELETE. The original is in this
+            //    profile's backup, or in the backup of another profile on the same game folder
+            //    (the one that replaced it first).
+            if !restored {
+                let original_src = std::iter::once(profile_backup_root)
+                    .chain(shared_backups.iter().map(|b| b.as_path()))
+                    .map(|b| b.join("_original").join(&rel))
+                    .find(|p| p.exists());
+                if let Some(original_src) = original_src {
+                    copy_file_governed(OpKind::Deploy, &original_src, &dst_path, Some(ticket), smart_io)?;
+                    // Space optimization: remove the backup file as it has been safely restored
+                    let _ = ensure_removed(&original_src);
+                } else {
+                    // File was added by mod and no original exists — DELETE IT
+                    let _ = ensure_removed(&dst_path);
+                }
+            }
+            Ok::<(), anyhow::Error>(())
+    });
+    result?;
+
+    // Cleanup of now-empty directories. Collect the UNIQUE relative ancestor dirs
+    // of every removed file once (instead of re-walking + canonicalizing per file),
+    // then try to remove them deepest-first. `fs::remove_dir` only removes EMPTY
+    // dirs (errors → no-op on non-empty), so this can never delete data, and the
+    // paths are relative to game_path so they can never escape it.
+    let mut dirs: Vec<PathBuf> = Vec::new();
+    let mut seen: HashSet<PathBuf> = HashSet::new();
+    for rel_str in &files_to_remove {
+        let mut cur = PathBuf::from(rel_str);
+        while let Some(parent) = cur.parent().map(|p| p.to_path_buf()) {
+            if parent.as_os_str().is_empty() { break; }
+            if seen.insert(parent.clone()) { dirs.push(parent.clone()); }
+            cur = parent;
         }
     }
+    // Deepest first → children are emptied before their parents are reconsidered.
+    dirs.sort_by(|a, b| b.components().count().cmp(&a.components().count()));
+    for d in dirs {
+        let _ = fs::remove_dir(game_path.join(&d));
+    }
+
+    // Sequential cleanup of empty backup directories
+    for root in std::iter::once(profile_backup_root).chain(shared_backups.iter().map(|b| b.as_path())) {
+        let original_dir = root.join("_original");
+        if original_dir.exists() {
+            let _ = remove_empty_dirs(&original_dir);
+        }
+    }
+
     Ok(())
 }
 
@@ -251,12 +1451,12 @@ pub fn resolve_path(app_handle: &tauri::AppHandle, path: &str) -> Option<std::pa
         path.to_string(), // As requested (e.g. "Lang/en.json")
         format!("_up_/{}", path), // Bundled relative parent (e.g. "_up_/app.cfg")
         format!("_up_/frontend/{}", path), // Bundled relative sibling (e.g. "_up_/frontend/Lang/en.json")
-        path.split('/').last().unwrap_or(path).to_string(), // Flattened (e.g. "en.json")
+        path.split('/').next_back().unwrap_or(path).to_string(), // Flattened (e.g. "en.json")
         format!("frontend/{}", path), // Deep (e.g. "frontend/Lang/en.json")
     ];
 
     for candidate in &candidates {
-        if let Some(p) = app_handle.path_resolver().resolve_resource(candidate) {
+        if let Some(p) = app_handle.path().resolve(candidate, tauri::path::BaseDirectory::Resource).ok() {
             if p.exists() {
                 return Some(p);
             }
@@ -264,7 +1464,7 @@ pub fn resolve_path(app_handle: &tauri::AppHandle, path: &str) -> Option<std::pa
     }
 
     // 2. Development: Try climbing up from resource_dir
-    if let Some(mut p) = app_handle.path_resolver().resource_dir() {
+    if let Some(mut p) = app_handle.path().resource_dir().ok() {
         for _ in 0..5 {
             let check = p.join(path);
             if check.exists() {
@@ -296,8 +1496,8 @@ pub fn get_lang_dir(app_handle: &tauri::AppHandle) -> std::path::PathBuf {
     }
     
     let path = app_handle
-        .path_resolver()
-        .resource_dir()
+        .path()
+        .resource_dir().ok()
         .unwrap_or_else(|| std::path::PathBuf::from("."));
 
     let mut current = path.clone();
@@ -312,4 +1512,789 @@ pub fn get_lang_dir(app_handle: &tauri::AppHandle) -> std::path::PathBuf {
     }
 
     path.join("Lang")
+}
+
+#[cfg(test)]
+mod unapply_stacked_tests {
+    use super::unapply_mod_stacked;
+    use std::fs;
+    use std::path::PathBuf;
+
+    fn scratch(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("bmm_unapply_{}", name));
+        let _ = fs::remove_dir_all(&d);
+        fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    /// Three mods enabled in order, all shipping `Data/tex.dds`. Deployment is last-wins, so
+    /// the game holds C's copy. Disabling C must reveal B — the layer directly underneath —
+    /// not A, which nobody has seen since B was enabled.
+    #[test]
+    fn disabling_the_top_mod_reveals_the_one_directly_underneath() {
+        let root = scratch("layers");
+        let game = root.join("game");
+        let backup = root.join("backup");
+        fs::create_dir_all(game.join("Data")).unwrap();
+        fs::create_dir_all(backup.join("_original/Data")).unwrap();
+        fs::write(backup.join("_original/Data/tex.dds"), b"vanilla").unwrap();
+
+        let mut actives = Vec::new();
+        for (id, body) in [("a", b"AAA"), ("b", b"BBB")] {
+            let dir = root.join(id);
+            fs::create_dir_all(dir.join("Data")).unwrap();
+            fs::write(dir.join("Data/tex.dds"), body).unwrap();
+            actives.push((id.to_string(), dir));
+        }
+        // C is the one being disabled; its copy is what the game currently holds.
+        fs::write(game.join("Data/tex.dds"), b"CCC").unwrap();
+
+        unapply_mod_stacked(
+            &game, &backup,
+            vec!["Data/tex.dds".to_string()],
+            &actives,          // activation order: a, then b
+            false,
+        ).unwrap();
+
+        assert_eq!(
+            fs::read(game.join("Data/tex.dds")).unwrap(), b"BBB",
+            "must fall back to the LAST still-enabled mod, not the first",
+        );
+    }
+
+    #[test]
+    fn with_no_other_mod_the_vanilla_file_comes_back_and_the_backup_is_freed() {
+        let root = scratch("vanilla");
+        let game = root.join("game");
+        let backup = root.join("backup");
+        fs::create_dir_all(game.join("Data")).unwrap();
+        fs::create_dir_all(backup.join("_original/Data")).unwrap();
+        fs::write(backup.join("_original/Data/tex.dds"), b"vanilla").unwrap();
+        fs::write(game.join("Data/tex.dds"), b"modded").unwrap();
+
+        unapply_mod_stacked(
+            &game, &backup, vec!["Data/tex.dds".to_string()], &[], false,
+        ).unwrap();
+
+        assert_eq!(fs::read(game.join("Data/tex.dds")).unwrap(), b"vanilla");
+        assert!(!backup.join("_original/Data/tex.dds").exists(), "backup should be reclaimed");
+    }
+
+    #[test]
+    fn a_file_the_game_never_had_is_deleted() {
+        let root = scratch("added");
+        let game = root.join("game");
+        let backup = root.join("backup");
+        fs::create_dir_all(game.join("Data")).unwrap();
+        fs::create_dir_all(backup.join("_original")).unwrap();
+        fs::write(game.join("Data/new.pak"), b"added").unwrap();
+
+        unapply_mod_stacked(
+            &game, &backup, vec!["Data/new.pak".to_string()], &[], false,
+        ).unwrap();
+
+        assert!(!game.join("Data/new.pak").exists());
+    }
+}
+
+#[cfg(test)]
+mod list_mod_files_tests {
+    use super::list_mod_files;
+    use std::fs;
+    use std::io::Write;
+
+    /// A zip holding two files, one of them nested.
+    fn zip_at(path: &std::path::Path) {
+        let f = fs::File::create(path).unwrap();
+        let mut z = zip::ZipWriter::new(f);
+        let o = zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        z.start_file("readme.txt", o).unwrap();
+        z.write_all(b"hi").unwrap();
+        z.start_file("Data/thing.pak", o).unwrap();
+        z.write_all(b"bytes").unwrap();
+        z.finish().unwrap();
+    }
+
+    /// THE ONE. An archived mod used to answer this question with a list of one empty path,
+    /// which is why "Disable all" left its files in the game folder: what gets deleted is
+    /// `installed_files` UNION this, and this contributed nothing.
+    #[test]
+    fn an_archived_mod_lists_the_files_inside_it() {
+        let dir = std::env::temp_dir().join("bmm_lmf_archive");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let zip = dir.join("CoolMod.zip");
+        zip_at(&zip);
+
+        let mut got: Vec<String> = list_mod_files(&zip).unwrap()
+            .into_iter().map(|p: std::path::PathBuf| p.components().map(|c| c.as_os_str().to_string_lossy().to_string()).collect::<Vec<_>>().join("/")).collect();
+        got.sort();
+        assert_eq!(got, vec!["Data/thing.pak".to_string(), "readme.txt".to_string()]);
+        assert!(!got.iter().any(|s| s.is_empty()), "an empty relative path is the old bug");
+    }
+
+    #[test]
+    fn a_folder_mod_still_lists_the_same_way() {
+        let dir = std::env::temp_dir().join("bmm_lmf_folder/CoolMod");
+        let _ = fs::remove_dir_all(std::env::temp_dir().join("bmm_lmf_folder"));
+        fs::create_dir_all(dir.join("Data")).unwrap();
+        fs::write(dir.join("readme.txt"), b"hi").unwrap();
+        fs::write(dir.join("Data/thing.pak"), b"bytes").unwrap();
+
+        let mut got: Vec<String> = list_mod_files(&dir).unwrap()
+            .into_iter().map(|p: std::path::PathBuf| p.components().map(|c| c.as_os_str().to_string_lossy().to_string()).collect::<Vec<_>>().join("/")).collect();
+        got.sort();
+        assert_eq!(got, vec!["Data/thing.pak".to_string(), "readme.txt".to_string()]);
+    }
+
+    /// The two shapes of the same mod must be indistinguishable here, or conflict detection
+    /// between a zipped mod and its unzipped twin finds nothing.
+    #[test]
+    fn the_zipped_and_unzipped_twin_agree() {
+        let root = std::env::temp_dir().join("bmm_lmf_twin");
+        let _ = fs::remove_dir_all(&root);
+        let folder = root.join("CoolMod");
+        fs::create_dir_all(folder.join("Data")).unwrap();
+        fs::write(folder.join("readme.txt"), b"hi").unwrap();
+        fs::write(folder.join("Data/thing.pak"), b"bytes").unwrap();
+        let zip = root.join("CoolMod.zip");
+        zip_at(&zip);
+
+        let norm = |v: Vec<std::path::PathBuf>| {
+            let mut s: Vec<String> = v.into_iter().map(|p: std::path::PathBuf| p.components().map(|c| c.as_os_str().to_string_lossy().to_string()).collect::<Vec<_>>().join("/")).collect();
+            s.sort();
+            s
+        };
+        assert_eq!(norm(list_mod_files(&folder).unwrap()), norm(list_mod_files(&zip).unwrap()));
+    }
+
+    /// Every thread of the GLOBAL rayon pool held until the guard drops (a panic drops it too).
+    /// What a Smart-I/O-off deploy's `par_iter` does to the pool for as long as it copies.
+    struct Held(std::sync::Arc<std::sync::atomic::AtomicBool>);
+    impl Drop for Held {
+        fn drop(&mut self) { self.0.store(true, std::sync::atomic::Ordering::SeqCst); }
+    }
+
+    /// The tests here that hold the global pool, and the one that needs it free, take turns:
+    /// run side by side, one test's hold is the other's busy pool.
+    static POOL_TURN: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    fn pool_turn() -> std::sync::MutexGuard<'static, ()> {
+        POOL_TURN.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    fn hold_the_global_pool() -> Held {
+        use std::sync::{atomic::{AtomicBool, Ordering}, mpsc, Arc};
+        let n = rayon::current_num_threads();
+        let release = Arc::new(AtomicBool::new(false));
+        let (tx, rx) = mpsc::channel();
+        for _ in 0..n {
+            let (r, tx) = (release.clone(), tx.clone());
+            rayon::spawn(move || {
+                let _ = tx.send(());
+                while !r.load(Ordering::SeqCst) { std::thread::sleep(std::time::Duration::from_millis(5)); }
+            });
+        }
+        let held = Held(release);
+        for _ in 0..n {
+            rx.recv_timeout(std::time::Duration::from_secs(60)).expect("every global thread is holding");
+        }
+        held
+    }
+
+    /// Three levels, a dozen files: enough that a walk cut short cannot pass for a whole one.
+    fn nested_mod(name: &str) -> (std::path::PathBuf, Vec<String>) {
+        let dir = std::env::temp_dir().join(name).join("CoolMod");
+        let _ = fs::remove_dir_all(std::env::temp_dir().join(name));
+        let mut want = Vec::new();
+        for a in ["Data", "Textures", "Scripts"] {
+            for b in ["x", "y"] {
+                fs::create_dir_all(dir.join(a).join(b)).unwrap();
+                fs::write(dir.join(a).join(b).join("f.bin"), b"1").unwrap();
+                want.push(format!("{a}/{b}/f.bin"));
+            }
+            fs::write(dir.join(a).join("top.txt"), b"2").unwrap();
+            want.push(format!("{a}/top.txt"));
+        }
+        want.sort();
+        (dir, want)
+    }
+
+    fn norm(v: Vec<std::path::PathBuf>) -> Vec<String> {
+        let mut s: Vec<String> = v.into_iter().map(|p| p.components().map(|c| c.as_os_str().to_string_lossy().to_string()).collect::<Vec<_>>().join("/")).collect();
+        s.sort();
+        s
+    }
+
+    /// THE ONE for the busy pool. jwalk gives up on a pool that does not answer within its
+    /// 1 s busy timeout and yields `ThreadpoolBusy` in place of the tree; `.filter_map(ok)`
+    /// dropped it, so a saturated pool answered "this mod has no files". `disable_mod` deletes
+    /// `installed_files ∪ this`: a short list here is files left behind in the game folder.
+    /// The full list, or an error that says so. Never a short list.
+    #[test]
+    fn a_saturated_global_pool_still_gets_the_whole_list() {
+        let (dir, want) = nested_mod("bmm_lmf_busy");
+        let _turn = pool_turn();
+        assert_eq!(norm(list_mod_files(&dir).unwrap()), want, "baseline, pool free");
+        let held = hold_the_global_pool();
+        let got = list_mod_files(&dir);
+        drop(held);
+        match got {
+            Ok(v) => assert_eq!(norm(v), want, "a busy pool must not shorten the list"),
+            Err(e) => assert!(e.to_string().contains("busy"), "an error must say why: {e}"),
+        }
+        let _ = fs::remove_dir_all(std::env::temp_dir().join("bmm_lmf_busy"));
+    }
+
+    /// The balanced walk, as it was written before `walk_entries`: jwalk's default pool,
+    /// errors dropped.
+    fn old_walk(root: &std::path::Path, sort: bool) -> Vec<(usize, std::path::PathBuf)> {
+        jwalk::WalkDir::new(root).sort(sort)
+            .parallelism(jwalk::Parallelism::RayonDefaultPool { busy_timeout: std::time::Duration::from_secs(1) })
+            .into_iter().filter_map(|e| e.ok()).map(|e| (e.depth, e.path())).collect()
+    }
+    fn balanced(root: &std::path::Path, sort: bool) -> Vec<(usize, std::path::PathBuf)> {
+        super::walk_entries_with(root, sort, jwalk::Parallelism::RayonDefaultPool { busy_timeout: std::time::Duration::from_secs(1) })
+            .into_iter().map(|e| (e.depth, e.path())).collect()
+    }
+
+    /// Balanced, pool free: entry for entry and in the same order, what the old walk gave.
+    #[test]
+    fn a_free_pool_walks_exactly_as_before() {
+        let (dir, _) = nested_mod("bmm_lmf_same");
+        let _turn = pool_turn();
+        for sort in [false, true] {
+            let (old, new) = (old_walk(&dir, sort), balanced(&dir, sort));
+            if sort {
+                assert_eq!(new, old, "sorted: same entries, same order");
+            } else {
+                let (mut o, mut n) = (old, new);
+                o.sort();
+                n.sort();
+                assert_eq!(n, o, "unsorted: same entries");
+            }
+        }
+        let _ = fs::remove_dir_all(std::env::temp_dir().join("bmm_lmf_same"));
+    }
+
+    /// The mapper's walk (sorted, every depth), the balanced parallelism named explicitly so
+    /// the preset of the test process cannot make it Serial: under a held pool it comes back
+    /// whole and in the order a free pool gives, so the tree it builds is the same tree.
+    #[test]
+    fn the_mapper_walk_under_a_held_pool_is_the_free_pool_walk() {
+        let (dir, _) = nested_mod("bmm_lmf_mapper");
+        let _turn = pool_turn();
+        let free = balanced(&dir, true);
+        assert!(free.len() > 12, "the fixture is not trivial: {}", free.len());
+        let held = hold_the_global_pool();
+        let busy = balanced(&dir, true);
+        drop(held);
+        assert_eq!(busy, free);
+        let _ = fs::remove_dir_all(std::env::temp_dir().join("bmm_lmf_mapper"));
+    }
+}
+
+/// Phase G3a: activation and deactivation on the governor (tickets, the Deploy pool, the
+/// governed copy). What must NOT change under the default Balanced preset is the bytes.
+#[cfg(test)]
+mod governed_deploy_tests {
+    use super::*;
+    use crate::governor::config::{OpKind, Preset};
+    use crate::governor::queue::Queue;
+    use std::time::Duration;
+
+    fn scratch(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("bmm_g3a_{}_{}", name, std::process::id()));
+        let _ = fs::remove_dir_all(&d);
+        fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    /// remove_dir_all refuses read-only files on Windows; clear them first.
+    fn rm(root: &Path) {
+        for e in WalkDir::new(root).into_iter().filter_map(|e| e.ok()) {
+            if let Ok(m) = fs::metadata(e.path()) {
+                let mut p = m.permissions();
+                if p.readonly() { p.set_readonly(false); let _ = fs::set_permissions(e.path(), p); }
+            }
+        }
+        let _ = fs::remove_dir_all(root);
+    }
+
+    fn bytes(len: usize, seed: u8) -> Vec<u8> {
+        (0..len).map(|i| (i as u32).wrapping_mul(31).wrapping_add(seed as u32) as u8).collect()
+    }
+
+    fn put(root: &Path, rel: &str, data: &[u8]) {
+        let p = root.join(rel);
+        fs::create_dir_all(p.parent().unwrap()).unwrap();
+        fs::write(p, data).unwrap();
+    }
+
+    /// A mod whose sizes straddle every boundary the copy has: empty, one byte, one chunk,
+    /// the 128 KiB paced chunk, and past the 16 MiB Smart I/O yield.
+    fn mod_tree(root: &Path) -> Vec<(&'static str, Vec<u8>)> {
+        let files = vec![
+            ("empty.txt", vec![]),
+            ("Data/one.bin", bytes(1, 1)),
+            ("Data/sub/chunk.bin", bytes((1 << 20) + 3, 2)),
+            ("Data/paced.bin", bytes(128 * 1024 + 1, 3)),
+            ("big.pak", bytes((17 << 20) + 7, 4)),
+            ("readonly.cfg", bytes(100, 5)),
+            ("shared.dds", bytes(10, 6)),
+        ];
+        for (rel, data) in &files { put(root, rel, data); }
+        files
+    }
+
+    #[test]
+    fn deploy_under_balanced_copies_the_same_bytes_as_before() {
+        assert_eq!(crate::governor::runtime::global().config().preset, Preset::Balanced, "the default is Balanced");
+        // Balanced resolves to today's Smart I/O rhythm for a deploy (config.rs pins the
+        // numbers; this pins that the copy asks for them).
+        let root = scratch("same");
+        let p = crate::governor::runtime::global().policy_for(OpKind::Deploy, &root.join("x"));
+        assert_eq!((p.buffer_kib, p.pause_every_mib, p.pause_us, p.rate_mb_s), (1024, Some(16), 150, None));
+
+        let m = root.join("mod");
+        let files = mod_tree(&m);
+        for smart_io in [true, false] {
+            let game = root.join(format!("game_{smart_io}"));
+            let backup = root.join(format!("backup_{smart_io}"));
+            // Originals the deploy must back up first, one of them read-only (the old copy
+            // cleared that before overwriting; so must this one).
+            put(&game, "Data/one.bin", b"vanilla-one");
+            put(&game, "readonly.cfg", b"vanilla-cfg");
+            let mut ro = fs::metadata(game.join("readonly.cfg")).unwrap().permissions();
+            ro.set_readonly(true);
+            fs::set_permissions(game.join("readonly.cfg"), ro).unwrap();
+            // A file another active mod put there: never backed up as an "original".
+            put(&game, "shared.dds", b"other-mod");
+            let other: HashSet<PathBuf> = [PathBuf::from("shared.dds")].into_iter().collect();
+
+            let mut applied = apply_mod_stacked(&m, &game, &backup, &other, smart_io).unwrap();
+            applied.sort();
+            let mut want: Vec<PathBuf> = files.iter().map(|(r, _)| PathBuf::from(r)).collect();
+            want.sort();
+            assert_eq!(applied, want, "smart_io={smart_io}: the list of applied files");
+            for (rel, data) in &files {
+                assert_eq!(&fs::read(game.join(rel)).unwrap(), data, "smart_io={smart_io}: {rel} byte for byte");
+            }
+            assert_eq!(fs::read(backup.join("_original/Data/one.bin")).unwrap(), b"vanilla-one");
+            assert_eq!(fs::read(backup.join("_original/readonly.cfg")).unwrap(), b"vanilla-cfg");
+            assert!(!backup.join("_original/shared.dds").exists(), "another mod's file is not an original");
+            assert!(!backup.join("_original/big.pak").exists(), "no original, no backup");
+
+            // And back: the originals return, the added files go, the backups are reclaimed.
+            let rels: Vec<String> = files.iter().map(|(r, _)| r.to_string()).collect();
+            unapply_mod_stacked(&game, &backup, rels, &[], smart_io).unwrap();
+            assert_eq!(fs::read(game.join("Data/one.bin")).unwrap(), b"vanilla-one");
+            assert_eq!(fs::read(game.join("readonly.cfg")).unwrap(), b"vanilla-cfg");
+            assert!(!game.join("big.pak").exists() && !game.join("Data/sub/chunk.bin").exists());
+            assert!(!backup.join("_original/Data/one.bin").exists());
+        }
+        // No ticket outlives its operation.
+        assert!(!crate::governor::runtime::global().queue().snapshot().iter().any(|t| t.subject == "mod" && t.kind == OpKind::Deploy));
+        rm(&root);
+    }
+
+    #[test]
+    fn cancelling_a_deploy_ticket_stops_between_files_and_leaves_no_partial_file() {
+        let root = scratch("cancel");
+        let m = root.join("mod");
+        let game = root.join("game");
+        let backup = root.join("backup");
+        for i in 0..24 { put(&m, &format!("f{i:02}.bin"), &bytes(300 * 1024, i as u8)); }
+        put(&game, "f00.bin", b"vanilla");
+
+        let q = Queue::default();
+        let t = q.begin(OpKind::Deploy, "cancel me");
+        let id = t.id();
+        q.pause(id); // held at its first checkpoint...
+        let (m2, g2, b2) = (m.clone(), game.clone(), backup.clone());
+        let h = std::thread::spawn(move || {
+            apply_mod_stacked_ticketed(&m2, &g2, &b2, &HashSet::new(), true, &t).map_err(|e| e.to_string())
+        });
+        std::thread::sleep(Duration::from_millis(150));
+        assert!(!h.is_finished(), "a paused deploy waits at its checkpoint");
+        q.cancel(id); // ...then cancelled
+        assert_eq!(h.join().unwrap(), Err(CANCELLED.to_string()), "a cancel is reported as CANCELLED, not as a failure");
+
+        // Nothing half-written: every file present is whole, and the original was not touched.
+        assert_eq!(fs::read(game.join("f00.bin")).unwrap(), b"vanilla");
+        let mut copied = 0;
+        for i in 1..24 {
+            let p = game.join(format!("f{i:02}.bin"));
+            if p.exists() {
+                assert_eq!(fs::read(&p).unwrap(), bytes(300 * 1024, i as u8), "no partial file");
+                copied += 1;
+            }
+        }
+        assert_eq!(copied, 0, "stopped at the checkpoint before the first file");
+        assert!(!backup.join("_original/f00.bin").exists(), "not even the backup of the first file");
+        rm(&root);
+    }
+
+    /// The Install copy must be what `fs_extra::dir::copy(content_only)` was: same tree, empty
+    /// folders included, same bytes, same modification times, read-only kept.
+    #[test]
+    fn install_folder_copy_matches_fs_extra() {
+        let root = scratch("install");
+        let src = root.join("src");
+        put(&src, "a.txt", b"alpha");
+        put(&src, "Data/b.bin", &bytes(70_000, 9));
+        fs::create_dir_all(src.join("Empty/Deeper")).unwrap();
+        let mut ro = fs::metadata(src.join("a.txt")).unwrap().permissions();
+        ro.set_readonly(true);
+        fs::set_permissions(src.join("a.txt"), ro).unwrap();
+
+        let old = root.join("old");
+        fs::create_dir_all(&old).unwrap();
+        let mut o = fs_extra::dir::CopyOptions::new();
+        o.content_only = true;
+        o.overwrite = true;
+        fs_extra::dir::copy(&src, &old, &o).unwrap();
+
+        let new = root.join("new");
+        let t = Queue::default().begin(OpKind::Install, "install");
+        copy_dir_governed(OpKind::Install, &src, &new, &t).unwrap();
+
+        for rel in ["a.txt", "Data/b.bin"] {
+            let (a, b) = (fs::metadata(old.join(rel)).unwrap(), fs::metadata(new.join(rel)).unwrap());
+            assert_eq!(fs::read(old.join(rel)).unwrap(), fs::read(new.join(rel)).unwrap(), "{rel}");
+            assert_eq!(a.modified().unwrap(), b.modified().unwrap(), "{rel}: date kept like fs::copy");
+            assert_eq!(a.permissions().readonly(), b.permissions().readonly(), "{rel}: read-only kept");
+        }
+        assert!(new.join("Empty/Deeper").is_dir(), "empty folders are copied too");
+        rm(&root);
+    }
+}
+
+/// Phase G3b: hashing on the governor (Hash pool, Hash tickets). The digests under the
+/// default Balanced preset must be exactly the ones the old private hash pool produced.
+#[cfg(test)]
+mod governed_hash_tests {
+    use super::*;
+    use crate::governor::config::{OpKind, ResourcesConfig};
+    use crate::governor::game_mode::Manual;
+    use crate::governor::runtime::Governor;
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    const SOON: Duration = Duration::from_millis(150);
+    const WAIT: Duration = Duration::from_secs(10);
+
+    fn scratch(tag: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("bmm_g3b_hash_{}_{}", tag, std::process::id()));
+        let _ = fs::remove_dir_all(&d);
+        fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    /// Edge sizes around the 1 MiB mark (BLAKE3 chunking and the old SHA buffers), an empty
+    /// file, a multi-MiB one, and a path that does not exist (left out, as it always was).
+    fn edge_files(dir: &Path) -> Vec<(String, PathBuf)> {
+        const MIB: usize = 1 << 20;
+        let mut items = Vec::new();
+        for (name, len) in [("zero", 0), ("one", 1), ("mib_minus_1", MIB - 1), ("mib_plus_1", MIB + 1), ("multi", 5 * MIB + 12_345)] {
+            let p = dir.join(name);
+            let data: Vec<u8> = (0..len).map(|i| (i.wrapping_mul(31) ^ (i >> 7)) as u8).collect();
+            fs::write(&p, &data).unwrap();
+            items.push((name.to_string(), p));
+        }
+        items.push(("missing".to_string(), dir.join("not-there")));
+        items
+    }
+
+    /// The loop as it was before G3b, verbatim: its own `(cores / 2).clamp(1, 4)` pool and a
+    /// `filter_map` over the files.
+    fn old_bulk(items: &[(String, PathBuf)]) -> Vec<(String, String)> {
+        let cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
+        let pool = rayon::ThreadPoolBuilder::new().num_threads((cores / 2).clamp(1, 4)).build().unwrap();
+        pool.install(|| items.par_iter().filter_map(|(k, p)| compute_file_hash(p).ok().map(|h| (k.clone(), h))).collect())
+    }
+
+    #[test]
+    fn hash_under_balanced_equals_the_old_result() {
+        let dir = scratch("eq");
+        let items = edge_files(&dir);
+        let old = old_bulk(&items);
+        assert_eq!(old.len(), 5, "the missing file is left out");
+        // And the old digests are real BLAKE3, not two implementations agreeing on nonsense.
+        for (k, h) in &old {
+            let bytes = fs::read(dir.join(k)).unwrap();
+            assert_eq!(h, &format!("b3:{}", blake3::hash(&bytes).to_hex()), "{k}");
+        }
+
+        assert_eq!(compute_file_hash_bulk(&items), old, "the untracked bulk hash (global governor, Balanced)");
+
+        let gov = Governor::for_tests(ResourcesConfig::default());
+        let cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
+        assert_eq!(gov.pool(OpKind::Hash).current_num_threads(), (cores / 2).clamp(1, 4), "Balanced = the old pool size");
+        let t = gov.begin(OpKind::Hash, "g3b test");
+        assert_eq!(compute_file_hash_bulk_ticketed(&gov, &items, &t).unwrap(), old, "the ticketed hash, same digests, same order");
+        let view = gov.queue().snapshot().into_iter().find(|v| v.subject == "g3b test").unwrap();
+        assert_eq!(view.bytes_read, items.iter().filter_map(|(_, p)| fs::metadata(p).ok()).map(|m| m.len()).sum::<u64>(), "bytes counted for the dashboard");
+
+        // Cancelled: nothing comes back, not half a baseline.
+        gov.queue().cancel(t.id());
+        assert!(compute_file_hash_bulk_ticketed(&gov, &items, &t).is_err());
+        drop(t);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn background_hash_yields_to_a_deploy_ticket() {
+        let dir = scratch("yield");
+        let items = edge_files(&dir);
+        let old = old_bulk(&items);
+        let gov = Governor::for_tests(ResourcesConfig::default());
+        let deploy = gov.begin(OpKind::Deploy, "enable a mod");
+        let hash = gov.begin(OpKind::Hash, "background sha");
+        std::thread::scope(|s| {
+            let (tx, rx) = mpsc::channel();
+            let (g, it, h) = (&gov, &items, &hash);
+            s.spawn(move || { tx.send(compute_file_hash_bulk_ticketed(g, it, h).map_err(|e| e.to_string())).unwrap(); });
+            assert!(rx.recv_timeout(SOON).is_err(), "hashing waits while a deploy writes the game folder");
+            let v = gov.queue().snapshot().into_iter().find(|v| v.subject == "background sha").unwrap();
+            assert_eq!(v.bytes_read, 0, "and has read nothing");
+            drop(deploy);
+            assert_eq!(rx.recv_timeout(WAIT).expect("it runs once the deploy is over").unwrap(), old);
+        });
+        drop(hash);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn game_mode_holds_background_hashing() {
+        let dir = scratch("game");
+        let items = edge_files(&dir);
+        let old = old_bulk(&items);
+        let gov = Governor::for_tests(ResourcesConfig::default());
+        gov.set_game_manual(Manual::On);
+        assert_eq!(gov.pool(OpKind::Hash).current_num_threads(), 1, "game mode = Silent: one hashing thread");
+        let hash = gov.begin(OpKind::Hash, "background sha");
+        std::thread::scope(|s| {
+            let (tx, rx) = mpsc::channel();
+            let (g, it, h) = (&gov, &items, &hash);
+            s.spawn(move || { tx.send(compute_file_hash_bulk_ticketed(g, it, h).map_err(|e| e.to_string())).unwrap(); });
+            assert!(rx.recv_timeout(SOON).is_err(), "background hashing is held while a game runs");
+            gov.set_game_manual(crate::governor::game_mode::Manual::Off);
+            assert_eq!(rx.recv_timeout(WAIT).expect("released when the game ends").unwrap(), old);
+        });
+        drop(hash);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A pause that lands while a pass is running stops the pass between files (the pool's
+    /// threads are not left waiting) and the rest is hashed after the resume: nothing is
+    /// hashed twice or skipped.
+    #[test]
+    fn a_pause_mid_pass_resumes_where_it_stopped() {
+        let dir = scratch("pause");
+        let mut items = Vec::new();
+        for i in 0..200 {
+            let p = dir.join(format!("f{i}"));
+            fs::write(&p, vec![i as u8; 40_000]).unwrap();
+            items.push((i, p));
+        }
+        let expected: Vec<(i32, String)> = items.iter().map(|(k, p)| (*k, compute_file_hash(p).unwrap())).collect();
+        let gov = Governor::for_tests(ResourcesConfig::default());
+        let t = gov.begin(OpKind::Hash, "paused mid-way");
+        let id = t.id();
+        std::thread::scope(|s| {
+            let (tx, rx) = mpsc::channel();
+            let (g, it, h) = (&gov, &items, &t);
+            s.spawn(move || { tx.send(compute_file_hash_bulk_ticketed(g, it, h).map_err(|e| e.to_string())).unwrap(); });
+            gov.queue().pause(id);
+            std::thread::sleep(Duration::from_millis(50));
+            // While paused, the Hash pool is free for anyone else.
+            let free = gov.pool(OpKind::Hash).install(|| 7);
+            assert_eq!(free, 7);
+            gov.queue().resume(id);
+            assert_eq!(rx.recv_timeout(WAIT).unwrap().unwrap(), expected);
+        });
+        drop(t);
+        let _ = fs::remove_dir_all(&dir);
+    }
+}
+
+#[cfg(test)]
+mod protected_folder_tests {
+    //! The owner's export: enabling a mod into C:\Program Files\Eagle Dynamics\DCS World failed
+    //! with « Failed to copy A -> B » and nothing else. These pin the typed error, the probe that
+    //! now runs before any copy, and the rollback of a deploy that fails half-way.
+    use super::*;
+
+    fn scratch(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("bmm_protected_{}_{}", name, std::process::id()));
+        let _ = fs::remove_dir_all(&d);
+        fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    fn put(root: &Path, rel: &str, data: &[u8]) {
+        let p = root.join(rel);
+        fs::create_dir_all(p.parent().unwrap()).unwrap();
+        fs::write(p, data).unwrap();
+    }
+
+    fn denied() -> std::io::Error {
+        std::io::Error::from_raw_os_error(5)
+    }
+
+    fn pf_roots() -> Vec<PathBuf> {
+        vec![PathBuf::from(r"C:\Program Files"), PathBuf::from(r"C:\Program Files (x86)"), PathBuf::from(r"C:\Windows")]
+    }
+
+    #[test]
+    fn a_path_under_program_files_is_protected_and_a_lookalike_is_not() {
+        let roots = pf_roots();
+        let dcs = Path::new(r"C:\Program Files\Eagle Dynamics\DCS World");
+        assert_eq!(protected_root_of(dcs, &roots), Some(PathBuf::from(r"C:\Program Files")));
+        // Case, forward slashes, a trailing slash and a verbatim prefix do not hide it.
+        assert!(protected_root_of(Path::new("c:/program files/Eagle Dynamics/"), &roots).is_some());
+        assert!(protected_root_of(Path::new(r"\\?\C:\PROGRAM FILES\x"), &roots).is_some());
+        assert_eq!(
+            protected_root_of(Path::new(r"C:\Program Files (x86)\Steam\steamapps"), &roots),
+            Some(PathBuf::from(r"C:\Program Files (x86)")),
+            "the (x86) folder is its own root, not a child of Program Files",
+        );
+        assert!(protected_root_of(Path::new(r"C:\Program FilesX\game"), &roots).is_none(), "a segment boundary is required");
+        assert!(protected_root_of(Path::new(r"E:\DCS Root Mods\SavedRoot Mods"), &roots).is_none());
+        assert!(protected_root_of(Path::new(r"C:\Windows\System32"), &roots).is_some());
+    }
+
+    #[test]
+    fn access_denied_under_a_protected_folder_is_the_typed_error() {
+        let roots = pf_roots();
+        let game = Path::new(r"C:\Program Files\Eagle Dynamics\DCS World");
+        let dst = game.join(r"Mods\aircraft\A-10C_2\Cockpit\Scripts\HUD\Indicator\HUD_init.lua");
+        let code = classify_write_error(&denied(), &dst, game, &roots).expect("os error 5 under Program Files");
+        let parts: Vec<&str> = code.split('|').collect();
+        assert_eq!(parts[0], PROTECTED_FOLDER);
+        assert_eq!(parts[1], game.display().to_string());
+        assert_eq!(parts[2], r"C:\Program Files");
+        assert!(parts[3].contains("os error 5"), "the OS reason travels: {code}");
+        // The kind alone (another platform, a mapped error) is enough too.
+        let kind_only = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied");
+        assert!(classify_write_error(&kind_only, &dst, game, &roots).is_some());
+    }
+
+    #[test]
+    fn other_failures_are_not_mistaken_for_a_protected_folder() {
+        let roots = pf_roots();
+        let game = Path::new(r"C:\Program Files\Game");
+        // A file in use (sharing violation) under Program Files is not an elevation problem.
+        let in_use = std::io::Error::from_raw_os_error(32);
+        assert_eq!(classify_write_error(&in_use, &game.join("a"), game, &roots), None);
+        // Access denied OUTSIDE a protected folder: a real refusal, but not this dialog.
+        let other = Path::new(r"E:\Games\DCS");
+        assert_eq!(classify_write_error(&denied(), &other.join("a"), other, &roots), None);
+    }
+
+    #[test]
+    fn the_copy_error_carries_the_os_reason_and_its_kind() {
+        let e = copy_failed(Path::new("a.lua"), Path::new("b.lua"), denied());
+        let msg = e.to_string();
+        assert!(msg.starts_with("Failed to copy"), "{msg}");
+        assert!(msg.contains("os error 5") && msg.contains("PermissionDenied"), "{msg}");
+        assert!(io_error_of(&e).map(is_permission_denied).unwrap_or(false), "the io::Error stays in the chain");
+    }
+
+    #[test]
+    fn the_probe_writes_nothing_that_stays_and_passes_on_a_writable_folder() {
+        let root = scratch("probe_ok");
+        let game = root.join("game");
+        put(&game, "Mods/keep.txt", b"x");
+        let files = vec![PathBuf::from("Mods/aircraft/new/file.lua"), PathBuf::from("root.cfg")];
+        probe_write_access_with(&game, &files, &protected_roots(), &write_probe_file).expect("a temp folder is writable");
+        // Nothing left behind: the game folder holds what it held.
+        let left: Vec<String> = walk_entries(&game, true).into_iter()
+            .filter(|e| e.file_type().is_file())
+            .map(|e| e.path().strip_prefix(&game).unwrap().to_string_lossy().replace('\\', "/"))
+            .collect();
+        assert_eq!(left, vec!["Mods/keep.txt".to_string()]);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn the_probe_asks_the_deepest_existing_folder_once() {
+        let root = scratch("probe_dirs");
+        let game = root.join("game");
+        fs::create_dir_all(game.join("Mods/aircraft")).unwrap();
+        let files = vec![
+            PathBuf::from("Mods/aircraft/A-10C_2/Cockpit/a.lua"),
+            PathBuf::from("Mods/aircraft/A-10C_2/Cockpit/b.lua"),
+            PathBuf::from("Mods/aircraft/F-16/c.lua"),
+        ];
+        let dirs = probe_dirs(&game, &files);
+        assert_eq!(dirs, vec![game.join("Mods/aircraft")], "both missing trees reduce to the folder that exists");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_refused_probe_under_a_protected_folder_is_typed_and_elsewhere_is_in_words() {
+        let root = scratch("probe_denied");
+        let game = root.join("DCS World");
+        fs::create_dir_all(&game).unwrap();
+        let files = vec![PathBuf::from("Mods/x.lua")];
+        // The test's temp folder plays Program Files: a refusal there is the typed error.
+        let roots = vec![root.clone()];
+        let refuse = |_: &Path| -> std::io::Result<()> { Err(std::io::Error::from_raw_os_error(5)) };
+        let e = probe_write_access_with(&game, &files, &roots, &refuse).unwrap_err().to_string();
+        assert!(e.starts_with("PROTECTED_FOLDER|"), "{e}");
+        // Not under a protected folder: the folder and the reason, in words.
+        let e = probe_write_access_with(&game, &files, &[], &refuse).unwrap_err().to_string();
+        assert!(e.starts_with("BMM cannot write to") && e.contains("os error 5") && e.contains("Nothing was copied"), "{e}");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_deploy_that_fails_half_way_puts_the_game_folder_back() {
+        let root = scratch("rollback");
+        let m = root.join("mod");
+        let game = root.join("game");
+        let backup = root.join("backup");
+        // The mod: replaces an original, replaces another mod's file, adds files (one in a new
+        // folder), and has one file that cannot be written (a FOLDER sits at its destination).
+        put(&m, "orig.cfg", b"mod-orig");
+        put(&m, "shared.dds", b"mod-shared");
+        put(&m, "New/added.lua", b"mod-added");
+        put(&m, "added2.txt", b"mod-added2");
+        put(&m, "zz_blocked.bin", b"mod-blocked");
+        put(&game, "orig.cfg", b"vanilla");
+        put(&game, "shared.dds", b"other-mod");
+        fs::create_dir_all(game.join("zz_blocked.bin")).unwrap();
+        put(&game, "zz_blocked.bin/inside.txt", b"keep");
+        let other: HashSet<PathBuf> = [PathBuf::from("shared.dds")].into_iter().collect();
+
+        let err = apply_mod_stacked(&m, &game, &backup, &other, true).expect_err("the folder in the way fails the copy");
+        assert!(!err.to_string().contains("rollback incomplete"), "{err}");
+
+        assert_eq!(fs::read(game.join("orig.cfg")).unwrap(), b"vanilla", "the original is back");
+        assert_eq!(fs::read(game.join("shared.dds")).unwrap(), b"other-mod", "the other mod's file is back");
+        assert!(!game.join("New/added.lua").exists() && !game.join("New").exists(), "added files and their new folder are gone");
+        assert!(!game.join("added2.txt").exists());
+        assert_eq!(fs::read(game.join("zz_blocked.bin/inside.txt")).unwrap(), b"keep");
+        assert!(!backup.join("_original/orig.cfg").exists(), "the backup this deploy made is reclaimed");
+        let leftovers: Vec<_> = fs::read_dir(&backup).map(|r| r.filter_map(|e| e.ok()).map(|e| e.file_name()).collect()).unwrap_or_default();
+        assert!(leftovers.iter().all(|n| !n.to_string_lossy().starts_with("_rollback-")), "the rollback copies are removed: {leftovers:?}");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_deploy_that_succeeds_leaves_no_rollback_copy() {
+        let root = scratch("no_stash");
+        let m = root.join("mod");
+        let game = root.join("game");
+        let backup = root.join("backup");
+        put(&m, "shared.dds", b"mod");
+        put(&game, "shared.dds", b"other-mod");
+        let other: HashSet<PathBuf> = [PathBuf::from("shared.dds")].into_iter().collect();
+        apply_mod_stacked(&m, &game, &backup, &other, false).unwrap();
+        assert_eq!(fs::read(game.join("shared.dds")).unwrap(), b"mod");
+        let names: Vec<_> = fs::read_dir(&backup).map(|r| r.filter_map(|e| e.ok()).map(|e| e.file_name()).collect()).unwrap_or_default();
+        assert!(names.iter().all(|n| !n.to_string_lossy().starts_with("_rollback-")), "{names:?}");
+        let _ = fs::remove_dir_all(&root);
+    }
 }

@@ -1,4 +1,5 @@
 use crate::state::AppState;
+use crate::error::AppError;
 use serde::Serialize;
 use sysinfo::Disks;
 use tauri::State;
@@ -32,7 +33,63 @@ pub struct BenchmarkResult {
 }
 
 /// Check if a path looks like a cloud sync folder
-fn detect_cloud_provider(mount_point: &str, name: &str) -> Option<String> {
+/// A Windows path with its verbatim prefix removed, ready to be compared with a mount point.
+///
+/// `\\?\C:\x` is the verbatim form of `C:\x`, and dropping the first four characters is the
+/// right answer for it. `\\?\UNC\server\share` is the verbatim form of `\\server\share`,
+/// and dropping four characters leaves `UNC\server\share` - a string that matches no mount
+/// point and no drive letter, so every network path failed the comparison it was about to be
+/// used in. That is what this exists to get right.
+///
+/// Input is expected already lowercased by the caller, but the UNC marker is matched in both
+/// cases so the function is correct on its own.
+pub fn strip_verbatim(p: &str) -> String {
+    for marker in [r"\\?\unc\", r"\\?\UNC\"] {
+        if let Some(rest) = p.strip_prefix(marker) {
+            return format!(r"\\{rest}");
+        }
+    }
+    if let Some(rest) = p.strip_prefix(r"\\?\") {
+        return rest.to_string();
+    }
+    p.to_string()
+}
+
+/// Free and total bytes for the volume holding `path`, straight from the OS.
+///
+/// `sysinfo` enumerates LOCAL volumes. A NAS reached over UNC, and in most configurations a
+/// mapped network drive, is not in that list - so matching a path against it can only ever
+/// fail for them, however well the path is normalised. `GetDiskFreeSpaceExW` takes a path
+/// rather than a volume and answers for shares, mapped drives and cloud-mounted folders alike.
+#[cfg(windows)]
+fn os_free_space(path: &str) -> Option<(u64, u64)> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
+    use windows::core::PCWSTR;
+
+    let wide: Vec<u16> = std::ffi::OsStr::new(path)
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let mut free_to_caller: u64 = 0;
+    let mut total: u64 = 0;
+    let ok = unsafe {
+        GetDiskFreeSpaceExW(
+            PCWSTR(wide.as_ptr()),
+            Some(&mut free_to_caller),
+            Some(&mut total),
+            None,
+        )
+    };
+    // `free_to_caller` and not the volume's raw free space: on a share with a quota those
+    // differ, and the number worth showing is the one this user may actually write.
+    if ok.is_ok() && total > 0 { Some((free_to_caller, total)) } else { None }
+}
+
+#[cfg(not(windows))]
+fn os_free_space(_path: &str) -> Option<(u64, u64)> { None }
+
+pub(crate) fn detect_cloud_provider(mount_point: &str, name: &str) -> Option<String> {
     let lower_mp = mount_point.to_lowercase();
     let lower_name = name.to_lowercase();
 
@@ -64,10 +121,27 @@ fn detect_cloud_provider(mount_point: &str, name: &str) -> Option<String> {
     None
 }
 
+/// Every volume, its space and which profiles use it: the Storage Manager's disk list.
+///
+/// Off the main thread. It was a sync command, and in Tauri v2 a sync command runs on the main
+/// thread: the enumeration asks every volume for its size and free space, and a hard disk that
+/// has to spin up or a mapped network drive that went away answers in seconds, not
+/// milliseconds, with the whole window frozen meanwhile (the Storage Manager asked twice per
+/// opening). Nothing here is bulk I/O, so it takes no ticket.
 #[tauri::command]
-pub fn get_system_disks(state: State<AppState>) -> Vec<DiskLimitInfo> {
+pub async fn get_system_disks(app: tauri::AppHandle) -> Result<Vec<DiskLimitInfo>, AppError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        use tauri::Manager;
+        let state = app.state::<AppState>();
+        system_disks(&state)
+    })
+    .await
+    .map_err(|e| AppError::Internal(e.to_string()))?
+}
+
+pub fn system_disks(state: &AppState) -> Result<Vec<DiskLimitInfo>, AppError> {
     let disks_list = Disks::new_with_refreshed_list();
-    let data = state.data.lock().unwrap();
+    let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
 
     let profiles = &data.profiles;
 
@@ -100,18 +174,14 @@ pub fn get_system_disks(state: State<AppState>) -> Vec<DiskLimitInfo> {
         };
 
         // Map profiles to this disk
-        let mut mp_lower = mount_point.to_lowercase();
-        if mp_lower.starts_with(r"\\?\") { mp_lower = mp_lower[4..].to_string(); }
+        let mp_lower = strip_verbatim(&mount_point.to_lowercase());
         let mut profile_usages = Vec::new();
         for profile in profiles.iter() {
-            let mut game_path = profile.game_path.to_string_lossy().to_lowercase();
-            if game_path.starts_with(r"\\?\") { game_path = game_path[4..].to_string(); }
+            let game_path = strip_verbatim(&profile.game_path.to_string_lossy().to_lowercase());
             
-            let mut mods_path = profile.mods_path.to_string_lossy().to_lowercase();
-            if mods_path.starts_with(r"\\?\") { mods_path = mods_path[4..].to_string(); }
+            let mods_path = strip_verbatim(&profile.mods_path.to_string_lossy().to_lowercase());
             
-            let mut backup_path = profile.backup_path.to_string_lossy().to_lowercase();
-            if backup_path.starts_with(r"\\?\") { backup_path = backup_path[4..].to_string(); }
+            let backup_path = strip_verbatim(&profile.backup_path.to_string_lossy().to_lowercase());
 
             if game_path.starts_with(&mp_lower) {
                 profile_usages.push(DiskProfileUsage {
@@ -150,16 +220,16 @@ pub fn get_system_disks(state: State<AppState>) -> Vec<DiskLimitInfo> {
         });
     }
 
-    infos
+    Ok(infos)
 }
 
 pub fn get_limit_for_path(state: &AppState, path: &std::path::Path) -> Option<u64> {
     let disks_list = Disks::new_with_refreshed_list();
-    let data = state.data.lock().unwrap();
+    let data = state.data.lock().ok()?;  // Returns None on poisoned lock (safe fallback)
 
     let path_can = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
     let mut path_str = path_can.to_string_lossy().to_lowercase();
-    if path_str.starts_with(r"\\?\") {
+    if path_str.starts_with(r"\\?\") && path_str.len() >= 4 {
         path_str = path_str[4..].to_string();
     }
 
@@ -167,7 +237,7 @@ pub fn get_limit_for_path(state: &AppState, path: &std::path::Path) -> Option<u6
 
     for disk in disks_list.iter() {
         let mut mp = disk.mount_point().to_string_lossy().to_lowercase();
-        if mp.starts_with(r"\\?\") {
+        if mp.starts_with(r"\\?\") && mp.len() >= 4 {
             mp = mp[4..].to_string();
         }
 
@@ -186,22 +256,62 @@ pub fn get_limit_for_path(state: &AppState, path: &std::path::Path) -> Option<u6
     }
 }
 
+/// Async (a worker thread, not the main one): it saves data.json, with an fsync.
 #[tauri::command]
-pub fn set_disk_limit(state: State<AppState>, mount_point: String, limit_mb_s: Option<u64>) -> Result<(), String> {
+pub async fn set_disk_limit(state: State<'_, AppState>, mount_point: String, limit_mb_s: Option<u64>) -> Result<(), AppError> {
     {
-        let mut data = state.data.lock().unwrap();
+        let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+        // The governor reads its rules, not this table (migrated once at startup), so the
+        // disk's `*` rule follows every edit or the limit set here would stop doing anything.
+        let key = mount_point.to_lowercase();
+        let rule = data.resources.rules.entry(key).or_default().entry("*".to_string()).or_default();
+        rule.rate_mb_s = limit_mb_s.filter(|n| *n > 0);
         if let Some(limit) = limit_mb_s {
             data.disk_limits.insert(mount_point, limit);
         } else {
             data.disk_limits.remove(&mount_point);
         }
+        crate::governor::runtime::global().configure(data.resources.clone());
     }
     let _ = state.save();
     Ok(())
 }
 
+/// The disk benchmark, off the main thread.
+///
+/// It was a plain (sync) command, and in Tauri v2 a sync command runs on the main thread: 50 MB
+/// written and fsynced per disk, at every start with auto-calibration on, with the window
+/// frozen for the duration (PLAN-BMM-RESOURCES-2026.md §0.2, points 2 to 4).
 #[tauri::command]
-pub fn benchmark_disk(mount_point: String) -> Result<BenchmarkResult, String> {
+pub async fn benchmark_disk(mount_point: String) -> Result<BenchmarkResult, String> {
+    tauri::async_runtime::spawn_blocking(move || benchmark_disk_blocking(mount_point))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Open for reading WITHOUT the OS cache, so a read benchmark reads the disk. The file was just
+/// written: an ordinary open reads it back from RAM, which is how the old read figure measured
+/// memory and reported several GB/s for a spinning disk.
+fn open_uncached(path: &std::path::Path) -> std::io::Result<std::fs::File> {
+    let mut o = std::fs::OpenOptions::new();
+    o.read(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_FLAG_NO_BUFFERING: u32 = 0x2000_0000;
+        o.custom_flags(FILE_FLAG_NO_BUFFERING);
+    }
+    o.open(path)
+}
+
+/// A buffer whose start is aligned to `align` bytes (unbuffered I/O needs sector alignment).
+pub(crate) fn aligned_buffer(len: usize, align: usize) -> (Vec<u8>, usize) {
+    let v = vec![0u8; len + align];
+    let off = (align - (v.as_ptr() as usize % align)) % align;
+    (v, off)
+}
+
+fn benchmark_disk_blocking(mount_point: String) -> Result<BenchmarkResult, String> {
     use std::io::{Write, Read};
     use std::time::Instant;
 
@@ -210,7 +320,18 @@ pub fn benchmark_disk(mount_point: String) -> Result<BenchmarkResult, String> {
         return Err(format!("Mount point {} does not exist.", mount_point));
     }
 
-    let test_filename = format!(".bmm_bench_{}.tmp", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_micros());
+    // A Maintenance ticket (G3b). It is background work, so it waits while a deploy or an
+    // install writes (a benchmark racing a deploy measures neither) and while a game runs,
+    // and it can be paused or cancelled before each phase. Checkpoints sit BETWEEN the timed
+    // phases, never inside one, so a figure never includes the wait.
+    let ticket = crate::governor::runtime::global()
+        .begin(crate::governor::config::OpKind::Maintenance, &format!("disk benchmark {}", mount_point));
+    crate::fs_utils::checkpoint(&ticket).map_err(|e| e.to_string())?;
+
+    let test_filename = format!(".bmm_bench_{}.tmp",
+        // unwrap_or is safe here — UNIX_EPOCH is always valid
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_micros()
+    );
     
     let candidates = vec![
         test_dir.clone(), // Root of the drive
@@ -267,14 +388,22 @@ pub fn benchmark_disk(mount_point: String) -> Result<BenchmarkResult, String> {
         0.0
     };
 
-    // ── Read benchmark ──
+    if let Err(e) = crate::fs_utils::checkpoint(&ticket) {
+        let _ = std::fs::remove_file(&test_file);
+        return Err(e.to_string());
+    }
+    ticket.add_bytes(0, total_size as u64);
+
+    // ── Read benchmark ── (uncached: see open_uncached; 1 MiB chunks and a 4 KiB-aligned buffer
+    // satisfy the sector alignment unbuffered reads require)
     let read_start = Instant::now();
     {
-        let mut file = std::fs::File::open(&test_file)
+        let mut file = open_uncached(&test_file)
             .map_err(|e| format!("Failed to open test file: {}", e))?;
-        let mut buf = vec![0u8; chunk_size];
+        let (mut raw, off) = aligned_buffer(chunk_size, 4096);
+        let buf = &mut raw[off..off + chunk_size];
         for _ in 0..iterations {
-            file.read_exact(&mut buf)
+            file.read_exact(buf)
                 .map_err(|e| format!("Read error: {}", e))?;
         }
     }
@@ -284,6 +413,8 @@ pub fn benchmark_disk(mount_point: String) -> Result<BenchmarkResult, String> {
     } else {
         0.0
     };
+
+    ticket.add_bytes(total_size as u64, 0);
 
     // Cleanup
     let _ = std::fs::remove_file(&test_file);
@@ -311,14 +442,14 @@ pub struct DiskSpaceInfo {
 pub fn check_disk_space(path: String) -> Result<DiskSpaceInfo, String> {
     let disks = Disks::new_with_refreshed_list();
     let target = std::path::Path::new(&path);
-    let mut path_str = target.canonicalize().unwrap_or(target.to_path_buf())
-        .to_string_lossy().to_lowercase();
-    if path_str.starts_with(r"\\?\") { path_str = path_str[4..].to_string(); }
+    let path_str = strip_verbatim(
+        &target.canonicalize().unwrap_or_else(|_| target.to_path_buf())
+            .to_string_lossy().to_lowercase(),
+    );
 
     let mut best: Option<(u64, u64, String, usize)> = None;
     for disk in disks.iter() {
-        let mut mp = disk.mount_point().to_string_lossy().to_lowercase();
-        if mp.starts_with(r"\\?\") { mp = mp[4..].to_string(); }
+        let mp = strip_verbatim(&disk.mount_point().to_string_lossy().to_lowercase());
         if path_str.starts_with(&mp) {
             let len = mp.len();
             if best.as_ref().map_or(true, |(_, _, _, l)| len > *l) {
@@ -330,7 +461,297 @@ pub fn check_disk_space(path: String) -> Result<DiskSpaceInfo, String> {
     if let Some((available, total, mount_point, _)) = best {
         let free_percent = if total > 0 { (available as f64 / total as f64) * 100.0 } else { 0.0 };
         Ok(DiskSpaceInfo { available_bytes: available, total_bytes: total, mount_point, free_percent })
+    } else if let Some((available, total)) = os_free_space(&path) {
+        // No local volume claimed this path. That is the normal case for a NAS or a mapped
+        // drive rather than an error: ask the OS about the path itself. Reporting the mount
+        // point as the path keeps the shape of the answer the same for the caller.
+        let free_percent = if total > 0 { (available as f64 / total as f64) * 100.0 } else { 0.0 };
+        Ok(DiskSpaceInfo { available_bytes: available, total_bytes: total, mount_point: path.clone(), free_percent })
     } else {
         Err(format!("Impossible de trouver le disque pour: {}", path))
+    }
+}
+
+/// Recursively sum all file sizes inside a directory (returns bytes).
+///
+/// It was a plain sync command, so in Tauri v2 it walked the whole tree ON THE MAIN THREAD
+/// with the window frozen (PLAN-BMM-RESOURCES-2026.md §0.2 point 4). Now async: the walk
+/// runs on a blocking thread under a Scan ticket. Same argument, same number back.
+#[tauri::command]
+pub async fn get_folder_size(path: String) -> u64 {
+    tauri::async_runtime::spawn_blocking(move || {
+        let ticket = crate::governor::runtime::global()
+            .begin(crate::governor::config::OpKind::Scan, &format!("size {}", path));
+        folder_size(std::path::Path::new(&path), &ticket)
+    })
+    .await
+    .unwrap_or(0)
+}
+
+/// The walk behind `get_folder_size`, with a checkpoint per directory. A cancelled walk stops
+/// there and answers what it had counted (the command has no error channel, and the
+/// frontend reads a number).
+pub(crate) fn folder_size(dir: &std::path::Path, ticket: &crate::governor::queue::Ticket) -> u64 {
+    if ticket.checkpoint().is_err() { return 0; }
+    let mut total = 0u64;
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            if let Ok(meta) = entry.metadata() {
+                if meta.is_dir() {
+                    total += folder_size(&entry.path(), ticket);
+                } else {
+                    total += meta.len();
+                }
+            }
+        }
+    }
+    total
+}
+
+/// `(async)`: a sync command runs on the main thread in Tauri v2, and this reads a whole file
+/// (an image, a replay) into memory and base64-encodes it. Same arguments for the frontend.
+///
+/// Confined (security summary §9 #16): it used to read ANY path, an arbitrary file read the
+/// day a plugin or an MCP tool reaches it. It now reads only under the configured profile
+/// roots (mods, game, backup folders), BMM's Crashes folder (crash and session reports, the
+/// session logs) and the API activity log, plus a file the user picked in BMM's own file
+/// dialog during this session (the feedback dialog's screenshots and zips can live anywhere).
+/// The check is the one the other disk guards use: canonicalise both sides, compare by
+/// component.
+#[tauri::command(async)]
+pub fn read_file_base64(state: State<'_, AppState>, path: String) -> Result<String, String> {
+    read_base64_confined(&path, &readable_roots(&state))
+}
+
+/// The body of `read_file_base64`, with the roots passed in (testable without an app).
+pub(crate) fn read_base64_confined(path: &str, roots: &[std::path::PathBuf]) -> Result<String, String> {
+    use base64::{Engine as _, engine::general_purpose};
+    if !may_read(std::path::Path::new(path), roots) {
+        return Err("Refused: this file is outside BMM's folders".into());
+    }
+    let data = std::fs::read(path).map_err(|e| e.to_string())?;
+    Ok(general_purpose::STANDARD.encode(data))
+}
+
+/// The folders `read_file_base64` may read under, as things stand now.
+fn readable_roots(state: &State<'_, AppState>) -> Vec<std::path::PathBuf> {
+    let crash = crate::commands::crash::get_crash_dir(None);
+    let mut roots = vec![crash.clone()];
+    if let Some(app_dir) = crash.parent() {
+        roots.push(app_dir.join("api-activity.log"));
+    }
+    let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+    for p in &data.profiles {
+        roots.push(p.mods_path.clone());
+        roots.push(p.game_path.clone());
+        roots.push(p.backup_path.clone());
+    }
+    roots
+}
+
+/// Is `path` an existing file inside one of `roots`, or one picked in BMM's own dialog?
+///
+/// Both sides canonicalised, so `..`, a symlink or a junction pointing out of a root resolves
+/// to where it really is before the comparison, and `starts_with` compares whole components
+/// (the `mods` / `mods-evil` sibling does not pass). A root that is a whole drive (`C:\`, say
+/// a profile folder set to a drive by a restored backup) grants nothing: it would grant
+/// everything.
+pub(crate) fn may_read(path: &std::path::Path, roots: &[std::path::PathBuf]) -> bool {
+    let Ok(target) = std::fs::canonicalize(path) else { return false };
+    if !target.is_file() {
+        return false;
+    }
+    if crate::commands::dialog::was_picked(&target) {
+        return true;
+    }
+    roots
+        .iter()
+        .filter(|r| !r.as_os_str().is_empty())
+        .filter_map(|r| std::fs::canonicalize(r).ok())
+        .filter(|r| r.parent().is_some())
+        .any(|r| target.starts_with(&r))
+}
+
+#[cfg(test)]
+mod read_confinement_tests {
+    use super::{may_read, read_base64_confined};
+
+    fn tmp(name: &str) -> std::path::PathBuf {
+        let d = std::env::temp_dir().join(format!("bmm_readconf_{}_{}", name, std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    #[test]
+    fn a_file_under_a_root_is_readable_and_one_outside_is_not() {
+        let base = tmp("roots");
+        let root = base.join("mods");
+        let sibling = base.join("mods-evil");
+        std::fs::create_dir_all(root.join("sub")).unwrap();
+        std::fs::create_dir_all(&sibling).unwrap();
+        std::fs::write(root.join("sub").join("a.png"), b"x").unwrap();
+        std::fs::write(sibling.join("b.png"), b"y").unwrap();
+        std::fs::write(base.join("secret.txt"), b"z").unwrap();
+        let roots = vec![root.clone()];
+        let read = |p: std::path::PathBuf| read_base64_confined(&p.to_string_lossy(), &roots);
+        assert_eq!(read(root.join("sub").join("a.png")).as_deref(), Ok("eA=="), "inside a root: read");
+        assert!(read(sibling.join("b.png")).is_err(), "a sibling with the same prefix is outside");
+        assert!(read(base.join("secret.txt")).is_err(), "a file beside the root is outside");
+        assert!(
+            read(root.join("sub").join("..").join("..").join("secret.txt")).is_err(),
+            "`..` resolves before the check"
+        );
+        assert!(!may_read(&root.join("missing.png"), &roots), "a missing file is refused");
+        assert!(!may_read(&root, &roots), "a folder is not a file");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_drive_root_or_an_empty_root_grants_nothing() {
+        let base = tmp("drive");
+        std::fs::write(base.join("f.txt"), b"x").unwrap();
+        let drive = base.ancestors().last().unwrap().to_path_buf();
+        assert!(drive.parent().is_none(), "the last ancestor is the drive root");
+        assert!(!may_read(&base.join("f.txt"), &[drive]));
+        assert!(!may_read(&base.join("f.txt"), &[std::path::PathBuf::new()]));
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_file_picked_in_bmms_own_dialog_is_readable_wherever_it_is() {
+        let base = tmp("picked");
+        let f = base.join("screenshot.png");
+        std::fs::write(&f, b"x").unwrap();
+        assert!(!may_read(&f, &[]), "not picked, under no root: refused");
+        crate::commands::dialog::remember_picked(&f.to_string_lossy());
+        assert!(may_read(&f, &[]), "picked by the user: readable");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn strip_verbatim_handles_drive_letters_and_unc() {
+        // The case that always worked.
+        assert_eq!(strip_verbatim(r"\\?\C:\games\mods"), r"C:\games\mods");
+        assert_eq!(strip_verbatim(r"\\?\c:\games"), r"c:\games");
+        // The case that did not. The verbatim form of \\server\share is
+        // \\?\UNC\server\share, and taking four characters off it leaves
+        // `UNC\server\share` - a string that matches no mount point and no drive letter.
+        assert_eq!(strip_verbatim(r"\\?\UNC\nas\mods"), r"\\nas\mods");
+        assert_eq!(strip_verbatim(r"\\?\unc\nas\mods"), r"\\nas\mods");
+        // No prefix - returned untouched. A plain UNC path in particular must NOT be
+        // mangled on its way into a comparison.
+        assert_eq!(strip_verbatim(r"\\nas\mods"), r"\\nas\mods");
+        assert_eq!(strip_verbatim(r"C:\games"), r"C:\games");
+        assert_eq!(strip_verbatim(""), "");
+    }
+
+    /// A UNC path resolves to a real free/total pair.
+    ///
+    /// `\\localhost\C$` is a genuine UNC path on any Windows machine, so this exercises
+    /// the network branch without a NAS on the bench. Skipped rather than failed where the
+    /// admin share is unavailable: that is a machine's configuration, not a defect here.
+    #[cfg(windows)]
+    #[test]
+    fn disk_space_answers_for_a_unc_path() {
+        let unc = r"\\localhost\C$\Windows";
+        if !std::path::Path::new(unc).exists() {
+            eprintln!("skipped: {unc} is not reachable on this machine");
+            return;
+        }
+        let info = check_disk_space(unc.to_string())
+            .expect("a UNC path must resolve to a disk-space answer, not an error");
+        assert!(info.total_bytes > 0, "total bytes should be known for a UNC path");
+        assert!(info.available_bytes <= info.total_bytes);
+    }
+
+    /// The control: an ordinary local path still resolves through the sysinfo route.
+    #[test]
+    fn disk_space_still_answers_for_a_local_path() {
+        let local = std::env::temp_dir();
+        let info = check_disk_space(local.to_string_lossy().to_string())
+            .expect("a local path must still resolve");
+        assert!(info.total_bytes > 0);
+    }
+}
+
+#[cfg(test)]
+mod bench_tests {
+    use super::*;
+
+    #[test]
+    fn the_read_buffer_is_sector_aligned_whatever_the_allocator_gives() {
+        for len in [4096usize, 1 << 20, 3 * 4096] {
+            let (v, off) = aligned_buffer(len, 4096);
+            assert_eq!((v.as_ptr() as usize + off) % 4096, 0);
+            assert!(off + len <= v.len());
+        }
+    }
+
+    #[test]
+    fn an_uncached_read_returns_the_bytes_written() {
+        use std::io::{Read, Write};
+        let p = std::env::temp_dir().join(format!("bmm-uncached-{}.bin", std::process::id()));
+        let data: Vec<u8> = (0..(2usize << 20)).map(|i| (i % 253) as u8).collect();
+        { let mut f = std::fs::File::create(&p).unwrap(); f.write_all(&data).unwrap(); f.sync_all().unwrap(); }
+        let mut f = open_uncached(&p).expect("an unbuffered open of a local file works");
+        let (mut raw, off) = aligned_buffer(1 << 20, 4096);
+        let mut got = Vec::new();
+        for _ in 0..2 { let b = &mut raw[off..off + (1 << 20)]; f.read_exact(b).unwrap(); got.extend_from_slice(b); }
+        assert_eq!(got, data, "what the benchmark reads is what it wrote");
+        let _ = std::fs::remove_file(&p);
+    }
+
+    #[test]
+    fn the_benchmark_measures_and_cleans_up() {
+        let tmp = std::env::temp_dir();
+        let root = tmp.components().next().map(|c| c.as_os_str().to_string_lossy().to_string() + "\\").unwrap_or_default();
+        let r = benchmark_disk_blocking(root).expect("the temp drive can be benchmarked");
+        assert!(r.write_mb_s > 0.0 && r.read_mb_s > 0.0);
+        assert!(r.suggested_limit >= 10);
+    }
+
+    /// G3b: the folder-size walk (a sync command on the main thread before) holds a Scan
+    /// ticket. With every Scan slot taken it WAITS, listed under its own name, and answers the
+    /// same number once a slot frees.
+    #[test]
+    fn a_folder_size_scan_holds_a_scan_ticket() {
+        use crate::governor::config::OpKind;
+        use crate::governor::queue::TicketState;
+        let root = std::env::temp_dir().join(format!("bmm_g3b_scan_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("a/b")).unwrap();
+        std::fs::write(root.join("x.bin"), vec![1u8; 1000]).unwrap();
+        std::fs::write(root.join("a/b/y.bin"), vec![2u8; 234]).unwrap();
+        let dir = root.to_string_lossy().to_string();
+        let subject = format!("size {}", dir);
+
+        let q = crate::governor::runtime::global().queue();
+        let mut held = Vec::new();
+        while let Some(t) = q.try_begin(OpKind::Scan, "test: fill the Scan slots") { held.push(t); }
+        assert!(!held.is_empty());
+
+        let d2 = dir.clone();
+        let h = std::thread::spawn(move || tauri::async_runtime::block_on(get_folder_size(d2)));
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let mut seen = None;
+        while std::time::Instant::now() < deadline {
+            seen = q.snapshot().into_iter().find(|v| v.subject == subject);
+            if seen.is_some() { break; }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        let seen = seen.expect("the walk is listed in the governor's queue");
+        assert_eq!(seen.kind, OpKind::Scan);
+        assert_eq!(seen.state, TicketState::Waiting, "no free Scan slot: it waits");
+        drop(held);
+        assert_eq!(h.join().unwrap(), 1234);
+        assert!(!q.snapshot().iter().any(|v| v.subject == subject), "the ticket ends with the walk");
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

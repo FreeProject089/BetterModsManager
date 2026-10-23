@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Repo — BMM Hub</title>
+<style>
+  :root { --bg:#070910; --bg2:#0c0f18; --card:#12161f; --border:#1e2433; --border-hi:#2a3346;
+    --text:#eef1f6; --muted:#7f8aa0; --dim:#5a6478; --accent:#06b6d4; --accent2:#0891b2; --green:#10b981; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:radial-gradient(900px 500px at 15% -10%, rgba(6,182,212,0.10), transparent 60%), var(--bg);
+    color:var(--text); font-family:'Segoe UI',system-ui,Roboto,sans-serif; min-height:100vh; padding:34px 20px 60px; }
+  .wrap { max-width:920px; margin:0 auto; }
+  .back { display:inline-flex; align-items:center; gap:6px; color:var(--muted); text-decoration:none; font-size:13px; margin-bottom:20px; }
+  .back:hover { color:var(--text); }
+  .head { display:flex; align-items:flex-start; gap:14px; margin-bottom:8px; flex-wrap:wrap; }
+  h1 { font-size:26px; font-weight:800; letter-spacing:-0.5px; }
+  .badges { display:flex; gap:6px; margin-top:6px; }
+  .badge { font-size:10px; font-weight:800; padding:3px 9px; border-radius:6px; text-transform:uppercase; letter-spacing:.5px; }
+  .badge.online { background:rgba(16,185,129,0.14); color:var(--green); }
+  .badge.signed { background:rgba(6,182,212,0.14); color:var(--accent); }
+  .desc { color:var(--muted); font-size:13px; line-height:1.6; margin:10px 0 18px; }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:12px; margin-bottom:18px; }
+  .stat { background:var(--card); border:1px solid var(--border); border-radius:13px; padding:14px 16px; }
+  .stat .v { font-size:21px; font-weight:800; color:var(--accent); }
+  .stat .l { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-top:5px; }
+  .url-card { background:var(--card); border:1px solid var(--border); border-radius:13px; padding:14px 16px; margin-bottom:22px; }
+  .url-card .lbl { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.8px; margin-bottom:8px; }
+  .url-row { display:flex; gap:8px; }
+  .url-row input { flex:1; background:var(--bg2); border:1px solid var(--border); border-radius:9px; padding:10px 12px; color:var(--text); font-size:12px; font-family:monospace; }
+  .url-row button { background:linear-gradient(135deg,var(--accent),var(--accent2)); border:none; border-radius:9px; padding:0 18px; color:#011; font-weight:800; cursor:pointer; }
+  .url-row button.ok { background:var(--green); }
+  .prof { background:var(--card); border:1px solid var(--border); border-radius:14px; margin-bottom:12px; overflow:hidden; }
+  .prof-h { display:flex; justify-content:space-between; align-items:center; padding:13px 16px; background:rgba(255,255,255,0.02); cursor:pointer; }
+  .prof-h:hover { background:rgba(255,255,255,0.04); }
+  .prof-name { font-weight:700; font-size:14px; }
+  .prof-meta { font-size:11px; color:var(--muted); }
+  .mods { display:none; padding:6px 16px 12px; }
+  .mod { display:flex; justify-content:space-between; align-items:center; padding:7px 0; border-bottom:1px solid rgba(255,255,255,0.04); font-size:12px; }
+  .mod:last-child { border-bottom:none; }
+  .mod .mn { color:var(--text); }
+  .mod .mv { color:var(--dim); font-size:11px; }
+  .mod .ms { color:var(--muted); font-size:11px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/">‹ Back to hub</a>
+  <div id="content"><p style="color:var(--muted)">Loading…</p></div>
+</div>
+<script>
+const fmt = b => { if(!b) return '0 B'; const u=['B','KB','MB','GB','TB']; const i=Math.floor(Math.log(b)/Math.log(1024)); return (b/Math.pow(1024,i)).toFixed(1)+' '+u[i]; };
+const esc = s => String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const folder = decodeURIComponent(location.pathname.replace(/^\/+|\/+$/g,''));
+
+async function load() {
+  let repo;
+  try { repo = await (await fetch(`/${folder}/repo.json`)).json(); }
+  catch(e) { document.getElementById('content').innerHTML = '<p style="color:#f87171">Repo not found.</p>'; return; }
+
+  let mods=0, size=0, files=0;
+  (repo.profiles||[]).forEach(p => { mods+=(p.mods||[]).length; (p.mods||[]).forEach(m=>{ (m.files||[]).forEach(f=>{size+=f.size||0;files++;}); }); });
+  const url = `${location.origin}/${folder}/repo.json`;
+  const signed = !!(repo.signature && repo.author_id);
+
+  document.getElementById('content').innerHTML = `
+    <div class="head">
+      <div>
+        <h1>${esc(repo.name||folder)}</h1>
+        <div class="badges">
+          <span class="badge online">● Online</span>
+          ${signed ? '<span class="badge signed">✓ Signed</span>' : ''}
+        </div>
+      </div>
+    </div>
+    <div class="desc">${esc(repo.description||'No description.')}${repo.author ? ' — by <b>'+esc(repo.author)+'</b>' : ''}</div>
+    <div class="stats">
+      <div class="stat"><div class="v">${(repo.profiles||[]).length}</div><div class="l">Profiles</div></div>
+      <div class="stat"><div class="v">${mods}</div><div class="l">Mods</div></div>
+      <div class="stat"><div class="v">${files}</div><div class="l">Files</div></div>
+      <div class="stat"><div class="v">${fmt(size)}</div><div class="l">Total size</div></div>
+      ${repo.game_name ? `<div class="stat"><div class="v" style="font-size:15px">${esc(repo.game_name)}</div><div class="l">Game</div></div>` : ''}
+    </div>
+    <div class="url-card">
+      <div class="lbl">Connect URL — paste into BMM → Server Repo → Sync</div>
+      <div class="url-row">
+        <input value="${url}" readonly onclick="this.select()">
+        <button onclick="cp(this,'${url}')">Copy</button>
+      </div>
+    </div>
+    ${(repo.profiles||[]).map(p => `
+      <div class="prof">
+        <div class="prof-h" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display==='block'?'none':'block'">
+          <span class="prof-name">${esc(p.name)}</span>
+          <span class="prof-meta">${(p.mods||[]).length} mods ›</span>
+        </div>
+        <div class="mods">
+          ${(p.mods||[]).map(m => { const ms=(m.files||[]).reduce((n,f)=>n+(f.size||0),0); return `
+            <div class="mod"><span class="mn">${esc(m.name)} <span class="mv">v${esc(m.version||'')}</span></span><span class="ms">${fmt(ms)}</span></div>`; }).join('') || '<div class="mod"><span class="ms">No mods</span></div>'}
+        </div>
+      </div>`).join('')}`;
+}
+function cp(btn,url){ navigator.clipboard.writeText(url).then(()=>{ const t=btn.textContent; btn.textContent='✓'; btn.classList.add('ok'); setTimeout(()=>{btn.textContent=t;btn.classList.remove('ok');},1200); }); }
+load();
+</script>
+</body>
+</html>

@@ -1,0 +1,79 @@
+/* ═══ Release notes: Versions tab (ui/update-history.ts) ═════════════════════════════════════
+   Linked on first open. The window is the release-notes card (.ptb-modal-card, a column); this
+   adds its two tabs and the Versions panel:
+
+     versions list (search, one row per version: dot · number · installed/newer · kind · counts)
+     │ the selected version's notes, B.MD (.dh-content, the docs hub's typography)
+
+   Below 760px wide the list goes above the notes. Tokens only. */
+
+.un-tabs { flex: none; display: flex; gap: 2px; padding: 0 16px; border-bottom: 1px solid var(--bmm-border); }
+.un-tab {
+    display: inline-flex; align-items: center; gap: 7px; padding: 10px 12px; margin-bottom: -1px;
+    border: 0; border-bottom: 2px solid transparent; background: transparent;
+    color: var(--bmm-text-secondary); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.un-tab:hover { color: var(--bmm-text-primary); }
+.un-tab[aria-selected="true"] { color: var(--bmm-text-primary); border-bottom-color: var(--bmm-accent); }
+[data-un-panel][hidden] { display: none !important; }
+
+.un-versions { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(220px, 280px) minmax(0, 1fr); }
+.un-vside { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--bmm-border); }
+.un-vsearch { position: relative; display: flex; align-items: center; margin: 12px 12px 8px; }
+.un-vsearch > svg { position: absolute; left: 10px; color: var(--bmm-text-secondary); pointer-events: none; }
+.un-vsearch > .form-input { width: 100%; padding: 6px 10px 6px 30px; font-size: 12.5px; }
+.un-vlist { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 8px 12px; }
+.un-vrow {
+    display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 9px 10px; margin-bottom: 2px;
+    border: 0; border-radius: 9px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.un-vrow:hover { background: var(--bmm-s05); }
+.un-vrow.is-sel { background: var(--bmm-accent-dim); }
+.un-vrow:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: 1px; }
+.un-dot { flex: none; width: 9px; height: 9px; margin-top: 5px; border-radius: 50%; border: 2px solid var(--bmm-border-hover); }
+.un-dot.is-installed { border-color: var(--bmm-success); background: var(--bmm-success); }
+.un-dot.is-newer { border-color: var(--bmm-accent); background: var(--bmm-accent); }
+.un-vmain { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.un-vtop { display: flex; align-items: center; gap: 6px; }
+.un-vnum { font-size: 14px; font-weight: 700; color: var(--bmm-text-primary); font-variant-numeric: tabular-nums; }
+.un-tag { padding: 0 7px; border-radius: 999px; font-size: 10.5px; font-weight: 700; line-height: 17px; }
+.un-tag.is-installed { background: var(--bmm-success-dim); color: color-mix(in srgb, var(--bmm-success) 70%, var(--bmm-text-primary)); }
+.un-tag.is-newer { background: var(--bmm-accent-dim); color: var(--bms-accent-ink); }
+.un-vkind { font-size: 11.5px; color: var(--bmm-text-secondary); }
+.un-counts { display: flex; flex-wrap: wrap; gap: 4px; }
+.un-count { padding: 0 6px; border-radius: 6px; font-size: 10.5px; font-weight: 600; line-height: 17px; background: var(--bmm-s05); color: var(--bmm-text-secondary); }
+.un-count.is-new { background: var(--bmm-success-dim); color: color-mix(in srgb, var(--bmm-success) 70%, var(--bmm-text-primary)); }
+.un-count.is-improved { background: var(--bmm-accent-dim); color: var(--bms-accent-ink); }
+.un-count.is-fixed { background: var(--bmm-warning-dim); color: color-mix(in srgb, var(--bmm-warning) 65%, var(--bmm-text-primary)); }
+.un-empty { margin: 16px 12px; font-size: 12.5px; color: var(--bmm-text-secondary); }
+
+.un-vnotes { min-width: 0; min-height: 0; overflow-y: auto; padding: 22px 32px 32px; }
+.un-nhead { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+.un-nver { font-size: 12px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--bmm-text-secondary); }
+.un-nhead .btn { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; }
+.un-others { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 14px; font-size: 12px; color: var(--bmm-text-secondary); }
+.un-md > h1:first-child { margin-top: 0; font-size: 20px; }
+.un-md .md-badge { margin-right: 6px; vertical-align: middle; }
+
+@media (max-width: 760px) {
+    .un-versions { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(160px, 38%) minmax(0, 1fr); }
+    .un-vside { border-right: 0; border-bottom: 1px solid var(--bmm-border); }
+    .un-vnotes { padding: 16px; }
+}
+
+/* The 1.0 story, pinned above the version list. */
+.un-pin {
+    display: flex; align-items: center; gap: 10px; margin: 0 12px 8px; padding: 10px 12px; text-align: left; cursor: pointer;
+    border: 1px solid color-mix(in srgb, var(--bmm-accent) 45%, var(--bmm-border)); border-radius: 10px;
+    background: var(--bmm-accent-dim); color: inherit; font: inherit;
+}
+.un-pin:hover, .un-pin.is-sel { border-color: var(--bmm-accent); }
+.un-pin.is-sel { box-shadow: 0 0 0 1px var(--bmm-accent) inset; }
+.un-pin:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: 1px; }
+.un-pin > svg { flex: none; color: var(--bms-accent-ink); }
+.un-pin-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.un-pin-n { font-size: 13.5px; font-weight: 700; color: var(--bmm-text-primary); }
+.un-pin-s { font-size: 11.5px; line-height: 1.35; color: var(--bmm-text-secondary); }
+.un-tag.is-major { background: var(--bmm-accent-dim); color: var(--bmm-text-primary); }
+.un-nhead .un-to-big { margin-left: auto; }
+.un-nhead .un-to-big + .un-open-doc { margin-left: 0; }

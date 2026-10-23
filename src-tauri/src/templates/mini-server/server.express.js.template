@@ -1,0 +1,409 @@
+const express = require('express');
+const fs = require('fs');
+const path = require('path');
+
+// Path confinement (CWE-22). The resolved path must be the folder itself or BELOW it: a bare
+// `abs.startsWith(dir)` also accepts a SIBLING whose name only begins with the same letters
+// (/srv/repo -> /srv/repo-private/...), reachable with an encoded `..` such as
+// `/..%2Frepo-private%2Fsecret.txt`, which no client normalises away.
+function insideDir(dir, p) {
+    const d = path.resolve(dir), a = path.resolve(p);
+    return a === d || a.startsWith(d.endsWith(path.sep) ? d : d + path.sep);
+}
+const cors = require('cors');
+const crypto = require('crypto');
+// The password and the authorised public keys, read from access.json beside this file at
+// request time. A key added there takes effect on the next request — no regeneration, no
+// re-upload. The download password below stays as a fallback so an existing generated server
+// keeps behaving exactly as it did.
+const { checkAccess } = require('./access-gate.js');
+
+// Constant-time string compare (CWE-208) — used for both password gates below.
+function safeEqual(a, b) {
+    const A = Buffer.from(String(a ?? ''));
+    const B = Buffer.from(String(b ?? ''));
+    return A.length === B.length && crypto.timingSafeEqual(A, B);
+}
+
+// Configuration
+const PORT = Number(process.env.PORT) || {{PORT}};
+// .env (docker compose env_file) wins over the value BMM baked in when it generated this file.
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "{{ADMIN_PASSWORD}}";
+// Optional download password. When non-empty, every content request (repo.json + mod files)
+// must carry it in the `x-repo-password` header (or ?pw=). Empty = the repo stays open.
+const DOWNLOAD_PASSWORD = "{{DOWNLOAD_PASSWORD}}";
+// The origin your subscribers dial — scheme, host and port, exactly as they type it. BMM
+// signs the address it dialled, so a proof addressed elsewhere is refused; that is what stops
+// a proof captured on one server being replayed against another. Override without editing
+// this file by setting "audience" in access.json, or the BMM_PUBLIC_ORIGIN env var.
+const PUBLIC_ORIGIN = process.env.BMM_PUBLIC_ORIGIN || "{{PUBLIC_ORIGIN}}";
+const UPLOAD_LIMIT = {{UPLOAD_LIMIT}}; // KB/s
+
+// Status page, health, Atom feed, ETag/304, resumable downloads, rate limiting and scheduled
+// jobs: bmm-extras.js beside this file, configured by server.config.json. Loaded defensively, so
+// a folder generated before it existed keeps running exactly as it did.
+let extras = null;
+try {
+    extras = require('./bmm-extras.js').create({ dir: __dirname, kind: 'express', adminPassword: ADMIN_PASSWORD, downloadPassword: DOWNLOAD_PASSWORD, port: PORT });
+} catch (e) { if (!e || e.code !== 'MODULE_NOT_FOUND') console.error('[EXTRAS] not loaded:', e && e.message); }
+
+// State
+const sessions = new Map();
+const activeDownloads = new Map();
+const startTime = Date.now();
+const history = [];
+
+const logFile = path.join(__dirname, 'server.log');
+const bansFile = path.join(__dirname, 'bans.json');
+const whitelistFile = path.join(__dirname, 'whitelist.json');
+const downloadsFile = path.join(__dirname, 'downloads.json');
+const repoFile = path.join(__dirname, 'repo.json');
+
+const stats = { totalDownloads: 0, totalBytesSent: 0, mods: {} };
+try { if (fs.existsSync(downloadsFile)) Object.assign(stats, JSON.parse(fs.readFileSync(downloadsFile))); } catch(e) {}
+
+function log(msg, event = 'INFO', toFile = true) {
+    const ts = new Date().toISOString();
+    const line = `[${ts}] [${event}] ${msg}`;
+    if (toFile) {
+        fs.appendFileSync(logFile, line + '\n');
+    }
+}
+
+function addToHistory(ip, creatorId, event, details) {
+    history.push({ ts: Date.now(), ip, creatorId, event, details });
+    if (history.length > 500) history.shift();
+    log(`${ip} | ID: ${creatorId} | ${details}`, event);
+}
+
+// The PUBLIC monitoring feed: aggregates only (BMM security summary, item 9). It is readable
+// without a password, so it carries no IP address and no Creator ID: how many downloads are
+// running, the bytes moved, each running file's progress. The detail (who is downloading) is
+// served under /admin/monitoring, behind the admin password, for the host's dashboard.
+function publicMonitoring(r) {
+    const s = (r && r.server) || {};
+    const active = ((r && r.active) || []).map(d => ({
+        file: String(d.file || ''), downloaded: Number(d.downloaded) || 0, total: Number(d.total) || 0
+    }));
+    const num = (v) => (typeof v === 'number' ? v : undefined);
+    const mods = {};
+    for (const [k, v] of Object.entries(s.modsDownloads || {})) if (typeof v === 'number') mods[k] = v;
+    return {
+        server: {
+            version: s.version, uptime: num(s.uptime), totalBytes: num(s.totalBytes),
+            totalDls: num(s.totalDls), totalDownloads: num(s.totalDownloads),
+            totalRepoSize: num(s.totalRepoSize), modsDownloads: mods,
+            repoFormat: typeof s.repoFormat === 'string' ? s.repoFormat : undefined,
+            activeCount: active.length, activeBytes: active.reduce((a, d) => a + d.downloaded, 0)
+        },
+        active, sessions: [], history: []
+    };
+}
+
+// The FORMAT of the manifest this server hands out (BMM's repo_format): « format 1.0 » when it
+// says so, « legacy 0.x » when it was written by a BMM from before manifests declared one.
+// The same shape rules as BMM's own detection, reduced to what a log line needs. Converting
+// is BMM's job (Server Repo page, or `bmm repo-convert <folder>`): it needs the owner's key.
+function repoFormatOf(rj) {
+    if (!rj || typeof rj !== 'object' || Array.isArray(rj)) return 'not a repo manifest';
+    const declared = rj.format_version !== undefined ? rj.format_version : rj.formatVersion;
+    if (declared !== undefined && declared !== null) return 'format ' + String(declared);
+    const has = (o, ks) => !!o && ks.some(k => Object.prototype.hasOwnProperty.call(o, k));
+    const profiles = Array.isArray(rj.profiles) ? rj.profiles : [];
+    const mods = [].concat(...profiles.map(p => (p && Array.isArray(p.mods)) ? p.mods : []));
+    const files = [].concat(...mods.map(m => (m && Array.isArray(m.files)) ? m.files : []));
+    if (has(rj, ['files_base_url', 'filesBaseUrl', 'files_layout', 'filesLayout', 'extras', 'credentials']) || files.some(f => has(f, ['mtime']))) return 'legacy 0.4';
+    if (has(rj, ['modpacks', 'require_login', 'requireLogin']) || profiles.some(p => has(p, ['icon', 'color', 'icon_image']))
+        || mods.some(m => has(m, ['archive', 'dependencies', 'changelog', 'update_url', 'direct_url', 'update_sources']))) return 'legacy 0.3';
+    if (has(rj, ['author_id', 'signature', 'seed', 'upload_limit']) && mods.every(m => has(m, ['download_links']))) return 'legacy 0.2';
+    return 'legacy 0.1';
+}
+
+function getSecurityData() {
+    let bans = { banned_ips: [], banned_keys: [] };
+    let whitelist = { enabled: false, ips: [], keys: [] };
+    let repo = { modpacks: [] };
+    try { if (fs.existsSync(bansFile)) bans = JSON.parse(fs.readFileSync(bansFile, 'utf8')); else fs.writeFileSync(bansFile, JSON.stringify(bans)); } catch(e){}
+    try { if (fs.existsSync(whitelistFile)) whitelist = JSON.parse(fs.readFileSync(whitelistFile, 'utf8')); else fs.writeFileSync(whitelistFile, JSON.stringify(whitelist)); } catch(e){}
+    try { if (fs.existsSync(repoFile)) repo = JSON.parse(fs.readFileSync(repoFile, 'utf8')); } catch(e){}
+    return { bans, whitelist, repo };
+}
+
+function getMonitoringReport() {
+    const now = Date.now();
+    const active = Array.from(activeDownloads.values()).map(d => ({
+        ip: d.ip, file: path.basename(d.file), downloaded: d.downloaded, total: d.total,
+        speed: d.downloaded / Math.max((now - d.startTime) / 1000, 1), protocol: d.protocol
+    }));
+    let totalRepoSize = 0;
+    let repoFormat = 'not a repo manifest';
+    try {
+        const r = JSON.parse(fs.readFileSync(repoFile, 'utf8').replace(/^﻿/, ''));
+        totalRepoSize = r.total_size || 0;
+        repoFormat = repoFormatOf(r);
+    } catch(e){}
+
+    return {
+        server: { uptime: now - startTime, totalDownloads: stats.totalDownloads, totalBytes: stats.totalBytesSent, totalRepoSize, repoFormat },
+        active,
+        sessions: Array.from(sessions.entries()).map(([ip, s]) => ({ ip, creatorId: s.creatorId, bytes: s.bytes, lastSeen: s.lastSeen, files: s.files })),
+        history: history.slice(-100).reverse()
+    };
+}
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+// /health, /status, /status.json, /admin/jobs and the rate limit, before anything else.
+app.use((req, res, next) => {
+    if (extras && extras.early(req, res, String(req.ip || '').replace('::ffff:', ''))) return;
+    next();
+});
+
+// Session Tracking Middleware
+app.use(async (req, res, next) => {
+    const ip = req.ip.replace('::ffff:', '') || '127.0.0.1';
+    const queryKey = req.query.key || req.query.id || req.query.creatorid;
+    const headerKey = req.headers['x-creator-id'] || req.headers['x-creator-key'] || req.headers['x-bmm-id'] || req.headers['authorization'];
+    const key = (headerKey || queryKey || "UNKNOWN").replace('Bearer ', '').trim();
+    
+    req.clientIp = ip;
+    req.creatorId = key;
+
+    if (!sessions.has(ip)) {
+        sessions.set(ip, { creatorId: key, bytes: 0, lastSeen: Date.now(), files: [] });
+        if (key !== "UNKNOWN") addToHistory(ip, key, "CONNECTION", "Session started with ID");
+        else addToHistory(ip, "UNKNOWN", "CONNECTION", "Anonymous session started");
+    } else {
+        const s = sessions.get(ip);
+        s.lastSeen = Date.now();
+        if (key !== "UNKNOWN" && (s.creatorId === "UNKNOWN" || s.creatorId === "")) {
+            s.creatorId = key;
+            addToHistory(ip, key, "IDENTITY", "Creator ID identified");
+        }
+    }
+    
+    // Security check
+    const { bans, whitelist, repo } = getSecurityData();
+    const isLocal = ip === '127.0.0.1' || ip === '::1';
+    if (!isLocal) {
+        if (bans.banned_ips.includes(ip) || (key !== "UNKNOWN" && bans.banned_keys.includes(key))) {
+            addToHistory(ip, key, "REJECTED", "Banned identity");
+            return res.status(403).send('Banned');
+        }
+        // Owner requires a BetterCommunity identity to download from this repo.
+        if ((repo && (repo.require_login || repo.requireLogin)) && key === "UNKNOWN") {
+            addToHistory(ip, key, "REJECTED", "BetterCommunity login required");
+            return res.status(403).send('BetterCommunity login required');
+        }
+        if (whitelist.enabled && !whitelist.ips.includes(ip) && !(key !== "UNKNOWN" && whitelist.keys.includes(key))) {
+            addToHistory(ip, key, "REJECTED", "Access denied (whitelist)");
+            return res.status(403).send('Not Whitelisted');
+        }
+        // Content only. The host's own dashboard/monitoring and the separately-authed admin
+        // panel are exempt (as is local access, above).
+        const isContent = !req.path.startsWith('/admin') && req.path !== '/dashboard' && req.path !== '/monitoring.json';
+        if (isContent) {
+            // The baked-in password first, so a server generated before access.json existed
+            // behaves exactly as it always did.
+            if (DOWNLOAD_PASSWORD) {
+                const given = req.headers['x-repo-password'] || req.query.pw || '';
+                if (!safeEqual(given, DOWNLOAD_PASSWORD)) {
+                    addToHistory(ip, key, "REJECTED", "Wrong or missing repo password");
+                    return res.status(401).send('Repo password required');
+                }
+            }
+            // Then access.json: its own password (if it sets one) and the authorised keys.
+            const gate = await checkAccess(__dirname, req, PUBLIC_ORIGIN);
+            if (!gate.ok) {
+                addToHistory(ip, key, "REJECTED", gate.reason);
+                return res.status(gate.status).send(gate.reason);
+            }
+        }
+    }
+
+    next();
+});
+
+// Admin Authentication Middleware
+// The feed, behind the same gate as repo.json (the middleware above has run).
+app.use((req, res, next) => {
+    if (extras && extras.serve(req, res)) return;
+    next();
+});
+
+const authAdmin = (req, res, next) => {
+    if (safeEqual(req.headers['authorization'], ADMIN_PASSWORD)) {
+        next();
+    } else {
+        res.status(401).json({ err: "Unauthorized" });
+    }
+};
+
+app.get('/dashboard', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});
+
+app.get('/monitoring.json', (req, res) => {
+    res.json(publicMonitoring(getMonitoringReport()));
+});
+
+app.get('/admin/monitoring', authAdmin, (req, res) => {
+    res.json(getMonitoringReport());
+});
+
+app.get('/admin/data', authAdmin, (req, res) => {
+    res.json(getSecurityData());
+});
+
+app.get('/admin/logs', authAdmin, (req, res) => {
+    try { 
+        const logs = fs.readFileSync(logFile, 'utf8').split('\n').filter(l => l.trim()).slice(-100); 
+        res.json({ lines: logs }); 
+    } catch(e) { 
+        res.json({ lines: [] }); 
+    }
+});
+
+app.post('/admin/update', authAdmin, (req, res) => {
+    try {
+        const data = req.body;
+        fs.writeFileSync(bansFile, JSON.stringify(data.bans, null, 2));
+        fs.writeFileSync(whitelistFile, JSON.stringify(data.whitelist, null, 2));
+        // The dashboard edits modpacks; it must not drop the format the manifest declares.
+        const nextRepo = data.repo || {};
+        try {
+            const prev = JSON.parse(fs.readFileSync(repoFile, 'utf8').replace(/^﻿/, ''));
+            if (prev && prev.format_version !== undefined && nextRepo.format_version === undefined) nextRepo.format_version = prev.format_version;
+        } catch (_) {}
+        fs.writeFileSync(repoFile, JSON.stringify(nextRepo, null, 2));
+        log(`Server config updated`, 'ADMIN');
+        res.json({ ok: true });
+    } catch(e) { 
+        res.status(400).json({ err: e.message }); 
+    }
+});
+
+app.get('/repo.json', (req, res) => {
+    try {
+        const repo = JSON.parse(fs.readFileSync(repoFile, 'utf8'));
+        if (repo && Array.isArray(repo.modpacks)) repo.modpacks = repo.modpacks.filter(m => m && m.enabled !== false);
+        // ETag + 304: a follower checking an unchanged repo gets no body.
+        if (extras) return extras.sendBody(req, res, JSON.stringify(repo), 'application/json; charset=utf-8');
+        res.json(repo);
+    } catch(e) { 
+        res.status(500).json({ err: "Failed to parse repo.json" }); 
+    }
+});
+
+// Serve static files with tracking and rate limiting
+app.use('/', (req, res, next) => {
+    let urlPath = decodeURIComponent(req.path);
+    const safePath = path.normalize(path.join(__dirname, urlPath.replace(/\//g, path.sep))).replace(/^(\.\.(\/|\\|$))+/, '');
+    const absolutePath = path.resolve(__dirname, safePath.startsWith(path.sep) ? safePath.substring(1) : safePath);
+
+    if (!insideDir(__dirname, absolutePath) || !fs.existsSync(absolutePath) || !fs.statSync(absolutePath).isFile()) {
+        return res.status(404).send('Not Found');
+    }
+    // At the root, only the manifest and its info file (the rule of BMM's built-in server,
+    // builtin_may_serve, and of the hybrid server). Everything else there is this server's own
+    // and was served to anyone who asked: server.js with the admin password baked in,
+    // access.json with the download password, docker-compose.yml / .env with ADMIN_PASSWORD,
+    // server.log, history.json and downloads.json with every downloader's IP and Creator ID,
+    // the ban and whitelist files. Decided on the RESOLVED path, so a spelling such as
+    // `/mods/../server.js` or `/SERVER.JS` cannot get past it.
+    const _segs = path.relative(__dirname, absolutePath).split(path.sep).filter(Boolean);
+    if ((_segs.length === 1 && !['repo.json', 'info.json'].includes(_segs[0].toLowerCase()))
+        || (_segs.length > 1 && _segs[0].toLowerCase() === 'node_modules')
+        || (_segs.length > 1 && _segs[0].toLowerCase() === 'bmm-server')) {
+        // bmm-server/ holds the job state and the repo.json backups: never served.
+        return res.status(404).send('Not Found');
+    }
+
+    const ip = req.clientIp;
+    const key = req.creatorId;
+    const isLocal = ip === '127.0.0.1' || ip === '::1';
+    const _stat = fs.statSync(absolutePath);
+    // ETag / Last-Modified / 304, Range / 206 / 416 and HEAD. A 304 or a HEAD is not a download.
+    const _part = extras ? extras.prepareFile(req, res, absolutePath, _stat) : null;
+    if (_part && _part.done) return;
+    const total = _part ? _part.length : _stat.size;
+    const protocol = isLocal ? 'Local' : (ip.startsWith('192.168.') ? 'LAN' : 'WAN');
+    const dlId = `${ip}-${Date.now()}`;
+    const dlObj = { ip, creatorId: key, file: urlPath, total, downloaded: 0, startTime: Date.now(), protocol };
+    
+    activeDownloads.set(dlId, dlObj);
+    stats.totalDownloads++;
+    addToHistory(ip, key, "DL_START", urlPath);
+    const s = sessions.get(ip); if (s && !s.files.includes(urlPath)) s.files.push(urlPath);
+
+    const stream = fs.createReadStream(absolutePath, _part ? { start: _part.start, end: _part.end } : undefined);
+    res.setHeader('Content-Length', total);
+    
+    let bytesSentInInterval = 0; let intervalStart = Date.now();
+
+    stream.on('data', chunk => {
+        dlObj.downloaded += chunk.length;
+        stats.totalBytesSent += chunk.length;
+        const ses = sessions.get(ip); if (ses) ses.bytes += chunk.length;
+
+        if (UPLOAD_LIMIT > 0) {
+            bytesSentInInterval += chunk.length;
+            const now = Date.now(); const elapsed = now - intervalStart;
+            if (elapsed < 1000 && bytesSentInInterval > (UPLOAD_LIMIT * 1024)) {
+                stream.pause();
+                setTimeout(() => { bytesSentInInterval = 0; intervalStart = Date.now(); stream.resume(); }, 1000 - elapsed);
+            } else if (elapsed >= 1000) { bytesSentInInterval = 0; intervalStart = now; }
+        }
+    });
+
+    let saveTimeout = null;
+    const saveStats = () => {
+        if (saveTimeout) clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(() => {
+            try { fs.writeFileSync(downloadsFile, JSON.stringify({ totalDownloads: stats.totalDownloads, totalBytesSent: stats.totalBytesSent, mods: stats.mods })); } catch(e) {}
+        }, 5000);
+    };
+
+    stream.on('end', () => { 
+        activeDownloads.delete(dlId);
+        addToHistory(ip, key, "DL_FINISH", urlPath);
+        if (urlPath.includes('/mods/')) {
+            const parts = urlPath.split('/mods/')[1].split('/');
+            if (parts.length > 0) {
+                const modId = parts[0];
+                stats.mods[modId] = (stats.mods[modId] || 0) + 1;
+                saveStats();
+            }
+        } else {
+            saveStats();
+        }
+    });
+
+    res.on('close', () => { stream.destroy(); activeDownloads.delete(dlId); });
+    stream.pipe(res);
+});
+
+const server = app.listen(PORT, '0.0.0.0', () => {
+    console.clear();
+    const cyan = '\x1b[36m'; const green = '\x1b[32m'; const magenta = '\x1b[35m';
+    const blue = '\x1b[34m'; const reset = '\x1b[0m'; const bold = '\x1b[1m';
+    const underline = '\x1b[4m';
+
+    console.log(`${bold}${cyan}   +------------------------------------------------------+`);
+    console.log(`   |             BMM DEDICATED SERVER                     |`);
+    console.log(`   +------------------------------------------------------+${reset}\n`);
+    console.log(`  ${bold}${green}[STATUS]${reset}  SERVER ONLINE`);
+    console.log(`  ${bold}${cyan}[PORT]${reset}    ${PORT}`);
+    {
+        let fmt = 'not a repo manifest';
+        try { fmt = repoFormatOf(JSON.parse(fs.readFileSync(repoFile, 'utf8').replace(/^﻿/, ''))); } catch (_) {}
+        console.log(`  ${bold}${cyan}[REPO]${reset}    repo.json: ${fmt}${fmt.startsWith('legacy') ? '  (convert it in BMM: Server Repo, or bmm repo-convert <folder>)' : ''}`);
+    }
+    console.log(`  ${bold}${magenta}[ADMIN]${reset}   Password: ${underline}${ADMIN_PASSWORD}${reset}`);
+    console.log(`  ${bold}${blue}[DASH]${reset}    http://127.0.0.1:${PORT}/dashboard`);
+    if (extras) console.log(`  ${bold}${green}[STATUS]${reset}  http://127.0.0.1:${PORT}/status  (health: /health, feed: /feed.xml)\n`);
+});
+// Scheduled jobs and a graceful SIGTERM (docker stop, systemd).
+if (extras) extras.attach(server);

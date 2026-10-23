@@ -1,0 +1,8 @@
+{
+  "version": "1.0",
+  "name": "Pooled catalogue",
+  "items": [
+    { "kind": "TUTORIAL", "id": "mapper-101", "name": "Mapper 101", "meta": { "download_url": "https://example.org/mapper-101.bmmtut" } },
+    { "kind": "spaceship", "id": "nope", "name": "Not a kind" }
+  ]
+}

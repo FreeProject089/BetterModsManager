@@ -1,0 +1,94 @@
+/* ═══ History (features/mods/history.ts) ═════════════════════════════════════════════════════
+   Linked on first open. The card is the house shell (#modal-history: modal--lg modal--tall,
+   .modal-toolbar, .modal-footer); this file is its content only:
+
+     toolbar   search · type chips with counts (All, Mods, Profiles, Settings, Updates, Repos, Other)
+     body      days, newest first; in each day a timeline of entries (icon · sentence · time),
+               an entry opens in place to show its details, before → after, and Undo
+     footer    keep for … · Clear · CSV · Export JSON
+
+   Tokens only. */
+
+/* ── Toolbar ───────────────────────────────────────────────────────────────────────────── */
+.hx-toolbar { flex-direction: column; align-items: stretch; gap: 10px; }
+.hx-search { position: relative; display: flex; align-items: center; margin: 0; min-width: 0; }
+.hx-search > svg { position: absolute; left: 11px; color: var(--bmm-text-secondary); pointer-events: none; }
+.hx-search > .form-input { width: 100%; padding: 7px 10px 7px 32px; font-size: 13px; }
+.hx-types { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 1px; }
+.hx-type {
+    flex: none; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px;
+    border: 1px solid var(--bmm-border); border-radius: 999px; background: transparent;
+    color: var(--bmm-text-secondary); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+    transition: background var(--bmm-transition-fast), color var(--bmm-transition-fast), border-color var(--bmm-transition-fast);
+}
+.hx-type:hover { background: var(--bmm-s05); color: var(--bmm-text-primary); }
+.hx-type[aria-pressed="true"] { border-color: var(--bmm-border-accent); background: var(--bmm-accent-dim); color: var(--bmm-text-primary); }
+.hx-type[data-zero]:not([aria-pressed="true"]) { opacity: 0.55; }
+.hx-type-n { font-variant-numeric: tabular-nums; opacity: 0.8; }
+
+/* ── Timeline ──────────────────────────────────────────────────────────────────────────── */
+.hx-body > .bms-empty { min-height: 260px; }
+.hx-hint { margin: 0; max-width: 420px; font-size: 12.5px; line-height: 1.55; color: var(--bmm-text-secondary); text-align: center; }
+.hx-day + .hx-day { margin-top: 18px; }
+.hx-day-h {
+    position: sticky; top: -1px; z-index: 1; margin: 0 0 6px; padding: 6px 0;
+    background: var(--bmm-bg-elevated);
+    font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--bmm-text-secondary);
+}
+.hx-items { list-style: none; margin: 0; padding: 0; position: relative; }
+/* The thread: one line behind the icons. */
+.hx-items::before { content: ''; position: absolute; left: 13px; top: 14px; bottom: 14px; width: 1px; background: var(--bmm-border); }
+.hx-item { position: relative; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; padding: 3px 0; }
+.hx-ic {
+    position: relative; z-index: 1; display: inline-grid; place-items: center; width: 28px; height: 28px; margin-top: 2px;
+    border-radius: 50%; border: 1px solid var(--bmm-border-hover); background: var(--bmm-bg-elevated); color: var(--bmm-text-secondary);
+}
+.hx-item.is-ok .hx-ic { color: var(--bmm-success); border-color: color-mix(in srgb, var(--bmm-success) 40%, var(--bmm-border)); background: color-mix(in srgb, var(--bmm-success-dim) 70%, var(--bmm-bg-elevated)); }
+.hx-item.is-danger .hx-ic { color: var(--bmm-danger); border-color: color-mix(in srgb, var(--bmm-danger) 40%, var(--bmm-border)); background: color-mix(in srgb, var(--bmm-danger-dim) 70%, var(--bmm-bg-elevated)); }
+.hx-item.is-warn .hx-ic { color: var(--bmm-warning); border-color: color-mix(in srgb, var(--bmm-warning) 40%, var(--bmm-border)); background: color-mix(in srgb, var(--bmm-warning-dim) 70%, var(--bmm-bg-elevated)); }
+.hx-item.is-accent .hx-ic { color: var(--bms-accent-ink); border-color: var(--bmm-border-accent); background: color-mix(in srgb, var(--bmm-accent-dim) 70%, var(--bmm-bg-elevated)); }
+.hx-main { min-width: 0; }
+.hx-line {
+    display: flex; align-items: center; gap: 10px; width: 100%; min-height: 34px; padding: 6px 10px; margin: 0;
+    border: 0; border-radius: 9px; background: transparent; color: inherit; font: inherit; text-align: left;
+}
+button.hx-line { cursor: pointer; }
+button.hx-line:hover { background: var(--bmm-s04); }
+.hx-item.is-open > .hx-main > .hx-line { background: var(--bmm-s04); border-radius: 9px 9px 0 0; }
+.hx-text { flex: 1 1 auto; min-width: 0; font-size: 13px; color: var(--bmm-text-primary); overflow-wrap: anywhere; }
+.hx-state { flex: none; padding: 1px 7px; border-radius: 999px; background: var(--bmm-s06); color: var(--bmm-text-secondary); font-size: 10.5px; font-weight: 700; }
+.hx-state.is-danger { background: var(--bmm-danger-dim); color: color-mix(in srgb, var(--bmm-danger) 75%, var(--bmm-text-primary)); }
+.hx-time { flex: none; font-size: 11.5px; color: var(--bmm-text-secondary); font-variant-numeric: tabular-nums; }
+.hx-chev { flex: none; display: inline-grid; color: var(--bmm-text-secondary); transition: transform 0.15s; }
+.hx-item.is-open .hx-chev { transform: rotate(180deg); }
+
+.hx-detail { display: flex; flex-direction: column; gap: 10px; padding: 10px 10px 12px; border-radius: 0 0 9px 9px; background: var(--bmm-s02); }
+.hx-detail-t { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--bmm-text-secondary); overflow-wrap: anywhere; white-space: pre-wrap; }
+.hx-diff { display: grid; grid-template-columns: minmax(90px, 0.6fr) minmax(0, 1fr) minmax(0, 1fr); }
+.hx-diff-row { display: contents; }
+.hx-diff-row > span { padding: 7px 10px; border-top: 1px solid var(--bmm-border); font-size: 12.5px; line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; }
+.hx-diff-head > span { border-top: 0; padding-top: 2px; padding-bottom: 4px; font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--bmm-text-secondary); }
+.hx-diff-f { font-weight: 600; color: var(--bmm-text-primary); }
+.hx-diff-old { color: var(--bmm-text-secondary); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--bmm-danger) 60%, transparent); }
+.hx-diff-new { color: var(--bmm-text-primary); background: color-mix(in srgb, var(--bmm-success-dim) 45%, transparent); }
+.hx-diff-old.is-empty, .hx-diff-new.is-empty { font-style: italic; text-decoration: none; color: var(--bmm-text-secondary); background: transparent; }
+.hx-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.hx-actions .btn { display: inline-flex; align-items: center; gap: 6px; }
+
+/* ── Footer ────────────────────────────────────────────────────────────────────────────── */
+.hx-keep { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--bmm-text-secondary); }
+.hx-keep label { margin: 0; white-space: nowrap; }
+.hx-select { width: auto; height: 30px; padding: 0 8px; font-size: 12px; }
+.hx-days { width: 72px; height: 30px; padding: 0 8px; font-size: 12px; }
+.hx-days[hidden] { display: none; }
+#modal-history .modal-footer .btn { display: inline-flex; align-items: center; gap: 6px; }
+.hx-clear.is-armed { color: color-mix(in srgb, var(--bmm-danger) 80%, var(--bmm-text-primary)); }
+
+.hx :is(.hx-type, button.hx-line):focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: 2px; }
+
+@media (max-width: 640px) {
+    .hx-diff { grid-template-columns: minmax(0, 1fr); }
+    .hx-diff-head { display: none; }
+    .hx-diff-f { background: var(--bmm-s03); }
+}
+@media (prefers-reduced-motion: reduce) { .hx-chev { transition: none; } }

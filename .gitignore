@@ -1,3 +1,34 @@
 .Assets
 node_modules
 src-tauri/target
+
+# TypeScript Compiled JS Output
+frontend/js/**/*.js
+frontend/js/**/*.js.map
+!frontend/js/lib/**/*.js
+
+# Obsidian
+.obsidian/
+
+tmp/
+.claude/
+.vscode
+.agent/
+dist/
+
+benchmarks/rust/target/debug/
+benchmarks/rust/target/release/
+# Tauri v2 build-generated schemas
+src-tauri/gen/
+
+# Local release/build output (installer artifacts, etc.)
+/Release/
+
+# Working plan for the current batch — local scratch, deliberately never committed.
+PLAN.md
+
+# « Laya hors ligne » model pack and ONNX exports: hundreds of MB, pinned in laya-model.lock.json
+# and published as a release asset — never committed (no LFS in this repo).
+*.onnx
+*.onnx.data
+laya-offline-*.zip

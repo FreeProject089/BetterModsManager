@@ -1,0 +1,171 @@
+/* The catalogue source list (features/catalogs/source-list.ts): App catalogue → Sources and
+   Settings → Catalogue index share it. Tokens only, so every theme (light included) reads it.
+   State is said by a dot and a word, never by a coloured bar down the side of a card.
+   One surface (modal-shell.css, "Inside the body"): the sources are rows split by a hairline
+   with a hover tint, and the explainer is a fold, not framed boxes. */
+
+.csl { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.csl.is-busy .csl-body { opacity: .7; }
+
+.csl-explain {
+    padding: 2px 0;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.csl-explain > summary {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-primary);
+    font-weight: 600;
+    list-style: none;
+}
+.csl-explain > summary::-webkit-details-marker { display: none; }
+.csl-explain p { margin: 8px 0 0; line-height: 1.5; }
+
+.csl-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.csl-spacer { flex: 1; }
+.csl-summary { margin: 0; font-size: 12px; color: var(--text-secondary); }
+.csl-summary:empty { display: none; }
+
+.csl-group + .csl-group { margin-top: 6px; }
+.csl-group-h {
+    margin: 0 0 6px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--text-secondary);
+}
+.csl-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0; }
+
+.csl-row {
+    display: grid;
+    grid-template-columns: 120px minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 10px;
+    padding: 9px 8px;
+    border-radius: 8px;
+}
+.csl-row + .csl-row { border-top: 1px solid var(--bmm-s06); }
+.csl-row:hover { background: var(--bmm-s03); }
+.csl-row.is-off .csl-name,
+.csl-row.is-off .csl-url { opacity: .6; }
+.csl-row.is-off .csl-url { text-decoration: line-through; }
+
+.csl-state {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    padding-top: 2px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.csl-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--text-muted); }
+.csl-state[data-state="ok"] .csl-dot { background: var(--success); }
+.csl-state[data-state="stale"] .csl-dot { background: var(--warning); }
+.csl-state[data-state="error"] .csl-dot { background: var(--danger); }
+.csl-state[data-state="pending"] .csl-dot { background: var(--accent); }
+.csl-state[data-state="error"] { color: color-mix(in srgb, var(--danger) 60%, var(--text-primary)); }
+
+.csl-main { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.csl-name { font-size: 13px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.csl-url {
+    font-family: var(--font-mono, monospace);
+    font-size: 11px;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    background: none;
+    padding: 0;
+}
+.csl-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 2px; }
+.csl-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    line-height: 1.6;
+    padding: 0 7px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+.csl-tier-official { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); color: var(--text-primary); }
+.csl-tier-partner { border-color: color-mix(in srgb, var(--success) 45%, var(--border)); }
+.csl-sig-verified { color: color-mix(in srgb, var(--success) 60%, var(--text-primary)); border-color: color-mix(in srgb, var(--success) 45%, var(--border)); }
+.csl-sig-invalid { color: color-mix(in srgb, var(--danger) 60%, var(--text-primary)); border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }
+.csl-sig-unknown_key { color: color-mix(in srgb, var(--warning) 60%, var(--text-primary)); border-color: color-mix(in srgb, var(--warning) 45%, var(--border)); }
+.csl-meta-txt { font-size: 10px; color: var(--text-secondary); }
+.csl-err {
+    display: flex;
+    align-items: flex-start;
+    gap: 5px;
+    font-size: 11px;
+    color: color-mix(in srgb, var(--danger) 60%, var(--text-primary));
+    overflow-wrap: anywhere;
+}
+.csl-err svg { flex: none; margin-top: 2px; }
+
+.csl-actions { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; justify-content: flex-end; }
+.csl-icon-btn { padding: 4px 6px; }
+.csl-icon-btn.is-hidden { visibility: hidden; }
+.csl-danger:hover { color: color-mix(in srgb, var(--danger) 60%, var(--text-primary)); }
+.csl-switch { margin-right: 4px; }
+
+.csl-none { font-size: 12px; color: var(--text-secondary); padding: 4px 2px; }
+
+.csl-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 24px 12px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 12px;
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+}
+.csl-empty p { margin: 0; }
+.csl-empty-title { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+
+/* Dialogs: details and add/edit. */
+.csl-dl { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.csl-dl-row { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 10px; font-size: 12px; }
+.csl-dl-row dt { color: var(--text-secondary); }
+.csl-dl-row dd { margin: 0; color: var(--text-primary); overflow-wrap: anywhere; }
+.csl-mono { font-family: var(--font-mono, monospace); font-size: 11px; }
+.csl-note { margin: 10px 0 0; font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+
+.csl-form { display: flex; flex-direction: column; gap: 10px; }
+.csl-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-secondary); }
+.csl-test:empty { display: none; }
+.csl-test-box {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-secondary);
+    overflow-wrap: anywhere;
+}
+.csl-test-box b { color: var(--text-primary); }
+.csl-test-box svg { flex: none; margin-top: 2px; }
+.csl-test-box.is-ok { border-color: color-mix(in srgb, var(--success) 45%, var(--border)); }
+.csl-test-box.is-ok svg { color: color-mix(in srgb, var(--success) 60%, var(--text-primary)); }
+.csl-test-box.is-bad { border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }
+.csl-test-box.is-bad svg { color: color-mix(in srgb, var(--danger) 60%, var(--text-primary)); }
+.csl-test-box.is-info svg { color: var(--accent); }
+.csl-modal .modal-footer { display: flex; align-items: center; gap: 6px; }
+
+@media (max-width: 720px) {
+    .csl-row { grid-template-columns: minmax(0, 1fr); }
+    .csl-actions { justify-content: flex-start; }
+}

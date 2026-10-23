@@ -1,0 +1,221 @@
+//! The resource governor, as the frontend and the scheduler see it (A3).
+//!
+//! Status, the preset (persistent, or for one scheduled task's duration), manual game mode and
+//! the queue (pause / resume / cancel). All cheap: nothing here does I/O except saving the
+//! document on a persistent preset change or a new game list, and those two are async so the
+//! save (an fsync of data.json) runs on a worker thread: a sync command runs on the main
+//! thread in Tauri v2, and the window would wait for the disk on every click.
+//!
+//! A task-scoped preset is NEVER written to `AppData.resources`: it lives in the governor,
+//! the task clears it with its token in its `finally`, and a timer clears it anyway after
+//! the TTL (at most 2 h), so a task killed mid-run cannot leave BMM in "Max" for good.
+use crate::governor::config::{GameOptions, Preset};
+use crate::governor::game_mode::GameView;
+use crate::governor::game_mode::Manual;
+use crate::governor::queue::{PauseAllView, TicketView, TASK_PAUSE_MAX};
+use crate::governor::runtime::{global, TASK_PRESET_MAX};
+use crate::state::AppState;
+use serde::Serialize;
+use std::time::{Duration, Instant};
+use tauri::State;
+
+#[derive(Debug, Serialize)]
+pub struct TaskPresetView {
+    pub preset: Preset,
+    pub overrides_game: bool,
+    pub token: u64,
+    pub remaining_ms: u64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ResourcesStatus {
+    /// The user's preset (the stored document).
+    pub preset: Preset,
+    /// The preset in force right now (game mode or a task may differ from `preset`).
+    pub effective: Preset,
+    pub task: Option<TaskPresetView>,
+    pub game_active: bool,
+    pub game_manual: Manual,
+    /// The manual list of executables that count as a game (beside the profiles' folders).
+    pub game_exes: Vec<String>,
+    pub tickets: Vec<TicketView>,
+    /// "Everything is paused": who set it and how long it has left (owner card 2). Without it
+    /// a task that paused the queue left every later deploy waiting with no reason on screen.
+    pub paused_all: Option<PauseAllView>,
+    /// Game mode in detail: which game triggered it and how, since when, the cooldown left,
+    /// the folders watched and what is held.
+    pub game: GameView,
+    /// Game mode's options as stored.
+    pub game_options: GameOptions,
+}
+
+pub(crate) fn parse<T: serde::de::DeserializeOwned>(what: &str, v: &str) -> Result<T, String> {
+    serde_json::from_value(serde_json::Value::String(v.trim().to_lowercase())).map_err(|_| format!("unknown {what}: {v}"))
+}
+
+pub fn status() -> ResourcesStatus {
+    let g = global();
+    g.expire_task_preset();
+    let (game_active, game_manual) = g.game_mode();
+    let now = Instant::now();
+    ResourcesStatus {
+        preset: g.config().preset,
+        effective: g.effective_preset(),
+        task: g.task_preset().map(|t| TaskPresetView {
+            preset: t.preset, overrides_game: t.overrides_game, token: t.token,
+            remaining_ms: t.until.saturating_duration_since(now).as_millis() as u64,
+        }),
+        game_active,
+        game_manual,
+        game_exes: g.config().game_exes,
+        tickets: g.queue().snapshot(),
+        paused_all: g.queue().paused_all(),
+        game: g.game_view(),
+        game_options: g.config().game,
+    }
+}
+
+#[tauri::command]
+pub fn resources_status() -> ResourcesStatus { status() }
+
+/// `scope`: "persistent" writes the document (and survives a restart); "task" returns a token
+/// the caller passes to `resources_clear_task_preset`. `ttl_secs` is capped at 2 h.
+#[tauri::command]
+pub async fn resources_set_preset(state: State<'_, AppState>, name: String, scope: String, ttl_secs: Option<u64>, overrides_game: Option<bool>) -> Result<Option<u64>, String> {
+    let token = apply_preset(&state.data, &name, &scope, ttl_secs, overrides_game.unwrap_or(false))?;
+    if token.is_none() { state.save().map_err(|e| e.to_string())?; }
+    Ok(token)
+}
+
+/// What `resources_set_preset` does, minus the saving: the command and `POST
+/// /api/resources/preset` (A4) share it, and each saves the document its own way. `Ok(None)`
+/// = a persistent change the caller must save; `Ok(Some(token))` = a task-scoped preset.
+pub fn apply_preset(data: &std::sync::Mutex<crate::state::AppData>, name: &str, scope: &str, ttl_secs: Option<u64>, overrides_game: bool) -> Result<Option<u64>, String> {
+    let preset: Preset = parse("preset", name)?;
+    match scope.trim() {
+        "persistent" => {
+            let cfg = {
+                let mut data = data.lock().map_err(|_| "state lock".to_string())?;
+                data.resources.preset = preset;
+                data.resources.clone()
+            };
+            global().configure(cfg);
+            Ok(None)
+        }
+        "task" => {
+            let ttl = Duration::from_secs(ttl_secs.unwrap_or(TASK_PRESET_MAX.as_secs())).min(TASK_PRESET_MAX);
+            let token = global().set_task_preset(preset, overrides_game, ttl);
+            // The safety net: whatever happens to the task, the preset ends.
+            std::thread::spawn(move || { std::thread::sleep(ttl + Duration::from_millis(50)); global().expire_task_preset(); });
+            Ok(Some(token))
+        }
+        other => Err(format!("unknown scope: {other} (persistent | task)")),
+    }
+}
+
+#[tauri::command]
+pub fn resources_clear_task_preset(token: u64) -> bool { global().clear_task_preset(token) }
+
+/// "auto" (detection decides), "on", "off".
+#[tauri::command]
+pub fn resources_game_mode(mode: String) -> Result<(), String> {
+    let m: Manual = parse("game mode", &mode)?;
+    global().set_game_manual(m);
+    Ok(())
+}
+
+/// Replace the manual game list (executable names or full paths), validated and bounded by
+/// `ResourcesConfig::set_game_exes`. Detection (governor/procs.rs) reads it at its next poll.
+/// Returns the list as stored.
+#[tauri::command]
+pub async fn resources_set_game_exes(state: State<'_, AppState>, exes: Vec<String>) -> Result<Vec<String>, String> {
+    let cfg = {
+        let mut data = state.data.lock().map_err(|_| "state lock".to_string())?;
+        data.resources.set_game_exes(&exes)?;
+        data.resources.clone()
+    };
+    let stored = cfg.game_exes.clone();
+    global().configure(cfg);
+    state.save().map_err(|e| e.to_string())?;
+    Ok(stored)
+}
+
+/// Game mode's options (what it holds, the cooldown, the notice, the full-screen-window
+/// signal, the ignored profile folders), validated by `ResourcesConfig::set_game_options`.
+/// Detection reads them at its next poll. Returns them as stored.
+#[tauri::command]
+pub async fn resources_set_game_options(state: State<'_, AppState>, options: GameOptions) -> Result<GameOptions, String> {
+    let cfg = {
+        let mut data = state.data.lock().map_err(|_| "state lock".to_string())?;
+        data.resources.set_game_options(options)?;
+        data.resources.clone()
+    };
+    let stored = cfg.game.clone();
+    // configure() hands the options to game mode at once: what it holds applies to what is
+    // already queued, not at the next poll.
+    global().configure(cfg);
+    state.save().map_err(|e| e.to_string())?;
+    Ok(stored)
+}
+
+/// How long a `pause_all` from `by` may last. The user's own pause (`by` = "user", the
+/// dashboard's button) has no end, as before; anything else — a scheduled task
+/// (`task:<name>`), a plugin through the API (`plugin:<id>`), a caller that names nobody —
+/// ends by itself after `TASK_PAUSE_MAX` (30 min), the way a task-scoped preset ends after
+/// its TTL. The API never passes "user" (api/mod.rs builds `plugin:<id>` itself).
+pub fn pause_ttl_for(by: &str) -> Option<Duration> {
+    if by == "user" { None } else { Some(TASK_PAUSE_MAX) }
+}
+
+/// "pause_all" | "resume_all" | "pause_until_game_ends" | "pause" | "resume" | "cancel" (the
+/// last three need `id`).
+/// `by` says who pauses everything (see `pause_ttl_for`); missing = nobody named = bounded.
+#[tauri::command]
+pub fn resources_queue(action: String, id: Option<u64>, by: Option<String>) -> Result<bool, String> {
+    let q = global().queue();
+    let need = || id.ok_or_else(|| format!("{action} needs an id"));
+    Ok(match action.as_str() {
+        "pause_all" => {
+            let by = by.as_deref().map(str::trim).filter(|b| !b.is_empty()).unwrap_or("unknown");
+            q.pause_all_by(by, pause_ttl_for(by));
+            true
+        }
+        "resume_all" => { q.resume_all(); true }
+        // "Pause everything until I quit the game": lifted when game mode ends.
+        "pause_until_game_ends" => { global().pause_until_game_ends()?; true }
+        "pause" => q.pause(need()?),
+        "resume" => q.resume(need()?),
+        "cancel" => q.cancel(need()?),
+        other => return Err(format!("unknown queue action: {other}")),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn names_parse_case_insensitively_and_unknown_ones_are_refused() {
+        assert_eq!(parse::<Preset>("preset", "Max").unwrap(), Preset::Max);
+        assert_eq!(parse::<Manual>("game mode", " ON ").unwrap(), Manual::On);
+        assert!(parse::<Preset>("preset", "turbo").is_err());
+    }
+
+    #[test]
+    fn a_queue_action_on_one_ticket_needs_its_id() {
+        assert!(resources_queue("cancel".into(), None, None).is_err());
+        assert!(resources_queue("explode".into(), Some(1), None).is_err());
+        assert_eq!(resources_queue("cancel".into(), Some(u64::MAX), None).unwrap(), false, "an unknown id changes nothing");
+    }
+
+    /// Owner card 2: only the user's own pause is open-ended. (The global queue is not paused
+    /// here: other tests in this binary take real tickets from it.)
+    #[test]
+    fn only_the_users_pause_all_has_no_end() {
+        assert_eq!(pause_ttl_for("user"), None);
+        for by in ["task:Nightly", "plugin:p1", "unknown", "", "User", "user "] {
+            assert_eq!(pause_ttl_for(by), Some(TASK_PAUSE_MAX), "{by:?} got an open-ended pause");
+        }
+        assert!(TASK_PAUSE_MAX <= Duration::from_secs(2 * 60 * 60), "no longer than a task preset's TTL");
+    }
+}

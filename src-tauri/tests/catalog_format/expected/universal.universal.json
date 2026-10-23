@@ -1,0 +1,78 @@
+{
+  "app": "bmm",
+  "catalogs": [
+    {
+      "kind": "preset",
+      "name": "Presets",
+      "url": "https://example.org/presets.json"
+    }
+  ],
+  "description": "One of each",
+  "description_i18n": {
+    "fr": "Un de chaque"
+  },
+  "format": "bmm-catalog",
+  "format_version": 1,
+  "homepage": "https://example.org",
+  "id": "hello-catalogue",
+  "items": [
+    {
+      "author": "Me",
+      "description": "Says hello",
+      "download": {
+        "sha256": "6666666666666666666666666666666666666666666666666666666666666666",
+        "size": 1234,
+        "url": "https://example.org/p/hello.bmmplug"
+      },
+      "game": "DCS World",
+      "id": "hello",
+      "kind": "plugin",
+      "name": "Hello",
+      "name_i18n": {
+        "fr": "Bonjour"
+      },
+      "tags": [
+        "demo"
+      ],
+      "version": "1.0.0"
+    },
+    {
+      "extra": {
+        "mode": "dark",
+        "vars": {
+          "--bg": "#101010"
+        }
+      },
+      "id": "dark-hello",
+      "kind": "theme",
+      "name": "Dark hello"
+    },
+    {
+      "download": {
+        "sha256": "7777777777777777777777777777777777777777777777777777777777777777",
+        "url": "https://example.org/a/hello-app.zip"
+      },
+      "extra": {
+        "category": "utility"
+      },
+      "id": "hello-app",
+      "kind": "app",
+      "name": "Hello App",
+      "version": "2.0"
+    },
+    {
+      "download": {
+        "url": "https://example.org/repo"
+      },
+      "id": "hello-repo",
+      "kind": "repo",
+      "name": "Hello repo"
+    }
+  ],
+  "name": "Hello catalogue",
+  "name_i18n": {
+    "fr": "Catalogue bonjour"
+  },
+  "publisher": "Hello Group",
+  "updated_at": "2026-10-13T00:00:00Z"
+}

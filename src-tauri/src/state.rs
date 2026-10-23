@@ -7,6 +7,51 @@ use std::sync::Mutex;
 use std::time::Instant;
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct ConnectedServerRepo {
+    pub url:  String,
+    #[serde(default)]
+    pub name: String,
+    /// Check this repo automatically when BMM starts.
+    ///
+    /// Off by default and per repo, never global: syncing writes into a game folder, so
+    /// "check everything on launch" is not a setting anyone should acquire by upgrading.
+    #[serde(default)]
+    pub auto_sync: bool,
+    /// Which of the two sync modes to use — "missing" (default) installs what is absent,
+    /// "all" also overwrites files that differ locally.
+    ///
+    /// Stored per repo because the answer differs per repo: a curated server you follow
+    /// wants "all", a repo you cherry-pick from does not, and a single global mode would
+    /// quietly overwrite local edits on the second kind.
+    #[serde(default)]
+    pub auto_sync_mode: Option<String>,
+    /// Followed: checked on a schedule for updates to the user's mods (commands/repo_follow.rs).
+    /// None = not followed. Absent from older data.json files, and not written when None.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub follow: Option<crate::commands::repo_follow::RepoFollow>,
+}
+
+/// One key on the keyring: a stable id, a name a person chose, and where the file is.
+///
+/// Never the key itself. The file is opened at the moment a proof is signed and the bytes are
+/// dropped, which is what lets this live in settings at all.
+///
+/// `id` exists because a NAME is not a handle. It is what somebody types, so it is what they
+/// rename, and it can hold spaces, accents and slashes — none of which survive a URL or a
+/// deeplink well. The id is minted once and is never derived from the name, so renaming a key
+/// leaves every script that refers to it still pointing at the same key.
+///
+/// It defaults to empty for rings written before it existed; `keyring_from_settings` mints
+/// one on the next load rather than leaving a key nothing can address.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KeyAuthEntry {
+    #[serde(default)]
+    pub id: String,
+    pub name: String,
+    pub path: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AppSettings {
     #[serde(default = "default_lang")]
     pub language: String,
@@ -18,8 +63,13 @@ pub struct AppSettings {
     pub onboarding_shown: bool,
     #[serde(default)]
     pub last_seen_crash: Option<String>,
-    #[serde(default)]
+    #[serde(default = "default_true")]
     pub auto_io_calibration: bool,
+    /// Smart I/O: when true (default), mod file copies use a bounded
+    /// thread pool + tiny periodic yields so the UI stays fluid.
+    /// When false, copies saturate every CPU core for max speed.
+    #[serde(default = "default_true")]
+    pub smart_io_enabled: bool,
     #[serde(default)]
     pub storage_alert_enabled: bool,
     #[serde(default = "default_storage_warning")]
@@ -32,15 +82,183 @@ pub struct AppSettings {
     pub current_sort_by: String,
     #[serde(default = "default_true")]
     pub last_session_clean: bool,
+    /// Has the one-time read-scope carry-over run?
+    ///
+    /// Fifty routes gained a permission at once; without this, every plugin already trusted
+    /// with a domain would lose the ability to LIST it on upgrade. Recorded rather than
+    /// re-derived, so a grant the user then revokes is not handed back on the next start.
+    #[serde(default)]
+    pub plugin_scopes_migrated: bool,
     #[serde(default)]
     pub auto_fill_metadata: bool,
     #[serde(default)]
     pub cloudflared_path: Option<String>,
+    /// SSH host fingerprints already trusted, keyed "host:port".
+    ///
+    /// Option, not a bare map, so an existing data.json without the field still parses —
+    /// and so "never connected to anything" is distinguishable from "trusted nothing".
+    /// Fingerprints only: no key material, no passphrase, ever.
+    #[serde(default)]
+    pub ssh_known_hosts: Option<HashMap<String, String>>,
+    /// PATH to the ed25519 private key used to prove identity to a repo or catalogue that
+    /// requires one (see commands/repo_keyauth.rs).
+    ///
+    /// A path, not a key — the same rule as everywhere else here, and the reason it can live
+    /// in settings at all. The proof is signed at the moment of use and the bytes are dropped.
+    ///
+    /// It lives on the Rust side rather than in the frontend's store because every outbound
+    /// request that might need it is built here: the catalogue fetcher, the repo-info fetcher
+    /// and the per-file sync client. Threading it through three call chains from the frontend
+    /// would be three chances for one of them to forget.
+    ///
+    /// LEGACY. Read once at startup and folded into `key_auth_keys` as an entry named
+    /// "default"; nothing writes it any more. Kept in the struct so an existing data.json
+    /// still parses and an upgrade does not silently lose the key somebody configured.
+    #[serde(default)]
+    pub key_auth_key_path: Option<String>,
+    /// The keyring: named ed25519 private keys BMM can prove identity with.
+    ///
+    /// Paths, never key material — the same rule as the single value this replaces. A NAME
+    /// per key because a list of absolute paths is not something a person recognises at a
+    /// glance, and choosing between them is the whole point of holding more than one.
+    #[serde(default)]
+    pub key_auth_keys: Vec<KeyAuthEntry>,
+    /// Which key signs when nothing more specific applies, by name.
+    #[serde(default)]
+    pub key_auth_active: Option<String>,
+    /// Per-ORIGIN overrides: `scheme://host` → key name.
+    ///
+    /// Keyed by origin rather than by full URL because that is exactly what a proof is
+    /// addressed to (see `audience_for`), so the lookup needs nothing threaded through the
+    /// three request builders that sign. One server, one identity — which is also how a
+    /// person thinks about it: this key is the one that community knows me by.
+    #[serde(default)]
+    pub key_auth_by_origin: HashMap<String, String>,
     #[serde(default)]
     pub discord_rpc_enabled: bool,
+    #[serde(default)]
+    pub fs_security_mode: Option<String>, // Some("full") | Some("limited") | None
+    #[serde(default)]
+    pub require_valid_sha: bool,
+    #[serde(default = "default_true")]
+    pub show_sha_loading_animation: bool,
+    #[serde(default = "default_true")]
+    pub enable_lazy_sha_calculation: bool,
+    #[serde(default = "default_history_retention")]
+    pub history_retention_days: u32,
+    #[serde(default = "default_api_token")]
+    pub api_token: String,
+    /// Proves a `bmm://schedule/run` came from THIS machine's Windows Scheduled Task and
+    /// not from a web page.
+    ///
+    /// The OS mirror launches `BMM.exe "bmm://schedule/run?id=…"`, and a page can write
+    /// that same link — task ids are `sched-<millisecond timestamp>`, so they are guessable.
+    /// Running one is executing whatever the owner wrote in it, so the link asks first … which
+    /// would leave every OS-scheduled task waiting for a click at 3am. This is what the
+    /// registration puts in the link so the app can tell the two apart.
+    ///
+    /// Deliberately NOT `api_token`: resetting that one is something a user does, and it
+    /// would silently turn every registered task into a prompt. This one has no reason to
+    /// change, is never shown, and never leaves the machine.
+    #[serde(default = "default_api_token")]
+    pub os_schedule_key: String,
+    /// Local Plugin API port (default 51274). Changing it requires a restart;
+    /// the whole frontend + generated scripts read it dynamically.
+    #[serde(default = "default_api_port")]
+    pub api_port: u16,
+    #[serde(default = "default_true")]
+    pub sound_effects_enabled: bool,
+    #[serde(default = "default_sound_volume")]
+    pub sound_volume: u32, // 0–100
+    #[serde(default)]
+    pub connected_server_repos: Vec<ConnectedServerRepo>,
+    /// Per-plugin API tokens: token string → plugin_id. CWE-862/863: the API
+    /// resolves a caller's identity (and thus permissions) from THIS map by token,
+    /// not from the spoofable `X-BMM-Plugin-Id` header. The main `api_token` stays
+    /// the admin token (full access). Empty by default ⇒ behaviour unchanged.
+    #[serde(default)]
+    pub plugin_tokens: std::collections::HashMap<String, String>,
+    /// CWE-942: extra CORS origins the user explicitly allows so they can call
+    /// the local API from other web services (e.g. a dashboard). Empty ⇒ only the
+    /// Tauri WebView origins are allowed (the secure default). A single `"*"`
+    /// entry means "allow any origin" (opt-in, the user accepted the risk).
+    /// Changing this requires an API restart.
+    #[serde(default)]
+    pub api_cors_origins: Vec<String>,
+    /// CWE-350 (DNS rebinding): the local API answers only a `Host` of `127.0.0.1:<port>` or
+    /// `localhost:<port>`, plus the hosts listed here for a tunnel the user runs to the API
+    /// (`abc.trycloudflare.com`, `box.lan:8080`). Empty by default. An entry without a port
+    /// names that host on any port; `*` is not a wildcard. Changing it needs an API restart.
+    #[serde(default)]
+    pub api_allowed_hosts: Vec<String>,
+    /// Telemetry consent (GDPR opt-in). `None` = never asked yet (show the prompt),
+    /// `Some(true)` = opted in, `Some(false)` = declined. Nothing is collected
+    /// unless this is explicitly `Some(true)`.
+    #[serde(default)]
+    pub analytics_consent: Option<bool>,
+    /// "Send errors live" (commands/live_issues.rs). Only ever acts with analytics_consent ==
+    /// Some(true). `None` = not decided yet: the first boot sets it ON if telemetry was
+    /// already accepted, OFF otherwise (live_issues::migrate_setting).
+    #[serde(default)]
+    pub live_errors: Option<bool>,
+    /// Where a bulk enable (modpack, "Enable all", .mm list, task, script) puts its mods in
+    /// the activation order when the caller does not say: `top` | `bottom` | `keep`
+    /// (commands/order_share.rs). `top` is what modpacks always did.
+    #[serde(default = "default_order_bulk_mode")]
+    pub order_bulk_mode: String,
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            language: default_lang(),
+            github_token: String::new(),
+            shortcuts: std::collections::HashMap::new(),
+            onboarding_shown: false,
+            last_seen_crash: None,
+            auto_io_calibration: true,
+            smart_io_enabled: true,
+            storage_alert_enabled: false,
+            storage_warning_space_pct: default_storage_warning(),
+            storage_critical_space_pct: default_storage_critical(),
+            current_filter: default_filter(),
+            current_sort_by: default_sort(),
+            plugin_scopes_migrated: false,
+            last_session_clean: true,
+            auto_fill_metadata: false,
+            cloudflared_path: None,
+            ssh_known_hosts: None,
+            key_auth_key_path: None,
+            key_auth_keys: Vec::new(),
+            key_auth_active: None,
+            key_auth_by_origin: HashMap::new(),
+            discord_rpc_enabled: false,
+            fs_security_mode: None,
+            require_valid_sha: false,
+            show_sha_loading_animation: true,
+            enable_lazy_sha_calculation: true,
+            history_retention_days: default_history_retention(),
+            api_token: default_api_token(),
+            os_schedule_key: default_api_token(),
+            api_port: default_api_port(),
+            sound_effects_enabled: true,
+            sound_volume: default_sound_volume(),
+            connected_server_repos: Vec::new(),
+            plugin_tokens: std::collections::HashMap::new(),
+            api_cors_origins: Vec::new(),
+            api_allowed_hosts: Vec::new(),
+            analytics_consent: None,
+            live_errors: None,
+            order_bulk_mode: default_order_bulk_mode(),
+        }
+    }
 }
 
 fn default_true() -> bool { true }
+fn default_order_bulk_mode() -> String { "top".to_string() }
+fn default_api_token() -> String { uuid::Uuid::new_v4().to_string() }
+fn default_api_port() -> u16 { 51274 }
+fn default_sound_volume() -> u32 { 70 }
 
 fn default_filter() -> String { "all".to_string() }
 fn default_sort() -> String { "name_asc".to_string() }
@@ -48,8 +266,9 @@ fn default_sort() -> String { "name_asc".to_string() }
 fn default_lang() -> String { "fr".to_string() }
 fn default_storage_warning() -> u32 { 40 }
 fn default_storage_critical() -> u32 { 30 }
+fn default_history_retention() -> u32 { 30 }
 
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
 pub struct AppData {
     pub profiles: Vec<Profile>,
     pub mods: Vec<ModEntry>,
@@ -58,16 +277,173 @@ pub struct AppData {
     pub custom_tags: Vec<crate::models::tag::TagDef>,
     #[serde(default)]
     pub disk_limits: std::collections::HashMap<String, u64>,
+    /// The resource governor's presets and per-disk × per-operation rules (governor/config.rs).
+    /// Here and not in `settings`: update_settings replaces the whole settings object with
+    /// the frontend's copy, which would overwrite a change made by the API meanwhile.
+    #[serde(default)]
+    pub resources: crate::governor::config::ResourcesConfig,
     #[serde(default)]
     pub settings: AppSettings,
+    #[serde(default)]
+    pub launch_packs: Vec<crate::models::launch_pack::LaunchPack>,
+    #[serde(default)]
+    pub installed_plugins: Vec<crate::models::plugin::InstalledPlugin>,
+    #[serde(default)]
+    pub plugin_permissions: std::collections::HashMap<String, Vec<String>>,
+    #[serde(default)]
+    pub modpacks: Vec<crate::models::modpack::LocalModpack>,
+    /// Saved activation-order lists (models/order_list.rs): named orders that may name mods
+    /// that are not active, applied to one or several profiles or activated in one step.
+    #[serde(default)]
+    pub order_lists: Vec<crate::models::order_list::OrderList>,
+}
+
+/// The settings that belong to THIS installation and never to a file: the three credentials
+/// the local API and the OS scheduler check, and the list of web origins allowed to call that
+/// API.
+///
+/// A backup import and a `.DATABMM` restore both replaced the whole document with the file's,
+/// these included. So a backup somebody was handed ("my setup, just import it") set the API
+/// token to a value its author knew and `api_cors_origins` to `["*"]`, and from the next start
+/// any web page open in a browser could drive the whole local API with that token — install and
+/// launch apps, run scheduled tasks, write files through repo sync (CWE-15 / CWE-942). Nothing
+/// is lost by keeping the local ones even for your OWN backup: a token is a key to this
+/// machine's API, and the CLI, MCP and plugins read the current one from here.
+///
+/// `api_allowed_hosts` for the same reason as the CORS list: a backup naming a host of its
+/// author's would let that name's pages through the DNS-rebinding check. `github_token`
+/// (security summary §9, exports): a personal access token of THIS user, which a backup
+/// shared as "my setup" handed to whoever received it; the machine's own token is kept on
+/// restore, like the others.
+pub const LOCAL_ONLY_SETTINGS: [&str; 6] = [
+    "api_token", "os_schedule_key", "plugin_tokens", "api_cors_origins", "api_allowed_hosts", "github_token",
+];
+
+impl AppData {
+    /// Carry this installation's `LOCAL_ONLY_SETTINGS` over a document about to replace it.
+    pub fn keep_local_only_settings(&mut self, current: &AppData) {
+        self.settings.api_token = current.settings.api_token.clone();
+        self.settings.os_schedule_key = current.settings.os_schedule_key.clone();
+        self.settings.plugin_tokens = current.settings.plugin_tokens.clone();
+        self.settings.api_cors_origins = current.settings.api_cors_origins.clone();
+        self.settings.api_allowed_hosts = current.settings.api_allowed_hosts.clone();
+        self.settings.github_token = current.settings.github_token.clone();
+    }
+
+    /// An empty credential is not a credential: a constant-time compare of "" against "" is
+    /// true, so a data.json holding `"api_token": ""` — hand-edited, or written by a tool
+    /// whose mirror of these settings defaults to empty — opened the API to any request with
+    /// no Authorization header at all. Regenerated on load rather than refused per request,
+    /// so the app's own screens keep working.
+    fn heal_empty_credentials(&mut self) {
+        if self.settings.api_token.trim().is_empty() {
+            self.settings.api_token = default_api_token();
+        }
+        if self.settings.os_schedule_key.trim().is_empty() {
+            self.settings.os_schedule_key = default_api_token();
+        }
+    }
+}
+
+/// Remove `LOCAL_ONLY_SETTINGS` from an exported document.
+///
+/// Removed, not blanked: an older BMM importing this file would take `""` as the token (see
+/// `heal_empty_credentials`), while a missing key falls back to a fresh random one.
+pub fn strip_local_only_settings(app_data: &mut serde_json::Value) {
+    if let Some(settings) = app_data.get_mut("settings").and_then(|s| s.as_object_mut()) {
+        for key in LOCAL_ONLY_SETTINGS {
+            settings.remove(key);
+        }
+    }
+}
+
+#[cfg(test)]
+mod local_only_settings_tests {
+    use super::*;
+
+    fn with(token: &str, cors: &[&str]) -> AppData {
+        let mut d = AppData::default();
+        d.settings.api_token = token.into();
+        d.settings.os_schedule_key = format!("{token}-sched");
+        d.settings.plugin_tokens.insert(format!("{token}-plugin"), "p".into());
+        d.settings.api_cors_origins = cors.iter().map(|s| s.to_string()).collect();
+        d.settings.language = format!("{token}-lang");
+        d
+    }
+
+    /// The trigger: an imported document naming a token its author knows and `*` for CORS.
+    #[test]
+    fn an_imported_document_cannot_choose_the_api_token_or_open_cors() {
+        let mine = with("mine", &[]);
+        let mut theirs = with("known-to-the-author", &["*"]);
+        theirs.keep_local_only_settings(&mine);
+        assert_eq!(theirs.settings.api_token, "mine");
+        assert_eq!(theirs.settings.os_schedule_key, "mine-sched");
+        assert!(theirs.settings.plugin_tokens.contains_key("mine-plugin"));
+        assert!(!theirs.settings.plugin_tokens.contains_key("known-to-the-author-plugin"));
+        assert!(theirs.settings.api_cors_origins.is_empty());
+        // Everything else is still the file's — this is a restore, not a merge.
+        assert_eq!(theirs.settings.language, "known-to-the-author-lang");
+    }
+
+    /// Security summary §9 (exports): a backup does not carry the GitHub token, and a restore
+    /// keeps this machine's own. Same for the tunnel hosts of the API Host check.
+    #[test]
+    fn the_github_token_and_tunnel_hosts_stay_on_this_machine() {
+        let mut mine = with("mine", &[]);
+        mine.settings.github_token = "ghp_mine".into();
+        mine.settings.api_allowed_hosts = vec!["mine.example".into()];
+        let mut theirs = with("theirs", &[]);
+        theirs.settings.github_token = "ghp_theirs".into();
+        theirs.settings.api_allowed_hosts = vec!["rebind.attacker.example".into()];
+
+        let mut exported = serde_json::to_value(&mine).unwrap();
+        strip_local_only_settings(&mut exported);
+        assert!(!exported.to_string().contains("ghp_mine"), "the GitHub token was exported");
+        assert!(!exported.to_string().contains("mine.example"));
+
+        theirs.keep_local_only_settings(&mine);
+        assert_eq!(theirs.settings.github_token, "ghp_mine", "the restore replaced this machine's token");
+        assert_eq!(theirs.settings.api_allowed_hosts, vec!["mine.example".to_string()]);
+    }
+
+    #[test]
+    fn an_export_carries_none_of_them_and_an_old_reader_gets_fresh_ones() {
+        let mut v = serde_json::to_value(with("mine", &["https://dash.example"])).unwrap();
+        strip_local_only_settings(&mut v);
+        let s = v["settings"].as_object().unwrap();
+        for k in LOCAL_ONLY_SETTINGS {
+            assert!(!s.contains_key(k), "{k} was exported");
+        }
+        assert_eq!(s["language"], "mine-lang");
+        // A reader that only knows the struct gets random credentials, never empty ones.
+        let back: AppData = serde_json::from_value(v).unwrap();
+        assert!(!back.settings.api_token.is_empty() && back.settings.api_token != "mine");
+        assert!(!back.settings.os_schedule_key.is_empty());
+    }
+
+    #[test]
+    fn an_empty_token_on_disk_is_replaced_on_load() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("data.json");
+        let mut v = serde_json::to_value(AppData::default()).unwrap();
+        v["settings"]["api_token"] = serde_json::json!("");
+        v["settings"]["os_schedule_key"] = serde_json::json!("  ");
+        std::fs::write(&path, v.to_string()).unwrap();
+        let st = AppState::load(path);
+        let d = st.data.lock().unwrap();
+        assert_eq!(d.settings.api_token.len(), 36, "{:?}", d.settings.api_token);
+        assert_eq!(d.settings.os_schedule_key.len(), 36);
+    }
 }
 
 pub struct AppState {
-    pub data: Mutex<AppData>,
-    pub data_path: PathBuf,
+    pub data: std::sync::Arc<Mutex<AppData>>,
+    pub data_path: std::sync::Arc<PathBuf>,
     pub install_cancelled: std::sync::Arc<std::sync::atomic::AtomicBool>,
     pub sync_paused: std::sync::Arc<std::sync::atomic::AtomicBool>,
     pub benchmark_running: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    pub advanced_benchmark: std::sync::Arc<std::sync::atomic::AtomicBool>,
     pub previous_session_clean: std::sync::Arc<std::sync::atomic::AtomicBool>,
     
     // Cache for O(1) conflict detection (In-Memory only, not saved to JSON)
@@ -76,37 +452,146 @@ pub struct AppState {
     pub last_cache_update: Mutex<Option<Instant>>,
     // Discord RPC
     pub discord_client: Mutex<Option<Box<dyn discord_rich_presence::DiscordIpc + Send + Sync>>>,
+    // SHA calculation queue (priority queue for background hashing)
+    pub sha_queue: std::sync::Arc<Mutex<std::collections::VecDeque<String>>>,
+    pub sha_queue_priority: std::sync::Arc<Mutex<std::collections::VecDeque<String>>>,
+    pub sha_calculation_active: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    pub current_sha_mod_id: std::sync::Arc<Mutex<Option<String>>>,
+    pub export_cancelled: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    pub api_shutdown_tx: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
+}
+
+/// Parse an AppData file, returning None on any read/parse error.
+fn parse_appdata(path: &std::path::Path) -> Option<AppData> {
+    let f = std::fs::File::open(path).ok()?;
+    serde_json::from_reader(std::io::BufReader::new(f)).ok()
+}
+
+/// Load data.json, recovering from the rolling `.bak` if the main file is
+/// corrupt or missing — and NEVER silently resetting when a good backup exists.
+/// A corrupt main file is preserved as `data.corrupt-<ts>.json` for forensics.
+fn load_with_recovery(path: &std::path::Path) -> AppData {
+    let bak = path.with_extension("json.bak");
+    let log = |m: String| crate::commands::crash::log_line(m);
+
+    if path.exists() {
+        if let Some(d) = parse_appdata(path) {
+            return d;
+        }
+        log("[STATE] data.json is unreadable/corrupt — attempting recovery from backup.".into());
+        // keep the bad file for manual inspection
+        let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        let _ = std::fs::copy(path, path.with_file_name(format!("data.corrupt-{}.json", ts)));
+        if bak.exists() {
+            if let Some(d) = parse_appdata(&bak) {
+                log("[STATE] Recovered data.json from backup (data.json.bak).".into());
+                let _ = std::fs::copy(&bak, path); // restore so later saves don't clobber the good backup
+                return d;
+            }
+        }
+        log("[STATE] No valid backup found — starting fresh (corrupt file preserved).".into());
+        return AppData::default();
+    }
+
+    // main file missing entirely → try the backup before defaulting
+    if bak.exists() {
+        if let Some(d) = parse_appdata(&bak) {
+            log("[STATE] data.json missing — recovered from data.json.bak.".into());
+            let _ = std::fs::copy(&bak, path);
+            return d;
+        }
+    }
+    AppData::default()
+}
+
+/// Serialises `AppState::save` calls (see there).
+static SAVE_ORDER: Mutex<()> = Mutex::new(());
+
+/// Crash-safe write: write to a temp file, fsync, then atomically rename over
+/// the target. An interrupted write can never leave a half-written file.
+pub fn atomic_write_bytes(path: impl AsRef<std::path::Path>, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    let path = path.as_ref();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let tmp = path.with_extension("json.tmp");
+    {
+        let mut f = std::fs::File::create(&tmp)?;
+        f.write_all(bytes)?;
+        f.flush()?;
+        f.sync_all()?; // ensure bytes hit disk before the rename
+    }
+    std::fs::rename(&tmp, path)
+}
+
+/// Crash-safe write of a serializable value (streams to temp, fsync, rename).
+pub fn atomic_write_json<T: serde::Serialize>(path: impl AsRef<std::path::Path>, value: &T) -> std::io::Result<()> {
+    use std::io::Write;
+    let path = path.as_ref();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let tmp = path.with_extension("json.tmp");
+    {
+        let file = std::fs::File::create(&tmp)?;
+        let mut writer = std::io::BufWriter::new(file);
+        serde_json::to_writer_pretty(&mut writer, value).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        writer.flush()?;
+        writer.get_ref().sync_all()?;
+    }
+    std::fs::rename(&tmp, path)
 }
 
 impl AppState {
     pub fn load(data_path: PathBuf) -> Self {
-        let data = if data_path.exists() {
-            let content = std::fs::read_to_string(&data_path).unwrap_or_default();
-            serde_json::from_str(&content).unwrap_or_default()
-        } else {
-            AppData::default()
-        };
+        let mut data = load_with_recovery(&data_path);
+        data.heal_empty_credentials();
         Self {
-            data: Mutex::new(data),
-            data_path,
+            data: std::sync::Arc::new(Mutex::new(data)),
+            data_path: std::sync::Arc::new(data_path),
             install_cancelled: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
             sync_paused: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
             benchmark_running: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            advanced_benchmark: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
             previous_session_clean: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true)),
             mod_files_cache: Mutex::new(HashMap::new()),
             conflict_index: Mutex::new(HashMap::new()),
             last_cache_update: Mutex::new(None),
             discord_client: Mutex::new(None),
+            sha_queue: std::sync::Arc::new(Mutex::new(std::collections::VecDeque::new())),
+            sha_queue_priority: std::sync::Arc::new(Mutex::new(std::collections::VecDeque::new())),
+            sha_calculation_active: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            current_sha_mod_id: std::sync::Arc::new(Mutex::new(None)),
+            export_cancelled: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            api_shutdown_tx: Mutex::new(None),
         }
     }
 
+    /// Write data.json (crash-safe: .bak roll, temp file, fsync, rename).
+    ///
+    /// The data lock is held only while the state is SERIALISED, not while it is written. The
+    /// old save held it through the .bak copy, the write and the fsync, and every mod enabled
+    /// or disabled saves once: on a big library (file lists and hashes for every mod) that was
+    /// tens to hundreds of milliseconds per mod during which get_mods, the cards' refresh and
+    /// every other command waited — the "freeze" of an activation. `SAVE_ORDER` keeps two saves
+    /// from crossing: the one that serialised later is the one that is written later, so an
+    /// older snapshot can never land on top of a newer one. Lock order is SAVE_ORDER → data,
+    /// and nothing takes SAVE_ORDER while holding the data lock (`save` takes both itself).
     pub fn save(&self) -> anyhow::Result<()> {
-        let data = self.data.lock().unwrap();
-        if let Some(parent) = self.data_path.parent() {
-            std::fs::create_dir_all(parent)?;
+        let _order = SAVE_ORDER.lock().unwrap_or_else(|p| p.into_inner());
+        let bytes = {
+            let data = self.data.lock().unwrap();
+            serde_json::to_vec_pretty(&*data)?
+        };
+        let path = &*self.data_path;
+        // Roll the current good file to .bak BEFORE replacing it. Because the
+        // write below is atomic (temp + rename), the live data.json is always a
+        // complete file, so the backup is always a complete prior version.
+        if path.exists() {
+            let _ = std::fs::copy(path, path.with_extension("json.bak"));
         }
-        let json = serde_json::to_string_pretty(&*data)?;
-        std::fs::write(&self.data_path, json)?;
+        atomic_write_bytes(path, &bytes)?;
         Ok(())
     }
 }

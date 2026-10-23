@@ -1,0 +1,17 @@
+{
+  "catalog_version": "1.0",
+  "format": "bmm-catalog",
+  "format_version": 1,
+  "items": [
+    {
+      "description": "Start here",
+      "download": {
+        "url": "https://example.org/first-steps.bmmtut"
+      },
+      "id": "first-steps",
+      "kind": "tutorial",
+      "name": "First steps"
+    }
+  ],
+  "name": "Tutorials"
+}

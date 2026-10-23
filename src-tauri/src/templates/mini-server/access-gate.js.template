@@ -1,0 +1,119 @@
+/**
+ * The access gate for a generated BMM server: a download password, authorised public keys,
+ * or both.
+ *
+ * WHY THIS IS A FILE AND NOT A PLACEHOLDER
+ *
+ * Everything here is read from `access.json` at request time rather than baked into the
+ * server when BMM generated it. Adding a subscriber's key, rotating a password or closing a
+ * repo therefore does not mean regenerating and re-uploading the server — you edit one small
+ * JSON file and the next request sees it. It is also how bans.json and whitelist.json already
+ * work here, so there is one habit to learn rather than two.
+ *
+ * SHAPE
+ *
+ *   {
+ *     "password": "",                 // blank = no password
+ *     "pubkeys":  [                   // empty = no key required
+ *       "ssh-ed25519 AAAAC3Nza… you@machine"
+ *     ],
+ *     "audience": "http://repo.example.com:3000"
+ *   }
+ *
+ * `audience` is the origin YOUR SUBSCRIBERS TYPE, scheme and host and port exactly as they
+ * dial it. BMM signs the address it dialled, so a proof addressed to `http://1.2.3.4:3000`
+ * cannot be replayed against `https://repo.example.com` — which is the point, and also the
+ * one setting that will lock everybody out if it is wrong. It is deliberately NOT taken from
+ * the request's Host header: an attacker replaying a proof captured elsewhere would simply
+ * send the Host that matches it, which would make the check decorative.
+ *
+ * With no `access.json`, or an empty one, the server is open — the same meaning a blank
+ * password has everywhere else in BMM.
+ */
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+
+/** Constant-time compare (CWE-208). A `===` on a secret leaks its length and its prefix. */
+function safeEqualStr(a, b) {
+    const A = Buffer.from(String(a == null ? '' : a));
+    const B = Buffer.from(String(b == null ? '' : b));
+    return A.length === B.length && crypto.timingSafeEqual(A, B);
+}
+
+// The verifier is the SAME FILE BetterCommunity runs, copied in without edits, so a proof
+// this server accepts is a proof the platform accepts. It is an ES module and this server is
+// CommonJS, hence the dynamic import — which is also why the gate is async.
+let _keyauth = null;
+let _keyauthErr = null;
+const keyauth = async () => {
+    if (_keyauth || _keyauthErr) return _keyauth;
+    try {
+        _keyauth = await import(require('node:url').pathToFileURL(path.join(__dirname, 'keyauth.mjs')).href);
+    } catch (e) {
+        // Remembered rather than retried on every request: a missing or broken keyauth.mjs is
+        // a permanent condition, and the log line should appear once, not once per download.
+        _keyauthErr = e;
+        console.error('[ACCESS] keyauth.mjs could not be loaded — public-key checks cannot run:', e && e.message);
+    }
+    return _keyauth;
+};
+
+/** Read one access.json. Missing or unreadable means "no restrictions", never "deny". */
+function readAccess(dir) {
+    try {
+        const raw = fs.readFileSync(path.join(dir, 'access.json'), 'utf8');
+        const j = JSON.parse(raw);
+        return {
+            password: typeof j.password === 'string' ? j.password : '',
+            pubkeys: Array.isArray(j.pubkeys) ? j.pubkeys.filter((k) => typeof k === 'string' && k.trim()) : [],
+            audience: typeof j.audience === 'string' ? j.audience.trim() : '',
+        };
+    } catch {
+        return { password: '', pubkeys: [], audience: '' };
+    }
+}
+
+/**
+ * Check one request against one directory's access.json.
+ *
+ * Returns `{ ok: true }`, or `{ ok: false, status, reason }`. A missing credential answers
+ * 401 rather than 403 on purpose: the client can DO something about it, and BMM reads a 401
+ * as "there is a credential to supply" and asks for one.
+ */
+async function checkAccess(dir, req, fallbackAudience) {
+    const acc = readAccess(dir);
+
+    if (acc.password) {
+        const given = req.headers['x-repo-password'] || (req.query && req.query.password) || (req.query && req.query.pw) || '';
+        if (!safeEqualStr(given, acc.password)) {
+            return { ok: false, status: 401, reason: 'Wrong or missing repo password' };
+        }
+    }
+
+    if (!acc.pubkeys.length) return { ok: true };
+
+    const ka = await keyauth();
+    if (!ka) {
+        // FAIL CLOSED. A repo whose owner listed keys is a repo they meant to close; serving
+        // it openly because our own verifier failed to load would quietly undo that decision.
+        return { ok: false, status: 500, reason: 'Key checking is unavailable on this server' };
+    }
+    const audience = acc.audience || fallbackAudience || '';
+    if (!audience) {
+        return { ok: false, status: 500, reason: 'No audience configured — set "audience" in access.json' };
+    }
+    const verdict = ka.keyAuthOk({ pubkeys: acc.pubkeys }, req, audience);
+    if (!verdict.ok) {
+        return { ok: false, status: 401, reason: 'A valid key proof is required (' + verdict.reason + ')' };
+    }
+    return { ok: true };
+}
+
+/** True when this directory restricts anything at all — for the dashboard's badge. */
+function isRestricted(dir) {
+    const a = readAccess(dir);
+    return !!(a.password || a.pubkeys.length);
+}
+
+module.exports = { checkAccess, readAccess, isRestricted, safeEqualStr };

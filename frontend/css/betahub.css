@@ -1,0 +1,1242 @@
+/* ── BetaHub Modals CSS ── */
+.bh-modal {
+    background: var(--bg-card);
+    backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 80px);
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.6), 0 0 50px rgba(99, 102, 241, 0.05);
+    animation: bh-modal-show 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes bh-modal-show {
+    from { opacity: 0; transform: scale(0.95) translateY(10px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.bh-field-group {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 16px;
+}
+
+.bh-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 6px;
+}
+
+.bh-counter {
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+.bh-input, .bh-textarea {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 10px 14px;
+    color: var(--text-primary);
+    font-size: 13px;
+    font-family: inherit;
+    transition: all 0.2s;
+    outline: none;
+}
+
+.bh-input:focus, .bh-textarea:focus {
+    background: rgba(0, 0, 0, 0.3);
+    border-color: rgba(99, 102, 241, 0.5);
+    box-shadow: 0 0 15px rgba(99, 102, 241, 0.15);
+}
+
+.bh-textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+
+.bh-input::placeholder, .bh-textarea::placeholder {
+    color: var(--text-muted);
+}
+
+.bh-file-zone {
+    background: rgba(0, 0, 0, 0.15);
+    border: 1px dashed rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    transition: border-color 0.2s;
+}
+
+/* --- Storage Manager Polish --- */
+.storage-disk-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 4px;
+}
+
+.storage-disk-identity {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.storage-usage-bar {
+    height: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 6px;
+}
+
+.storage-usage-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (max-width: 500px) {
+    .storage-disk-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
+
+.bh-add-file-btn {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(99, 102, 241, 0.1);
+    border: 1px dashed rgba(99, 102, 241, 0.4);
+    color: var(--bmm-purple);
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.bh-add-file-btn:hover {
+    background: rgba(99, 102, 241, 0.2);
+    border-style: solid;
+}
+
+.bh-file-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    padding: 6px 10px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.bh-file-item-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 250px;
+}
+
+.bh-remove-file-btn {
+    background: none;
+    border: none;
+    color: var(--danger);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+
+.bh-remove-file-btn:hover {
+    background: rgba(239, 68, 68, 0.15);
+}
+
+/* PoW Container */
+.bh-pow-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: rgba(0, 0, 0, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    margin-top: 16px;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.bh-pow-idle { border-color: rgba(255, 255, 255, 0.1); }
+.bh-pow-solving { border-color: var(--bh-accent-alpha, rgba(99, 102, 241, 0.4)); background: var(--bh-bg-alpha, rgba(99, 102, 241, 0.05)); }
+.bh-pow-upload { border-color: rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.05); }
+.bh-pow-done { border-color: rgba(52, 211, 153, 0.4); background: rgba(52, 211, 153, 0.05); }
+.bh-pow-error { border-color: rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.05); }
+
+.bh-pow-icon {
+    font-size: 18px;
+    flex-shrink: 0;
+    transition: transform 0.3s;
+}
+
+.bh-pow-solving .bh-pow-icon { animation: bh-spin 2s linear infinite; }
+@keyframes bh-spin { 100% { transform: rotate(360deg); } }
+
+.bh-pow-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    z-index: 2;
+}
+
+.bh-pow-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.bh-pow-msg {
+    font-size: 10px;
+    color: var(--text-secondary);
+}
+
+.bh-pow-bar {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
+    background: transparent;
+    z-index: 1;
+}
+
+.bh-pow-bar-fill {
+    height: 100%;
+    width: 0%;
+    background: #6366f1;
+    transition: width 0.3s ease-out;
+}
+
+.bh-pow-upload .bh-pow-bar-fill { background: #f59e0b; }
+.bh-pow-done .bh-pow-bar-fill { background: #34d399; width: 100% !important; }
+.bh-pow-error .bh-pow-bar-fill { background: #ef4444; width: 100% !important; }
+
+.bh-submit-btn {
+    background: var(--accent);
+    color: var(--text-on-accent);
+    border: none;
+    height: 40px;
+    padding: 0 24px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(59, 130, 246, 0.2);
+}
+
+.bh-theme-bug .bh-submit-btn {
+    background: #ef4444;
+    box-shadow: 0 4px 15px rgba(239, 68, 68, 0.2);
+}
+
+.bh-theme-bug .bh-submit-btn:hover:not(:disabled) {
+    background: #f87171;
+    box-shadow: 0 8px 25px rgba(239, 68, 68, 0.4);
+    transform: translateY(-2px);
+}
+
+.bh-submit-btn:hover:not(:disabled) {
+    background: var(--accent-bright, #3b82f6);
+    box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4);
+    transform: translateY(-2px);
+}
+
+.bh-submit-btn:active:not(:disabled) {
+    transform: translateY(0);
+    filter: brightness(0.9);
+}
+
+.bh-submit-btn:disabled {
+    background: #374151 !important;
+    color: var(--text-muted) !important;
+    opacity: 0.5;
+    cursor: not-allowed;
+    box-shadow: none !important;
+    transform: none !important;
+    filter: grayscale(0.8) brightness(0.8);
+}
+
+.btn-secondary {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+    border-color: var(--border-accent);
+}
+
+/* ── Dynamic Steps V2 ── */
+.bh-step-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.bh-step-item:focus-within {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(99, 102, 241, 0.4);
+    transform: translateX(4px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.bh-step-badge {
+    width: 24px;
+    height: 24px;
+    background: rgba(99, 102, 241, 0.1);
+    border: 1.5px solid rgba(99, 102, 241, 0.25);
+    color: var(--bmm-purple);
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 3px;
+}
+
+.bh-step-index {
+    font-size: 11px;
+    font-weight: 800;
+    font-family: var(--font-mono, monospace);
+    letter-spacing: -0.02em;
+}
+
+.bh-step-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.bh-step-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text-primary);
+    font-size: 12px;
+    padding: 4px 0;
+    min-height: 36px;
+    resize: none; 
+    line-height: 1.4;
+}
+
+.bh-step-input::-webkit-scrollbar {
+    width: 4px;
+}
+
+.bh-step-input::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+}
+
+.bh-step-input:focus {
+    color: var(--text-primary);
+}
+
+.bh-step-remove {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    margin-top: 2px;
+}
+
+.bh-step-remove:hover {
+    color: var(--danger);
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.bh-modal-overlay {
+    backdrop-filter: blur(12px);
+    background: rgba(0, 0, 0, 0.4);
+    display: none; /* Hidden by default */
+    align-items: center; /* Center vertically */
+    justify-content: center;
+    padding: 30px 0; /* Safety vertical padding */
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 11000; /* Ensure it stays on top */
+}
+
+.bh-modal-overlay.open {
+    display: flex;
+    animation: bh-fade-in 0.3s ease-out;
+}
+
+@keyframes bh-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.bh-modal-overlay .modal-container {
+    max-height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 20px;
+}
+
+.bh-modal-overlay .modal-content {
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg-card);
+    backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.7);
+    animation: bh-modal-in 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes bh-modal-in {
+    from { opacity: 0; transform: scale(0.95) translateY(20px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.bh-field-error {
+    color: var(--danger);
+    font-size: 11px;
+    margin-top: 4px;
+}
+
+/* ── Crash Report Explorer V3 ── */
+.bh-explorer-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 12px;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 3px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.bh-tab {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.bh-tab svg {
+    opacity: 0.5;
+    transition: all 0.3s;
+}
+
+.bh-tab:hover {
+    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.bh-tab.active {
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--bmm-purple);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+}
+
+.bh-tab.active svg {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.bh-report-explorer {
+    background: rgba(15, 17, 26, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 12px;
+    position: relative;
+    overflow: hidden;
+}
+
+.bh-report-list {
+    max-height: 280px; /* Match index.html */
+    min-height: 200px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-bottom: 24px; /* Fix clipping at the bottom */
+    padding-right: 6px;
+}
+
+.bh-report-list::-webkit-scrollbar { width: 4px; }
+.bh-report-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+
+.bh-report-item {
+    display: grid;
+    grid-template-columns: 24px 1fr auto;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.bh-report-item:hover {
+    background: rgba(99, 102, 241, 0.08);
+    border-color: rgba(99, 102, 241, 0.3);
+    transform: translateX(2px);
+}
+
+.bh-report-item.active {
+    background: rgba(99, 102, 241, 0.12);
+    border-color: rgba(99, 102, 241, 0.5);
+    box-shadow: 0 0 15px rgba(99, 102, 241, 0.1);
+}
+
+.bh-report-icon {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.bh-report-name {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bh-report-meta {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-align: right;
+    display: flex;
+    flex-direction: column;
+}
+
+.bh-report-empty {
+    padding: 20px;
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* ── Premium PoW Verifier V3 ── */
+.bh-verifier {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    cursor: pointer;
+    user-select: none;
+    width: 100%;
+}
+
+.bh-verifier input { display: none; }
+
+/* ── Themes ── */
+.bh-theme-bug {
+    --bh-accent: #ef4444;
+    --bh-accent-alpha: rgba(239, 68, 68, 0.4);
+    --bh-bg-alpha: rgba(239, 68, 68, 0.05);
+}
+
+.bh-theme-feedback {
+    --bh-accent: #f59e0b;
+    --bh-accent-alpha: rgba(245, 158, 11, 0.4);
+    --bh-bg-alpha: rgba(245, 158, 11, 0.05);
+}
+
+.bh-verifier-box {
+    width: 44px;
+    height: 44px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 2px solid rgba(255, 255, 255, 0.12);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* Added bounce */
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.bh-verifier:hover .bh-verifier-box {
+    border-color: #10b981;
+    background: rgba(16, 185, 129, 0.1);
+    transform: scale(1.05);
+}
+
+.bh-verifier:active .bh-verifier-box {
+    transform: scale(0.95);
+}
+
+.bh-verifier-spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid rgba(255, 255, 255, 0.05);
+    border-top-color: var(--bh-accent, #6366f1);
+    border-radius: 50%;
+    opacity: 0;
+    transition: opacity 0.3s;
+    position: absolute; /* Fixed jumping */
+}
+
+/* Ripple effect on click */
+.bh-verifier-ripple {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle, var(--bh-accent-alpha, rgba(99, 102, 241, 0.4)) 0%, transparent 70%);
+    opacity: 0;
+    transform: scale(0);
+    pointer-events: none;
+}
+
+.bh-verifier:active .bh-verifier-ripple {
+    animation: bh-ripple 0.6s ease-out;
+}
+
+@keyframes bh-ripple {
+    0% { transform: scale(0); opacity: 1; }
+    100% { transform: scale(2); opacity: 0; }
+}
+
+/* Solving state */
+.bh-pow-solving .bh-verifier-spinner {
+    opacity: 1;
+    animation: bh-spin 0.8s linear infinite, bh-pulse-glow 1.5s ease-in-out infinite;
+}
+
+@keyframes bh-pulse-glow {
+    0%, 100% { filter: drop-shadow(0 0 2px var(--bh-accent-alpha, rgba(99, 102, 241, 0.4))); }
+    50% { filter: drop-shadow(0 0 8px var(--bh-accent, #6366f1)); }
+}
+
+/* Success state with checkmark animation */
+.bh-verifier-check {
+    opacity: 0;
+    transform: scale(0.5) translateY(2px);
+    color: var(--success);
+    transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    position: absolute; /* Fixed jumping */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.bh-pow-done .bh-verifier-check {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+}
+
+.bh-pow-done .bh-verifier-box {
+    border-color: #34d399;
+    background: rgba(52, 211, 153, 0.12);
+    box-shadow: 0 0 20px rgba(52, 211, 153, 0.25);
+    animation: bh-success-pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes bh-success-pop {
+    0% { transform: scale(1); }
+    40% { transform: scale(1.18); }
+    100% { transform: scale(1); }
+}
+
+.bh-pow-done .bh-verifier-spinner {
+    opacity: 0;
+    transform: scale(0.5); /* Smooth shrink */
+}
+
+.bh-verifier-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.bh-verifier:hover .bh-pow-label { color: var(--bmm-purple); }
+.bh-pow-done .bh-pow-label { color: var(--success); }
+
+.bh-report-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: bh-fade-in-slide 0.3s ease-out backwards;
+    cursor: pointer;
+}
+
+@keyframes bh-fade-in-slide {
+    from { opacity: 0; transform: translateX(-10px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+.bh-report-item:hover {
+    background: rgba(99, 102, 241, 0.08);
+    border-color: rgba(99, 102, 241, 0.4);
+    transform: translateX(4px);
+}
+
+.bh-report-item.selected {
+    background: rgba(99, 102, 241, 0.12);
+    border-color: #6366f1;
+    box-shadow: 0 0 15px rgba(99, 102, 241, 0.2);
+}
+
+.bh-report-icon {
+    width: 32px;
+    height: 32px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    transition: all 0.3s;
+}
+
+.bh-report-item:hover .bh-report-icon {
+    background: rgba(99, 102, 241, 0.2);
+    color: var(--bmm-purple);
+}
+
+.bh-report-item.selected .bh-report-icon {
+    background: #6366f1;
+    color: var(--text-on-accent);
+}
+
+.bh-report-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.bh-report-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bh-report-meta {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+/* ── Quality Gauge ── */
+.bh-strength-box {
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    box-shadow: inset 0 0 20px rgba(0,0,0,0.2);
+}
+
+.bh-strength-title {
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    margin: 0;
+    opacity: 0.8;
+}
+
+.bh-gauge-container {
+    position: relative;
+    width: 160px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.bh-gauge-svg {
+    width: 100%;
+    filter: drop-shadow(0 4px 10px rgba(0,0,0,0.3));
+}
+
+.bh-gauge-label {
+    fill: var(--bmm-text-primary);
+    font-size: 5px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.2px;
+}
+
+.bh-gauge-segment {
+    opacity: 0.8;
+    transition: opacity 0.3s;
+}
+
+.bh-gauge-segment:hover {
+    opacity: 1;
+}
+
+.bh-gauge-ticks line {
+    transition: opacity 0.3s;
+}
+
+.bh-gauge-needle-group {
+    transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.5s ease;
+    transform-origin: 50px 50px;
+}
+
+.bh-gauge-needle {
+    color: var(--text-primary);
+}
+
+.bh-gauge-info {
+    position: absolute;
+    bottom: -8px; /* Move further down */
+    left: 0;
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    height: 52px;
+    pointer-events: none;
+}
+
+.bh-strength-score {
+    font-size: 28px;
+    font-weight: 950;
+    color: var(--text-primary);
+    line-height: 1;
+    margin-bottom: 0px;
+    text-shadow: 0 4px 15px rgba(0,0,0,0.5);
+}
+
+.bh-strength-label.bh-label-low { color: var(--danger); text-shadow: 0 0 10px rgba(239, 68, 68, 0.2); }
+.bh-strength-label.bh-label-good { color: var(--accent); text-shadow: 0 0 10px rgba(245, 158, 11, 0.2); }
+.bh-strength-label.bh-label-expert { color: var(--success); text-shadow: 0 0 10px rgba(52, 211, 153, 0.2); }
+
+.bh-strength-suggestions {
+    list-style: none;
+    padding: 0;
+    margin: 4px 0 0;
+    font-size: 10px;
+    color: var(--text-muted);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border-top: 1px solid rgba(255,255,255,0.05);
+    padding-top: 10px;
+}
+
+.bh-strength-suggestions li {
+    padding-left: 12px;
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.bh-strength-suggestions li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 5px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.5;
+}
+
+/* ── Guidance Box ── */
+.bh-guidance-box {
+    background: rgba(99, 102, 241, 0.03);
+    border: 1px dashed rgba(99, 102, 241, 0.2);
+    border-radius: 12px;
+    padding: 16px;
+}
+
+.bh-guidance-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--bmm-purple);
+    margin: 0 0 10px 0;
+}
+
+.bh-guidance-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    font-size: 11px;                 /* was 10px — too small to read comfortably */
+    color: var(--text-secondary);    /* was --text-muted (#475569) — near-illegible */
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    line-height: 1.45;
+}
+
+.bh-guidance-list strong {
+    color: var(--text-primary);
+}
+
+/* ── Tasky Mascot ── */
+.bh-pow-mascot {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+    animation: bh-mascot-float 3s ease-in-out infinite;
+}
+
+@keyframes bh-mascot-float {
+    0%, 100% { transform: translateY(0) rotate(0); }
+    50% { transform: translateY(-3px) rotate(5deg); }
+}
+
+/* ── Theme Overlays (Applied to form) ── */
+.bh-theme-feedback .bh-gauge-fill { stroke: var(--bmm-warning); }
+.bh-theme-bug .bh-gauge-fill { stroke: var(--bmm-purple); }
+
+.bh-theme-feedback .bh-strength-label { color: var(--accent); }
+.bh-theme-bug .bh-strength-label { color: var(--bmm-purple); }
+/* ── Premium Crash Modal ── */
+.bh-crash-header {
+    position: relative;
+    background:
+        radial-gradient(120% 140% at 0% 0%, rgba(239, 68, 68, 0.16), transparent 60%),
+        linear-gradient(180deg, rgba(239, 68, 68, 0.08), rgba(239, 68, 68, 0.02));
+    border-bottom: 1px solid rgba(239, 68, 68, 0.18);
+    border-radius: var(--radius-lg, 16px) var(--radius-lg, 16px) 0 0;
+    padding: 22px 28px;
+}
+
+.bh-crash-title {
+    color: var(--danger);
+    font-weight: 800;
+    margin: 0;
+    font-size: 18px;
+    letter-spacing: -0.02em;
+}
+
+.bh-crash-header .bh-crash-icon-box {
+    width: 44px;
+    height: 44px;
+    border-radius: 13px;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.22), rgba(239, 68, 68, 0.08));
+    box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.25) inset, 0 6px 18px rgba(239, 68, 68, 0.18);
+}
+
+/* Neutral card — the report file path is information, not an error state */
+.bh-crash-card {
+    background: var(--bmm-s02);
+    border: 1px solid var(--bmm-s08, var(--border));
+    border-radius: 14px;
+    padding: 15px 16px;
+    margin: 16px 0;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+    cursor: pointer;
+}
+
+.bh-crash-card:hover {
+    background: var(--bmm-s05);
+    border-color: var(--accent-soft, var(--accent));
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.bh-crash-icon-box {
+    width: 36px;
+    height: 36px;
+    background: rgba(239, 68, 68, 0.1);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--danger);
+    flex-shrink: 0;
+}
+
+.bh-crash-btn-betahub {
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    color: var(--text-on-accent) !important;
+    border: none !important;
+    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+}
+
+.bh-crash-btn-betahub:hover {
+    filter: brightness(1.1);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4);
+}
+/* ── Premium Crash Modal Buttons ──
+   Two items, not four: "Close" on the left, the action group on the right.
+
+   The old rule laid all four buttons out as one wrapping row with
+   `margin-right: auto` on Close. Four buttons do not fit the modal at its real
+   width, so the row wrapped — and because the leftover was one button against
+   `justify-content: flex-end`, "Join Discord" ended up alone on a second line,
+   right-aligned, reading as a mistake. Wrapping a row of buttons is fine; what
+   is not fine is which button gets left behind being decided by pixel
+   arithmetic. Grouping makes it a designed decision: the actions wrap as a
+   block or not at all. */
+.bh-crash-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 28px;
+    background: rgba(0,0,0,0.22);
+    border-top: 1px solid rgba(255,255,255,0.05);
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.bh-crash-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    /* Beats the footer's own `flex-wrap` to the punch: the group is allowed to
+       shrink and take the whole leftover line before Close is pushed off. */
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* The two secondary actions carry long labels in some languages and are not what
+   the modal is for; a slightly tighter box buys the row enough width to stay on
+   one line in French without touching the primary. */
+.bh-crash-actions .bh-btn-glass,
+.bh-crash-actions .bh-btn-discord {
+    padding: 0 14px;
+    gap: 8px;
+}
+
+/* Discord loses its solid fill HERE ONLY (the class keeps it everywhere else).
+   Side by side, #5865F2 and the indigo gradient are the same button to the eye:
+   two filled blue rectangles, and whichever is bigger wins the attention — which
+   was Discord. Outlined, it keeps its brand mark and its colour and stops
+   competing with the one action this modal is asking for.
+
+   The label is the brand blue mixed INTO the theme's own text colour rather than
+   a fixed periwinkle: on a dark theme that lands light, on a light theme it lands
+   dark, and either way it stays readable. A literal hex here is the light-theme
+   "white on white" bug waiting to happen — and the colour guard says so. */
+.bh-crash-actions .bh-btn-discord {
+    background: color-mix(in srgb, #5865F2 12%, transparent);
+    border-color: color-mix(in srgb, #5865F2 45%, transparent);
+    color: color-mix(in srgb, #5865F2 55%, var(--bmm-text-primary));
+    box-shadow: none;
+}
+
+.bh-crash-actions .bh-btn-discord:hover {
+    background: color-mix(in srgb, #5865F2 22%, transparent);
+    border-color: #5865F2;
+    color: color-mix(in srgb, #5865F2 30%, var(--bmm-text-primary));
+    box-shadow: 0 4px 15px rgba(88, 101, 242, 0.22);
+}
+
+/* One primary. "Report to BetterCommunity" is the thing this modal exists for,
+   so it sits last — the end of the row is where the eye lands and where the
+   confirm button lives in every other modal here. Discord was there before,
+   in full blurple, out-shouting it. */
+.bh-crash-actions .bh-btn-indigo {
+    margin-left: 2px;
+}
+
+/* Narrow: stop competing for one line and stack. Every control gets the full
+   width in the order it is read — actions first, "Close" last, because a
+   stacked dismiss button at the top is a trap for a thumb.
+
+   Unreachable as things stand: tauri.conf.json pins minWidth to 1120, so the
+   viewport never gets here and the row above is what ships. Kept as the floor
+   if that minimum is ever lowered — which is also why the row above was made to
+   fit on one line rather than left to rely on this. */
+@media (max-width: 720px) {
+    .bh-crash-footer {
+        flex-direction: column-reverse;
+        align-items: stretch;
+        gap: 10px;
+        padding: 16px;
+    }
+
+    .bh-crash-actions {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+
+    .bh-crash-footer .bh-btn-premium,
+    .bh-crash-footer .bh-btn-premium:is(a) {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+.bh-btn-premium {
+    height: 40px;
+    padding: 0 18px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    border: 1px solid transparent;
+    user-select: none;
+    white-space: normal;
+    text-align: center;
+    min-width: fit-content;
+}
+
+.bh-btn-premium:active {
+    transform: scale(0.97);
+}
+
+.bh-btn-premium svg {
+    flex-shrink: 0;
+}
+
+/* Glass Variant (Secondary/Explorer/Cancel) */
+.bh-btn-glass {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.08);
+    color: var(--text-secondary);
+    backdrop-filter: blur(8px);
+}
+
+.bh-btn-glass:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: var(--text-primary);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.bh-btn-ghost {
+    background: transparent;
+    border-color: transparent;
+    color: var(--text-muted);
+}
+
+.bh-btn-ghost:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-secondary);
+}
+
+/* Indigo Variant (BetaHub) */
+.bh-btn-indigo {
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+    color: var(--text-on-accent);
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+}
+
+.bh-btn-indigo:hover {
+    box-shadow: 0 8px 25px rgba(99, 102, 241, 0.45);
+    transform: translateY(-2px);
+    filter: brightness(1.1);
+}
+
+/* Discord Variant (Join Discord) */
+.bh-btn-discord {
+    background: #5865F2;
+    color: var(--text-on-accent);
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 15px rgba(88, 101, 242, 0.3);
+}
+
+.bh-btn-discord:hover {
+    box-shadow: 0 8px 25px rgba(88, 101, 242, 0.45);
+    transform: translateY(-2px);
+    filter: brightness(1.1);
+}
+
+/* One row for every "nothing to show yet" state in this feature: loading, empty, failed.
+   They were four separate inline styles with four different paddings (15/12/10px) and three
+   font sizes, so the panel jumped by a few pixels depending on WHY it was empty — a wobble
+   that reads as a rendering bug rather than as a state. */
+.bh-state {
+    padding: var(--space-3, 12px);
+    text-align: center;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-style: italic;
+}
+/* Semantic, not decorative: only the failure is coloured, so colour still means something
+   when it appears. */
+.bh-state-error {
+    color: var(--danger);
+    font-style: normal;
+}
+.bh-state-loading {
+    font-style: normal;
+}

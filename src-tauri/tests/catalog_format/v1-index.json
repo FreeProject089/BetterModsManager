@@ -1,0 +1,10 @@
+{
+  "version": "1.0",
+  "kind": "catalog-index",
+  "name": "Group index",
+  "description": "Everything we publish",
+  "catalogs": [
+    { "type": "plugin", "url": "https://group.example/plugins.json", "name": "Plugins", "items": 4, "official": true },
+    { "type": "theme", "url": "https://group.example/themes.json", "app": "bmm" }
+  ]
+}

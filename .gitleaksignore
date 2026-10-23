@@ -1,0 +1,49 @@
+# Gitleaks: reviewed false positives, one fingerprint per line (commit:file:rule:line).
+# Read automatically by gitleaks from the repository root. A fingerprint pins ONE finding in ONE
+# commit: the same text re-added in a new commit is reported again and must be reviewed again.
+#
+# Never add a real secret here without rotating it first — and say so, with the date.
+# Classes of false positive (PEM headers in docs, Discord user ids, the public bmm_pk_ ingest
+# key) are allowlisted in .gitleaks.toml instead. Reviewed 2026-09-25.
+
+# Test fixtures inside #[cfg(test)] modules: fake values the redaction / link-guard tests look for.
+# link_guard.rs: a made-up bc_live_ key; crash.rs: FAKE_GITHUB, written into a fake crash log.
+54cebeaf7e2143c0187722ee2a69dd0d2a2008f4:src-tauri/src/commands/crash.rs:github-pat:1086
+588cb8e066fe376720de88e7d5c9efa3e434a27b:src-tauri/src/commands/link_guard.rs:generic-api-key:415
+
+# live_issues.rs (commit c51a63f2, #[cfg(test)]): the redaction tests feed MADE-UP values to the
+# Redactor and assert they never reach the report (a fixed UUID, a bcw_live_ placeholder, a
+# tok- placeholder). None was ever a credential. The current file builds them at run time, so they are not re-reported. Reviewed 2026-10-06.
+c51a63f25696bd6c44930d519c24270c54ed09a5:src-tauri/src/commands/live_issues.rs:generic-api-key:593
+c51a63f25696bd6c44930d519c24270c54ed09a5:src-tauri/src/commands/live_issues.rs:generic-api-key:597
+c51a63f25696bd6c44930d519c24270c54ed09a5:src-tauri/src/commands/live_issues.rs:generic-api-key:724
+
+# i18n dictionaries: the KEY NAMES "i18n.copyKey" / "i18n.noKey…" matched generic-api-key (the values are UI text).
+ac70961075e5ad733ab63634705810a791076c34:frontend/Lang/en.json:generic-api-key:476
+ac70961075e5ad733ab63634705810a791076c34:frontend/Lang/en.json:generic-api-key:507
+e56a14d07407153aa23044c09b977dd0b7412ee4:frontend/Lang/template.json:generic-api-key:719
+e56a14d07407153aa23044c09b977dd0b7412ee4:frontend/Lang/template.json:generic-api-key:754
+# "i18n.hcReuse": "Existing key with this text" (commit f246e187): the word "key" followed by UI
+# text matched generic-api-key; the captured "secret" is the English phrase. Reviewed 2026-10-14.
+f246e187359287e204625946da2a5d6e3c7b83ce:frontend/Lang/en.json:generic-api-key:897
+f246e187359287e204625946da2a5d6e3c7b83ce:frontend/Lang/template.json:generic-api-key:893
+
+# localStorage key NAMES (bmm.i18nsb.dock / .dockw) matched generic-api-key.
+4dc53471910e52de71bc800b65864b8ed5b0dccf:frontend/src/features/settings/i18n-sandbox.ts:generic-api-key:631
+4dc53471910e52de71bc800b65864b8ed5b0dccf:frontend/src/features/settings/i18n-sandbox.ts:generic-api-key:632
+
+# API docs cURL examples: "Authorization: Bearer YOUR_TOKEN" placeholders (commit 1176d89, 2026-05-21).
+1176d8995a32620abf5ae4ddb38149c471ecf527:frontend/index.html:curl-auth-header:6178
+1176d8995a32620abf5ae4ddb38149c471ecf527:frontend/index.html:curl-auth-header:6190
+1176d8995a32620abf5ae4ddb38149c471ecf527:frontend/index.html:curl-auth-header:6196
+1176d8995a32620abf5ae4ddb38149c471ecf527:frontend/index.html:curl-auth-header:6202
+
+# --- BetaHub personal access token (tkn-…, generic-api-key) — accepted after revocation -------------------
+# A real BetaHub token was committed in these two commits. The BetaHub integration was removed from
+# BMM on 2026-09-25 (no current file contains the token any more), but git history keeps it for ever,
+# so the secrets job stays RED on these two findings until the token is dead.
+# Uncomment the two lines below ONLY after the owner has revoked the token at BetaHub (or confirmed
+# the BetaHub account/project is closed), and write that date here:
+#   BetaHub integration removed on 2026-09-25; token revoked by the owner on 2026-10-06.
+f46614f248c7d3783b5dd8c44e2ea0fbb33ac018:frontend/src/features/betahub/betahub-config.example.ts:generic-api-key:22
+e90495878072f5c5243677d3481000178ed2a984:frontend/src/features/betahub/betahub-api.ts:generic-api-key:16

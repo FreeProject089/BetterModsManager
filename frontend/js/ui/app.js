@@ -1,0 +1,2405 @@
+// @ts-nocheck
+/**
+ * app.js — Main application controller
+ * Entry point for Better Mod Manager frontend
+ */
+import { initProfiles, updateProfileChip, openNewProfileModal, getProfileIconSvg } from '../features/profiles/profiles.js';
+import { initMods, refreshMods } from '../features/mods/mods.js';
+import { initI18n, applyTranslations, t, getLang } from '../core/i18n.js';
+import { initBenchmark } from '../features/bench/benchmark.js';
+import { shouldShowOnboarding, startOnboarding, startOnboardingWhenClear } from './onboarding.js';
+import { initNavbarCustomize } from './navbar-customize.js';
+import { initInlineActions, actAttrs } from '../core/inline-actions.js';
+import { openTutorialHub } from './tutorial-hub.js';
+import { initRepo } from '../features/repo/repo.js';
+import { appState } from '../core/state.js';
+import { initInteractiveDocs, openDiagram } from '../docs/interactive-docs.js';
+import { initDocsHub } from '../docs/docs-hub.js';
+import { mountLearnMoreLinks } from './learn-more-mount.js';
+import { initCommands } from '../core/commands.js';
+import { initDeepLinks } from '../core/deep_link_manager.js';
+import { initAnalytics, trackView, showConsentModal } from '../core/analytics.js';
+import { initApiActivity } from '../core/api_activity.js';
+import { initTitlebar } from './titlebar.js';
+import { isActivationBusy, configureActivationJobs, onActivationJobEnd } from '../core/activation-jobs.js';
+import { isProtectedFolderError } from '../features/mods/protected-folder-model.js';
+import { attachActivitySources } from '../core/activity-sources.js';
+import { setInvokeActivityHook } from '../core/api.js';
+import { initActivityCenter } from './activity-center.js';
+import { initActivationIndicator } from './activation-indicator.js';
+import { initSettings, runAutoBenchmarks } from '../features/settings/settings.js';
+import { initModals } from './modals.js';
+import { shortLicense } from './licence-short.js';
+import { wireTipDismissal, restoreAllTips } from './dismissible-tip.js';
+import { registerBmmsLanguage } from '../features/settings/bmms-prism.js';
+import { fireErrorEvent } from '../core/bmm-events.js';
+import { initNavbarVersion, initUpdateNotes, initAutoUpdate, checkPtbMode, checkAutoEula, checkAutoPrivacy, checkLangSelect, renderMarkdown, markEulaAccepted, openUpdateNotesModal } from './update-notes.js';
+// New Modularized Imports
+import { initModlist } from '../features/mods/modlist.js';
+import { initModpackCreator } from '../features/mods/modpack-creator.js';
+import { initCrashReportUI } from './crash-report.js';
+import { initInteractionLogging } from './user-logger.js';
+import { initDebugMenu } from '../features/debug/debug-menu.js';
+import { checkSecurityMode } from './security-modal.js';
+import { initPlugins } from '../features/plugins/plugins.js';
+import { escHtml, escAttr } from '../core/utils.js';
+import { loadLinks, loadBcConfig, getLinks } from '../core/links-config.js';
+import { initMapper } from '../features/mapper/mapper.js';
+import { initAppsCatalog } from '../features/apps/apps-catalog.js';
+import { initCommunity, openCommunity } from '../features/community/community.js';
+import { restoreThemeAtBoot } from '../features/themes/theme-engine.js';
+import { initThemeEditor } from '../features/themes/theme-editor.js';
+import { initThemeCatalog } from '../features/themes/theme-catalog.js';
+import { initCustomSelects } from './custom-select.js';
+import { initTooltips } from './tooltips.js';
+import { playBootSound, playCloseSound, setSoundEnabled, setSoundVolume } from './sound-engine.js';
+export { setSoundEnabled, setSoundVolume, playCloseSound };
+// Expose boot sound to inline loader script. If the loader already fired before this module
+// loaded, __bmmBootSoundPending will be true — play it now.
+window.__bmmPlayBootSound = () => playBootSound();
+if (window.__bmmBootSoundPending) {
+    window.__bmmBootSoundPending = false;
+    try {
+        playBootSound();
+    }
+    catch (_) { }
+}
+async function waitForModalClosed(id) {
+    const el = document.getElementById(id);
+    if (!el)
+        return;
+    if (!el.classList.contains('open'))
+        return;
+    await new Promise((resolve) => {
+        // Observer 1: class change (modal hidden via classList.remove('open'))
+        const classObs = new MutationObserver(() => {
+            if (!el.classList.contains('open')) {
+                classObs.disconnect();
+                domObs.disconnect();
+                resolve();
+            }
+        });
+        classObs.observe(el, { attributes: true, attributeFilter: ['class'] });
+        // Observer 2: element removal from DOM (modal closed via .remove())
+        const domObs = new MutationObserver((mutations) => {
+            for (const m of mutations) {
+                for (const node of Array.from(m.removedNodes)) {
+                    if (node === el || node.contains?.(el)) {
+                        classObs.disconnect();
+                        domObs.disconnect();
+                        resolve();
+                        return;
+                    }
+                }
+            }
+        });
+        domObs.observe(document.body, { childList: true, subtree: true });
+    });
+}
+// ── Tauri bridge ──────────────────────────────────────────
+import { loadTauri, invoke, listen, pickFolder, pickFile, saveFile, convertFileSrc, listenFileDrop, sendOsNotification, lastSavePath } from '../core/api.js';
+import { recordNotification, initNotificationCenter, readNotifPrefs, writeNotifPrefs, sendSystemNotification, appFocused, groupLabel } from './notification-center.js';
+import * as NotifRules from '../core/notif-model.js';
+// Imported from the tiny standalone module, NOT from debug-ui: the trap has to be
+// installed at boot to be worth anything, and pulling the whole DevTools surface
+// onto the boot path to get it would trade one diagnostic for a slower start.
+import { initWebviewErrorTrap } from '../features/debug/webview-env.js';
+import { uiIcon, brandIcon } from './icons.js';
+export { invoke, pickFolder, pickFile, saveFile, listenFileDrop, sendOsNotification };
+/**
+ * "Exported" is only half an answer. The other half — WHERE — was missing from every
+ * export in the app, so the file existed somewhere the user then had to go and find.
+ * This appends the destination and, because knowing the path and getting to it are
+ * different problems, opens the containing folder on click.
+ *
+ * The path comes from the save dialog the export just used (core/api lastSavePath),
+ * so no call site has to thread its own variable through. When an export did not go
+ * through a dialog — an unattended backup to a configured folder — there is nothing
+ * to name and this degrades to the plain message rather than inventing one.
+ */
+export function toastSaved(message, path) {
+    const dest = path || lastSavePath();
+    if (!dest) {
+        toast(message, 'success');
+        return;
+    }
+    // The FOLDER, not the file: it is what you would open, and a full path in a toast
+    // is unreadable at this width anyway.
+    const folder = String(dest).replace(/[\\/][^\\/]+$/, '');
+    toast(`${message} → ${folder}`, 'success', 6000);
+    // Fire-and-forget: the toast has already told the truth, and a failure to open a
+    // file manager must not turn a successful export into an error.
+    setTimeout(() => {
+        const el = document.querySelector('#toast-container .toast:last-child');
+        if (!el)
+            return;
+        el.style.cursor = 'pointer';
+        el.title = folder;
+        el.addEventListener('click', () => {
+            invoke('open_folder', { path: folder }).catch(() => { });
+        });
+    }, 0);
+}
+// ── Toast ─────────────────────────────────────────────────
+/**
+ * Are the popups switched off?
+ *
+ * Read from localStorage on every call rather than cached: Settings writes it, and a cached
+ * copy would need the app restarted to take effect — which is the kind of setting people
+ * conclude is broken.
+ */
+export function toastsMuted() {
+    try {
+        return localStorage.getItem('bmm.muteToasts') === '1';
+    }
+    catch {
+        return false;
+    }
+}
+/**
+ * The groups a popup can come from (core/notif-model.ts NOTIF_GROUPS). Listed so Settings can
+ * offer them before one has fired: a preferences screen that only shows what has already
+ * interrupted you can only be used after being interrupted.
+ */
+export const NOTIF_SOURCES = NotifRules.NOTIF_GROUPS;
+/**
+ * Is this source's popup switched off? Per GROUP now (Settings, Notifications: in the app /
+ * also as a system notification / off). Read per call: Settings writes it, and a cached copy
+ * would need a restart to take effect. DEFAULT ON: a group nobody configured is heard.
+ */
+export function sourceMuted(source) {
+    return NotifRules.modeFor(readNotifPrefs(), NotifRules.groupOf(source)) === 'off';
+}
+// Popups on screen, by identity (core/notif-model.ts toastKey): the same event twice is one
+// popup with a count, not two stacked copies. A batch toasts per item; a poll repeats itself.
+const _liveToasts = new Map();
+export function toast(message, type = 'info', duration = 3000, icon = '', source = 'BMM', opts = {}) {
+    // Recorded here and ONLY here, so the notification centre and the popup can never disagree
+    // about what the app said (ui/notification-center.ts). A repeat folds into its entry.
+    try {
+        recordNotification(String(message ?? ''), type, source, opts);
+    }
+    catch { /* never let history break a message */ }
+    // And told to any task waiting for one: every error in BMM comes through here.
+    if (type === 'error') {
+        try {
+            fireErrorEvent(String(message ?? ''), source);
+        }
+        catch { /* same rule */ }
+    }
+    // What to do with it: the group's setting, do not disturb / quiet hours, the old global
+    // switch. An ERROR always pops up in the app: "I muted notifications" is not consent to
+    // failing silently. Everything is RECORDED above either way.
+    const group = NotifRules.groupOf(source);
+    let d = { toast: true, os: false };
+    try {
+        d = NotifRules.deliveryFor(type, group, readNotifPrefs(), { now: new Date(), focused: appFocused(), globalMuted: toastsMuted() });
+    }
+    catch { /* the rules failing must not eat a message */ }
+    if (d.os)
+        void sendSystemNotification(`Better Mod Manager · ${groupLabel(group)}`, String(message ?? ''));
+    if (!d.toast)
+        return () => { };
+    const container = document.getElementById('toast-container');
+    if (!container)
+        return () => { };
+    // Already on screen: count it and keep it up longer instead of stacking a copy.
+    const id = NotifRules.toastKey(String(message ?? ''), String(type), String(source), opts.key);
+    const live = _liveToasts.get(id);
+    if (live && live.el.isConnected) {
+        live.bump(duration);
+        return () => live.el.remove();
+    }
+    const el = document.createElement('div');
+    el.className = `toast ${type}`;
+    el.setAttribute('role', type === 'error' ? 'alert' : 'status');
+    if (icon) {
+        // Custom SVG icon (replaces the default colored dot)
+        const iconSpan = document.createElement('span');
+        iconSpan.className = 'toast-icon';
+        iconSpan.innerHTML = icon;
+        el.appendChild(iconSpan);
+    }
+    else {
+        const dot = document.createElement('div');
+        dot.className = 'toast-dot';
+        el.appendChild(dot);
+    }
+    const textSpan = document.createElement('span');
+    textSpan.textContent = message;
+    el.appendChild(textSpan);
+    const countSpan = document.createElement('span');
+    countSpan.className = 'toast-count';
+    let count = 1;
+    container.appendChild(el);
+    const remove = () => {
+        _liveToasts.delete(id);
+        el.classList.add('removing');
+        el.addEventListener('animationend', () => el.remove(), { once: true });
+    };
+    // `duration: 0` = stays until the caller dismisses it. A "working..." toast on a fixed
+    // timer either vanishes while the work is still running or lingers next to the result.
+    let timer = duration > 0 ? setTimeout(remove, duration) : null;
+    _liveToasts.set(id, {
+        el,
+        bump: (again) => {
+            count += 1;
+            countSpan.textContent = `×${count}`;
+            if (!countSpan.isConnected)
+                el.appendChild(countSpan);
+            if (timer) {
+                clearTimeout(timer);
+                timer = null;
+            }
+            const ms = Math.max(again, duration);
+            if (ms > 0)
+                timer = setTimeout(remove, ms);
+        },
+    });
+    return () => {
+        if (timer)
+            clearTimeout(timer);
+        remove();
+    };
+}
+// The global handle. Modules the app shell itself imports (core/commands.ts,
+// core/analytics.ts, core/offline.ts, restore-bundle, navbar-customize, the scheduler's
+// undo…) cannot import ui/app.js without closing an import cycle, so they call
+// `window.toast?.()`. Nothing ever assigned it, and the optional call hid that: "nothing
+// to undo", "telemetry exported" and every other message sent that way silently vanished.
+// Assigned at module evaluation, so it exists before any init() can fire one.
+window.toast = toast;
+// ── Tasky Sync Loading ──────────────────────────────────────
+export function startTaskyLoader(reverse = false) {
+    const mascotContainer = document.getElementById('app-mascot-container');
+    if (!mascotContainer)
+        return;
+    // Its OWN switch, not the float's. They were one setting, so wanting a still mascot
+    // also silenced the one animation that carries information — and wanting the spin gone
+    // meant giving up the float.
+    if (localStorage.getItem('bmm_tasky_spin') === 'false')
+        return;
+    const className = reverse ? 'is-loading-reverse' : 'is-loading';
+    const otherClass = reverse ? 'is-loading' : 'is-loading-reverse';
+    if (!mascotContainer.dataset.spinStartTime || mascotContainer.dataset.spinStartTime === '0') {
+        mascotContainer.dataset.spinStartTime = Date.now().toString();
+        mascotContainer.classList.remove(otherClass);
+        mascotContainer.classList.add(className);
+    }
+    if (mascotContainer._spinTimeout) {
+        clearTimeout(mascotContainer._spinTimeout);
+        mascotContainer._spinTimeout = null;
+    }
+}
+export function stopTaskyLoader() {
+    const mascotContainer = document.getElementById('app-mascot-container');
+    if (!mascotContainer || !mascotContainer.dataset.spinStartTime || mascotContainer.dataset.spinStartTime === '0')
+        return;
+    if (mascotContainer._spinTimeout)
+        return; // Already stopping
+    const startTime = parseInt(mascotContainer.dataset.spinStartTime);
+    const elapsed = Date.now() - startTime;
+    let timeToWait = 1000 - (elapsed % 1000);
+    if (timeToWait < 300)
+        timeToWait += 1000; // Add full spin if <300ms remaining
+    mascotContainer._spinTimeout = setTimeout(() => {
+        mascotContainer.classList.remove('is-loading', 'is-loading-reverse');
+        mascotContainer.dataset.spinStartTime = '0';
+        mascotContainer._spinTimeout = null;
+    }, timeToWait);
+}
+export function triggerTaskyPulse() {
+    startTaskyLoader();
+    stopTaskyLoader();
+}
+// ── Navigation ────────────────────────────────────────────
+function initNavigation() {
+    // Apply saved navbar customization (order / hidden / rename) + add the editor trigger.
+    initNavbarCustomize();
+    const navItems = document.querySelectorAll('.nav-item[data-view]');
+    navItems.forEach(item => {
+        item.addEventListener('click', () => {
+            const viewId = item.dataset.view;
+            invoke('log_frontend_line', { line: `Navigated to view: ${viewId}` });
+            if (viewId)
+                trackView(viewId);
+            // Clear ALL nav items (incl. custom navbar buttons), not just [data-view],
+            // otherwise a custom button stays stuck in its active/hover state.
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            item.classList.add('active');
+            // Trigger mascot loading safely
+            triggerTaskyPulse();
+            // Yield to main thread so the nav button highlights instantly
+            setTimeout(() => {
+                document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+                document.getElementById('view-' + viewId)?.classList.add('active');
+                // Re-apply the (existing) collapsible-cards enhancement on every Settings
+                // open — catches cards that were re-rendered since the initial pass.
+                if (viewId === 'settings') {
+                    import('./settings-fold.js').then(m => m.initCollapsibleSettingsCards()).catch(() => { });
+                }
+                // Auto-sync when entering library
+                if (viewId === 'library') {
+                    window._refreshModsFn?.(true);
+                }
+                // Load / render the BetterCommunity blog on entry (fetches once).
+                if (viewId === 'community') {
+                    openCommunity();
+                }
+                // Credits video background control
+                const creditsVideo = document.getElementById('credits-bg-video');
+                const marqueeContainer = document.getElementById('credits-marquee-container');
+                if (viewId === 'credits') {
+                    creditsVideo?.play().catch(() => { });
+                    // Restart the marquee — it was cleared when leaving credits, and
+                    // without this it stays frozen/blank on every re-entry.
+                    startCreditsMarquee();
+                }
+                else {
+                    // Pause video and clear marquee interval to free memory
+                    if (creditsVideo && !creditsVideo.paused)
+                        creditsVideo.pause();
+                    if (marqueeContainer && marqueeContainer._marqueeInterval) {
+                        clearInterval(marqueeContainer._marqueeInterval);
+                        marqueeContainer._marqueeInterval = null;
+                    }
+                }
+                // MEMORY OPTIMIZATION: Flush conflict cache if not in library — but never while
+                // mods are being turned on or off. The flush empties the backend's file cache,
+                // which the next get_mods then rebuilds under the data lock the activation also
+                // needs: leaving the Library mid-activation cost a stall, and the cache is what
+                // the activation reads. Navigation never touches the running job itself
+                // (core/activation-jobs.ts: only an explicit cancel stops one).
+                if (viewId !== 'library' && !isActivationBusy()) {
+                    appState.flushMemory();
+                }
+                // MEMORY OPTIMIZATION: pause/release YouTube iframes when
+                // leaving the docs view, then re-mount them on re-entry.
+                // Removing the <iframe> outright (previous behaviour) broke
+                // the docs page because nothing came back to repaint the
+                // players.  Now we just blank the src, which releases the
+                // WebView2 subframe process while leaving the DOM intact —
+                // and on re-entry we ask the docs UI to rehydrate the players.
+                if (viewId !== 'docs') {
+                    document.querySelectorAll('#view-docs iframe').forEach((f) => {
+                        const iframe = f;
+                        // Stash the real src so we can restore it on return
+                        if (iframe.src && iframe.src !== 'about:blank') {
+                            iframe.dataset.bmmPausedSrc = iframe.src;
+                            try {
+                                iframe.src = 'about:blank';
+                            }
+                            catch { }
+                        }
+                    });
+                    // Also pause any <video> playing to free decoder resources
+                    document.querySelectorAll('#view-docs video').forEach((v) => {
+                        try {
+                            v.pause();
+                        }
+                        catch { }
+                    });
+                }
+                else {
+                    // Entering docs: restore stashed iframes; if the players
+                    // were never set up (first navigation), trigger setup.
+                    let anyRestored = false;
+                    document.querySelectorAll('#view-docs iframe').forEach((f) => {
+                        const iframe = f;
+                        if (iframe.dataset.bmmPausedSrc) {
+                            try {
+                                iframe.src = iframe.dataset.bmmPausedSrc;
+                            }
+                            catch { }
+                            delete iframe.dataset.bmmPausedSrc;
+                            anyRestored = true;
+                        }
+                    });
+                    if (!anyRestored) {
+                        try {
+                            window.__bmmSetupDocsVideos?.();
+                        }
+                        catch { }
+                    }
+                }
+            }, 15);
+        });
+    });
+    // Auto-detect when app regained focus — debounced to prevent Tauri multi-fire
+    let _focusDebounce = null;
+    window.addEventListener('focus', () => {
+        if (_focusDebounce)
+            return; // Ignore rapid re-fires (Tauri emits focus multiple times at startup)
+        _focusDebounce = setTimeout(() => { _focusDebounce = null; }, 2000);
+        const libView = document.getElementById('view-library');
+        const detailOpen = !!document.getElementById('mod-detail-panel');
+        if (libView && libView.classList.contains('active') && !detailOpen) {
+            window._refreshModsFn?.(true);
+        }
+    });
+    // Global SHA Status Listener
+    (async () => {
+        try {
+            const { listen } = await import('../core/api.js');
+            // Debounce timer for background (non-manual) SHA refresh — prevents 100 rapid refreshes
+            let _shaRefreshDebounce = null;
+            await listen('sha-status-changed', async (event) => {
+                const payload = event.payload; // { mod_id, status, is_manual }
+                console.log(`[BLAKE3] Hash status changed for mod ${payload.mod_id}: ${payload.status}`);
+                if (payload.status === 'calculating') {
+                    const isLazy = !payload.is_manual;
+                    const { getSettings } = await import('../core/api.js');
+                    const settings = await getSettings();
+                    if (payload.is_manual && settings.show_sha_loading_animation !== false) {
+                        startTaskyLoader(); // Added Tasky mascot animation
+                    }
+                    // Show spinner on mod card (both manual and lazy)
+                    const modCard = document.querySelector(`.mod-card[data-id="${payload.mod_id}"]`);
+                    if (modCard) {
+                        const shaIcon = modCard.querySelector('.sha-status-icon');
+                        if (shaIcon) {
+                            if (isLazy) {
+                                // Lighter, more transparent spinner for background lazy processing
+                                shaIcon.innerHTML = '<span class="spinner" style="width:12px;height:12px;border:2px solid rgba(139, 92, 246, 0.1);border-top-color:rgba(139, 92, 246, 0.4);border-radius:50%;animation:spin 1.5s linear infinite;display:inline-block;"></span>';
+                            }
+                            else {
+                                // Stronger spinner for manual calculation
+                                shaIcon.innerHTML = '<span class="spinner" style="width:12px;height:12px;border:2px solid rgba(139, 92, 246, 0.3);border-top-color:#8b5cf6;border-radius:50%;animation:spin 1s linear infinite;display:inline-block;"></span>';
+                            }
+                        }
+                    }
+                    // Find the detail button
+                    const btn = document.getElementById('btn-recalculate-sha');
+                    const detailContainer = document.getElementById('mod-detail-container');
+                    if (btn && detailContainer && detailContainer._currentModId === payload.mod_id) {
+                        btn.classList.add('loading');
+                        if (isLazy) {
+                            btn.innerHTML = '<span class="spinner" style="width:14px;height:14px;border:2px solid rgba(255,255,255,0.1);border-top-color:rgba(255,255,255,0.5);border-radius:50%;animation:spin 1.5s linear infinite;display:inline-block;"></span>';
+                        }
+                        else {
+                            btn.innerHTML = '<span class="spinner" style="width:14px;height:14px;border:2px solid rgba(255,255,255,0.3);border-top-color:white;border-radius:50%;animation:spin 1s linear infinite;display:inline-block;"></span>';
+                        }
+                    }
+                    // Content ID section animation
+                    const cidBox = document.getElementById('content-id-box');
+                    const cidLabel = document.getElementById('content-id-status-label');
+                    const cidDot = document.getElementById('content-id-dot');
+                    const cidHint = document.getElementById('content-id-hint');
+                    const cidBtn = document.getElementById('btn-compute-content-id');
+                    if (cidBox) {
+                        cidBox.style.borderColor = 'rgba(139,92,246,0.4)';
+                        cidBox.style.boxShadow = 'inset 0 0 10px rgba(0,0,0,0.1), 0 0 8px rgba(139,92,246,0.15)';
+                    }
+                    if (cidLabel) {
+                        cidLabel.style.color = 'var(--accent)';
+                        cidLabel.innerHTML = `<span class="spinner" style="width:8px;height:8px;border:1.5px solid rgba(139,92,246,0.3);border-top-color:#8b5cf6;border-radius:50%;animation:spin 0.9s linear infinite;display:inline-block;flex-shrink:0"></span> COMPUTING...`;
+                    }
+                    if (cidHint)
+                        cidHint.textContent = t('mod.hashingContent');
+                    if (cidBtn)
+                        cidBtn.style.opacity = '0.4';
+                }
+                else if (payload.status === 'done' || payload.status === 'error' || payload.status === 'missing') {
+                    if (payload.is_manual && payload.status !== 'missing') {
+                        stopTaskyLoader(); // Stop Tasky mascot animation
+                    }
+                    // Explicitly remove loading spinners to ensure they don't get stuck before list refresh
+                    const modCard = document.querySelector(`.mod-card[data-id="${payload.mod_id}"]`);
+                    if (modCard) {
+                        const shaIcon = modCard.querySelector('.sha-status-icon');
+                        if (shaIcon) {
+                            shaIcon.innerHTML = (uiIcon('shield', 12));
+                            if (payload.status === 'done') {
+                                shaIcon.style.color = 'var(--success)';
+                                shaIcon.style.opacity = '0.9';
+                                shaIcon.className = 'sha-status-icon verified';
+                            }
+                            else {
+                                shaIcon.style.color = 'var(--text-muted)';
+                                shaIcon.style.opacity = '0.5';
+                                shaIcon.className = 'sha-status-icon missing';
+                            }
+                        }
+                    }
+                    const btn = document.getElementById('btn-recalculate-sha');
+                    if (btn) {
+                        btn.classList.remove('loading');
+                        btn.innerHTML = (uiIcon('reapply', 14) + '<span data-i18n="mods.sha.recalculate">Recalculate SHA</span>');
+                        const { applyTranslations } = await import('../core/i18n.js');
+                        applyTranslations(btn);
+                    }
+                    // Reset Content ID section (re-render via list refresh will update values)
+                    const cidBoxDone = document.getElementById('content-id-box');
+                    const cidBtnDone = document.getElementById('btn-compute-content-id');
+                    if (cidBoxDone) {
+                        cidBoxDone.style.borderColor = '';
+                        cidBoxDone.style.boxShadow = '';
+                    }
+                    if (cidBtnDone)
+                        cidBtnDone.style.opacity = '';
+                    if (payload.status === 'error' && payload.is_manual) {
+                        const { toast } = await import('../ui/app.js');
+                        toast(t('toast.hashFailed', { id: payload.mod_id }) || ('Failed to hash mod ' + payload.mod_id), 'error');
+                    }
+                    else if (payload.status === 'done' && payload.is_manual) {
+                        const { toast } = await import('../ui/app.js');
+                        toast(t('toast.hashDone') || 'Hash calculation completed', 'success');
+                    }
+                    // Refresh main mod list — debounce background SHA refreshes to avoid 100+ rapid re-renders
+                    if (window._refreshModsFn) {
+                        if (payload.is_manual) {
+                            window._refreshModsFn();
+                        }
+                        else {
+                            if (_shaRefreshDebounce)
+                                clearTimeout(_shaRefreshDebounce);
+                            _shaRefreshDebounce = setTimeout(() => {
+                                window._refreshModsFn?.();
+                                _shaRefreshDebounce = null;
+                            }, 1500);
+                        }
+                    }
+                    // Refresh detail panel if it's the same mod
+                    const detailContainer = document.getElementById('mod-detail-container');
+                    if (detailContainer && detailContainer._currentModId === payload.mod_id) {
+                        import('../features/mods/mods-details.js').then(m => m.renderModDetail(payload.mod_id));
+                    }
+                }
+            });
+        }
+        catch (e) {
+            console.error("[BLAKE3] Failed to setup global hash listener", e);
+        }
+    })();
+    // Credits video visibility control
+    document.addEventListener('visibilitychange', () => {
+        const creditsVideo = document.getElementById('credits-bg-video');
+        const creditsView = document.getElementById('view-credits');
+        if (creditsVideo && creditsView && creditsView.classList.contains('active')) {
+            if (document.hidden) {
+                creditsVideo.pause();
+            }
+            else {
+                creditsVideo.play().catch(() => { });
+            }
+        }
+    });
+}
+// ── Navbar Language Dropdown ──────────────────────────────
+export function initNavbarLangDropdown() {
+    const container = document.getElementById('nav-lang-dropdown');
+    if (!container)
+        return;
+    // Importing i18n functions here as they are tightly coupled with the UI
+    import('../core/i18n.js').then(({ getLanguages, setLang }) => {
+        function render() {
+            const langs = getLanguages();
+            const current = langs.find(l => l.active) || langs[0];
+            const getFlag = (l) => {
+                if (!l || !l.flag)
+                    return '⚪';
+                const f = l.flag.trim();
+                // If it's already an emoji (complex character) or a long string, return it as is
+                if (f.length > 2)
+                    return f;
+                // If it's a 2-letter ISO code (e.g., "us", "FR", "de")
+                if (f.length === 2) {
+                    const code = f.toLowerCase();
+                    // Use flagcdn.com for high quality flags with an offline text fallback
+                    return `<img src="https://flagcdn.com/w20/${code}.png" 
+                                 width="20" 
+                                 height="14" 
+                                 alt="${f.toUpperCase()}"
+                                 style="vertical-align: middle; border-radius: 2px; object-fit: cover;"
+                                 data-onerror="text" data-onerror-text="${f.toUpperCase()}">`;
+                }
+                return f;
+            };
+            container.innerHTML = `
+                <button class="nav-lang-btn" id="nav-lang-toggle">
+                    <span class="nav-lang-flag" style="margin-right:8px">${getFlag(current)}</span>
+                    <span class="nav-lang-name">${current.name}</span>
+                    ${uiIcon('chevron-up', 12, { cls: 'nav-lang-chevron' })}
+                </button>
+                <div class="nav-lang-menu" id="nav-lang-menu">
+                    ${langs.map(l => `
+                        <button class="nav-lang-option ${l.active ? 'active' : ''}" data-lang="${l.code}">
+                            <span class="nav-lang-flag" style="margin-right:10px">${getFlag(l)}</span>
+                            <span>${l.name}</span>
+                            ${l.active ? (uiIcon('check', 14, { style: 'color:var(--accent);margin-left:auto' })) : ''}
+                        </button>
+                    `).join('')}
+                </div>
+            `;
+            const toggle = document.getElementById('nav-lang-toggle');
+            const menu = document.getElementById('nav-lang-menu');
+            toggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                menu.classList.toggle('open');
+                toggle.classList.toggle('open');
+            });
+            menu.querySelectorAll('.nav-lang-option').forEach(opt => {
+                opt.addEventListener('click', () => {
+                    setLang(opt.dataset.lang);
+                    menu.classList.remove('open');
+                    toggle.classList.remove('open');
+                    render();
+                    // Re-render dynamic content
+                    updateLibraryProfileSelector();
+                    if (window._refreshModsFn)
+                        window._refreshModsFn();
+                });
+            });
+            document.addEventListener('click', () => {
+                menu.classList.remove('open');
+                toggle.classList.remove('open');
+            });
+        }
+        render();
+        document.addEventListener('langChanged', render);
+    });
+}
+// ── Offline Detection ─────────────────────────────────────
+// Real reachability (probe) and the 'no connection' banner live in core/offline.ts. A notice,
+// not a lock: network features are not gated and report their own error when offline.
+function initOfflineDetection() {
+    import('../core/offline.js').then(m => m.initOffline()).catch(() => { });
+}
+// ── Profile selector in Library ───────────────────────────
+export async function updateLibraryProfileSelector() {
+    const select = document.getElementById('lib-profile-select');
+    if (!select)
+        return;
+    try {
+        const profiles = await invoke('get_profiles');
+        const activeId = await invoke('get_active_profile_id');
+        // Fetch custom icon paths in parallel.
+        const iconPaths = await fetchProfileIconPaths(profiles);
+        // Always include/reset to the placeholder as the first option
+        select.innerHTML = `<option value="" data-i18n="lib.selectProfile">${t('lib.selectProfile') || '— Select a profile —'}</option>`;
+        profiles.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.id;
+            opt.textContent = p.name + (p.game_name ? ` — ${t(p.game_name) || p.game_name}` : '');
+            if (p.id === activeId)
+                opt.selected = true;
+            select.appendChild(opt);
+        });
+        // The dropdown rows get the profile icon too, not just the closed trigger
+        // below. This select was missed when the other three were done — the list is
+        // where you compare profiles, so it is the place the icon earns most.
+        decorateProfileOptions(select, profiles, iconPaths);
+        // Update the dynamic profile icon in the wrapper (supports custom icon img).
+        const wrapper = select.closest('.profile-select-icon-wrap');
+        if (wrapper) {
+            let iconEl = wrapper.querySelector('.profile-icon-display');
+            if (!iconEl) {
+                iconEl = document.createElement('span');
+                iconEl.className = 'profile-icon-display';
+                wrapper.insertBefore(iconEl, select);
+            }
+            updateSelectProfileIcon(select, profiles, iconPaths, iconEl);
+        }
+        // On change, refresh the icon next to the select.
+        const wrp = select.closest('.profile-select-icon-wrap');
+        const onChangeIconRefresh = () => {
+            if (wrp) {
+                const el = wrp.querySelector('.profile-icon-display');
+                updateSelectProfileIcon(select, profiles, iconPaths, el);
+            }
+        };
+        // Refresh icon when the user changes selection (no page reload needed).
+        if (!select._iconChangeListener) {
+            select._iconChangeListener = onChangeIconRefresh;
+            select.addEventListener('change', onChangeIconRefresh);
+        }
+        else {
+            // Already wired — just update to use the freshly fetched iconPaths.
+            select.removeEventListener('change', select._iconChangeListener);
+            select._iconChangeListener = onChangeIconRefresh;
+            select.addEventListener('change', onChangeIconRefresh);
+        }
+        // Add change listener only once
+        if (!select._hasListener) {
+            select.addEventListener('change', async () => {
+                const id = select.value;
+                if (!id)
+                    return;
+                // Trigger mascot loading
+                startTaskyLoader();
+                try {
+                    await invoke('set_active_profile', { profileId: id });
+                    await updateProfileChip();
+                    if (window._refreshModsFn)
+                        await window._refreshModsFn();
+                    await updateLibraryProfileSelector(); // Keep labels in sync
+                    applyTranslations();
+                }
+                catch (e) {
+                    const { toast } = await import('../ui/app.js');
+                    toast((window.t ? window.t('common.error') : 'Error') + ' : ' + e, 'error');
+                }
+                finally {
+                    stopTaskyLoader();
+                }
+            });
+            select._hasListener = true;
+        }
+    }
+    catch (err) {
+        console.warn("Profile selector update failed:", err);
+    }
+}
+// ── Reusable profile-select icon helpers ──────────────────────────────────────
+// Enriches <option> elements and maintains a sibling icon/thumbnail that
+// reflects the currently selected profile's custom icon (or builtin SVG).
+// Works for any <select> that lists profiles.
+/** Fetch the custom icon path for every profile that has one (parallel). */
+export async function fetchProfileIconPaths(profiles) {
+    const entries = await Promise.all(profiles
+        .filter(p => p.icon_image)
+        .map(async (p) => {
+        try {
+            const path = await invoke('get_profile_icon_path', { profileId: p.id });
+            return path ? [p.id, path] : null;
+        }
+        catch {
+            return null;
+        }
+    }));
+    return new Map(entries.filter(Boolean));
+}
+/** Update an icon element next to a <select> to show the selected profile's icon. */
+/** The icon markup for ONE profile, as the custom select wants it.
+ *
+ *  The dropdown already supports a per-option icon — `data-icon` on the <option>,
+ *  rendered by ui/custom-select.ts — and nothing was filling it for profiles. So the
+ *  closed select showed the profile's icon and the open list showed bare names, which
+ *  is the one moment you are actually comparing profiles and the icons would help
+ *  most.
+ *
+ *  Extracted from updateSelectProfileIcon rather than copied, so the trigger and the
+ *  list can never disagree about what a profile looks like. */
+export function profileIconMarkup(profile, iconPaths, size = 14) {
+    const custom = profile?.id ? iconPaths.get(profile.id) : null;
+    if (custom) {
+        // Cache-busted: a re-uploaded icon keeps its path, so without this the browser
+        // serves the old file forever.
+        return `<img src="${convertFileSrc(custom)}?t=${Date.now()}" style="width:${size + 2}px;height:${size + 2}px;border-radius:3px;object-fit:cover;display:block" alt="">`;
+    }
+    return getProfileIconSvg(profile?.icon || 'user', `width:${size}px;height:${size}px`);
+}
+/** Stamp every <option> of a profile select with its icon, then let the custom
+ *  select rebuild. Call it after the options have been filled. */
+export function decorateProfileOptions(selectEl, profiles, iconPaths) {
+    if (!selectEl)
+        return;
+    for (const opt of Array.from(selectEl.options)) {
+        const prof = profiles.find(x => x.id === opt.value);
+        // The placeholder row ("— pick one —") has no profile and must stay bare:
+        // giving it a default user glyph would make it look like a real choice.
+        if (prof)
+            opt.dataset.icon = profileIconMarkup(prof, iconPaths);
+        else
+            delete opt.dataset.icon;
+    }
+}
+export function updateSelectProfileIcon(selectEl, profiles, iconPaths, iconEl) {
+    if (!selectEl || !iconEl)
+        return;
+    const id = selectEl.value;
+    const p = profiles.find(x => x.id === id);
+    const imgSrc = id && iconPaths.get(id) ? convertFileSrc(iconPaths.get(id)) : null;
+    const ts = Date.now();
+    if (imgSrc) {
+        iconEl.innerHTML = `<img src="${imgSrc}?t=${ts}" style="width:16px;height:16px;border-radius:3px;object-fit:cover;vertical-align:middle;display:block;" alt="">`;
+    }
+    else {
+        iconEl.innerHTML = getProfileIconSvg(p?.icon || 'user', 'width:14px;height:14px;vertical-align:middle');
+    }
+}
+// ── Link patcher ──────────────────────────────────────────
+// Updates every [data-link-key] element in the HTML with the
+// value from links.json, so no URL is hardcoded in static HTML.
+function patchHtmlLinks() {
+    const links = getLinks();
+    // A key that is not in the registry used to be skipped in silence, which left the
+    // hardcoded href in the markup — exactly the frozen URL the attribute exists to replace,
+    // and invisible, because the link still opens. It just opens the wrong place. Named here,
+    // once, so a typo or a key dropped from a hand-edited links.json is findable.
+    const missing = [];
+    document.querySelectorAll('[data-link-key]').forEach(el => {
+        const key = el.getAttribute('data-link-key');
+        if (!key)
+            return;
+        const url = links[key];
+        if (typeof url !== 'string' || !url) {
+            missing.push(key);
+            return;
+        }
+        // <a href="...">
+        if (el instanceof HTMLAnchorElement)
+            el.href = url;
+        // <div data-url="..."> (quicklink cards)
+        if (el.dataset.url !== undefined)
+            el.dataset.url = url;
+    });
+    if (missing.length)
+        console.warn(`[BMM] links.json has no entry for: ${[...new Set(missing)].join(', ')} — those elements keep the URL hardcoded in index.html`);
+}
+// Open an external URL in the system browser. `window.open(url,'_blank')` is a
+// no-op in the Tauri v2 webview, so route through the backend `open_external`
+// command (this is why the credits stack links stopped working after v2).
+export function openExternal(url) {
+    if (!url)
+        return;
+    invoke('open_external', { url }).catch((e) => {
+        console.warn('[BMM] open_external failed:', e);
+        try {
+            window.open(url, '_blank');
+        }
+        catch { /* ignore */ }
+    });
+}
+window.openExternal = openExternal;
+// ── Boot ──────────────────────────────────────────────────
+async function main() {
+    // FIRST, before anything renders. These are delegated listeners on `document` that
+    // stand in for the `on…=` attributes the markup used to carry; a tooltip or an image
+    // fallback rendered before they exist would simply never respond.
+    initInlineActions();
+    console.log('[BMM] App starting from generated TypeScript!');
+    // The bridge BEFORE the link registry. loadLinks() invokes (get_bc_config, then
+    // fetch_remote_json for BCWEB and GitHub), and invoke() waits up to 5 s for a bridge
+    // that only loadTauri() provides — so with the registry first, every launch sat through
+    // three 5-second timeouts (~15 s) and logged "[RPC ERROR] get_bc_config: Tauri bridge not
+    // initialized" before anything else could start. loadTauri() needs no links.
+    await loadTauri();
+    // Load external link registry first so every module can call getLinks() safely
+    await loadLinks();
+    patchHtmlLinks();
+    // BetterCommunity v2 or v1 for this session (app.cfg > links.json > v1, then a health check
+    // in Rust). Not awaited: until it answers the session is v1, the default. Once it does, the
+    // v2 legal texts are checked (re-acceptance when v2 publishes another version).
+    void import('../core/bc-v2.js').then((m) => m.activateBcV2()).then((s) => {
+        if (s.version === 'v2')
+            setTimeout(() => { void import('../core/bc-v2-legal.js').then((l) => l.checkBcV2Legal()).catch(() => { }); }, 20_000);
+    }).catch(() => { });
+    // Initialize Offline Detection
+    initOfflineDetection();
+    const initVersionDisplay = async () => {
+        // Safety delay
+        await new Promise(r => setTimeout(r, 300));
+        console.log("[BMM] Starting version display initialization...");
+        try {
+            // Safe extraction of Tauri APIs
+            const tauri = window.__TAURI__;
+            if (!tauri) {
+                console.warn("[BMM] window.__TAURI__ is not available. Skipping version injection.");
+                return;
+            }
+            const getVersion = tauri.app.getVersion;
+            const version = await getVersion();
+            console.log("[BMM] Found version:", version);
+            // Fetch PTB mode
+            let isPtb = false;
+            try {
+                isPtb = await invoke('is_ptb_mode');
+            }
+            catch (err) {
+                console.warn("[BMM] Failed to fetch PTB mode:", err);
+            }
+            const suffix = isPtb ? "-FAB" : "";
+            const versionStr = `V${version}${suffix}`;
+            let buildDate = "Unknown";
+            try {
+                buildDate = await invoke('get_build_date');
+                console.log("[BMM] Found build date:", buildDate);
+            }
+            catch (invErr) {
+                console.warn("[BMM] get_build_date invoke failed, using current date as fallback:", invErr);
+                buildDate = new Date().toISOString().split('T')[0];
+            }
+            const buildStr = `Build: ${buildDate} — ${versionStr}`;
+            const buildDisplay = document.getElementById('app-build-display');
+            if (buildDisplay) {
+                buildDisplay.textContent = buildStr;
+                console.log("[BMM] Updated build display.");
+            }
+            else {
+                console.warn("[BMM] app-build-display element not found.");
+            }
+            const versionBadge = document.getElementById('credits-hero-version');
+            if (versionBadge) {
+                versionBadge.textContent = versionStr;
+                console.log("[BMM] Updated version badge.");
+            }
+            const creditsVerSub = document.getElementById('credits-version-subtitle');
+            if (creditsVerSub) {
+                creditsVerSub.textContent = `Better Mod Manager — ${versionStr} —`;
+                console.log("[BMM] Updated credits subtitle.");
+            }
+            // Exhaustive sync for all version labels
+            document.querySelectorAll('.footer-version-pill').forEach(el => el.textContent = 'v' + version);
+            document.querySelectorAll('.about-version').forEach(el => el.textContent = 'v' + version);
+        }
+        catch (e) {
+            console.error("[BMM] CRITICAL: Failed to init version display:", e);
+        }
+    };
+    // (loadTauri() already ran, at the top of main().)
+    // Resolve the BetterCommunity test-mode/base from app.cfg (blog + account link).
+    // MUST run AFTER loadTauri() — get_bc_config is a Tauri command, and calling it
+    // before the bridge is ready threw "Tauri bridge not initialized".
+    await loadBcConfig();
+    try {
+        await invoke('log_frontend_line', { line: '[BMM] App started from generated TypeScript!' });
+    }
+    catch (e) { }
+    // First-run handoff from BetterInstaller: if the installer pre-configured BMM
+    // (privacy/ToS, language, tutorial, telemetry), apply it BEFORE the first-run
+    // modals below so they don't appear. Settings (language/onboarding/telemetry)
+    // are applied Rust-side; the legal/lang modals are localStorage-gated, so we
+    // satisfy those keys here. No-op when installed without BetterInstaller.
+    try {
+        const ho = await invoke('consume_installer_handoff');
+        if (ho?.applied) {
+            if (ho.legal_accepted) {
+                localStorage.setItem('bmm_eula_accepted', 'true');
+                localStorage.setItem('bmm_privacy_seen', 'true');
+            }
+            if (ho.language_set)
+                localStorage.setItem('bmm_lang_selected', 'true');
+            // Local session recorder is a JS-side setting (localStorage bmm_replay_enabled,
+            // default on). The installer only needs to act when the user turned it OFF.
+            if (ho.session_recorder === false)
+                localStorage.setItem('bmm_replay_enabled', '0');
+            // Telemetry: the installer's ticked box is a PRE-SELECTION, never consent. It
+            // makes the consent dialog (further down this same startup sequence) appear
+            // with the installer's answers filled in; collection starts only if the user
+            // accepts there. An unticked box was recorded Rust-side as a refusal.
+            if (ho.telemetry_preselect === true) {
+                const { setInstallerTelemetryPreselect } = await import('../core/analytics.js');
+                setInstallerTelemetryPreselect(true, { usage: ho.telemetry_usage, perf: ho.telemetry_perf, laya: ho.telemetry_laya });
+            }
+            // The installer's privacy step (« Essential only » / « Accept all » / « Customize »)
+            // is the decision itself: Rust already recorded the consent, so only the categories
+            // it picked are stored here, and the consent dialog never asks again.
+            if (ho.telemetry_consent === true) {
+                const { applyInstallerTelemetryDecision } = await import('../core/analytics.js');
+                applyInstallerTelemetryDecision({ usage: ho.telemetry_usage, perf: ho.telemetry_perf, laya: ho.telemetry_laya });
+            }
+            // Automatic update checks: read as `!== 'false'`, so only an explicit "off" is written.
+            if (ho.auto_update === false)
+                localStorage.setItem('bmm_auto_update_enabled', 'false');
+            // Weekly benchmark + extra hardware report — a JS-side setting, default OFF.
+            if (typeof ho.telemetry_bench === 'boolean') {
+                localStorage.setItem('bmm_telemetry_bench', ho.telemetry_bench ? '1' : '0');
+            }
+            // Theme chosen on the installer's swatch page. Also a JS-side setting, and it
+            // must land BEFORE restoreThemeAtBoot() below reads bmm_active_theme — the
+            // installer wrote this all along and nobody consumed it, so the pick never
+            // survived the first launch.
+            if (ho.active_theme)
+                localStorage.setItem('bmm_active_theme', ho.active_theme);
+            // Content-Security-Policy preset. The value is a preset ID, and applyPresetById
+            // ignores anything that is not one of BMM's own — including "custom", which
+            // means "write nothing, I will author one in Settings". It goes through the same
+            // function the Settings panel uses, so the policy is validated the same way
+            // csp-boot.js will validate it on the next launch; a second writer here could
+            // save something the loader then drops without a word.
+            //
+            // It takes effect from the SECOND launch: a CSP meta tag is only honoured while
+            // the document is parsed, and this document has already been parsed.
+            if (ho.csp_preset && ho.csp_preset !== 'custom') {
+                const { applyPresetById } = await import('../features/settings/csp-editor.js');
+                applyPresetById(ho.csp_preset);
+            }
+            // Tasky + in-app tips. Each key is read as `!== 'false'`, so only an explicit
+            // "off" needs writing — and only when the installer actually said so. A null
+            // means it was not asked about, and BMM's own default must stand.
+            for (const [k, v] of [
+                ['bmm_tasky_visible', ho.tasky_visible],
+                ['bmm_tasky_tooltip', ho.tasky_tooltip],
+                ['bmm_tasky_animated', ho.tasky_animated],
+                ['bmm_tips_visible', ho.tips_visible],
+            ]) {
+                if (typeof v === 'boolean')
+                    localStorage.setItem(k, String(v));
+            }
+            // Pre-import a bundled preset (themes / translations / catalogue / plugins)
+            // through the same path as a manual backup import. Runs before i18n init
+            // so freshly-imported languages are available immediately.
+            if (ho.import_preset_path) {
+                try {
+                    await invoke('import_app_data', { srcPath: ho.import_preset_path });
+                    console.log('[BMM] Imported installer preset:', ho.import_preset_path);
+                }
+                catch (e) {
+                    console.warn('[BMM] preset import failed:', e);
+                }
+            }
+            console.log('[BMM] Applied installer handoff:', ho);
+        }
+    }
+    catch (e) { /* no handoff / older backend — normal */ }
+    // Block the WebView2 "Inspect" context menu + F12 / Ctrl+Shift+I,J,C in
+    // PRODUCTION only. Runs AFTER loadTauri() so the bridge is ready (otherwise
+    // is_dev_build threw "bridge not initialized" and defaulted to prod, killing
+    // right-click in dev). Dev builds keep everything; inputs keep native menus;
+    // the theme element picker still receives the event.
+    try {
+        const isDev = await invoke('is_dev_build').catch(() => true); // unknown → assume dev (don't block)
+        if (!isDev) {
+            document.addEventListener('contextmenu', (e) => {
+                const el = e.target;
+                if (el && el.closest('input, textarea, [contenteditable="true"]'))
+                    return;
+                e.preventDefault();
+            }, { capture: true });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'F12' || ((e.ctrlKey || e.metaKey) && e.shiftKey && ['I', 'i', 'J', 'j', 'C', 'c'].includes(e.key))) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            }, { capture: true });
+        }
+    }
+    catch { /* non-fatal */ }
+    // Restore active theme ASAP (before first render to avoid flash)
+    restoreThemeAtBoot().catch(() => { });
+    await initI18n();
+    initNavigation();
+    initModals();
+    initBenchmark();
+    await initTitlebar();
+    // The activity pill for mods being turned on / off, in the title bar on every view.
+    try {
+        configureActivationJobs({ invoke: (cmd, args) => invoke(cmd, args || {}), listen, t });
+        // Any activation job (a card, a modpack, an order list) refused because Windows protects
+        // the game folder: one dialog with a way out (features/mods/protected-folder.ts).
+        onActivationJobEnd((s) => {
+            const f = (s.failed || []).find((x) => isProtectedFolderError(x.error));
+            if (f)
+                void import('../features/mods/protected-folder.js').then((m) => m.handleProtectedFolderError(f.error)).catch(() => { });
+        });
+        initActivationIndicator();
+    }
+    catch (e) {
+        console.warn('[BMM] activation indicator', e);
+    }
+    // The activity centre: every running action (activations, downloads, syncs, exports…) in one
+    // title-bar button and panel. Sources: core/activity-sources.ts.
+    try {
+        attachActivitySources({ t, invoke: (cmd, args) => invoke(cmd, args || {}), listen, setInvokeHook: setInvokeActivityHook });
+        initActivityCenter();
+    }
+    catch (e) {
+        console.warn('[BMM] activity centre', e);
+    }
+    initModlist();
+    initRepo();
+    // After the UI is up, never before: this makes network calls, and a slow or unreachable
+    // repo must not delay the window appearing.
+    void import('../features/repo/auto-sync.js').then((m) => m.runAutoSyncCheck());
+    initInteractiveDocs(); // diagram modal engine + Tasky tooltips (still used app-wide)
+    initDocsHub(); // the rebuilt Help & documentation hub (owns #view-docs)
+    try {
+        mountLearnMoreLinks();
+    }
+    catch (e) {
+        console.warn('[learn-more] mount failed', e);
+    } // "Learn more" on the static screens
+    initCommands(); // command registry + Ctrl+K palette + global shortcut dispatcher
+    initDeepLinks();
+    // A double-clicked .bmmscript arrives the same two ways a bmm:// link does. Imported
+    // lazily so the compiler and the review screen cost nothing on a normal launch.
+    void import('../features/settings/bmmscript-open.js').then((m) => m.initBmmScriptOpen()).catch(() => { });
+    initApiActivity();
+    initAnalytics().catch(() => { });
+    // Local session recorder (user-controlled, separate from telemetry). Wire the
+    // settings card now, but defer starting the (heavy) recorder until idle so it
+    // doesn't fight the startup animation.
+    import('../features/settings/replay-watcher.js').then((m) => {
+        m.initWatcherUI();
+        const begin = () => m.syncWatcher();
+        const ric = window.requestIdleCallback;
+        if (ric)
+            ric(begin, { timeout: 7000 });
+        else
+            setTimeout(begin, 4500);
+    }).catch(() => { });
+    const modpackContainer = document.getElementById('modpack-container');
+    if (modpackContainer) {
+        initModpackCreator(modpackContainer);
+    }
+    // Bind Docs Diagram buttons
+    // The documentation page on syncing (chunks, resumed downloads), not the bare diagram.
+    document.getElementById('btn-docs-resumable')?.addEventListener('click', () => (window.openDocsPageById || openDiagram)('server-sync'));
+    document.getElementById('btn-faq-resumable')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openDiagram('resumable-downloads');
+    });
+    document.getElementById('btn-faq-resumable-alt')?.addEventListener('click', () => openDiagram('resumable-downloads'));
+    initNavbarLangDropdown();
+    initNavbarVersion();
+    initNotificationCenter();
+    initWebviewErrorTrap();
+    // Second source for the same centre. Does nothing without a stored key, so it
+    // costs an idle check for everyone who has not linked an account.
+    // In v2 mode it reads with the device-flow token instead, so it waits for the session's mode.
+    void import('../core/bc-v2.js').then((b) => b.activateBcV2())
+        .then(() => import('../core/bcweb-notifications.js')).then(m => m.startBcwebNotifications()).catch(() => { });
+    // BetterCommunity's launch announcements: asked for now, shown by the launch deck later.
+    // Never awaited — a slow or absent answer costs the start-up nothing (launch-announcements.ts).
+    void import('./launch-announcements.js').then((m) => m.prefetchLaunchFeed()).catch(() => { });
+    // These are async and were called bare — no await, no catch. A rejection in any of them
+    // became an unhandled promise rejection and, more importantly, silently abandoned the
+    // REST OF THAT init: every listener the function had not reached yet was never attached,
+    // so the feature rendered fine and responded to nothing.
+    //
+    // bootFeature keeps them parallel (none blocks the others) but names the one that failed,
+    // in the console and in BMM's own log, so "the buttons do nothing" stops being a mystery
+    // and starts being a line you can read.
+    const bootFeature = (name, run) => {
+        try {
+            const r = run();
+            if (r && typeof r.catch === 'function') {
+                r.catch((e) => {
+                    console.error(`[boot] ${name} failed to initialise`, e);
+                    invoke('log_frontend_line', { line: `[BOOT-FAIL] ${name}: ${e?.message || e}` }).catch(() => { });
+                });
+            }
+        }
+        catch (e) {
+            console.error(`[boot] ${name} threw synchronously`, e);
+            invoke('log_frontend_line', { line: `[BOOT-FAIL] ${name}: ${e?.message || e}` }).catch(() => { });
+        }
+    };
+    initUpdateNotes();
+    bootFeature('mapper', initMapper);
+    bootFeature('plugins', initPlugins);
+    bootFeature('apps-catalog', initAppsCatalog);
+    bootFeature('community', initCommunity);
+    bootFeature('theme-editor', initThemeEditor);
+    bootFeature('theme-catalog', initThemeCatalog);
+    initCustomSelects();
+    initTooltips();
+    document.getElementById('btn-restart-onboarding')?.addEventListener('click', () => {
+        openTutorialHub();
+    });
+    applyTranslations();
+    // BMMScript's colours, registered once for the whole app rather than by whichever
+    // screen happens to open first: the scheduler's two code boxes need it, and so do
+    // the 14 ```bmms fences in the bundled documentation, which nobody would think to
+    // blame on the scheduler not having been opened yet.
+    registerBmmsLanguage();
+    // Per-tip dismissal. The Settings switch is all-or-nothing, which is the wrong
+    // granularity for what people actually want: THIS box gone, the tips on screens they
+    // have not learnt yet kept. Every .bmm-tip[data-tip-id] gets its own × here.
+    // After applyTranslations on purpose — the button's accessible name goes through t(),
+    // and t() before initI18n returns the key, so an earlier call would have labelled it
+    // "settings.tipHide" in every language.
+    try {
+        wireTipDismissal(document);
+        document.getElementById('btn-restore-tips')?.addEventListener('click', () => {
+            const n = restoreAllTips();
+            toast(n > 0
+                ? t('settings.tipsRestored').replace('{n}', String(n))
+                : t('settings.tipsNoneHidden'), n > 0 ? 'success' : 'info');
+        });
+    }
+    catch { /* the tips are a comfort, never a blocker */ }
+    // Call this after translations to ensure it's not overwritten and elements are ready
+    await initVersionDisplay();
+    await initProfiles();
+    await initMods();
+    await updateProfileChip();
+    await updateLibraryProfileSelector();
+    // Load contributors before initializing credits
+    await fetchContributors();
+    initCredits();
+    // Force an explicit initial scan at startup so we don't rely on the debounced focus event
+    setTimeout(() => { refreshMods(true); }, 500);
+    // BMM is up: the intro (boot-loader.js) ends as soon as it may (past its impact, Tasky's
+    // happy beat in the classic style), then removes itself. The fallback below only runs if
+    // boot-loader.js never ran.
+    const intro = window.__bmmIntro;
+    const loader = document.getElementById('app-loader');
+    if (intro?.ready) {
+        intro.ready();
+    }
+    else if (loader) {
+        setTimeout(() => {
+            loader.style.opacity = '0';
+            loader.style.visibility = 'hidden';
+            setTimeout(() => {
+                // Kill the loader timeline + all tweens on loader elements before
+                // removing, so no scheduled step fires on missing targets.
+                window.__ldTimeline?.kill?.();
+                const gsapInst = window.gsap;
+                if (gsapInst) {
+                    const targets = Array.from(loader.querySelectorAll('[id], .ld-char, .ld-word'));
+                    targets.push(loader);
+                    gsapInst.killTweensOf(targets);
+                }
+                loader.remove();
+            }, 600);
+        }, 150);
+    }
+    await initSettings();
+    // ── Apply sound settings from config ──
+    try {
+        const { getSettings, refreshApiStatus } = await import('../core/api.js');
+        const cfg = await getSettings();
+        // Sync apiBase() with the port the server ACTUALLY bound this session — not
+        // settings.api_port, which may have been changed and needs a restart — AND with
+        // whether it bound at all. The port alone was never enough: a failed bind left every
+        // caller fetching a port nothing was listening on.
+        try {
+            await refreshApiStatus();
+            applyTranslations(); // re-sub the port in the docs examples
+        }
+        catch { }
+        const soundEnabled = cfg.sound_effects_enabled !== false;
+        const soundVol = (cfg.sound_volume ?? 70) / 100;
+        setSoundEnabled(soundEnabled);
+        setSoundVolume(soundVol);
+        localStorage.setItem('bmm_sound_enabled', String(soundEnabled));
+        localStorage.setItem('bmm_sound_volume', String(soundVol));
+    }
+    catch (_e) { /* use defaults */ }
+    // ── Start-up: ONE dialog ──
+    // First run = onboarding hasn't been shown yet. Used to keep first-launch-irrelevant
+    // steps (release notes, file-access mode, telemetry, the start-up cards) off a brand-new
+    // user, exactly as the separate dialogs did.
+    const isFirstRun = await shouldShowOnboarding();
+    // The getting-started checklist measures real state now (see gs-checklist.ts).
+    try {
+        const { initSetupChecklist } = await import('./gs-checklist.js');
+        initSetupChecklist();
+    }
+    catch { /* decorative if it fails */ }
+    initCrashReportUI();
+    // If BMM crashed (or was killed) in the middle of an interactive tutorial, the example
+    // profile survived on disk — remove it now, before the user sees it.
+    try {
+        const { cleanupOrphanTutorialDemo } = await import('./tutorial-engine.js');
+        await cleanupOrphanTutorialDemo();
+    }
+    catch (e) {
+        console.warn('[BMM] orphan tutorial demo cleanup failed', e);
+    }
+    // Everything BMM used to say at start-up in a relay of separate dialogs — language, terms,
+    // privacy policy, file-access mode, telemetry, the crash notice, release notes, the test
+    // build notice, BetterCommunity's announcements, the BetterCommunity and Ko-fi cards — is
+    // ONE deck now, with Previous / Next (launch-deck.ts, steps in launch-steps.ts). The
+    // questions that must be answered still must be; what they save has not changed.
+    //
+    // Not awaited: this is inside main(), and everything below it must still run. What has to
+    // wait for the deck waits here: the update check (its dialog would otherwise land on the
+    // deck) and the first-run tour.
+    void (async () => {
+        // Proof of consent (core/consent.ts): what has no receipt for the text in force (an
+        // update from 1.0.x, an import, a changed text) is asked again by the deck below, and an
+        // answer the deck records only locally (the policy step) gets its receipt here.
+        const consent = await import('../core/consent.js').catch(() => null);
+        const reask = consent ? await consent.prepareLaunchConsents() : [];
+        const privacyHashBefore = (() => { try {
+            return localStorage.getItem('bmm_privacy_seen_hash');
+        }
+        catch {
+            return null;
+        } })();
+        try {
+            const { runStartupDeck } = await import('./launch-steps.js');
+            await runStartupDeck({ firstRun: isFirstRun }, {
+                renderMarkdown: (md) => renderMarkdown(md),
+                markEulaAccepted,
+                openFullReleaseNotes: () => { void openUpdateNotesModal(); },
+                openPtbGuide: () => { void checkPtbMode(true); },
+                showConsentModal: () => showConsentModal(),
+            });
+        }
+        catch (e) {
+            // The deck could not load. The questions that cannot be skipped are still asked,
+            // the old way, one dialog after the other.
+            console.error('[BMM] launch deck failed; falling back to the separate dialogs', e);
+            try {
+                await checkLangSelect();
+                await waitForModalClosed('modal-lang-select');
+                const tosShown = await checkAutoEula();
+                await waitForModalClosed('modal-tos');
+                if (tosShown) {
+                    await checkAutoPrivacy();
+                    await waitForModalClosed('modal-privacy');
+                }
+                if (!isFirstRun) {
+                    await checkSecurityMode();
+                    await waitForModalClosed('modal-security-choice');
+                    const { maybeShowConsentModal } = await import('../core/analytics.js');
+                    await maybeShowConsentModal();
+                }
+                void checkPtbMode();
+            }
+            catch (err) {
+                console.warn('[BMM] start-up fallback failed', err);
+            }
+        }
+        if (consent) {
+            try {
+                const after = localStorage.getItem('bmm_privacy_seen_hash');
+                const proven = await consent.hasProof('privacy');
+                if (proven) { /* recorded already (the policy's own Accept button) */ }
+                else if (after && after !== privacyHashBefore) {
+                    await consent.recordConsent({ doc: 'privacy', choice: 'accepted', source: 'app' });
+                }
+                else if (reask.includes('privacy') && !after) {
+                    // The deck asks the policy only together with the terms; a policy without
+                    // proof whose terms are proven is asked on its own.
+                    await checkAutoPrivacy(true);
+                    await waitForModalClosed('modal-privacy');
+                }
+            }
+            catch { /* never blocks start-up */ }
+            void consent.syncConsents();
+        }
+        initAutoUpdate();
+        // Show onboarding on first launch, once the screen is clear (see startOnboardingWhenClear).
+        if (isFirstRun)
+            setTimeout(() => { void startOnboardingWhenClear(); }, 800);
+    })();
+    // ── Auto-Calibration trigger at startup ──
+    setTimeout(async () => {
+        try {
+            const { getSettings } = await import('../core/api.js');
+            const settings = await getSettings();
+            if (settings.auto_io_calibration) {
+                console.log("[BMM] Auto-Calibration enabled, running boot optimization...");
+                const disks = await invoke('get_system_disks');
+                // Run benchmarks asynchronously without awaiting to avoid blocking other startup tasks
+                runAutoBenchmarks(disks, true);
+            }
+        }
+        catch (e) {
+            console.error("[BMM] Auto-Calibration startup failed:", e);
+        }
+    }, 2000); // 2s delay to ensure disks are mounted and system is stable
+    // Old BMM installations: one quiet scan after boot; the dialog only when something new and
+    // removable was found and nobody said « Never ask again » (features/settings/old-installs.ts).
+    setTimeout(() => {
+        import('../features/settings/old-installs.js')
+            .then((m) => m.offerOldInstallsAtStartup())
+            .catch((e) => console.warn('[old-installs] start-up check failed', e));
+    }, 8000);
+    // Make the Settings glass cards collapsible (declutter).
+    try {
+        const { initCollapsibleSettingsCards } = await import('./settings-fold.js');
+        initCollapsibleSettingsCards();
+    }
+    catch (e) {
+        console.warn('[BMM] settings-fold init failed', e);
+    }
+    // Interaction log
+    initInteractionLogging();
+    // Debug Menu
+    initDebugMenu();
+    // Run any user-defined auto-animations (Animation Studio). Guarded on a cheap string
+    // check so the module is only loaded when the user actually created auto-run entries.
+    try {
+        if (localStorage.getItem('bmm_custom_anims')?.includes('"auto":true')) {
+            import('../features/debug/anim-studio.js').then((m) => m.installAutoAnimations()).catch(() => { });
+        }
+    }
+    catch { /* ignore */ }
+    // The PTB (test build) notice is a step of the launch deck now (launch-steps.ts).
+    const restartBtn = document.getElementById('btn-restart-tutorial');
+    if (restartBtn) {
+        restartBtn.addEventListener('click', () => {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(v => v.classList.remove('active'));
+            document.getElementById('view-library').classList.add('active');
+            startOnboarding();
+        });
+    }
+    const newProfileLibBtn = document.getElementById('btn-new-profile-lib');
+    if (newProfileLibBtn) {
+        newProfileLibBtn.addEventListener('click', () => {
+            openNewProfileModal();
+        });
+    }
+    // The command palette can now return things, not just commands — a mod you own, a profile
+    // you made. Picking one has to land you somewhere useful, and these listeners are what
+    // makes that true.
+    //
+    // Deliberately driven through the EXISTING controls (the nav item's click, the mod search
+    // box's input event) rather than by reaching into the views' internals: whatever those
+    // already do about filters, re-rendering and scroll position keeps working, and there is
+    // no second way to "focus a mod" to keep in step with the first.
+    document.addEventListener('bmm:search:open-mod', (e) => {
+        const name = e.detail?.name;
+        document.querySelector('.nav-item[data-view="mods"]')?.click();
+        if (!name)
+            return;
+        // After the view switch, so the input exists and the list re-renders with the filter.
+        setTimeout(() => {
+            const box = document.getElementById('mod-search');
+            if (!box)
+                return;
+            box.value = name;
+            box.dispatchEvent(new Event('input', { bubbles: true }));
+            box.focus();
+        }, 60);
+    });
+    document.addEventListener('bmm:search:open-profile', () => {
+        document.querySelector('.nav-item[data-view="profiles"]')?.click();
+    });
+    // Global helper for navigation
+    window.showProfiles = () => {
+        document.querySelector('.nav-item[data-view="profiles"]')?.click();
+    };
+    window.openNewProfileModal = openNewProfileModal;
+    // Version button uses inline onclick
+}
+// ── Tasky mascot settings ────────────────────────────────
+// Restore the tips flag before first paint of the settings card.
+try {
+    const tipsSaved = localStorage.getItem('bmm_tips_visible');
+    if (tipsSaved === 'false') {
+        document.body.classList.add('bmm-tips-hidden');
+        const cb = document.getElementById('toggle-bmm-tips');
+        if (cb)
+            cb.checked = false;
+    }
+}
+catch { /* default: visible */ }
+window.applyTaskySettings = function () {
+    const visibleToggle = document.getElementById('toggle-tasky-visible');
+    const animToggle = document.getElementById('toggle-tasky-animation');
+    const tooltipToggle = document.getElementById('toggle-tasky-tooltip');
+    const opacitySlider = document.getElementById('tasky-opacity-slider');
+    const container = document.getElementById('app-mascot-container');
+    const mascotImg = document.getElementById('app-mascot');
+    const sidebarBrand = document.querySelector('.sidebar-brand');
+    const isVisible = visibleToggle ? visibleToggle.checked : true;
+    const isAnimated = animToggle ? animToggle.checked : true;
+    const tooltipEnabled = tooltipToggle ? tooltipToggle.checked : true;
+    const opacity = opacitySlider ? parseInt(opacitySlider.value) : 100;
+    // Persist
+    localStorage.setItem('bmm_tasky_visible', String(isVisible));
+    localStorage.setItem('bmm_tasky_animated', String(isAnimated));
+    localStorage.setItem('bmm_tasky_tooltip', String(tooltipEnabled));
+    localStorage.setItem('bmm_tasky_opacity', String(opacity));
+    // In-app tips (the unified .bmm-tip callouts). A CLASS on <body>, so hiding is one
+    // rule and a page can never half-obey. Warnings are exempt by design: danger/warning
+    // callouts never carry .bmm-tip, so the toggle cannot silence anything load-bearing.
+    const spinToggle = document.getElementById('toggle-tasky-spin');
+    localStorage.setItem('bmm_tasky_spin', String(spinToggle ? spinToggle.checked : true));
+    // Off while it is already spinning: stop now rather than at the end of whatever is
+    // loading, or the switch appears not to work for as long as the sync lasts.
+    if (spinToggle && !spinToggle.checked) {
+        const c = document.getElementById('app-mascot-container');
+        c?.classList.remove('is-loading', 'is-loading-reverse');
+        if (c)
+            c.dataset.spinStartTime = '0';
+    }
+    const tipsToggle = document.getElementById('toggle-bmm-tips');
+    const tipsOn = tipsToggle ? tipsToggle.checked : true;
+    localStorage.setItem('bmm_tips_visible', String(tipsOn));
+    document.body.classList.toggle('bmm-tips-hidden', !tipsOn);
+    // Apply visibility - when hidden, show text logo in sidebar like fullscreen
+    if (container)
+        container.style.display = isVisible ? '' : 'none';
+    // Toggle class on body for global styling adjustments: the sidebar text logo
+    // AND the CSS rule that fully removes the corner-mascot div (#app-mascot-container)
+    // when hidden. The help bubbles are NOT affected — they have their own toggle.
+    if (isVisible)
+        document.body.classList.remove('tasky-hidden');
+    else
+        document.body.classList.add('tasky-hidden');
+    // Sidebar brand: removed redundant fallback logo logic
+    // Animation: when off, make mascot look "stuck" (no shadow, flat)
+    if (mascotImg) {
+        if (isAnimated) {
+            mascotImg.style.animation = '';
+            mascotImg.style.filter = 'drop-shadow(2px 4px 12px rgba(0,0,0,0.6))';
+            mascotImg.style.transform = '';
+            if (container)
+                container.style.animation = 'mascot-bounce 4s ease-in-out infinite';
+        }
+        else {
+            mascotImg.style.animation = 'none';
+            mascotImg.style.filter = 'none';
+            mascotImg.style.transform = 'rotate(0deg)';
+            if (container)
+                container.style.animation = 'none';
+        }
+    }
+    // Tooltip disable
+    window.__taskyTooltipEnabled = tooltipEnabled;
+    // Opacity for the tooltip bubble
+    document.documentElement.style.setProperty('--tasky-bubble-opacity', String(opacity / 100));
+    // Update opacity label
+    const opacityLabel = document.getElementById('tasky-opacity-value');
+    if (opacityLabel)
+        opacityLabel.textContent = opacity + '%';
+};
+// ── Tasky tooltip mouse-follow ───────────────────────────
+//
+// This ran on every `mousemove`, and each run READ `container.offsetWidth` /
+// `offsetHeight` and then WROTE eight inline styles. A read forces the browser to flush
+// layout; the writes invalidate it again; the next mouse event a millisecond later reads
+// once more. That is layout thrashing, and at the several hundred events a second a moving
+// mouse produces it is exactly what the stutter was — the bubble juddering along behind the
+// cursor while the rest of the frame waited for the reflow.
+//
+// Two changes fix it, and neither changes what you see:
+//
+//   · **One placement per animation frame.** Mouse events are recorded and coalesced; the
+//     work happens in a rAF. 60 placements a second instead of 500, and the read now
+//     happens once per frame, before that frame's writes, so nothing is measured against a
+//     layout the same frame already dirtied.
+//   · **Only write what changed.** Dragging the mouse along a wall pins the bubble at the
+//     same clamped coordinate for hundreds of events; re-assigning the identical `left`
+//     invalidates layout for nothing.
+//
+// The listener is passive: it never calls preventDefault, and saying so lets the browser
+// stop waiting to find out.
+(function initTaskyMouseFollow() {
+    let lastX = 0;
+    let lastY = 0;
+    let lastTarget = null;
+    let frame = 0;
+    // Last values actually written, so an unchanged frame writes nothing at all.
+    let wroteX = NaN;
+    let wroteY = NaN;
+    let wroteRow = '';
+    const place = () => {
+        frame = 0;
+        const bubble = document.querySelector('.tasky-speech-bubble');
+        const container = document.getElementById('tasky-bubble-docs');
+        if (!bubble || !container)
+            return;
+        // Nothing on screen: no measuring, no writing. This is the common case — the
+        // pointer spends most of its life not over anything with a tooltip.
+        if (container.style.display === 'none' && !bubble.classList.contains('active'))
+            return;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        // The one forced layout, once per frame, before this frame writes anything.
+        const tw = container.offsetWidth || 350;
+        const th = container.offsetHeight || 100;
+        const target = lastTarget;
+        const isDropdown = !!target?.closest?.('#global-dropdown-portal, .mod-actions-dropdown-content, .dropdown-menu, .dropdown-item, .btn-open-folder, .btn-open-active-folder, .btn-open-backup-folder, .btn-edit-mod, .btn-remove-mod, .btn-open-source-folder');
+        const OFFSET = 20;
+        const MARGIN = 15;
+        let targetX = lastX + OFFSET;
+        let targetY = lastY + OFFSET;
+        let isFlippedX = false;
+        // Over a dropdown the bubble goes ABOVE the cursor, or it covers the item you are
+        // about to click.
+        if (isDropdown)
+            targetY = lastY - th - OFFSET;
+        if (targetX + tw > vw - MARGIN) {
+            targetX = lastX - tw - OFFSET;
+            isFlippedX = true;
+        }
+        if (targetY + th > vh - MARGIN)
+            targetY = lastY - th - OFFSET;
+        const finalX = Math.max(MARGIN, Math.min(targetX, vw - tw - MARGIN));
+        const finalY = Math.max(MARGIN, Math.min(targetY, vh - th - MARGIN));
+        const row = isFlippedX ? 'row-reverse' : 'row';
+        if (finalX === wroteX && finalY === wroteY && row === wroteRow)
+            return;
+        wroteX = finalX;
+        wroteY = finalY;
+        wroteRow = row;
+        container.style.flexDirection = row;
+        container.style.position = 'fixed';
+        container.style.left = finalX + 'px';
+        container.style.top = finalY + 'px';
+        container.style.bottom = 'auto';
+        container.style.right = 'auto';
+        container.style.transform = 'none';
+        container.style.zIndex = '999999999';
+    };
+    // `null` means "place it now, at the last known point" — showTaskyHelp calls it that way
+    // so the bubble is never painted once at the previous position and again at this one.
+    window.updateTaskyPosition = (e) => {
+        if (e && e.clientX !== undefined) {
+            lastX = e.clientX;
+            lastY = e.clientY;
+            lastTarget = e.target ?? null;
+            if (!frame)
+                frame = requestAnimationFrame(place);
+            return;
+        }
+        if (!lastTarget)
+            lastTarget = document.elementFromPoint(lastX, lastY);
+        if (frame) {
+            cancelAnimationFrame(frame);
+            frame = 0;
+        }
+        place();
+    };
+    document.addEventListener('mousemove', (e) => window.updateTaskyPosition(e), { passive: true });
+})();
+// ── The popup switch ─────────────────────────────────────
+//
+// Its own initialiser rather than a line inside Tasky's: they are unrelated settings, and the
+// one that hides the mascot is not where anybody would look for the one that silences the app.
+(function initToastPref() {
+    const el = document.getElementById('toggle-toasts-enabled');
+    if (!el)
+        return;
+    // Checked = popups ON. The stored key is the negative ("muted") because that is the
+    // unusual state, and an absent key must mean "show them".
+    el.checked = !toastsMuted();
+    el.addEventListener('change', () => {
+        // ORDER MATTERS, in both directions. Switching ON: persist first, or the confirming
+        // popup is suppressed by the setting it is confirming. Switching OFF: show it first,
+        // or the last popup you would ever see is the one that never appears.
+        const on = el.checked;
+        const say = () => toast(on
+            ? (t('settings.toastsOn') || 'Notifications on')
+            : (t('settings.toastsOff') || 'Notifications off — everything is still in the notification centre'), 'info');
+        if (!on)
+            say();
+        try {
+            localStorage.setItem('bmm.muteToasts', on ? '0' : '1');
+        }
+        catch { /* private mode */ }
+        if (on)
+            say();
+    });
+})();
+// ── Notification preferences: per source, and BetterCommunity at the source ──
+//
+// The global mute above is all-or-nothing, which is the right default and was the only
+// control. "Tell me about my repo, not about the site" had no answer.
+(function initNotifPrefs() {
+    const host = document.getElementById('notif-source-list');
+    if (host) {
+        host.classList.add('notif-prefs');
+        host.removeAttribute('style');
+        const render = () => {
+            const prefs = readNotifPrefs();
+            const modeLabel = (m) => t('settings.notifMode.' + m);
+            const rows = NOTIF_SOURCES.map((g) => {
+                const mode = NotifRules.modeFor(prefs, g);
+                return `<label class="notif-pref-row">
+                    <span class="notif-pref-name">${escHtml(groupLabel(g))}<span class="notif-pref-hint">${escHtml(t('settings.notifGroupHint.' + g))}</span></span>
+                    <select class="input notif-pref-mode" data-group="${g}" aria-label="${escAttr(groupLabel(g))}">
+                        ${NotifRules.DELIVERY_MODES.map((m) => `<option value="${m}"${m === mode ? ' selected' : ''}>${escHtml(modeLabel(m))}</option>`).join('')}
+                    </select>
+                </label>`;
+            }).join('');
+            host.innerHTML = `<div class="notif-pref-grid">${rows}</div>
+                <div class="notif-quiet">
+                    <label class="notif-quiet-row"><input type="checkbox" id="notif-dnd"${prefs.dnd ? ' checked' : ''}>
+                        <span>${escHtml(t('settings.notifDnd'))}</span></label>
+                    <label class="notif-quiet-row"><input type="checkbox" id="notif-quiet-on"${prefs.quiet.enabled ? ' checked' : ''}>
+                        <span>${escHtml(t('settings.notifQuiet'))}</span></label>
+                    <span class="notif-quiet-times">
+                        <label>${escHtml(t('settings.notifQuietFrom'))} <input type="time" class="input" id="notif-quiet-from" value="${escAttr(prefs.quiet.from)}"${prefs.quiet.enabled ? '' : ' disabled'}></label>
+                        <label>${escHtml(t('settings.notifQuietTo'))} <input type="time" class="input" id="notif-quiet-to" value="${escAttr(prefs.quiet.to)}"${prefs.quiet.enabled ? '' : ' disabled'}></label>
+                    </span>
+                    <p class="notif-quiet-note">${escHtml(t('settings.notifQuietNote'))}</p>
+                    <button type="button" class="btn btn-sm btn-secondary" id="notif-test">${escHtml(t('settings.notifTest'))}</button>
+                </div>`;
+        };
+        render();
+        // This runs at module evaluation, before the language file may be loaded: drawn again
+        // when the language changes and each time Settings opens, so the labels are never keys.
+        document.addEventListener('langChanged', render);
+        document.addEventListener('click', (ev) => {
+            if (ev.target?.closest?.('.nav-item[data-view="settings"]'))
+                setTimeout(render, 0);
+        }, true);
+        host.addEventListener('change', (ev) => {
+            const el = ev.target;
+            const p = readNotifPrefs();
+            if (el.classList.contains('notif-pref-mode')) {
+                const g = el.dataset.group;
+                const m = el.value;
+                if (m === 'app')
+                    delete p.modes[g];
+                else
+                    p.modes[g] = m;
+                // A system notification needs the OS's permission; asking at the moment the user
+                // chose it is the only time the question makes sense.
+                if (m === 'system') {
+                    try {
+                        void window.__TAURI__?.notification?.requestPermission?.();
+                    }
+                    catch { /* desktop grants it */ }
+                }
+            }
+            else if (el.id === 'notif-dnd')
+                p.dnd = el.checked;
+            else if (el.id === 'notif-quiet-on')
+                p.quiet.enabled = el.checked;
+            else if (el.id === 'notif-quiet-from' && el.value)
+                p.quiet.from = el.value;
+            else if (el.id === 'notif-quiet-to' && el.value)
+                p.quiet.to = el.value;
+            else
+                return;
+            writeNotifPrefs(p);
+            if (el.id === 'notif-quiet-on')
+                render();
+        });
+        host.addEventListener('click', (ev) => {
+            if (ev.target.closest('#notif-test')) {
+                // Through the same path as everything else, so it tests the real thing.
+                toast(t('settings.notifTestMsg'), 'info', 4000, '', 'BMM');
+                void sendSystemNotification('Better Mod Manager', t('settings.notifTestMsg'));
+            }
+        });
+    }
+    const bc = document.getElementById('toggle-notif-bcweb');
+    if (bc) {
+        try {
+            bc.checked = localStorage.getItem('bmm.muteSources.bcwebPoll') !== '1';
+        }
+        catch { /* private mode */ }
+        bc.addEventListener('change', async () => {
+            const on = bc.checked;
+            try {
+                localStorage.setItem('bmm.muteSources.bcwebPoll', on ? '0' : '1');
+            }
+            catch { /* private mode */ }
+            // Applied NOW, not at the next launch. A preference that needs a restart is one
+            // people conclude does not work.
+            const m = await import('../core/bcweb-notifications.js');
+            if (on) {
+                void m.startBcwebNotifications();
+            }
+            else {
+                m.stopBcwebNotifications();
+            }
+            toast(on ? t('settings.notifBcwebOn') : t('settings.notifBcwebOff'), 'info');
+        });
+    }
+})();
+// ── Flappy Tasky, behind the logo ────────────────────────
+//
+// Loaded lazily: a mini game nobody has opened should not be in the boot path of an app whose
+// job is managing mods.
+(function initFlappy() {
+    void import('../features/misc/flappy-tasky.js').then((m) => m.initFlappyTasky()).catch(() => { });
+})();
+// ── Restore Tasky preferences on page load ───────────────
+(function initTaskyPrefs() {
+    const container = document.getElementById('app-mascot-container');
+    const mascotImg = document.getElementById('app-mascot');
+    const visibleToggle = document.getElementById('toggle-tasky-visible');
+    const animToggle = document.getElementById('toggle-tasky-animation');
+    const tooltipToggle = document.getElementById('toggle-tasky-tooltip');
+    const spinToggle = document.getElementById('toggle-tasky-spin');
+    const opacitySlider = document.getElementById('tasky-opacity-slider');
+    const opacityLabel = document.getElementById('tasky-opacity-value');
+    const isVisible = localStorage.getItem('bmm_tasky_visible') !== 'false';
+    const isAnimated = localStorage.getItem('bmm_tasky_animated') !== 'false';
+    const spins = localStorage.getItem('bmm_tasky_spin') !== 'false';
+    const tooltipEnabled = localStorage.getItem('bmm_tasky_tooltip') !== 'false';
+    const opacity = parseInt(localStorage.getItem('bmm_tasky_opacity') || '100');
+    if (visibleToggle)
+        visibleToggle.checked = isVisible;
+    if (animToggle)
+        animToggle.checked = isAnimated;
+    if (tooltipToggle)
+        tooltipToggle.checked = tooltipEnabled;
+    if (spinToggle)
+        spinToggle.checked = spins;
+    if (opacitySlider)
+        opacitySlider.value = String(opacity);
+    if (opacityLabel)
+        opacityLabel.textContent = opacity + '%';
+    window.__taskyTooltipEnabled = tooltipEnabled;
+    document.documentElement.style.setProperty('--tasky-bubble-opacity', String(opacity / 100));
+    if (container)
+        container.style.display = isVisible ? '' : 'none';
+    // Reflect the hidden state as a body class on load too (was only set on toggle),
+    // so the corner-mascot removal + sidebar logo apply from the first paint.
+    if (!isVisible)
+        document.body.classList.add('tasky-hidden');
+    else
+        document.body.classList.remove('tasky-hidden');
+    if (mascotImg) {
+        if (isAnimated) {
+            mascotImg.style.filter = 'drop-shadow(2px 4px 12px rgba(0,0,0,0.6))';
+            if (container)
+                container.style.animation = 'mascot-bounce 4s ease-in-out infinite';
+        }
+        else {
+            mascotImg.style.animation = 'none';
+            mascotImg.style.filter = 'none';
+            mascotImg.style.transform = 'rotate(0deg)';
+            if (container)
+                container.style.animation = 'none';
+        }
+    }
+    // Sidebar logo fallback - removed as per request to look like original
+})();
+// ── Credits & Contributors ──────────────────────────────
+let CONTRIBUTORS = [];
+let CREDITS_MESSAGES = [
+    'credits.msg1',
+    'credits.msg2',
+    'credits.msg3',
+    'credits.msg4',
+    'credits.msg5',
+    'credits.msg6',
+    'credits.msg7'
+];
+const CONTRIBUTORS_LOCAL_FALLBACK = 'assets/contributors.json';
+async function fetchContributors() {
+    const applyData = (data) => {
+        if (data.contributors)
+            CONTRIBUTORS = data.contributors;
+        else if (Array.isArray(data))
+            CONTRIBUTORS = data; // Backward compatibility
+        if (data.messages && Array.isArray(data.messages)) {
+            CREDITS_MESSAGES = data.messages;
+        }
+    };
+    try {
+        // Route through the Rust backend (reqwest) — the webview blocks a direct cross-origin
+        // fetch of bettercommunity.ch/api/assets/* on CORS. `quiet` keeps a 404 (endpoint not
+        // deployed) out of the console; we just fall back to the bundled copy below.
+        // A v1 asset URL moves to the v2 root when this session already runs on v2 (ADR 0019).
+        const remoteUrl = (await import('../core/bc-client.js')).bcRehome(getLinks().contributors);
+        if (/^https?:\/\//i.test(remoteUrl)) {
+            // `anonymous`: the credits list is public and identical for everyone — it is
+            // fetched without X-Creator-ID so a launch is not an identified request.
+            const text = await invoke('fetch_remote_json', { url: remoteUrl, anonymous: true }, { quiet: true });
+            if (text) {
+                applyData(JSON.parse(text));
+                return;
+            }
+        }
+    }
+    catch (e) {
+        console.warn("[BMM] Remote contributors fetch failed, using local fallback:", e);
+    }
+    try {
+        const response = await fetch(CONTRIBUTORS_LOCAL_FALLBACK);
+        if (response.ok) {
+            const data = await response.json();
+            applyData(data);
+            console.log("[BMM] Successfully loaded local fallback contributors.");
+        }
+    }
+    catch (e) {
+        console.error("[BMM] CRITICAL: Failed to load any contributors:", e);
+    }
+}
+// Messages will be updated by fetchContributors()
+/** (Re)start the rotating credits marquee. Idempotent — safe to call every time
+ *  the credits view is opened. The nav handler clears the interval when leaving
+ *  credits (to save work), so this MUST run again on re-entry or the marquee stays
+ *  frozen/blank after the first navigation. */
+export function startCreditsMarquee() {
+    const marqueeContainer = document.getElementById('credits-marquee-container');
+    if (!marqueeContainer)
+        return;
+    if (marqueeContainer._marqueeInterval)
+        return; // already running
+    let msgIndex = 0;
+    const updateMarquee = () => {
+        if (!CREDITS_MESSAGES.length)
+            return; // guard: no messages → no % 0 = NaN
+        const key = CREDITS_MESSAGES[msgIndex % CREDITS_MESSAGES.length];
+        // Escape: messages can come from the remote contributors.json (data.messages),
+        // and t() returns the raw string when the key isn't a translation — never trust
+        // it in an innerHTML sink. The CSS animation handles entry/exit each time.
+        marqueeContainer.innerHTML = `<div class="credits-marquee-content"><span class="marquee-msg">${escHtml(t(key) || key)}</span></div>`;
+        msgIndex = (msgIndex + 1) % CREDITS_MESSAGES.length;
+    };
+    updateMarquee();
+    marqueeContainer._marqueeInterval = setInterval(updateMarquee, 7000);
+}
+function initCredits() {
+    const contributorsGrid = document.getElementById('contributors-grid');
+    startCreditsMarquee();
+    if (contributorsGrid) {
+        const sections = [
+            { id: 'staff', title: 'credits.sections.staff' },
+            { id: 'kofi', title: 'credits.sections.kofi' },
+            { id: 'testers', title: 'credits.sections.testers' }
+        ];
+        // Subcategory role mapping
+        const subcategoryRoleMap = {
+            'dev': 'credits.subcategory.dev',
+            'community_support': 'credits.subcategory.communitySupport',
+            'testing_team': 'credits.subcategory.testingTeam',
+            'ptb': 'credits.subcategory.ptbTester',
+            'early_access': 'credits.subcategory.earlyAccessTester'
+        };
+        contributorsGrid.style.display = 'block';
+        contributorsGrid.innerHTML = sections.map(section => {
+            const members = CONTRIBUTORS.filter(c => c.category === section.id || (section.id === 'testers' && c.category === 'tester'));
+            if (members.length === 0)
+                return '';
+            return `
+                <div class="credits-category-section">
+                    <div class="credits-category-title" data-i18n="${section.title}">
+                        ${t(section.title)}
+                    </div>
+                    <div class="sub-contributors-grid">
+                        ${members.map(c => {
+                const sub = c.subcategory;
+                // Check if role is a translation key or a literal string
+                const isKey = c.role && c.role.includes('.');
+                const roleText = isKey ? t(c.role) : c.role;
+                return `
+                                <div class="contributor-card glass-card" ${actAttrs('openContributorModal', c.id)}>
+                                    <div class="contributor-pfp-box">
+                                        <img src="${c.pfp}" class="contributor-pfp" alt="${c.display_name || c.username}">
+                                    </div>
+                                    <div class="contributor-name">${c.display_name || c.username}</div>
+                                    <div class="contributor-role" ${isKey ? `data-i18n="${c.role}"` : ''}>${roleText}</div>
+                                </div>
+                            `;
+            }).join('')}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+    // Who wrote the code, from the git history (generated beside the stack).
+    if (contributorsGrid) {
+        void Promise.all([loadStackJson(), import('./credits-extras.js')])
+            .then(([j, m]) => m.renderCodeContributors(contributorsGrid, j?.contributors, CONTRIBUTORS))
+            .catch(() => { });
+    }
+    // Language change support
+    document.addEventListener('langChanged', () => {
+        if (contributorsGrid) {
+            contributorsGrid.querySelectorAll('.contributor-role').forEach(el => {
+                const key = el.dataset.i18n;
+                if (key)
+                    el.textContent = t(key);
+            });
+            contributorsGrid.querySelectorAll('.credits-category-title').forEach(el => {
+                const key = el.dataset.i18n;
+                if (key)
+                    el.textContent = t(key);
+            });
+        }
+    });
+}
+/** Each group's title and one line on what it is, in the order the generator writes them. */
+const STACK_GROUP_TEXT = {
+    shell: ['credits.group.shell', 'App shell', 'credits.groupBlurb.shell', 'Tauri, its plugins and the Windows glue that make BMM a desktop app.'],
+    ui: ['credits.group.ui', 'Interface', 'credits.groupBlurb.ui', 'The libraries the window loads: markdown, sanitising, highlighting, diagrams, maths, replays, animation.'],
+    core: ['credits.group.core', 'Rust core', 'credits.groupBlurb.core', 'Scanning, hashing, archives, networking, the local API and the MCP server.'],
+    ai: ['credits.group.ai', 'AI (Laya)', 'credits.groupBlurb.ai', 'The offline Laya classifier: the model, its runtime and its tokenizer, pinned.'],
+    art: ['credits.group.art', 'Fonts & icons', 'credits.groupBlurb.art', 'Typefaces and icon sets drawn by other people.'],
+    docs: ['credits.group.docs', 'BMM Docs', 'credits.groupBlurb.docs', 'What builds the documentation site and its PDF.'],
+    installer: ['credits.group.installer', 'BetterInstaller', 'credits.groupBlurb.installer', 'The installer and updater, built with Slint.'],
+    site: ['credits.group.site', 'BetterCommunity site', 'credits.groupBlurb.site', 'The website, its API and its Discord bot.'],
+    tooling: ['credits.group.tooling', 'Build & tooling', 'credits.groupBlurb.tooling', 'Compiler, build and test tools. They do not ship inside BMM.'],
+};
+let _stackJson = null;
+/** The whole generated file: `groups` (the stack) and `contributors` (the git history). */
+function loadStackJson() {
+    if (!_stackJson) {
+        _stackJson = fetch('assets/credits-stack.gen.json')
+            .then((r) => (r.ok ? r.json() : {}))
+            .catch(() => { _stackJson = null; return {}; });
+    }
+    return _stackJson;
+}
+function loadStackData() {
+    return loadStackJson().then((j) => (Array.isArray(j?.groups) ? j.groups : []));
+}
+/** The card's description: ours when we wrote one, else the line from its own manifest. */
+function stackDesc(it) {
+    for (const k of [`credits.stackCrate.${it.key}`, `credits.stackPkg.${it.key}`]) {
+        const v = t(k);
+        if (v && v !== k)
+            return { text: v, upstream: false };
+    }
+    return { text: it.desc || '', upstream: !!it.desc };
+}
+const stackVersion = (v) => (!v ? '' : /^\d/.test(v) ? `v${v}` : v);
+// Where each piece actually earns its place. A dependency list answers "what do we ship"; this
+// answers "why", which is the only reason to read one. Optional on purpose: the load-bearing
+// ones, not a paraphrase of every README.
+const STACK_ROLE = {
+    'jwalk': { en: 'Walks your mod folders. Recursive scanning is the hottest path in BMM, so it runs in parallel.', fr: 'Parcourt tes dossiers de mods. Le scan récursif est le chemin le plus chaud de BMM, donc il tourne en parallèle.' },
+    'rayon': { en: 'Turns per-file work (hashing, copying, verifying) into multithreaded iteration without hand-rolling a pool.', fr: 'Transforme le travail par fichier (hash, copie, vérification) en itération multithread sans écrire de pool à la main.' },
+    'blake3': { en: 'Every integrity check and every delta-sync decision compares BLAKE3 fingerprints, never file contents.', fr: 'Chaque vérification d’intégrité et chaque décision de delta-sync compare des empreintes BLAKE3, jamais le contenu des fichiers.' },
+    'ed25519-dalek': { en: 'Signs and verifies repo manifests, so a mod list can prove who produced it.', fr: 'Signe et vérifie les manifestes de dépôt, pour qu’une liste de mods puisse prouver qui l’a produite.' },
+    'tokio': { en: 'The async runtime behind downloads, the local API and the repo server.', fr: 'Le runtime asynchrone derrière les téléchargements, l’API locale et le serveur de dépôt.' },
+    'mimalloc': { en: 'Replaces the system allocator: measurably faster under the allocation storm a large library scan produces.', fr: 'Remplace l’allocateur système : mesurablement plus rapide sous la tempête d’allocations d’un gros scan.' },
+    'rrweb': { en: 'Records a session as replayable DOM events: the .bmmreplay files behind bug reports and the docs player.', fr: 'Enregistre une session en événements DOM rejouables : les fichiers .bmmreplay des rapports de bug et du lecteur de docs.' },
+    'dompurify': { en: 'Sanitises every piece of markdown BMM renders, because catalogs and repos are content written by other people.', fr: 'Assainit chaque markdown affiché par BMM, parce que catalogues et dépôts sont du contenu écrit par d’autres.' },
+    'lucide': { en: 'Build-time source of the 2000+ stroke icons in the shared picker. Generated to JSON, never a runtime dependency.', fr: 'Source à la compilation des 2000+ icônes du sélecteur partagé. Générée en JSON, jamais une dépendance d’exécution.' },
+    'simple-icons': { en: 'Build-time source of the 3400+ brand glyphs, sharded per first letter so one stored icon costs KB, not MB.', fr: 'Source à la compilation des 3400+ glyphes de marques, shardée par première lettre pour qu’une icône stockée coûte des Ko, pas des Mo.' },
+    'clap': { en: 'Parses the BMM CLI, the same surface the MCP server exposes to agents.', fr: 'Analyse le CLI de BMM, la même surface que le serveur MCP expose aux agents.' },
+    'schemars': { en: 'Generates the JSON Schemas the MCP tools advertise, so an agent knows what a tool accepts.', fr: 'Génère les schémas JSON annoncés par les outils MCP, pour qu’un agent sache ce qu’un outil accepte.' },
+    'tauri-api': { en: 'The bridge the whole UI talks through: every action crosses it to reach the Rust core.', fr: 'Le pont par lequel toute l’UI passe : chaque action le traverse pour atteindre le cœur Rust.' },
+    'laya-model': { en: 'The model behind Laya: it classifies text (a crash, a question, a report) on your PC, offline, never generating any.', fr: 'Le modèle derrière Laya : il classe du texte (un crash, une question, un rapport) sur ton PC, hors ligne, sans jamais en générer.' },
+    'ort': { en: 'Runs the Laya model in-process through ONNX Runtime, loaded from the model pack after its hash is checked.', fr: 'Fait tourner le modèle Laya dans le processus via ONNX Runtime, chargé depuis le pack après vérification de son empreinte.' },
+    'tokenizers': { en: 'Cuts text into the exact token ids the model was trained on, byte for byte the same as the Python reference.', fr: 'Découpe le texte en exactement les identifiants de tokens du modèle, octet pour octet comme la référence Python.' },
+    'slint': { en: 'Draws BetterInstaller: a native window without a browser engine, so the installer stays small.', fr: 'Dessine BetterInstaller : une fenêtre native sans moteur de navigateur, pour que l’installeur reste petit.' },
+    'mkdocs-material': { en: 'The theme and search of BMM Docs, in English and French.', fr: 'Le thème et la recherche de BMM Docs, en anglais et en français.' },
+};
+const stackGroupTitle = (id) => { const tx = STACK_GROUP_TEXT[id]; return tx ? (t(tx[0]) !== tx[0] ? t(tx[0]) : tx[1]) : id; };
+const stackGroupBlurb = (id) => { const tx = STACK_GROUP_TEXT[id]; return tx ? (t(tx[2]) !== tx[2] ? t(tx[2]) : tx[3]) : ''; };
+/**
+ * Credits → Technical Architecture. Three panes inside one dialog: the groups with their counts
+ * on the left, a dense list in the middle (one line of description, a short licence badge), and
+ * the selected component on the right (what it is, why BMM uses it, the full licence and where
+ * each fact was read). With nothing selected the right pane is the overview: licences counted.
+ *
+ * The search lives in the dialog's toolbar band. It used to be a sticky block inside the
+ * scrolling body, which floated over the cards and cut them at its edge.
+ */
+window.openStackModal = async (onlyGroup) => {
+    const modal = document.getElementById('modal-stack');
+    const content = document.getElementById('stack-modal-content');
+    const filterBox = document.getElementById('stack-filter');
+    const shownEl = document.getElementById('stack-shown');
+    const subEl = document.getElementById('stack-modal-sub');
+    if (!modal || !content)
+        return;
+    modal.classList.add('open');
+    content.innerHTML = `<div class="bms-empty stk-state">${escHtml(t('credits.stackLoading'))}</div>`;
+    const groups = (await loadStackData()).filter((g) => g.items.length);
+    if (!groups.length) {
+        content.innerHTML = `<div class="bms-empty stk-state"><div class="bms-empty-t">${escHtml(t('credits.stackUnavailable'))}</div></div>`;
+        return;
+    }
+    const lang = getLang() === 'fr' ? 'fr' : 'en';
+    const custom = t('credits.stackLicCustom');
+    const rows = [];
+    for (const g of groups)
+        for (const it of g.items) {
+            const d = stackDesc(it);
+            rows.push({ it, g: g.id, lic: shortLicense(it.license, custom), q: `${it.name} ${it.license || ''} ${d.text}`.toLowerCase() });
+        }
+    const total = rows.length;
+    if (subEl)
+        subEl.textContent = `${t('credits.stackTotal').replace('{n}', String(total))} · ${t('credits.stackGroupsN').replace('{n}', String(groups.length))}`;
+    let group = groups.some((g) => g.id === onlyGroup) ? onlyGroup : 'all';
+    let sel = -1;
+    if (filterBox) {
+        filterBox.value = '';
+        filterBox.setAttribute('aria-label', t('credits.stackFilter'));
+    }
+    content.innerHTML = `
+        <div class="stk-wrap">
+            <div class="stk-layout">
+                <nav class="stk-nav" aria-label="${escAttr(t('credits.stackGroups'))}"></nav>
+                <div class="stk-list" role="listbox" aria-label="${escAttr(t('credits.stackTitle'))}" tabindex="-1"></div>
+                <aside class="stk-detail" aria-live="polite"></aside>
+            </div>
+        </div>`;
+    const layout = content.querySelector('.stk-layout');
+    const nav = content.querySelector('.stk-nav');
+    const list = content.querySelector('.stk-list');
+    const detail = content.querySelector('.stk-detail');
+    const query = () => (filterBox?.value || '').trim().toLowerCase();
+    const matches = (r, q) => !q || r.q.includes(q);
+    const renderNav = () => {
+        const q = query();
+        const count = (id) => rows.filter((r) => (id === 'all' || r.g === id) && matches(r, q)).length;
+        const item = (id, label) => {
+            const n = count(id);
+            return `<button type="button" class="stk-nav-item${n ? '' : ' is-empty'}" data-group="${escAttr(id)}" aria-current="${id === group}">
+                <span class="stk-nav-name">${escHtml(label)}</span><span class="stk-nav-count">${n}</span></button>`;
+        };
+        nav.innerHTML = `<div class="bms-label stk-nav-label">${escHtml(t('credits.stackGroups'))}</div>`
+            + item('all', t('credits.stackAll'))
+            + `<div class="stk-nav-sep" role="separator"></div>`
+            + groups.map((g) => item(g.id, stackGroupTitle(g.id))).join('');
+    };
+    const rowHtml = (r, i) => {
+        const d = stackDesc(r.it);
+        return `<button type="button" class="stk-row" role="option" data-i="${i}" aria-selected="${i === sel}" tabindex="${i === sel ? 0 : -1}">
+            <span class="stk-name" title="${escAttr(r.it.name)}">${escHtml(r.it.name)}</span>
+            <span class="stk-ver">${escHtml(stackVersion(r.it.version))}</span>
+            ${r.lic ? `<span class="stk-lic" title="${escAttr(r.it.license || '')}">${escHtml(r.lic)}</span>` : '<span class="stk-lic is-none"></span>'}
+            <span class="stk-desc"${d.upstream ? ' lang="en"' : ''}>${escHtml(d.text)}</span>
+        </button>`;
+    };
+    const renderList = () => {
+        const q = query();
+        let shown = 0;
+        const html = [];
+        for (const g of groups) {
+            if (group !== 'all' && g.id !== group)
+                continue;
+            const inGroup = rows.map((r, i) => [r, i]).filter(([r]) => r.g === g.id && matches(r, q));
+            if (!inGroup.length)
+                continue;
+            shown += inGroup.length;
+            const blurb = stackGroupBlurb(g.id);
+            html.push(`<section class="stk-sec" aria-label="${escAttr(stackGroupTitle(g.id))}">
+                <div class="stk-group">
+                    <span class="stk-group-title">${escHtml(stackGroupTitle(g.id))}</span>
+                    <span class="stk-nav-count">${inGroup.length}</span>
+                    ${blurb ? `<span class="stk-group-blurb" title="${escAttr(blurb)}">${escHtml(blurb)}</span>` : ''}
+                </div>
+                ${inGroup.map(([r, i]) => rowHtml(r, i)).join('')}
+            </section>`);
+        }
+        list.innerHTML = html.join('') || `<div class="bms-empty stk-state">
+            <div class="bms-empty-ic">${uiIcon('search', 18)}</div>
+            <div class="bms-empty-t">${escHtml(t('credits.stackNoMatch'))}</div>
+            ${q ? `<button type="button" class="btn btn-ghost btn-sm" data-stk-clear>${escHtml(t('credits.stackClear'))}</button>` : ''}
+        </div>`;
+        // A roving tabindex needs one row that takes the Tab: the selected one, else the first.
+        if (!list.querySelector('.stk-row[tabindex="0"]'))
+            list.querySelector('.stk-row')?.setAttribute('tabindex', '0');
+        if (shownEl)
+            shownEl.textContent = q || group !== 'all' ? t('credits.stackShown').replace('{n}', String(shown)).replace('{total}', String(total)) : '';
+    };
+    const fact = (label, value) => `<div class="stackd-fact"><dt>${escHtml(label)}</dt><dd>${escHtml(value)}</dd></div>`;
+    const docsLink = `<div class="stk-docs">
+        <span>${escHtml(t('credits.stackDocsBlurb'))}</span>
+        <button type="button" class="btn btn-secondary btn-sm" ${actAttrs('openExternal', 'https://freeproject089.github.io/BMM-Docs/how-it-works/architecture/')}>${escHtml(t('credits.stackDocsCta'))} ${uiIcon('external', 14)}</button>
+    </div>`;
+    const renderDetail = () => {
+        const r = rows[sel];
+        layout.classList.toggle('has-sel', !!r);
+        if (!r) {
+            // The overview: what the licences add up to. Counted on the short form, so the
+            // "MIT OR Apache-2.0" and "Apache-2.0 OR MIT" crates are one line, not two.
+            const byLic = new Map();
+            for (const x of rows)
+                byLic.set(x.lic || custom, (byLic.get(x.lic || custom) || 0) + 1);
+            const sorted = [...byLic.entries()].sort((a, b) => b[1] - a[1]);
+            const top = sorted.slice(0, 7);
+            const rest = sorted.slice(7).reduce((n, [, c]) => n + c, 0);
+            const max = top[0]?.[1] || 1;
+            const bar = (label, n, title = label) => `<div class="stk-licrow" title="${escAttr(title)}">
+                <span class="stk-licrow-name">${escHtml(label)}</span>
+                <span class="stk-bar"><span style="width:${Math.max(4, Math.round((n / max) * 100))}%"></span></span>
+                <span class="stk-licrow-n">${n}</span></div>`;
+            detail.innerHTML = `
+                <div class="stk-d-kicker bms-label">${escHtml(t('credits.stackOverview'))}</div>
+                <div class="stk-stats">
+                    <div class="stk-stat"><b>${total}</b><span>${escHtml(t('credits.stackComponents'))}</span></div>
+                    <div class="stk-stat"><b>${groups.length}</b><span>${escHtml(t('credits.stackGroups'))}</span></div>
+                    <div class="stk-stat"><b>${byLic.size}</b><span>${escHtml(t('credits.stackLicences'))}</span></div>
+                </div>
+                <div class="stk-d-block">
+                    <div class="bms-label">${escHtml(t('credits.stackLicences'))}</div>
+                    <div class="stk-licbars">${top.map(([l, n]) => bar(l, n)).join('')}${rest ? bar(t('credits.stackOther'), rest) : ''}</div>
+                </div>
+                <p class="stk-note">${escHtml(t('credits.stackPickHint'))}</p>
+                <p class="stk-note">${escHtml(t('credits.stackNote'))}</p>
+                ${docsLink}`;
+            return;
+        }
+        const it = r.it;
+        const d = stackDesc(it);
+        const role = STACK_ROLE[it.key];
+        detail.innerHTML = `
+            <div class="stk-d-head">
+                <div class="stk-d-name">${escHtml(it.name)}</div>
+                <div class="stk-d-meta">
+                    ${it.version ? `<span class="stk-ver-pill">${escHtml(stackVersion(it.version))}</span>` : ''}
+                    <span class="bms-chip">${escHtml(stackGroupTitle(r.g))}</span>
+                    ${r.lic ? `<span class="stk-lic" title="${escAttr(it.license || '')}">${escHtml(r.lic)}</span>` : ''}
+                </div>
+            </div>
+            ${d.text ? `<div class="stackd-block">
+                <div class="stackd-label">${escHtml(t('credits.stackWhatIs'))}</div>
+                <p class="stackd-text"${d.upstream ? ' lang="en"' : ''}>${escHtml(d.text)}</p>
+            </div>` : ''}
+            ${role ? `<div class="stackd-block stackd-role">
+                <div class="stackd-label">${escHtml(t('credits.stackWhyHere'))}</div>
+                <p class="stackd-text">${escHtml(role[lang])}</p>
+            </div>` : ''}
+            <dl class="stackd-facts">
+                ${it.license ? fact(t('credits.stackLicense'), it.license) : ''}
+                ${it.req ? fact(t('credits.stackRequired'), it.req) : ''}
+                ${it.apps?.length ? fact(t('credits.stackUsedBy'), it.apps.join(', ')) : ''}
+                ${fact(t('credits.stackSource'), it.source)}
+                ${it.licenseFrom && it.licenseFrom !== it.source ? fact(t('credits.stackLicenseFrom'), it.licenseFrom) : ''}
+            </dl>
+            <div class="stk-d-actions">
+                ${it.lic?.length ? `<button type="button" class="btn btn-primary btn-sm" data-stk-lic>${uiIcon('scale', 14)} ${escHtml(t('credits.stackReadLicence'))}</button>` : ''}
+                ${it.repo ? `<button type="button" class="btn btn-secondary btn-sm" data-stk-link="repo" title="${escAttr(it.repo)}">${/github\.com\//.test(it.repo) ? brandIcon('github', 14) : uiIcon('code', 14)} ${escHtml(t('credits.stackRepo'))}</button>` : ''}
+                ${it.home ? `<button type="button" class="btn btn-secondary btn-sm" data-stk-link="home" title="${escAttr(it.home)}">${uiIcon('globe', 14)} ${escHtml(t('credits.stackHome'))}</button>` : ''}
+                ${!it.lic?.length && /^https:\/\//.test(it.licenseFrom || '') ? `<button type="button" class="btn btn-secondary btn-sm" data-stk-link="licfrom" title="${escAttr(it.licenseFrom)}">${uiIcon('scale', 14)} ${escHtml(t('credits.stackLicenceSource'))}</button>` : ''}
+                ${it.url ? `<button type="button" class="btn btn-secondary btn-sm" data-stk-open title="${escAttr(it.url)}">${escHtml(t('credits.stackOpenPage'))} ${uiIcon('external', 14)}</button>` : ''}
+                <button type="button" class="btn btn-ghost btn-sm" data-stk-back>${escHtml(t('credits.stackOverview'))}</button>
+            </div>`;
+    };
+    const select = (i, focus = false) => {
+        sel = i;
+        list.querySelectorAll('.stk-row').forEach((el) => {
+            const on = Number(el.dataset.i) === i;
+            el.setAttribute('aria-selected', String(on));
+            el.tabIndex = on ? 0 : -1;
+            if (on && focus) {
+                el.focus({ preventScroll: true });
+                el.scrollIntoView({ block: 'nearest' });
+            }
+        });
+        renderDetail();
+    };
+    const setGroup = (g) => {
+        group = g;
+        if (sel >= 0 && group !== 'all' && rows[sel]?.g !== group)
+            sel = -1;
+        renderNav();
+        renderList();
+        renderDetail();
+        list.scrollTop = 0;
+    };
+    nav.onclick = (e) => {
+        const b = e.target.closest('.stk-nav-item');
+        if (b?.dataset.group)
+            setGroup(b.dataset.group);
+    };
+    nav.onkeydown = (e) => {
+        if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp')
+            return;
+        const items = [...nav.querySelectorAll('.stk-nav-item')];
+        const at = items.indexOf(document.activeElement);
+        if (at < 0)
+            return;
+        e.preventDefault();
+        const next = items[(at + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length];
+        next.focus();
+        if (next.dataset.group)
+            setGroup(next.dataset.group);
+        nav.querySelector(`.stk-nav-item[data-group="${CSS.escape(next.dataset.group || '')}"]`)?.focus();
+    };
+    list.onclick = (e) => {
+        if (e.target.closest('[data-stk-clear]')) {
+            if (filterBox)
+                filterBox.value = '';
+            renderNav();
+            renderList();
+            filterBox?.focus();
+            return;
+        }
+        const el = e.target.closest('.stk-row');
+        if (el)
+            select(Number(el.dataset.i));
+    };
+    list.onkeydown = (e) => {
+        const items = [...list.querySelectorAll('.stk-row')];
+        if (!items.length)
+            return;
+        const at = items.indexOf(document.activeElement);
+        let to = -1;
+        if (e.key === 'ArrowDown')
+            to = Math.min(items.length - 1, at + 1);
+        else if (e.key === 'ArrowUp')
+            to = Math.max(0, at - 1);
+        else if (e.key === 'Home')
+            to = 0;
+        else if (e.key === 'End')
+            to = items.length - 1;
+        else if (e.key === 'PageDown')
+            to = Math.min(items.length - 1, at + 10);
+        else if (e.key === 'PageUp')
+            to = Math.max(0, at - 10);
+        if (to < 0)
+            return;
+        e.preventDefault();
+        select(Number(items[to].dataset.i), true);
+    };
+    detail.onclick = (e) => {
+        const tgt = e.target;
+        if (tgt.closest('[data-stk-open]')) {
+            const u = rows[sel]?.it.url;
+            if (u)
+                window.openExternal?.(u);
+            return;
+        }
+        const linkBtn = tgt.closest('[data-stk-link]');
+        if (linkBtn) {
+            const it = rows[sel]?.it;
+            const u = linkBtn.dataset.stkLink === 'repo' ? it?.repo : linkBtn.dataset.stkLink === 'home' ? it?.home : it?.licenseFrom;
+            if (u && /^https:\/\//.test(u))
+                window.openExternal?.(u);
+            return;
+        }
+        if (tgt.closest('[data-stk-lic]')) {
+            const it = rows[sel]?.it;
+            if (!it?.lic?.length)
+                return;
+            const keep = detail.onclick;
+            void import('./credits-extras.js').then(({ openLicenceReader }) => openLicenceReader(detail, {
+                name: it.name, version: it.version, license: it.license, files: it.lic,
+                notify: (m) => toast(m, 'success'),
+                onBack: () => { detail.onclick = keep; renderDetail(); detail.querySelector('[data-stk-lic]')?.focus({ preventScroll: true }); },
+            }));
+            return;
+        }
+        if (tgt.closest('[data-stk-back]')) {
+            const row = list.querySelector(`.stk-row[data-i="${sel}"]`);
+            select(-1);
+            row?.focus({ preventScroll: true });
+        }
+    };
+    if (filterBox) {
+        filterBox.oninput = () => { renderNav(); renderList(); };
+        // Down from the search goes into the list, the way a combobox would.
+        filterBox.onkeydown = (e) => {
+            if (e.key !== 'ArrowDown')
+                return;
+            const first = list.querySelector('.stk-row');
+            if (!first)
+                return;
+            e.preventDefault();
+            select(Number(first.dataset.i), true);
+        };
+    }
+    renderNav();
+    renderList();
+    renderDetail();
+    requestAnimationFrame(() => filterBox?.focus({ preventScroll: true }));
+};
+window.openContributorModal = (id) => {
+    const c = CONTRIBUTORS.find(x => x.id === id);
+    if (!c)
+        return;
+    const modal = document.getElementById('modal-contributor-detail');
+    const content = document.getElementById('contributor-modal-content');
+    if (!modal || !content)
+        return;
+    content.innerHTML = `
+        <div class="contributor-modal-hero">
+            <img src="${c.pfp}" class="contributor-modal-pfp">
+            <div class="contributor-modal-info">
+                <h2>${c.display_name || c.username}</h2>
+                <p ${c.role && c.role.includes('.') ? `data-i18n="${c.role}"` : ''}>
+                    ${c.role && c.role.includes('.') ? t(c.role) : c.role}
+                </p>
+            </div>
+        </div>
+        <div class="contributor-modal-bio" ${c.description && c.description.includes('.') ? `data-i18n="${c.description}"` : ''}>
+            ${c.description && c.description.includes('.') ? t(c.description) : c.description}
+        </div>
+        <div class="contributor-modal-links">
+            ${c.github ? `
+                <a href="${c.github}" ${actAttrs('openExternal', c.github)} data-act-prevent="1" class="contributor-link-btn" style="cursor:pointer">
+                    ${brandIcon('github', 20)}
+                    GitHub
+                </a>
+            ` : ''}
+            ${c.website ? `
+                <a href="${c.website}" ${actAttrs('openExternal', c.website)} data-act-prevent="1" class="contributor-link-btn" style="cursor:pointer">
+                    ${uiIcon('globe', 20)}
+                    Website
+                </a>
+            ` : ''}
+        </div>
+    `;
+    modal.classList.add('open');
+};
+main().catch(console.error);
+//# sourceMappingURL=app.js.map

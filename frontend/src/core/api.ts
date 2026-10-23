@@ -1,0 +1,530 @@
+/**
+ * api.ts — Tauri Bridge
+ * Handles communication between frontend and Rust backend
+ */
+
+import { debugHub } from '../features/debug/debug.js';
+import type { AppSettings } from '../types/models.js';
+import { t } from './i18n.js';
+
+let _invoke: ((cmd: string, args?: Record<string, unknown>) => Promise<any>) | null = null;
+
+// Bridge-readiness gate. The bridge is wired up by loadTauri(), but some boot code (e.g.
+// loadLinks → fetch_links_json) can invoke BEFORE loadTauri() has run. Rather than fail those
+// with "Tauri bridge not initialized", invoke() awaits this promise first — loadTauri resolves
+// it on every path (real bridge, unpkg dev, or browser mock), so an early call just waits a
+// few ms instead of throwing.
+let _markBridgeReady: (() => void) | null = null;
+const _bridgeReady: Promise<void> = new Promise((res) => { _markBridgeReady = res; });
+function markBridgeReady(): void { if (_markBridgeReady) { _markBridgeReady(); _markBridgeReady = null; } }
+
+// ── Local Plugin API base URL (configurable port) ─────────────────────────────
+// The port comes from settings.api_port (default 51274). Cached in localStorage
+// so it's correct synchronously at boot; refreshed once settings load.
+let _apiPort = parseInt(localStorage.getItem('bmm_api_port') || '51274', 10) || 51274;
+export function apiBase(): string { return `http://127.0.0.1:${_apiPort}`; }
+export function setApiPort(p: number): void {
+    if (!p || p < 1 || p > 65535) return;
+    _apiPort = p;
+    localStorage.setItem('bmm_api_port', String(p));
+}
+
+// Is anything actually LISTENING on that port?
+//
+// The port is only which one the server tried. Binding can fail — a zombie instance from a
+// previous run still holds it — and the Rust side degrades gracefully and writes one line to
+// the crash log. The frontend never knew: it read the cached port and fetched, so every
+// feature that touched the API logged its own ERR_CONNECTION_REFUSED and the real cause was
+// in a file nobody opens.
+//
+// Starts FALSE and is corrected at boot. A wrong "off" costs one skipped fetch; a wrong "on"
+// costs the console noise this exists to remove.
+let _apiRunning = false;
+export function apiRunning(): boolean { return _apiRunning; }
+
+/** Ask the backend for the truth, once, at boot. */
+export async function refreshApiStatus(): Promise<void> {
+    try {
+        const s = await invoke('get_api_status', {}, { quiet: true }) as { port?: number; running?: boolean };
+        if (s?.port) setApiPort(s.port);
+        _apiRunning = !!s?.running;
+    } catch {
+        // An old backend without the command, or a bridge that is not up yet. Assume off:
+        // the callers all degrade to an empty list, which is what they did anyway.
+        _apiRunning = false;
+    }
+}
+let _dialog: any = null;
+let _notifModule: any = null;
+let _convertFileSrc: ((path: string) => string) | null = null;
+
+// --- Console Interceptor ---
+const originalLog = console.log;
+const originalWarn = console.warn;
+const originalError = console.error;
+
+// Re-entrancy guard: forwarding a log to the backend can itself log (e.g. the
+// browser mock's mockInvoke console.logs the command it received). Without this
+// guard that recurses infinitely — bridgeLog → log_frontend_line → console.log →
+// bridgeLog → … — flooding output and freezing the main thread. Prod invoke never
+// re-enters synchronously, so this is a no-op there.
+let _bridging = false;
+function bridgeLog(level: string, args: any[]): void {
+    debugHub.recordLog(level, args);
+    if (_bridging || !_invoke) return;
+
+    const message = args.map((arg: any) =>
+        typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+    ).join(' ');
+
+    _bridging = true;
+    try {
+        _invoke('log_frontend_line', { line: `[${level}] ${message}` }).catch(() => {});
+    } finally {
+        _bridging = false;
+    }
+}
+
+console.log = (...args: any[]) => {
+    originalLog.apply(console, args);
+    bridgeLog('INFO', args);
+};
+console.warn = (...args: any[]) => {
+    originalWarn.apply(console, args);
+    bridgeLog('WARN', args);
+};
+console.error = (...args: any[]) => {
+    originalError.apply(console, args);
+    bridgeLog('ERROR', args);
+};
+
+export async function loadTauri(): Promise<void> {
+    if (window.__TAURI__) {
+        // Tauri v2: invoke / convertFileSrc live under the `core` global. The
+        // dialog plugin's JS is NOT injected by withGlobalTauri, so dialogs are
+        // routed through Rust commands (commands::dialog) instead of __TAURI__.dialog.
+        const core: any = (window.__TAURI__ as any).core || window.__TAURI__;
+        _invoke = core.invoke;
+        _convertFileSrc = typeof core.convertFileSrc === 'function'
+            ? core.convertFileSrc
+            : (p: string) => `asset.localhost/${p}`;
+        _dialog = {
+            open: async (opts: any = {}) =>
+                opts && opts.directory
+                    ? await _invoke!('dlg_pick_folder')
+                    : await _invoke!('dlg_pick_file', { filters: opts?.filters ?? null }),
+            save: async (opts: any = {}) =>
+                await _invoke!('dlg_save_file', { defaultPath: opts?.defaultPath ?? null, filters: opts?.filters ?? null }),
+            ask: async (message: string, opts: any = {}) =>
+                await _invoke!('dlg_confirm', { message, title: opts?.title ?? null }),
+        };
+        _notifModule = null;
+        console.log('[BMM] Using local Tauri v2 bridge');
+        markBridgeReady();
+        return;
+    }
+
+    // SECURITY: In production, we should NEVER fallback to unpkg without SRI (Issue 5)
+    // For now, we add a warning and a mock mode if not in Tauri.
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    
+    if (!isLocalhost) {
+        console.error('[SECURITY] Tauri bridge missing in production! Fallback to CDN disabled for security.');
+        _invoke = mockInvoke;
+        _dialog = { open: async () => null, save: async () => null };
+        markBridgeReady();
+        return;
+    }
+
+    try {
+        // Only allow unpkg in development/localhost
+        const tauriModule = await import('https://unpkg.com/@tauri-apps/api@1/tauri.js');
+        const dialogModule = await import('https://unpkg.com/@tauri-apps/api@1/dialog.js');
+        _notifModule = await import('https://unpkg.com/@tauri-apps/api@1/notification.js');
+        _invoke = tauriModule.invoke;
+        _dialog = dialogModule;
+        _convertFileSrc = tauriModule.convertFileSrc;
+    } catch {
+        console.warn('[BMM] Running in browser mock mode');
+        _invoke = mockInvoke;
+        _dialog = { open: async () => 'C:\\mock\\folder', save: async () => null };
+        _notifModule = null;
+        _convertFileSrc = (path: string) => `file://${path}`;
+    }
+    markBridgeReady();
+}
+
+// Live error reporting (core/live-issues.ts) registers here: a failed command is reported with
+// its NAME and its error text, never its arguments. Set by the reporter, so this module imports
+// nothing of it (and cannot report the reporter's own calls: it skips its commands).
+export type InvokeFailureKind = 'error' | 'cancel' | 'network' | 'validation' | 'quiet';
+let _onInvokeFailure: ((command: string, err: unknown, kind: InvokeFailureKind) => void) | null = null;
+export function setInvokeFailureHook(fn: ((command: string, err: unknown, kind: InvokeFailureKind) => void) | null): void { _onInvokeFailure = fn; }
+
+// Content-free usage statistics (core/laya-telemetry.ts) watch the commands of one family by
+// PREFIX: name, arguments, outcome and duration are handed over, and the observer keeps only
+// counts and enum values. One prefix, one observer; commands outside it cost a string compare.
+export type InvokeObserver = (command: string, args: Record<string, unknown>, ok: boolean, result: unknown, ms: number) => void;
+let _observer: { prefix: string; fn: InvokeObserver } | null = null;
+export function setInvokeObserver(prefix: string, fn: InvokeObserver | null): void { _observer = fn ? { prefix, fn } : null; }
+function observe(command: string, args: Record<string, unknown>, ok: boolean, result: unknown, ms: number): void {
+    if (!_observer || !command.startsWith(_observer.prefix)) return;
+    try { _observer.fn(command, args, ok, result, ms); } catch { /* statistics never break a call */ }
+}
+
+// The activity centre (core/activity-sources.ts) registers here: told when a command starts, it
+// may return the function to call when that command ends. Commands it does not list cost a lookup.
+export type InvokeActivityHook = (command: string, args: Record<string, unknown>) => ((ok: boolean, result: unknown) => void) | null;
+let _activityHook: InvokeActivityHook | null = null;
+export function setInvokeActivityHook(fn: InvokeActivityHook | null): void { _activityHook = fn; }
+function activityStart(command: string, args: Record<string, unknown>): ((ok: boolean, result: unknown) => void) | null {
+    if (!_activityHook) return null;
+    try { return _activityHook(command, args); } catch { return null; }
+}
+
+// Told when a command SUCCEEDED, with its arguments and result: the history journal
+// (core/history-journal.ts) listens here. Any number of listeners; each filters by name itself
+// and must be cheap, since every command passes through.
+export type InvokeListener = (command: string, args: Record<string, unknown>, result: unknown) => void;
+const _listeners = new Set<InvokeListener>();
+export function addInvokeListener(fn: InvokeListener): () => void { _listeners.add(fn); return () => { _listeners.delete(fn); }; }
+function notifyListeners(command: string, args: Record<string, unknown>, result: unknown): void {
+    for (const fn of _listeners) { try { fn(command, args, result); } catch { /* a listener never breaks a call */ } }
+}
+
+export async function invoke(command: string, args: Record<string, unknown> = {}, opts?: { quiet?: boolean }): Promise<any> {
+    if (!_invoke) {
+        // Early boot call before loadTauri() finished — wait for the bridge (max 5s) instead
+        // of failing outright. loadTauri() resolves _bridgeReady on every path.
+        await Promise.race([_bridgeReady, new Promise((r) => setTimeout(r, 5000))]);
+        if (!_invoke) {
+            if (!opts?.quiet) console.error(`[RPC ERROR] Cannot invoke ${command}: Tauri bridge not initialized`);
+            throw new Error('Tauri bridge not initialized');
+        }
+    }
+    const startTime = performance.now();
+    const _call = debugHub.recordIPC(command, args, 'pending');
+    const _act = activityStart(command, args);
+
+    try {
+        const res = await _invoke(command, args);
+        const duration = Math.round(performance.now() - startTime);
+        debugHub.recordIPC(command, args, 'success', res, duration);
+        observe(command, args, true, res, duration);
+        if (_listeners.size) notifyListeners(command, args, res);
+        if (_act) { try { _act(true, res); } catch { /* the activity centre never breaks a call */ } }
+        return res;
+    } catch (err) {
+        const duration = Math.round(performance.now() - startTime);
+        debugHub.recordIPC(command, args, 'error', err, duration);
+        observe(command, args, false, err, duration);
+        if (_act) { try { _act(false, err); } catch { /* the activity centre never breaks a call */ } }
+        // Suppress console noise for expected "user cancelled" signals — callers handle these gracefully
+        const errStr = String(err);
+        const isCancelled = errStr.includes('cancel') || errStr.includes('Cancel') || errStr === 'repo.errCancel'
+            || errStr.includes('annulée') || errStr.includes('annulé') || errStr.includes('Annulé');
+        // Network/DNS failures (unreachable repo URL, dead tunnel, offline) are
+        // expected runtime conditions the caller surfaces via a toast — don't
+        // log them as hard errors.
+        const isNetwork = /dns error|error sending request|error trying to connect|connection (refused|reset|closed)|failed to connect|timed out|os error 11001|Hôte inconnu|name resolution|no address|NETWORK_ERROR|NO_RELEASE/i.test(errStr);
+        // User-facing validation errors (path not found, wrong format, etc.): the
+        // Rust backend throws AppError::NotFound / validation messages that are
+        // already shown to the user as toasts by the caller — downgrade to warn.
+        const isValidation = /Ressource non trouvée|not found|introuvable|n.existe pas|does not exist|n.a pas été trouvé|invalid|invalide|requis|required|errNoExistingRepo|errNoProfile|errNoUrl|errNoOutDir|errNoAuthor/i.test(errStr);
+        if (opts?.quiet) {
+            // Caller owns this failure entirely (e.g. an optional feed that may 404
+            // when the endpoint isn't deployed) — keep the console clean.
+        } else if (isCancelled) {
+            console.warn(`[RPC CANCEL] ${command}: ${errStr}`);
+        } else if (isNetwork) {
+            console.warn(`[RPC NET] ${command}: ${errStr}`);
+        } else if (isValidation) {
+            console.warn(`[RPC VALIDATION] ${command}: ${errStr}`);
+        } else {
+            console.error(`[RPC ERROR] ${command}:`, err);
+        }
+        if (_onInvokeFailure) {
+            try { _onInvokeFailure(command, err, opts?.quiet ? 'quiet' : isCancelled ? 'cancel' : isNetwork ? 'network' : isValidation ? 'validation' : 'error'); } catch { /* never */ }
+        }
+        throw err;
+    }
+}
+
+/**
+ * The app looks frozen while a native file dialog is up, because it IS.
+ *
+ * A Windows file dialog is modal and owns the message loop: the webview stops painting,
+ * animations stop mid-frame, and hovering does nothing. Nothing in BMM can fix that — it is
+ * the operating system's window, not ours — and nothing can be drawn once it is up either,
+ * which is why "show a warning while it is open" cannot work.
+ *
+ * What CAN be done is say so BEFORE, and leave the sentence on screen. Somebody who alt-tabs
+ * back to a still BMM then finds an explanation instead of a hang: the app is not stuck, it
+ * is waiting for a window that is in front of it.
+ *
+ * Every picker goes through here, so the promise is kept everywhere rather than at the call
+ * sites that remembered.
+ */
+let _nativeDepth = 0;
+
+function nativeWaitOn(): void {
+    _nativeDepth += 1;
+    if (_nativeDepth > 1 || document.getElementById('bmm-native-wait')) return;
+    const el = document.createElement('div');
+    el.id = 'bmm-native-wait';
+    el.className = 'bmm-native-wait';
+    // Plain DOM and a class — this module is core/ and must not reach into ui/, which the
+    // dependency gate counts as a cycle. i18n is core too, so the text is translated rather
+    // than left in English behind a window-global that did not exist.
+    el.textContent = t('common.nativeDialog');
+    (document.getElementById('app-window-outer') || document.body).appendChild(el);
+}
+
+function nativeWaitOff(): void {
+    _nativeDepth = Math.max(0, _nativeDepth - 1);
+    if (_nativeDepth === 0) document.getElementById('bmm-native-wait')?.remove();
+}
+
+/**
+ * Run a native dialog with the notice actually on screen first.
+ *
+ * The two frames matter. Appending a node does not paint it; the native dialog takes the
+ * loop on the very next tick, and without waiting for a real frame the notice would be
+ * created, never drawn, and removed — present in the DOM for the whole freeze and visible
+ * for none of it.
+ */
+async function withNativeWait<T>(run: () => Promise<T>): Promise<T> {
+    nativeWaitOn();
+    await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        // A hidden or backgrounded webview never fires rAF, and a picker opened from one must
+        // not hang on a frame that will not come.
+        setTimeout(resolve, 120);
+    });
+    try {
+        return await run();
+    } finally {
+        nativeWaitOff();
+    }
+}
+
+/** A folder picker that STARTS at a suggested place — the user still chooses. Used where a
+ *  link suggests a folder: the link may propose, only the person picks. */
+export async function pickFolderAt(defaultPath?: string): Promise<string | null> {
+    try {
+        return await withNativeWait(() => _dialog.open({ directory: true, multiple: false, ...(defaultPath ? { defaultPath } : {}) })) as string | null;
+    } catch {
+        return null;
+    }
+}
+
+export async function pickFolder(): Promise<string | null> {
+    try {
+        return await withNativeWait(() => _dialog.open({ directory: true, multiple: false })) as string | null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Several files at once.
+ *
+ * A separate function rather than an option on `pickFile`: widening that one's return type
+ * to `string | string[]` broke three existing call sites that reasonably assume a string,
+ * and every one of them would have had to grow a check for a case it can never see. The
+ * compiler caught it, which is the argument for not doing it.
+ */
+export async function pickFiles(
+    filters?: Array<{ name: string; extensions: string[] }>
+): Promise<string[]> {
+    try {
+        const r = await withNativeWait(() => _dialog.open({ multiple: true, ...(filters?.length ? { filters } : {}) }));
+        return Array.isArray(r) ? r as string[] : (r ? [r as string] : []);
+    } catch {
+        return [];
+    }
+}
+
+export async function pickFile(
+    options: Array<string | { name: string; extensions: string[] }> | { filters?: Array<{ name: string; extensions: string[] }> } = []
+): Promise<string | null> {
+    try {
+        let dialogOptions: Record<string, unknown> = { multiple: false };
+        if (Array.isArray(options)) {
+            let filters: any[] = options;
+            if (filters.length > 0 && typeof filters[0] === 'string') {
+                filters = [{ name: (filters as string[]).join(', ').toUpperCase(), extensions: filters as string[] }];
+            }
+            if (filters.length > 0) dialogOptions.filters = filters;
+        } else {
+            if (options.filters?.length) dialogOptions.filters = options.filters;
+        }
+        return await withNativeWait(() => _dialog.open(dialogOptions)) as string | null;
+    } catch {
+        return null;
+    }
+}
+
+/** The last path the user chose in a save dialog, or null.
+ *
+ *  Every export in the app picks its destination through saveFile() and then writes
+ *  to it, so the success toast fires a few lines after this was set — which is what
+ *  lets `toastSaved()` name the destination without each of a dozen call sites
+ *  threading its own local variable through. A cancelled dialog does not overwrite
+ *  it, so a later export cannot inherit an abandoned path. */
+let _lastSavePath: string | null = null;
+export function lastSavePath(): string | null { return _lastSavePath; }
+
+export async function saveFile(
+    options: { defaultPath?: string; filters?: Array<{ name: string; extensions: string[] }> } = {}
+): Promise<string | null> {
+    try {
+        const picked = await withNativeWait(async () => (_dialog?.save
+            ? await _dialog.save(options) as string | null
+            : await (await import('https://unpkg.com/@tauri-apps/api@1/dialog.js')).save(options) as string | null));
+        if (picked) _lastSavePath = picked;
+        return picked;
+    } catch {
+        return null;
+    }
+}
+
+/** Yes/no question in BMM's own dialog (ui/verify.ts confirmAction). Never a Windows message
+ *  box and never window.confirm: in Tauri the first is unthemed and untranslated, the second
+ *  returns undefined. Kept as a thin wrapper for the scheduler; new code calls confirmAction. */
+export async function askConfirm(
+    message: string,
+    options: { title?: string; type?: 'info' | 'warning' | 'error' } = {}
+): Promise<boolean> {
+    const { confirmAction } = await import('../ui/verify.js');
+    return confirmAction({
+        title: options.title || message,
+        message: options.title ? message : undefined,
+        tone: options.type === 'error' ? 'danger' : options.type === 'info' ? 'accent' : 'warn',
+    });
+}
+/** True when running inside the Tauri webview (as opposed to a browser or the mock).
+ *  Exported because "can I use a native browser dialog" is a question several modules ask. */
+export function isTauri(): boolean {
+    try { return !!(window as any).__TAURI__; } catch { return false; }
+}
+
+export async function getSettings(): Promise<AppSettings> {
+    return await invoke('get_settings') as AppSettings;
+}
+
+export async function updateSettings(settings: AppSettings): Promise<void> {
+    return await invoke('update_settings', { settings });
+}
+
+/**
+ * Files and folders dropped onto the window.
+ *
+ * The event is `tauri://drag-drop`. It was `tauri://file-drop` in Tauri 1, and this listened for
+ * that name until long after the v2 migration — so dropping a folder or a zip onto the library
+ * did nothing at all, with no error anywhere: an event that is never emitted cannot fail loudly.
+ *
+ * The PAYLOAD changed with it, and that was the second half of the same break. v1 sent a bare
+ * array of paths; v2 sends `{ paths, position }`. The old code tested `payload.length > 0`,
+ * which on a v2 object is `undefined > 0` — false — so even under the right event name the
+ * callback would still never have run.
+ *
+ * Both shapes are accepted below. Not for v1 compatibility, which is gone, but because reading
+ * the paths out of whatever arrived is what makes the next rename a shrug instead of a silent
+ * dead feature. scripts/check-tauri-events.mjs now fails the build on a v1 event name.
+ */
+export async function listenFileDrop(callback: (paths: string[]) => void): Promise<() => void> {
+    try {
+        const { listen } = await getEventModule();
+        return await listen('tauri://drag-drop', (e: { payload: any }) => {
+            const p = e?.payload;
+            const paths: string[] = Array.isArray(p) ? p : (Array.isArray(p?.paths) ? p.paths : []);
+            if (paths.length > 0) callback(paths);
+        });
+    } catch {
+        console.warn('[BMM] File drop not supported in browser mockup');
+        return () => {};
+    }
+}
+
+async function getEventModule(): Promise<any> {
+    if (window.__TAURI__) {
+        return window.__TAURI__.event;
+    }
+    return await import('https://unpkg.com/@tauri-apps/api@1/event.js');
+}
+
+export async function listen(event: string, callback: (payload: any) => void): Promise<() => void> {
+    try {
+        const { listen } = await getEventModule();
+        return await listen(event, callback);
+    } catch (e) {
+        console.warn(`[BMM] Event listening (${event}) not supported in current environment`, e);
+        return () => {};
+    }
+}
+
+export async function sendOsNotification(_title: string, _body: string): Promise<void> {
+    // Deprecated per user request. OS notifications and settings removed.
+    return;
+}
+
+// Mock invoke for browser testing
+/** Demo data for the browser mock, fetched once. Never loaded inside the Tauri app —
+ *  mockInvoke is only installed when the bridge is absent. */
+let _fixtures: Record<string, any> | null | undefined;
+async function mockFixtures(): Promise<Record<string, any> | null> {
+    if (_fixtures !== undefined) return _fixtures;
+    try {
+        const r = await fetch('assets/mock-fixtures.json');
+        _fixtures = r.ok ? await r.json() : null;
+    } catch { _fixtures = null; }
+    return _fixtures ?? null;
+}
+
+async function mockInvoke(command: string, args?: Record<string, unknown>): Promise<any> {
+    console.log(`[Mock] ${command}`, args);
+
+    // The language files are ordinary static assets, so the browser can read them itself.
+    // Returning null here — which is what this did — made loadLang() throw on `data._info`,
+    // left `t()` returning raw keys and every label in the preview blank. The preview was
+    // useless for looking at the interface, which is the one thing it is for.
+    if (command === 'get_language_content') {
+        const lang = String((args as any)?.lang || 'fr');
+        const r = await fetch(`Lang/${lang}.json`);
+        if (!r.ok) throw new Error(`no language file for ${lang}`);
+        return await r.text();
+    }
+
+    // The built-in themes are static files too. A dev server that lists folders (python's
+    // http.server does) names them; without that the preview simply has no presets.
+    if (command === 'list_builtin_themes' || command === 'list_builtin_themes_all') {
+        try {
+            const listing = await (await fetch('assets/builtin-themes/')).text();
+            const files = [...new Set([...listing.matchAll(/href="([^"?#]+\.bmmtheme\.json)"/g)].map((m) => m[1]))].sort();
+            const themes = await Promise.all(files.map(async (f) => (await fetch(`assets/builtin-themes/${f}`)).json()));
+            return JSON.stringify(themes);
+        } catch { return '[]'; }
+    }
+
+    const fx = await mockFixtures();
+    if (fx && Object.prototype.hasOwnProperty.call(fx, command)) return fx[command];
+
+    // Anything list-shaped answers with an empty list rather than null.
+    //
+    // Returning null for everything meant the preview died in a cascade of
+    // "Cannot read properties of null (reading 'length'/'filter'/'slice')" — each one an
+    // unawaited init that gave up half-way. The app is entitled to assume `list_x` returns a
+    // list; a mock that says null is lying about the contract, not testing it.
+    //
+    // A NAME heuristic, deliberately: the alternative is hard-coding a shape for a few
+    // hundred commands, which would be wrong the moment one changes. Anything needing real
+    // content gets an explicit entry in mock-fixtures.json instead.
+    if (/^(list_|get_all_)/.test(command) || /s$/.test(command)) return [];
+    return null;
+}
+
+export function convertFileSrc(path: string): string {
+    if (_convertFileSrc) return _convertFileSrc(path);
+    return `asset.localhost/${path}`;
+}

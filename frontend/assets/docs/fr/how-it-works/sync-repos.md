@@ -1,0 +1,230 @@
+# Hébergement & synchro (dépôts serveur)
+
+Un dépôt serveur transforme le profil d'une personne en **source de vérité hébergée** : tous les
+abonnés convergent vers exactement les mêmes mods, versions et ordre — et le restent à mesure que le
+propriétaire met à jour. Deux moitiés : l'héberger, et s'y synchroniser.
+
+## Hébergement
+
+BMM transforme le profil choisi en un dépôt servable. Le mot est littéral : l'export
+**construit un répertoire**, il n'annote pas celui que vous avez déjà.
+
+- Une **copie de chaque fichier de mod**, écrite dans le dossier de sortie sous `mods/<id>/…`.
+  Les hachages sont calculés sur ces copies. C'est le point qui surprend en général au moment de
+  mettre en place l'hébergement : vous pointez l'export sur un profil et vous obtenez un dépôt
+  complet, que vous publiez ensuite. Ce n'est pas un manifeste à déposer à côté de fichiers déjà
+  hébergés.
+- Un **manifeste** (`repo.json`) listant chaque fichier avec son hachage **SHA-256**, plus des
+  **hachages de blocs de 4&nbsp;Mo** (SHA-256 aussi) pour des mises à jour différentielles.
+- Une **signature** cryptographique : le manifeste est signé avec une clé **ed25519** dérivée de
+  l'identité de l'hôte, et la clé publique est l'`author_id` du dépôt. Un abonné peut vérifier la
+  signature pour confirmer que le dépôt vient bien de cet auteur.
+
+    Cette même clé signe désormais **tous les fichiers que BMM écrit**, pas seulement
+    `repo.json` — les listes de mods (`.mm`), les automatisations (`.bmmpa`), les barres de
+    navigation (`.bmmnav`), les modpacks, les enregistrements de session et la sauvegarde
+    `.DATABMM`. Les documents JSON portent un bloc `bmm_signature` ; les formats ZIP
+    (`.bmmplug`, `.bmmtheme` et `.mm`) portent une entrée `bmm_signature.json` qui liste
+    chaque autre fichier et son SHA-256 — échanger un script à côté d'un manifeste intact
+    est donc détecté. Un fichier sans signature se lit comme **non signé**, jamais comme
+    invalide : tout ce qui a été écrit avant existe, et d'autres outils écrivent ces formats.
+
+Le servir ne demande aucun logiciel de BMM : un client va chercher `<votre-url>/repo.json` puis
+les fichiers en dessous, donc **n'importe quel hébergeur statique convient** — vous déposez le
+répertoire exporté et c'est fini. BMM peut aussi s'en charger, via son **mini-serveur intégré**
+ou un serveur autonome généré (Node, ou un script `.bat`/`.sh`) sur une machine dédiée. Dans tous
+les cas en HTTP — **le HTTPS est fortement recommandé**.
+
+!!! note "Comment l'onglet Héberger est organisé"
+    La carte **Générer** est découpée en sections numérotées qu'on ouvre une à la fois (profils ·
+    sortie & identité · distribution · inclure plus & publier via SSH), et **Manifeste seul** de
+    la même façon. Chaque carte de l'onglet se replie depuis le chevron de son en-tête. Dans
+    *Distribution*, **Compresser en .zip** ne fait que l'archive ; inclure un **serveur autonome**
+    est une case séparée et optionnelle à l'intérieur (les indicateurs `zipOutput` et
+    `generateServer` de l'API sont indépendants pour la même raison — une archive seule
+    s'appelle `BMM-Repo-*`, avec serveur `BMM-Standalone-Server-*`). Le **hub multi-dépôts** —
+    un serveur Node et un tableau de bord pour tous vos dépôts — est sa propre carte dans
+    l'étape *Servir les fichiers*.
+
+!!! warning "Impossible de publier un dépôt par-dessus des fichiers déjà hébergés"
+
+    La génération de l'API locale accepte un drapeau `lightweight` qui hache les mods sur place
+    au lieu de les copier, et il est tentant d'y lire « un manifeste pour mon hébergement
+    existant ». Ce n'en est pas un. Il n'écrit aucun dossier `mods/`, n'enregistre aucun hachage
+    par blocs (`chunks: None`, donc pas de mises à jour différentielles), et rien dans le
+    manifeste ne permet de faire pointer les fichiers ailleurs. Ce que vous obtenez est un
+    **index de ce que contiendrait un export**, pas quelque chose depuis quoi un client peut se
+    synchroniser. Si vous hébergez déjà vos mods et ne voulez pas les téléverser à nouveau,
+    utilisez plutôt les [liens de téléchargement direct](doc-page:features/repo) — au prix de la
+    détection des mises à jour, un téléchargement direct ne portant aucune version.
+
+```mermaid
+flowchart TD
+    PROF(["Profil"]) --> COPY["Copier ou zipper<br/>les fichiers de mods"]
+    COPY --> GEN["Construire repo.json<br/>SHA-256 + hachages de blocs"]
+    GEN --> SIGN["Signer le manifeste<br/>(Ed25519)"]
+    SIGN --> OUT[("Dossier de sortie")]
+    OUT --> HOW{"Qui le sert ?"}
+    HOW -- "BMM" --> MINI[["Serveur intégré"]]
+    HOW -- "ta machine" --> STAND["Serveur autonome"]
+    HOW -- "tout hébergeur" --> STATIC["Hébergement web statique"]
+```
+
+### Contrôle d'accès (auto-hébergé)
+
+Un dépôt auto-hébergé est **public par défaut**. Il peut être restreint de deux façons :
+
+- Une **liste blanche / liste de bannis**, comparée automatiquement au compte lié ou à l'identité
+  d'appareil d'un abonné.
+- Un **mot de passe de téléchargement** optionnel. Définissez-le à la génération du serveur ; les
+  abonnés se le voient alors demander à la première connexion (BMM l'envoie dans un en-tête
+  `X-Repo-Password` et le retient pour les synchros suivantes). Laissez-le vide pour un dépôt ouvert.
+
+Ne confondez pas ce mot de passe de téléchargement avec l'`admin_password` : ce dernier ne protège
+que le panneau d'admin de l'*hôte* (pousser de nouvelles versions) et n'est pas une barrière pour les
+abonnés.
+
+## Synchro
+
+Le client ne re-télécharge jamais à l'aveugle. Il récupère le manifeste et le réconcilie avec ce
+qu'il possède.
+
+```mermaid
+sequenceDiagram
+    participant Client as BMM de l'abonné
+    participant Host as Dépôt serveur
+    Client->>Host: GET repo.json (mot de passe, identité)
+    Host-->>Client: manifeste
+    Note over Client: refuser les chemins dangereux, ignorer les fichiers dont le SHA-256 correspond
+    Client->>Host: fichier modifié : blocs de 4 Mo différents (Range), sinon fichier entier
+    Host-->>Client: blocs ou fichier
+    Note over Client: re-hacher chaque fichier, puis mettre à jour la bibliothèque et le profil
+```
+
+Une **chaîne de version** sur le dépôt pilote la *détection* des mises à jour : BMM signale un mod
+quand la version publiée du dépôt diffère de celle installée. Appliquer la mise à jour relance la
+synchro ci-dessus — en ne transférant que les fichiers modifiés (jusqu'aux blocs modifiés) et en
+retirant les mods que l'hôte a supprimés. D'où le coût de quelques Mo pour une petite mise à jour
+d'une énorme collection.
+
+### Un serveur sans manifeste
+
+Un hôte qui sert simplement un dossier de mods n'a pas de `repo.json`, et jusqu'ici ça le
+rendait inutilisable alors que chaque fichier était pourtant là. BMM peut désormais lire
+l'index de répertoire du serveur, et cherche un manifeste pour le confronter à deux endroits :
+à côté du dossier des mods, puis un niveau au-dessus — là où un dépôt généré le place. La
+recherche s'arrête là plutôt que de remonter : un manifeste plus haut appartient à un autre
+dépôt.
+
+Ce qu'il trouve décide de ce que tu obtiens :
+
+| Trouvé | Résultat |
+|---|---|
+| Un manifeste dont la signature vérifie | Les fichiers qu'il couvre gardent la garantie habituelle. |
+| Un manifeste dont la signature **ne** vérifie **pas** | Traité comme absent. Il ne cautionne rien, donc ses hachages ne valent pas mieux que des fichiers se portant garants d'eux-mêmes. |
+| Aucun manifeste | Tout est proposé **non vérifié**. |
+
+Les mods non vérifiés sont installables, et marqués. **Un seul** fichier non couvert rend le
+mod entier non vérifié — l'installation écrit aussi ce fichier, donc une couverture partielle
+n'est pas une sécurité partielle.
+
+La marque est stockée sur le mod, pas recalculée après coup. Elle n'est connaissable qu'à
+l'installation : un scan ultérieur voit des fichiers ordinaires sur le disque et les
+promouvrait silencieusement au rang des mods dont les octets ont réellement été vérifiés.
+Resynchroniser depuis un dépôt qui a depuis gagné des hachages l'efface — la même règle lue
+dans l'autre sens.
+
+!!! warning "Ce que coûte le non-vérifié"
+    Un hachage est ce qui distingue un bon téléchargement d'un fichier corrompu, tronqué ou
+    substitué. Sans lui il n'y a rien à comparer, et les trois se ressemblent exactement.
+    N'installe des mods non vérifiés que depuis un hôte de confiance.
+
+### La signature est vérifiée avant toute écriture
+
+Le badge *Vérifié* / *Non vérifié* de la carte du dépôt était tout : un manifeste dont la signature
+ne correspondait pas au contenu se synchronisait exactement comme un valide. La synchro en décide
+désormais, avant d'écrire le premier octet :
+
+| Le manifeste | La synchro |
+|---|---|
+| porte une signature (ou un `author_id`) qui se vérifie | se fait, indiquée **signée** |
+| porte une signature (ou un `author_id`) qui ne se vérifie **pas** | est **refusée** : le dépôt a été modifié après la signature |
+| figure dans la liste officielle, qui a enregistré sa signature, et n'en sert aucune | est **refusée** : retirer la signature ne fait pas d'un dépôt validé un dépôt « non signé, installer quand même » |
+| figure dans la liste officielle et sert une autre signature | est **refusée** : son contenu a changé depuis sa validation |
+| ne porte aucune signature | se fait comme avant, indiquée **non signée** dans le résultat |
+
+Il n'y a pas de bouton « faire confiance quand même » : une synchro refusée ne télécharge rien, et la
+correction revient au propriétaire du dépôt (régénérer, ou faire mettre la liste à jour). Un manifeste
+signé est aussi tenu pour complet : les mods que le serveur contient mais que le manifeste ne liste
+pas ne lui sont **pas** ajoutés depuis l'index du dossier, puisque rien de ce que couvre la signature
+ne les garantit.
+
+!!! note "Généré par une très ancienne version de BMM"
+    La signature est vérifiée sur le manifeste tel que ce BMM le lit. Un dépôt signé par une très
+    ancienne version de BMM, avant l'ajout de champs au format, peut échouer à ce contrôle sans avoir
+    été modifié. Le régénérer depuis un BMM récent règle le problème.
+
+### Ce qu'une synchro garantit réellement
+
+| Étape | Contrôle |
+|---|---|
+| Avant tout | un manifeste signé doit se vérifier, et un manifeste épinglé doit servir sa signature enregistrée (ci-dessus) |
+| Avant de télécharger un fichier | hash local **==** celui du manifeste → fichier ignoré, rien ne transite |
+| Par bloc | le SHA-256 de chaque bloc de 4 Mo est comparé : un transfert repris ne récupère que ce qui diffère |
+| Après le téléchargement | le fichier est re-haché et comparé. Une divergence est une **erreur**, pas un avertissement |
+
+Trois comportements à anticiper :
+
+- **Une seule synchro à la fois.** Une seconde demande est refusée (`409`), pas mise en file.
+- **Annuler s'arrête à la prochaine frontière de mod**, pas au milieu d'un fichier : tu ne te
+  retrouves jamais avec un mod à moitié écrit.
+- **« Supprimer les extras » est destructif par conception.** Ça aligne exactement la copie locale sur
+  le distant, donc tout ce qui est en trop chez toi est retiré. Laisse-le coupé sauf si la convergence
+  est précisément le but.
+
+Tu peux aussi plafonner le **débit de téléchargement** de la synchro — la même idée de cadencement que
+[Smart I/O](doc-page:how-it-works/performance), appliquée au réseau.
+
+---
+
+## Générer un dépôt
+
+« Générer » construit le dossier du dépôt *et*, optionnellement, un serveur pour le servir. Les options
+méritent d'être connues, car plusieurs changent la forme de la sortie et pas seulement un réglage :
+
+| Option | Ce que ça change |
+|---|---|
+| **Profils** | quels profils deviennent le contenu du dépôt — un dépôt peut en porter plusieurs |
+| **Nom d'auteur / seed** | alimente l'identité `author_id` avec laquelle le manifeste est signé |
+| **Générer un serveur** | produire un serveur exécutable à côté des fichiers, pas seulement les fichiers |
+| **Type de serveur** | un modèle de serveur standard ou étendu (`lux`) |
+| **Léger** | une variante de serveur plus petite |
+| **Port** | le port sur lequel le serveur généré écoute |
+| **Limite d'upload** | un plafond de bande passante côté hôte |
+| **Mot de passe admin** | protège le panneau d'administration de l'*hôte*, **pas** les téléchargements |
+| **Démarrage auto** | le serveur se lance tout seul au démarrage |
+| **UPnP** | demander au routeur de mapper le port automatiquement — retiré quand le serveur s'arrête |
+| **Cloudflare** | passer par un tunnel au lieu d'exposer le port |
+| **Docker** | produire une configuration conteneurisée plutôt qu'un script nu, avec un choix d'OS |
+| **Sortie zip** | empaqueter le tout en une archive à transporter vers la machine hôte |
+| **Langue** | la langue d'interface du serveur généré |
+
+Le serveur généré est un script autonome (un `.bat` sous Windows, un `.sh` ailleurs) — aucune
+installation de BMM nécessaire sur la machine hôte. La génération est annulable et, comme la synchro,
+rapporte sa progression.
+
+!!! warning "Deux mots de passe différents"
+
+    Le **mot de passe admin** protège la publication de nouvelles versions depuis le panneau de l'hôte.
+    Le **mot de passe de téléchargement** est la barrière pour les abonnés, envoyé en en-tête
+    `X-Repo-Password` et mémorisé pour les synchros suivantes. Poser l'un ne pose pas l'autre, et les
+    confondre est la cause habituelle du « pourquoi tout le monde peut télécharger ça ? ».
+
+!!! note "BetterCommunity, ce n'est pas la même chose"
+    Le hub BetterCommunity ajoute des fonctions qu'un dépôt que vous hébergez vous-même n'a **pas** :
+    une empreinte `BCR-XXXX-XXXX`, un accès par compte (e-mail / mot de passe), et de l'hébergement
+    géré. Un dépôt auto-hébergé a la signature `author_id` ci-dessus — pas une empreinte BCR.
+
+!!! info "À voir dans l'app"
+    Aide &amp; autre → Développeur → **Mode serveur** et **Flux d'hébergement**. Guide utilisateur :
+    [Dépôt Serveur](doc-page:features/repo).

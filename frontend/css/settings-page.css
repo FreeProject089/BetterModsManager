@@ -1,0 +1,914 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Settings page: the index column, the search, and one rhythm for the cards.
+   The markup of the index is built by ui/settings-nav.ts; the cards are the
+   ones in index.html, untouched. Colours are tokens only, so every theme,
+   light ones included, reads it: the accent is used as a FILL (the active
+   entry's tint), never as the colour of text, and never as a bar on an edge.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Room for the index beside the cards. */
+#view-settings.stg-has-index { max-width: 1360px; }
+
+.stg-layout {
+    display: grid;
+    /* 260: the search field keeps its whole placeholder beside the « hide » button. */
+    grid-template-columns: 260px minmax(0, 1fr);
+    gap: 28px;
+    align-items: start;
+}
+.stg-main { min-width: 0; }
+
+/* ── The index ─────────────────────────────────────────────────────────── */
+.stg-index {
+    position: sticky;
+    top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    /* Short enough that its foot (Edit layout) shows before the page scrolls, under the title. */
+    max-height: calc(100vh - 200px);
+    min-height: 0;
+}
+
+.stg-search { position: relative; }
+.stg-search-icon {
+    position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+    color: var(--text-muted); pointer-events: none;
+}
+.stg-search .stg-search-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 54px 8px 32px;
+    font-size: 12.5px;
+    border-radius: 10px;
+}
+.stg-search-input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+.stg-search-clear {
+    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; padding: 0;
+    border: 0; border-radius: 6px; background: transparent;
+    color: var(--text-muted); cursor: pointer;
+}
+.stg-search-clear[hidden] { display: none; }
+.stg-search-clear:hover { color: var(--text-primary); background: var(--bmm-s06); }
+.stg-search-clear:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.stg-search-count { font-size: 11px; color: var(--text-muted); padding: 0 4px; }
+.stg-search-count:empty { display: none; }
+
+.stg-nav {
+    overflow-y: auto;
+    min-height: 0;
+    padding: 2px 4px 8px 0;
+    /* Standard properties only: in Chromium, setting them disables ::-webkit-scrollbar. */
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+}
+.stg-nav:hover { scrollbar-color: var(--bmm-s15) transparent; }
+.stg-nav-group[hidden] { display: none; }
+.stg-nav-group + .stg-nav-group { margin-top: 12px; }
+.stg-nav-head {
+    padding: 4px 10px 4px;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+.stg-nav-link {
+    display: block;
+    width: 100%;
+    padding: 6px 10px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    text-align: left;
+    font: inherit;
+    font-size: 12.5px;
+    line-height: 1.35;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    transition: background .12s ease, color .12s ease, box-shadow .12s ease;
+}
+.stg-nav-link[hidden] { display: none; }
+.stg-nav-link:hover { background: var(--bmm-s04); color: var(--text-primary); }
+.stg-nav-link:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.stg-nav-link.is-active {
+    color: var(--text-primary);
+    font-weight: 600;
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+/* ── Search results ────────────────────────────────────────────────────── */
+.stg-filtered-out { display: none !important; }
+/* While searching the layout toolbar is noise: it reorders cards you cannot all see. */
+.settings-sections.stg-searching > .cardorder-bar { display: none; }
+
+.stg-empty {
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    padding: 48px 24px;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-card);
+    color: var(--text-muted);
+    text-align: center;
+}
+.stg-empty[hidden] { display: none; }
+.stg-empty-text { margin: 0; font-size: 13px; color: var(--text-secondary); }
+
+/* A card reached from the index says so for a moment. */
+@keyframes stg-flash {
+    0%   { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent); }
+    100% { box-shadow: 0 0 0 2px transparent; }
+}
+#view-settings .glass-card.stg-flash { animation: stg-flash 1.1s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+    #view-settings .glass-card.stg-flash { animation: none; }
+    .stg-nav-link { transition: none; }
+}
+
+/* ── The cards: one heading style, one rhythm ──────────────────────────── */
+#view-settings .settings-sections > .glass-card {
+    margin-bottom: 0;
+    scroll-margin-top: 16px;
+}
+#view-settings .settings-sections { gap: 14px; }
+#view-settings .settings-sections > .glass-card + .glass-card { margin-top: 0; }
+
+/* Card titles in sentence case: twenty-five shouted headings in a column read as one wall. */
+#view-settings .settings-sections > .glass-card > .card-title,
+#view-settings .settings-sections > .glass-card > .bmm-fold-head > .card-title,
+#view-settings .settings-sections > .glass-card > .bmm-fold-head .card-title {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--text-primary);
+}
+
+/* ── One card anatomy (Oct 2026) ───────────────────────────────────────────────────────────
+   Every Settings card is the same four parts, and nothing else:
+
+     header  .card-title        an icon on a neutral tile, the title, then (at the end) a badge,
+                                « Learn more » and the fold chevron.
+     help    .stg-help          ONE sentence under the title, aligned with it. The detail lives
+                                in the docs behind « Learn more », not in the card.
+     body    .set-rows/.set-row rows: label + a short hint on the left, the control on the right
+                                (a switch, a select, a number). A small .stg-sub label splits a
+                                long card into named blocks. A free block (a list, an editor) sits
+                                in the body as is.
+     footer  .stg-foot          the card's buttons, right-aligned; a status line, if any, on the
+                                left (.stg-foot-status).
+
+   The card is the ONE surface (same rule as css/modal-shell.css): no framed box inside it, no
+   tinted border or glow per card, no coloured icon. Rows are split by a hairline. The danger
+   variant (.stg-card--danger, and .stg-danger for a destructive block inside an ordinary card)
+   is the only card that changes colour, and only its border, its icon tile and its buttons. */
+
+#view-settings .settings-sections > .glass-card {
+    padding: 18px 20px 20px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    box-shadow: none;
+    overflow: visible;
+}
+#view-settings .settings-sections > .glass-card > .card-title {
+    min-height: 30px;
+    gap: 10px;
+    margin-bottom: 14px;
+    padding-bottom: 0;
+    border-bottom: 0;
+}
+#view-settings .settings-sections > .glass-card > .card-title > svg:first-child,
+#view-settings .settings-sections > .glass-card > .card-title > img:first-child {
+    flex: none;
+    box-sizing: content-box;
+    border-radius: 9px;
+    background: var(--bmm-s05);
+}
+#view-settings .settings-sections > .glass-card > .card-title > svg:first-child {
+    width: 16px;
+    height: 16px;
+    padding: 7px;
+    color: var(--text-secondary);
+}
+#view-settings .settings-sections > .glass-card > .card-title > img:first-child { width: 22px !important; height: 22px !important; padding: 4px; }
+#view-settings .settings-sections > .glass-card > .card-title:has(+ p) { margin-bottom: 4px; }
+/* The help line. !important: a card built by code may still carry an inline size and margin. */
+#view-settings .settings-sections > .glass-card > .card-title + p {
+    margin: 0 0 14px !important;
+    font-size: 12.5px !important;
+    line-height: 1.5;
+    color: var(--text-secondary) !important;
+}
+#view-settings .settings-sections > .glass-card > .card-title:has(> svg:first-child, > img:first-child) + p,
+#view-settings .settings-sections > .glass-card > .card-title:has(> svg:first-child, > img:first-child) ~ .stg-indent { padding-left: 40px; }
+/* A badge in the header (the current mode, « advanced »): quiet, never the accent as ink. */
+#view-settings .stg-badge {
+    flex: none;
+    padding: 2px 8px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--bmm-s03);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--text-secondary);
+}
+
+/* A folded card is a single tidy line, without the rule under a title that has nothing below. */
+#view-settings .settings-sections > .glass-card.bmm-collapsed:not(.stg-search-open) {
+    padding-top: 14px;
+    padding-bottom: 14px;
+}
+#view-settings .glass-card.bmm-collapsed:not(.stg-search-open) .bmm-fold-head,
+#view-settings .glass-card.bmm-collapsed:not(.stg-search-open) .bmm-fold-head .card-title,
+#view-settings .glass-card.bmm-collapsed:not(.stg-search-open) > .card-title {
+    border-bottom-color: transparent;
+    padding-bottom: 0;
+    margin-bottom: 0;
+}
+#view-settings .glass-card.bmm-collapsed:hover { border-color: var(--bmm-border-hover, var(--border)); }
+
+/* ── Body: rows ────────────────────────────────────────────────────────────────────────── */
+#view-settings .settings-sections .set-rows {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    overflow: visible;
+}
+#view-settings .settings-sections .set-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 40px;
+    padding: 10px 0;
+    border: 0;
+    border-top: 1px solid var(--bmm-s06);
+    border-radius: 0;
+    background: transparent;
+}
+#view-settings .settings-sections .set-row:hover { background: transparent; }
+#view-settings .settings-sections .set-rows > .set-row:first-child,
+#view-settings .settings-sections .stg-sub + .set-row { border-top: 0; }
+#view-settings .set-row > :first-child { min-width: 0; flex: 1 1 auto; }
+#view-settings .set-row > :not(:first-child) { flex-shrink: 0; }
+#view-settings .set-row-title { font-size: 13px; font-weight: 600; line-height: 1.35; color: var(--text-primary); }
+#view-settings .set-row-desc { margin-top: 2px; font-size: 11.5px; line-height: 1.45; color: var(--text-muted); }
+#view-settings .settings-sections .set-row.set-row--stack { display: block; }
+#view-settings .set-row--stack > .set-row-title + * { margin-top: 2px; }
+#view-settings .set-row--stack .stg-row-body { margin-top: 8px; }
+#view-settings .stg-row-ctl { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; }
+#view-settings .set-row .form-input,
+#view-settings .set-row .input-field { width: auto; }
+#view-settings .stg-num { width: 76px !important; padding: 5px 8px; font-size: 12px; border-radius: 7px; }
+#view-settings .stg-sel { width: 170px; padding: 5px 8px; font-size: 12px; border-radius: 7px; }
+#view-settings .stg-unit { font-size: 11.5px; color: var(--text-muted); }
+#view-settings .stg-text {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bmm-bg-base);
+    color: var(--text-primary);
+    font-size: 12px;
+}
+#view-settings textarea.stg-text { font-family: var(--font-mono); font-size: 11.5px; resize: vertical; }
+
+/* A named block inside a long card: a small label, the rows under it. */
+#view-settings .stg-sub {
+    margin: 18px 0 2px;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+#view-settings .stg-sub:first-child,
+#view-settings .card-title + .stg-sub,
+#view-settings .card-title + p + .stg-sub,
+#view-settings .set-rows > .stg-sub:first-child { margin-top: 0; }
+
+/* ── Footer: the card's buttons ────────────────────────────────────────────────────────── */
+#view-settings .stg-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 14px;
+}
+#view-settings .stg-foot > .btn { display: inline-flex; align-items: center; gap: 6px; }
+#view-settings .stg-foot-status {
+    margin-right: auto;
+    min-width: 0;
+    font-size: 11.5px;
+    line-height: 1.45;
+    color: var(--text-muted);
+}
+#view-settings .stg-foot-status:empty { display: none; }
+#view-settings .stg-foot-status:empty + * { margin-left: auto; }
+
+/* ── Danger: a whole card, or a block at the end of an ordinary one ────────────────────── */
+#view-settings .settings-sections > .glass-card.stg-card--danger {
+    border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+}
+#view-settings .settings-sections > .glass-card.stg-card--danger > .card-title > svg:first-child,
+#view-settings .settings-sections > .glass-card.stg-card--danger > .bmm-fold-head > svg:first-child {
+    color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+#view-settings .stg-danger {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px dashed color-mix(in srgb, var(--danger) 35%, var(--border));
+}
+#view-settings .stg-danger > .stg-sub { margin-top: 0; color: var(--danger); }
+#view-settings .stg-danger .stg-foot { margin-top: 8px; }
+#view-settings .btn.stg-btn-danger {
+    color: var(--danger);
+    border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
+    background: transparent;
+}
+#view-settings .btn.stg-btn-danger:hover { background: color-mix(in srgb, var(--danger) 10%, transparent); }
+
+/* ── One switch ────────────────────────────────────────────────────────────────────────────
+   Three switch widgets grew in this page (.bmm-switch, .toggle-switch, .plug-toggle), each a
+   different size with a different « on » colour. Here they are drawn as one: 36 × 20, the
+   accent as the fill when on, a white thumb. */
+#view-settings :is(.bmm-switch, .toggle-switch, .plug-toggle) {
+    position: relative;
+    display: inline-block;
+    flex: none;
+    width: 36px;
+    height: 20px;
+    margin: 0;
+    cursor: pointer;
+}
+#view-settings :is(.bmm-switch-track, .toggle-slider, .plug-toggle-slider) {
+    position: absolute;
+    inset: 0;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--bmm-s10);
+    box-shadow: none;
+    transition: background .15s ease, border-color .15s ease;
+}
+#view-settings .bmm-switch-thumb,
+#view-settings :is(.toggle-slider, .plug-toggle-slider)::before {
+    content: '';
+    position: absolute;
+    top: 2px;
+    bottom: auto;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    box-shadow: none;
+    transform: none;
+    transition: transform .15s ease, background .15s ease;
+}
+#view-settings input:checked + :is(.bmm-switch-track, .toggle-slider, .plug-toggle-slider) {
+    border-color: transparent;
+    background: var(--accent);
+    box-shadow: none;
+}
+#view-settings input:checked + .bmm-switch-track .bmm-switch-thumb,
+#view-settings input:checked + :is(.toggle-slider, .plug-toggle-slider)::before {
+    transform: translateX(16px);
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+#view-settings input:focus-visible + :is(.bmm-switch-track, .toggle-slider, .plug-toggle-slider) {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+#view-settings input:disabled + :is(.bmm-switch-track, .toggle-slider, .plug-toggle-slider) { opacity: 0.5; cursor: not-allowed; }
+@media (prefers-reduced-motion: reduce) {
+    #view-settings :is(.bmm-switch-track, .toggle-slider, .plug-toggle-slider),
+    #view-settings .bmm-switch-thumb,
+    #view-settings :is(.toggle-slider, .plug-toggle-slider)::before { transition: none; }
+}
+
+/* ── Rows written by other modules, drawn as rows of this page ─────────────────────────── */
+/* Privacy: the telemetry categories (core/analytics.ts, core/live-issues.ts). */
+#view-settings .tc-settings { margin: 0; }
+#view-settings .tc-settings .tc-setting,
+#view-settings #analytics-detail > .setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 0 !important;
+    padding: 10px 0;
+    border-top: 1px solid var(--bmm-s06);
+}
+#view-settings .tc-settings .tc-setting + .tc-setting { border-top: 1px solid var(--bmm-s06); }
+#view-settings .tc-setting-txt > span:first-child { font-size: 13px !important; font-weight: 600; color: var(--text-primary) !important; }
+#view-settings .tc-setting-hint { font-size: 11.5px; color: var(--text-muted); }
+
+/* The layout toolbar is a tool, not content: quieter than the cards. */
+#view-settings .cardorder-bar { margin-bottom: 0; background: transparent; }
+
+/* ── Narrow windows: the index becomes a bar above the cards ───────────── */
+@media (max-width: 1240px) {
+    .stg-layout { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+    .stg-index {
+        top: 0;
+        z-index: 20;
+        max-height: none;
+        padding: 10px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--bmm-bg-elevated);
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+    .stg-search { flex: 1 1 260px; }
+    .stg-search-count { order: 3; }
+    .stg-nav {
+        flex: 1 1 100%;
+        display: flex;
+        gap: 4px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 0 0 2px;
+    }
+    .stg-nav-group { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
+    .stg-nav-group + .stg-nav-group { margin-top: 0; padding-left: 8px; border-left: 1px solid var(--border); }
+    .stg-nav-head { padding: 0 4px 0 0; }
+    .stg-nav-link { width: auto; flex-shrink: 0; padding: 4px 9px; }
+}
+
+/* The shortcut, shown while the field is empty and unfocused. */
+.stg-search-kbd {
+    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+    padding: 1px 5px;
+    font-family: var(--font-mono); font-size: 10px; line-height: 1.5;
+    color: var(--text-muted);
+    border: 1px solid var(--border); border-radius: 5px;
+    background: var(--bmm-s03);
+    pointer-events: none;
+}
+.stg-search-input:focus ~ .stg-search-kbd,
+.stg-search-input:not(:placeholder-shown) ~ .stg-search-kbd { display: none; }
+
+/* A folded card shown open by the search points its chevron the way it looks. */
+#view-settings .glass-card.bmm-collapsed.stg-search-open .bmm-fold-chevron { transform: none; }
+
+/* ── Editing the layout from the index (settings-nav.ts + card-order.ts) ───────────────── */
+.stg-index-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 4px 0;
+    border-top: 1px solid var(--border);
+}
+.stg-index-foot:empty { display: none; }
+.stg-foot-btn { display: inline-flex; align-items: center; gap: 6px; }
+.stg-foot-hidden {
+    display: inline-flex; align-items: center; gap: 5px;
+    margin-left: auto;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--bmm-s03);
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+.stg-foot-hidden b { font-variant-numeric: tabular-nums; color: var(--text-primary); }
+.stg-foot-hint { flex: 1 1 100%; margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--text-secondary); }
+.stg-foot-row { display: flex; justify-content: flex-end; gap: 6px; width: 100%; }
+.stg-index.is-editing .stg-search { opacity: 0.55; }
+
+.stg-nav-row {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding-left: 2px;
+    border-radius: 8px;
+    cursor: grab;
+    touch-action: none;
+}
+.stg-nav-row[hidden] { display: none; }
+.stg-nav-row:hover { background: var(--bmm-s03); }
+.stg-nav-row.is-dragging {
+    cursor: grabbing;
+    background: color-mix(in srgb, var(--accent) 13%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.stg-row-grip { flex: none; display: inline-flex; color: var(--text-secondary); opacity: 0.7; }
+.stg-nav-row .stg-nav-link { flex: 1; min-width: 0; width: auto; padding-left: 6px; cursor: inherit; }
+.stg-nav-row.is-hidden .stg-nav-link { text-decoration: line-through; }
+.stg-row-btn {
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+.stg-row-btn:hover:not(:disabled) { background: var(--bmm-s06); color: var(--text-primary); }
+.stg-row-btn:disabled { opacity: 0.3; cursor: default; }
+.stg-row-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+.stg-row-btn[aria-pressed="true"] { color: var(--text-primary); background: var(--bmm-s05); }
+
+/* A hidden card is off the page; it comes back while editing (dimmed, to show it again), while
+   searching (search still finds it) and when the palette or Ask Laya sends you to it (peek). */
+#view-settings .settings-sections:not(.stg-searching):not(.cardorder-editing) > .glass-card.stg-card-hidden:not(.stg-card-peek) { display: none; }
+#view-settings .settings-sections.cardorder-editing > .glass-card.stg-card-hidden { opacity: 0.5; }
+
+/* Narrow windows: the index is a strip; while editing it is a list again. */
+@media (max-width: 1240px) {
+    .stg-index.is-editing .stg-nav { display: block; overflow-x: hidden; overflow-y: auto; max-height: 50vh; }
+    .stg-index.is-editing .stg-nav-group { display: block; }
+    .stg-index.is-editing .stg-nav-group + .stg-nav-group { margin-top: 10px; padding-left: 0; border-left: 0; }
+    .stg-index.is-editing .stg-nav-row .stg-nav-link { padding: 6px 6px; }
+    .stg-index-foot { flex: 1 1 100%; }
+}
+/* Wide windows: a little more room while editing, so the titles beside four controls still read. */
+@media (min-width: 1241px) {
+    .stg-layout:has(> .stg-index.is-editing) { grid-template-columns: 290px minmax(0, 1fr); }
+}
+
+/* ── Hiding the index (settings-nav.ts setIndexHidden) ─────────────────────────────────────
+   The search row carries the « hide » button; a compact « Index » button above the cards
+   brings the column back. Editing the layout happens in the index, so it shows while editing
+   even when put away. Narrow windows ignore all of it: the index is the strip on top there. */
+.stg-index-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.stg-index-top > .stg-search { flex: 1 1 auto; min-width: 0; }
+.stg-index-toggle {
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background .12s ease, color .12s ease, border-color .12s ease;
+}
+.stg-index-toggle:hover { background: var(--bmm-s05); color: var(--text-primary); border-color: var(--bmm-border-hover, var(--border)); }
+.stg-index-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.stg-index-show { display: none; }
+.stg-index-show:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+@media (min-width: 1241px) {
+    .stg-layout.is-index-hidden { grid-template-columns: minmax(0, 1fr); }
+    .stg-layout.is-index-hidden > .stg-index:not(.is-editing) { display: none; }
+    .stg-layout.is-index-hidden:has(> .stg-index.is-editing) { grid-template-columns: 290px minmax(0, 1fr); }
+    .stg-layout.is-index-hidden:not(:has(> .stg-index.is-editing)) .stg-index-show {
+        display: inline-flex;
+        position: sticky;
+        top: 8px;
+        z-index: 5;
+        margin-bottom: 10px;
+        border: 1px solid var(--border);
+        background: var(--bmm-bg-elevated);
+    }
+}
+@media (max-width: 1240px) {
+    .stg-index-top { flex: 1 1 260px; }
+    .stg-index-toggle { display: none; }
+}
+
+/* ── Card bodies (index.html settings cards, one anatomy) ──────────────────────────────── */
+#view-settings .stg-row-label { display: flex; flex-direction: column; min-width: 0; cursor: pointer; }
+#view-settings .stg-sub { display: flex; align-items: center; gap: 6px; }
+#view-settings .stg-sub-img { width: 16px; height: 16px; object-fit: contain; }
+#view-settings .stg-range { width: 160px; accent-color: var(--accent); cursor: pointer; }
+#view-settings .stg-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+#view-settings .stg-sel--unit { width: 72px; }
+#view-settings .stg-lang { position: relative; flex-shrink: 0; width: 200px; }
+#view-settings .stg-lang .nav-lang-btn { width: 200px !important; background: var(--bmm-s04) !important; }
+#view-settings .stg-mono { font-family: var(--font-mono); }
+
+/* Tags: one line of fields, the tags under it. */
+#view-settings .stg-tag-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+#view-settings .stg-tag-form > .stg-text { flex: 1 1 200px; width: auto; }
+#view-settings .stg-sq { width: 34px; height: 34px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+#view-settings .stg-tag-ic { display: inline-flex; color: var(--text-secondary); }
+#view-settings .stg-color { width: 34px; height: 34px; padding: 0; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; background: transparent; }
+#view-settings .stg-tags-list { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* A field with a button inside its end (the GitHub token and its eye). */
+#view-settings .stg-field { position: relative; }
+#view-settings .stg-field > form > .stg-text,
+#view-settings .stg-field > .stg-text { padding-right: 40px; }
+#view-settings .stg-field-btn {
+    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; padding: 0;
+    border: 0; border-radius: 6px; background: transparent;
+    color: var(--text-muted); cursor: pointer;
+}
+#view-settings .stg-field-btn:hover { color: var(--text-primary); background: var(--bmm-s06); }
+
+/* Lists a card holds (launch packs, scheduled tasks): rows split by a hairline, never cards. */
+#view-settings .stg-list { display: flex; flex-direction: column; }
+#view-settings .stg-list:empty { display: none; }
+#view-settings .stg-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 0;
+    border-top: 1px solid var(--bmm-s06);
+}
+#view-settings .stg-item:first-child { border-top: 0; }
+#view-settings .stg-item-ic {
+    flex: none; width: 32px; height: 32px; border-radius: 8px;
+    display: grid; place-items: center;
+    background: var(--bmm-s05); color: var(--text-secondary);
+    object-fit: cover;
+}
+#view-settings .stg-item-main { flex: 1; min-width: 0; }
+#view-settings .stg-item-name { font-size: 13px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#view-settings .stg-item-meta { font-size: 11.5px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#view-settings .stg-item-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+#view-settings .stg-empty-line { margin: 0; font-size: 12px; color: var(--text-muted); }
+
+#security-apply-msg { opacity: 0; transition: opacity .3s ease; color: var(--success); font-weight: 600; }
+#view-settings .stg-foot-note { margin: 8px 0 0; font-size: 11.5px; text-align: right; }
+#view-settings .stg-foot-note:empty { display: none; }
+
+/* Feedback: the report history under the card's footer. */
+#view-settings .stg-history { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--bmm-s06); }
+#view-settings .stg-history-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+#view-settings .stg-history-head .stg-sub { margin: 0; }
+#view-settings .stg-history .bh-explorer-tabs { margin-bottom: 10px; }
+#view-settings .stg-history-list { display: flex; flex-direction: column; gap: 6px; }
+#view-settings .stg-history-more { display: flex; justify-content: center; margin-top: 8px; }
+
+/* Identity: label, value, actions, as rows of the card rather than a stack of framed boxes. */
+#view-settings #settings-identity-card .sic-row {
+    margin: 0;
+    padding: 10px 0;
+    border: 0;
+    border-top: 1px solid var(--bmm-s06);
+    border-radius: 0;
+    background: transparent;
+}
+#view-settings #settings-identity-card .stg-help + .sic-row,
+#view-settings #settings-identity-card .stg-help + * + .sic-row { border-top: 0; }
+#view-settings #settings-identity-card .sic-label {
+    width: 110px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--text-primary);
+}
+#view-settings #sic-api-port { width: 110px; padding: 5px 9px; font-size: 12px; font-family: var(--font-mono); }
+
+/* Privacy: the master switch is the first row, not a framed banner; the actions are the footer. */
+#view-settings .apv-hero {
+    padding: 0 0 12px;
+    border: 0;
+    border-bottom: 1px solid var(--bmm-s06);
+    border-radius: 0;
+    background: transparent;
+}
+#view-settings .apv-hero.on { border-color: var(--bmm-s06); }
+#view-settings .apv-hero-icon { display: none; }
+#view-settings .apv-hero-text strong { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+#view-settings .apv-hero-sub { font-size: 11.5px; }
+#view-settings .apv-actions {
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 14px;
+    padding-top: 0;
+    border-top: 0;
+}
+#view-settings .apv-actions .btn { height: auto; padding: 5px 10px; border-color: transparent; background: transparent; }
+#view-settings .apv-actions .btn:hover { background: var(--bmm-s05); border-color: transparent; }
+#view-settings .apv-actions #analytics-delete { color: var(--danger); }
+
+/* Catalogue index: its folds are sections split by a hairline, like rows. */
+#view-settings #settings-catalog-index-card .cat-index-fold { border-top-color: var(--bmm-s06); }
+#view-settings #settings-catalog-index-card .cat-index-fold > summary { font-size: 12.5px; font-weight: 600; color: var(--text-primary); }
+#view-settings .cardorder-hint { display: inline-flex; align-items: center; gap: 6px; }
+
+/* A status line with its glyph (token saved, update found…): the state colour mixed with the
+   text ink, so it reads on light themes too; the glyph carries the state, not only the hue. */
+.stg-status { display: inline-flex; align-items: center; gap: 5px; }
+.stg-status.is-ok { color: color-mix(in srgb, var(--success) 60%, var(--text-primary)); }
+.stg-status.is-warn { color: color-mix(in srgb, var(--warning) 60%, var(--text-primary)); }
+.stg-status.is-bad { color: color-mix(in srgb, var(--danger) 60%, var(--text-primary)); }
+#view-settings .stg-tag-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; padding: 0;
+    border: 0; border-radius: 6px; background: transparent;
+    color: var(--text-muted); cursor: pointer;
+}
+#view-settings .stg-tag-btn:hover { color: var(--text-primary); background: var(--bmm-s06); }
+#view-settings .stg-tag-btn.btn-del-tag:hover { color: var(--danger); }
+
+/* ── A card split into panes (ui/settings-tabs.ts) ─────────────────────────────────────────
+   « Interface & notifications »: a segmented control names the blocks, one block is shown.
+   The block label (.stg-pane-sub) is redundant beside the tabs, so it only shows while the
+   Settings search lists every pane at once. Rarely used rows wait behind « More options ». */
+#view-settings .stg-tabs { margin: 2px 0 6px; }
+#view-settings .stg-tabs > .stg-tab { flex: 1 1 auto; }
+#view-settings .stg-tab[aria-selected="true"] { background: var(--bmm-accent-dim); color: var(--text-primary); }
+#view-settings .settings-sections:not(.stg-searching) .stg-pane:not(.is-active) { display: none; }
+#view-settings .settings-sections .stg-pane > .stg-pane-sub { display: none; }
+#view-settings .settings-sections .stg-pane > .stg-pane-sub + .set-row { border-top: 0; }
+#view-settings .settings-sections:not(.stg-searching) .stg-pane:not(.is-more) > .stg-more-row { display: none; }
+#view-settings .stg-more-toggle {
+    align-self: flex-start;
+    margin: 6px 0 0;
+    padding: 4px 8px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+#view-settings .stg-more-toggle::after { content: ' \25BE'; }
+#view-settings .stg-more-toggle[aria-expanded="true"]::after { content: ' \25B4'; }
+#view-settings .stg-more-toggle:hover { background: var(--bmm-s06); color: var(--text-primary); }
+#view-settings .stg-more-toggle + .stg-more-row { border-top: 0; }
+/* Searching: every pane, every row, each under its block label; no tabs, no fold. */
+#view-settings .settings-sections.stg-searching .stg-tabs,
+#view-settings .settings-sections.stg-searching .stg-more-toggle { display: none; }
+#view-settings .settings-sections.stg-searching .stg-pane > .stg-pane-sub { display: flex; margin-top: 12px; }
+
+/* ── Keyboard shortcuts (core/commands.ts renderShortcutsManager) ──────────────────────────
+   A table: action on the left, its keys as keycaps, then the row's actions. Groups are
+   headings, not folds; the search above filters rows in place. A conflict is said on the row
+   it concerns, and the row being recorded is the one that changes look. */
+#view-settings .sk-tools { display: flex; align-items: center; gap: 8px; margin: 2px 0 8px; }
+#view-settings .sk-search {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    height: 32px;
+    padding: 0 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bmm-bg-base);
+    color: var(--text-muted);
+}
+#view-settings .sk-search:focus-within { border-color: var(--accent); }
+#view-settings .sk-q { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text-primary); font-size: 12.5px; }
+#view-settings .sk-filter { white-space: nowrap; }
+#view-settings .sk-filter[aria-pressed="true"] { background: var(--bmm-accent-dim); color: var(--text-primary); border-color: transparent; }
+/* A long table scrolls inside the card, its group headings pinned, so the card stays one screen.
+   Under the pointer the wheel belongs to the table until its end (overscroll-behavior: contain:
+   the page does not take over half way and leave the table stuck); off the table it scrolls the
+   page as before. The scrollbar is the house one: thin, a neutral thumb from the theme's surface
+   ramp, the track invisible, brighter on hover (both themes: --bmm-s* flips with the theme).
+   Standard properties only: in Chromium they win over ::-webkit-scrollbar, and setting
+   `scrollbar-width` alone gave the platform's grey bar with arrows. */
+#view-settings .sk-table {
+    display: flex;
+    flex-direction: column;
+    max-height: min(64vh, 620px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 6px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--bmm-s10) transparent;
+    scrollbar-gutter: stable;
+}
+#view-settings .sk-table:hover { scrollbar-color: var(--bmm-s20) transparent; }
+#view-settings .sk-group { border: 0; }
+#view-settings .sk-group-h {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin: 10px 0 0;
+    padding: 6px 0 4px;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--bg-card);
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+#view-settings .sk-group:first-child .sk-group-h { margin-top: 4px; }
+#view-settings .sk-group-note { font-weight: 500; letter-spacing: 0; text-transform: none; }
+#view-settings .sk-group-n { margin-left: auto; font-weight: 500; font-variant-numeric: tabular-nums; }
+#view-settings .sk-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 4px 10px;
+    min-height: 36px;
+    padding: 4px 0;
+    border-top: 1px solid var(--bmm-s06);
+}
+#view-settings .sk-group-h + .sk-row { border-top: 0; }
+#view-settings .sk-label { min-width: 0; font-size: 12.5px; line-height: 1.35; color: var(--text-primary); }
+#view-settings .sk-tag {
+    margin-left: 6px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--bmm-s06);
+    color: var(--text-secondary);
+    font-size: 10.5px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+#view-settings .sk-chord {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 3px;
+    min-width: 120px;
+    min-height: 28px;
+    padding: 2px 6px;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text-primary);
+    cursor: pointer;
+}
+#view-settings .sk-chord:hover { border-color: var(--border); background: var(--bmm-s04); }
+#view-settings .sk-chord.sk-none { color: var(--text-muted); font-size: 11.5px; }
+#view-settings .sk-kbd,
+.sk-dlg .sk-kbd {
+    display: inline-block;
+    min-width: 22px;
+    padding: 2px 6px;
+    border: 1px solid var(--bmm-s15);
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    background: var(--bmm-bg-base);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.3;
+    text-align: center;
+}
+#view-settings .sk-row.sk-recording .sk-chord,
+.sk-dlg .sk-rec.is-recording {
+    border-color: var(--accent);
+    background: var(--bmm-accent-dim);
+    color: var(--text-primary);
+    font-size: 11.5px;
+    font-weight: 600;
+}
+#view-settings .sk-acts { display: inline-flex; align-items: center; gap: 2px; }
+#view-settings .sk-act {
+    display: inline-grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+#view-settings .sk-act:hover:not(:disabled) { color: var(--text-primary); background: var(--bmm-s06); }
+#view-settings .sk-act:disabled { opacity: 0.3; cursor: default; }
+#view-settings .sk-act.sk-del:hover { color: var(--danger); }
+#view-settings .sk-warn,
+.sk-dlg .sk-warn {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    line-height: 1.4;
+    color: color-mix(in srgb, var(--warning) 60%, var(--text-primary));
+}
+#view-settings .sk-empty { padding: 18px 0; text-align: center; font-size: 12px; color: var(--text-muted); }
+#view-settings .sk-foot .sk-reset-all { color: var(--danger); }
+#view-settings .sk-row[hidden],
+#view-settings .sk-group[hidden],
+#view-settings .sk-empty[hidden] { display: none; }
+/* A disabled shortcut (imported with nothing to run here), and a mouse, wheel or gamepad key:
+   its device's icon, then its name in the UI font (« Back button » is a word, not a key code). */
+#view-settings .sk-tag-off { background: color-mix(in srgb, var(--warning) 16%, transparent); color: var(--text-primary); }
+#view-settings .sk-kbd-dev,
+.sk-dlg .sk-kbd-dev { display: inline-flex; align-items: center; gap: 4px; font-family: inherit; }
+#view-settings .sk-kbd-dev .ic,
+.sk-dlg .sk-kbd-dev .ic { flex: none; color: var(--text-secondary); }

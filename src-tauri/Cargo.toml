@@ -1,18 +1,55 @@
 [package]
 name = "better-mods-manager"
-version = "0.9.8"
+version = "1.0.4"
 edition = "2021"
+autobins = false
+# Declared here as well as in LICENSE.md and the docs: cargo, crates.io and any tool that
+# inspects the manifest read THIS field, and its absence reads as "unlicensed" — the exact
+# opposite of what a GPL project wants to communicate.
+license = "GPL-3.0-or-later"
+authors = ["FreeProject089"]
+repository = "https://github.com/FreeProject089"
 
 [[bin]]
 name = "better-mods-manager"
 path = "src/main.rs"
 
+# Standalone MCP server + CLI (bmm-mcp-server serve / profiles / mods / api …).
+#
+# It is declared as an [[example]], NOT a [[bin]], on purpose:
+#   tauri-bundler harvests every cargo [[bin]] into the installer, but it IGNORES
+#   examples. As a [[bin]] this collided with the externalBin sidecar of the same
+#   name (binaries/bmm-mcp-server-<triple>.exe) → WiX light.exe LGHT0091
+#   "Duplicate symbol 'Component:bmm_mcp_server.exe'" → the MSI failed to bundle.
+#
+# The binary that SHIPS is the sidecar in tauri.conf.json
+# (`externalBin: ["binaries/bmm-mcp-server"]`). It is self-contained
+# (`#[path = "../mcp/mod.rs"] mod mcp;`), so building it as an example works
+# exactly like the old bin. To (re)build & refresh the shipped sidecar:
+#   cargo build --release --example bmm-mcp-server
+#   copy target\release\examples\bmm-mcp-server.exe binaries\bmm-mcp-server-x86_64-pc-windows-msvc.exe
+[[example]]
+name = "bmm-mcp-server"
+path = "src/extra_tools/mcp_server.rs"
+
+
 [build-dependencies]
-tauri-build = { version = "1", features = [] }
+tauri-build = { version = "2", features = [] }
 chrono = "0.4"
+embed-resource = "2"
 
 [dependencies]
-tauri = { version = "1", features = [ "dialog-message", "dialog-confirm", "dialog-ask", "protocol-asset", "custom-protocol", "notification-all", "dialog-open", "dialog-save", "fs-all", "path-all", "window-all", "shell-open"] }
+# Tauri v2 — capabilities replace the allowlist; per-feature flags (dialog/fs/shell/
+# notification/path/window/cli/protocol-asset) move into separate plugins below.
+# "devtools" still enables the WebView2 inspector in RELEASE builds.
+tauri = { version = "2", features = ["devtools", "protocol-asset"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-cli = "2"
+tauri-plugin-process = "2"
+open = "5" # open external URLs in the default browser (non-deprecated opener)
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uuid = { version = "1", features = ["v4"] }
@@ -20,33 +57,112 @@ chrono = { version = "0.4", features = ["serde"] }
 walkdir = "2"
 fs_extra = "1"
 anyhow = "1"
-reqwest = { version = "0.11", features = ["blocking", "json", "rustls-tls", "stream"] }
-zip = { version = "0.6", features = ["deflate"] }
+reqwest = { version = "0.12", features = ["blocking", "json", "rustls-tls", "stream"] }
+# DEFLATE via zlib (libz-sys, builds with cc — no cmake). A modest inflate win over
+# the pure-Rust miniz_oxide. NOTE: zlib-ng (the 2-3x SIMD backend) needs cmake to
+# build libz-ng-sys, which can't target the installed VS 2026 toolchain — so it is
+# intentionally NOT used. Stock codecs (bzip2/zstd/aes/time) kept for parity.
+zip = { version = "0.6", default-features = false, features = ["deflate-zlib", "bzip2", "zstd", "aes-crypto", "time"] }
+tar = "0.4"
+flate2 = "1"
+# 7z reading. sevenz-rust2, not sevenz-rust 0.6: RUSTSEC-2026-0245 (path traversal in
+# decompress_impl, no fix) and RUSTSEC-2026-0246 (unmaintained). archive.rs keeps its own
+# pre-scan of every entry name on top of the crate's check.
+sevenz-rust2 = "0.23"
+unrar = "0.5"
 lazy_static = "1.4"
 backtrace = "0.3"
 sysinfo = "0.30"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+thiserror = "1.0"
 tokio = { version = "1", features = ["full"] }
 discord-rich-presence = "0.2.4"
-image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "ico"] }
 futures = "0.3"
 sha2 = "0.10.9"
-warp = "0.3"
+# The passphrase lock on a data export and on a mod list that carries credentials.
+# Both versions were already resolved in the lock as transitive dependencies of russh, so
+# naming them here adds nothing to the tree — it only says out loud what the app relies on.
+# Argon2id because the attacker has the file and unlimited time; AES-GCM because a tampered
+# envelope must fail to open rather than decrypt to something plausible.
+aes-gcm = "0.11.1"
+argon2 = "0.6.0-rc.8"
+# Creator key v5.1: the seeds live in `Zeroizing` buffers, wiped on drop (and ed25519-dalek's
+# SigningKey already wipes itself). Already in the lock through ed25519-dalek; `serde` lets
+# the store (de)serialise straight into the wiped type.
+zeroize = { version = "1.8", features = ["serde"] }
+# BLAKE3 for fast local content hashing: a tree hash that parallelises WITHIN a
+# single large file (mmap + rayon), unlike SHA-256. Used for file_hashes and the
+# modpack hash-match index. Repo delta-sync keeps its own SHA-256 (wire format).
+blake3 = { version = "1", features = ["rayon", "mmap"] }
+# warp 0.4 (hyper 1): warp 0.3 pinned hyper 0.14 and h2 0.3, which has no fix for
+# RUSTSEC-2026-0258 (h2 >= 0.4.16). `server` is the listener; the route tests add `test`.
+warp = { version = "0.4", features = ["server"] }
 local-ip-address = "0.6"
 igd = "0.12"
 regex = "1"
 bytes = "1"
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 hex = "0.4"
+# ring, not the default aws-lc-rs: aws-lc-sys compiles assembly through NASM, which is not
+# installed on a stock Windows box and is not a dependency worth adding to BMM's build for
+# one feature. ring builds with the toolchain everyone already has. Verified: the default
+# feature set fails here with "NASM command not found".
+russh = { version = "0.63.0", default-features = false, features = ["ring", "rsa", "flate2"] }
+russh-sftp = "2.4.0"
+# « Laya intégré » (commands/ai_embedded.rs): the Laya classifier run in-process, offline.
+# ONNX Runtime through `ort` (MIT OR Apache-2.0), with `load-dynamic`: nothing is linked or
+# downloaded at BUILD time (the default `download-binaries` fetches prebuilt libraries from a
+# third-party CDN during the build) — the official Microsoft onnxruntime.dll ships inside the
+# model pack and is loaded by absolute path, after its SHA-256 is checked. Pinned exactly: an
+# rc crate may change its API between candidates. api-27 needs ONNX Runtime >= 1.27 (the pack
+# ships 1.30.0).
+ort = { version = "=2.0.0-rc.13", default-features = false, features = ["std", "load-dynamic", "api-27"] }
+# The Hugging Face tokenizer, the same 0.23.2 the Python `tokenizers` wheel is built from, so
+# tokenizer.json means byte-for-byte the same ids (checked by the golden test). `fancy-regex`
+# instead of the default `onig`, which needs a C toolchain step; no progress bar, no hub client.
+tokenizers = { version = "=0.23.2", default-features = false, features = ["fancy-regex"] }
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.52", features = ["Win32_System_Threading", "Win32_Storage_FileSystem", "Win32_Foundation", "Win32_Security_Cryptography", "Win32_Graphics_Dxgi", "Win32_Graphics_Dxgi_Common", "Win32_System_Ioctl", "Win32_System_IO"] }
 rand = "0.8"
 tokio-util = { version = "0.7", features = ["io"] }
-windows-sys = { version = "0.45", features = ["Win32_UI_WindowsAndMessaging", "Win32_Foundation", "Win32_UI_Input_KeyboardAndMouse"] }
+windows-sys = { version = "0.45", features = ["Win32_UI_WindowsAndMessaging", "Win32_Foundation", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell", "Win32_Graphics_Gdi"] }
 percent-encoding = "2.3"
 tempfile = "3"
 base64 = "0.21"
 winreg = "0.52"
 rayon = "1.8"
+tauri-plugin-single-instance = "2"
+jwalk = "0.8"
+rmcp = { version = "1.4", features = ["server", "transport-io"] }
+schemars = "0.8"
+clap = { version = "4", features = ["derive"] }
+colored = "2"
+comfy-table = "7"
+# Use mimalloc — drastically lower RSS on Windows vs the default HeapAlloc.
+# Typical gain: 30–60% smaller process working set, plus much less
+# fragmentation when many small allocs (string paths, hash entries) are
+# allocated and freed during normal BMM use.
+mimalloc = { version = "0.1", default-features = false }
 
-[features]
-# this feature is used for production builds or when `devPath` points to the filesystem
-# it is the default for `tauri build`
-custom-protocol = [ "tauri/custom-protocol" ]
+# Creator key v5.1 off Windows: the key that seals the store lives in the OS keyring
+# (macOS Keychain, Linux Secret Service over D-Bus, pure-Rust crypto). Without these
+# features keyring 3 silently falls back to an in-memory MOCK store — i.e. a key that is
+# gone at the next launch — so they are not optional. Not compiled on Windows (DPAPI there).
+[target.'cfg(not(windows))'.dependencies]
+keyring = { version = "3.6", features = ["apple-native", "sync-secret-service", "crypto-rust"] }
+
+# NB: Tauri v2 dropped the `custom-protocol` cargo feature — the production asset
+# protocol is handled by the bundler/config, so the old `[features]` block is gone.
+
+[dev-dependencies]
+# warp::test, for the route tests (api::*_tests, the Host check).
+warp = { version = "0.4", features = ["test"] }
+# Tests generate a real key of each kind (ed25519, RSA, ECDSA) rather than committing one:
+# a private key checked into the repository is a private key in the repository, and a
+# signature test is worthless against a fake key. ssh-key builds against rand_core 0.10, so
+# the version is pinned to match — an older one compiles and then fails the trait bound with
+# a message about `CryptoRng` that says nothing about versions.
+rand_core = "0.10"
+getrandom = "0.2"

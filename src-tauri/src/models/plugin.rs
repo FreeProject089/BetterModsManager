@@ -1,0 +1,214 @@
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct PluginModRequirement {
+    pub name: String,
+    /// Stable mod id, when known. Optional + serde(default) so older manifests that
+    /// only stored `name` still parse. When present, mod matching prefers the id
+    /// (rename-proof) and falls back to the name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    #[serde(default)]
+    pub optional: bool,
+    #[serde(default)]
+    pub sha256: Option<String>,
+    /// Where to get THIS mod, when it does not come from the list's fallback repo.
+    ///
+    /// A direct archive URL, for the ones that live nowhere in particular — a file on the
+    /// original author's site, a GitHub release. It wins over the list's fallback repo when
+    /// both are set: an address written for this mod is more precise than a repo it might
+    /// be in.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub download_url: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct PluginModList {
+    #[serde(default)]
+    pub strict: bool,
+    #[serde(default)]
+    pub required_mods: Vec<PluginModRequirement>,
+    /// A repo.json the reader can add when they are missing mods from this list.
+    ///
+    /// The list named what to have and stopped there, which leaves somebody with a shopping
+    /// list and a search engine — while the person who wrote the plugin knows exactly where
+    /// they got them. Optional, and absent from every manifest written before this.
+    ///
+    /// Deliberately NOT fetched or installed from on its own: it is an address the reader is
+    /// offered, not a source BMM adds behind them. A plugin that could attach a repo by being
+    /// installed is a plugin that can decide where your mods come from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fallback_repo: Option<String>,
+    /// Whether that repo asks for a password or a key. See UpdateSource::protected — same
+    /// meaning, same reason: the reader should learn it before the first refusal, not from it.
+    #[serde(default)]
+    pub fallback_protected: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PluginManifest {
+    pub id: String,
+    pub name: String,
+    #[serde(default = "default_version")]
+    pub version: String,
+    #[serde(default)]
+    pub author: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub game: String,
+    #[serde(default)]
+    pub official: bool,
+    #[serde(default)]
+    pub permissions: Vec<String>,
+    #[serde(default)]
+    pub modlist: Option<PluginModList>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub website: String,
+    /// Relative paths (within the plugin folder) of external scripts this plugin
+    /// ships. Running them is gated behind the "unsafe plugins" permission.
+    #[serde(default)]
+    pub scripts: Vec<String>,
+    /// Marks this plugin as containing external scripts (set via the "contains
+    /// scripts" checkbox). When true, activating it prompts to run the scripts.
+    #[serde(default)]
+    pub has_scripts: bool,
+    /// Relative paths of folders bundled inside the plugin (under "bundle/").
+    #[serde(default)]
+    pub folders: Vec<String>,
+    /// Automations the plugin ships, under `automations/` (`.bmmpa` files).
+    ///
+    /// The alternative was what people were doing instead: ship a `.bat`, tell the person to
+    /// find the folder, and hope. An automation is the thing BMM can actually READ — it has
+    /// steps, permissions and a trigger, all of which can be shown before anything happens.
+    ///
+    /// They are never run as they arrive. Applying the plugin IMPORTS them through the same
+    /// sanitiser as any other `.bmmpa`: disabled, with every capability that reaches outside
+    /// BMM stripped. Which is also what makes the auto-run mode defensible — a task that
+    /// cannot run a program is a task that can be started without asking a second time.
+    #[serde(default)]
+    pub automations: Vec<String>,
+    /// Catalogue bundles the plugin ships, under `bundles/` (`.bmmbundle` files).
+    ///
+    /// A `.bmmbundle` is a whole catalogue in one file — entries plus everything they pack —
+    /// and it is followable as it stands, with nothing to host and no address to keep alive.
+    /// Which made it the obvious thing for a plugin to carry and the one thing it could not:
+    /// a plugin could ship the automation and not the catalogue the automation came from.
+    ///
+    /// Same rules as `automations`. They are never followed as they arrive: applying the
+    /// plugin ADDS each one as a catalogue source, after saying which kind it is and asking.
+    /// A source is a thing BMM reads from later, so adding one silently would be signing the
+    /// person up to a stranger's feed.
+    #[serde(default)]
+    pub bundles: Vec<String>,
+    /// What happens when the plugin is applied: "modlist" (default), "script",
+    /// or "both".
+    #[serde(default = "default_apply_mode")]
+    pub apply_mode: String,
+    /// The files shipped under `assets/` — a README, a config template, a sample list, a
+    /// tool. Not code and not installed anywhere: they sit in the plugin to be read, copied
+    /// out, or handed to an automation.
+    ///
+    /// This is a DECLARATION, written from what is on disk when the plugin is packed. The
+    /// installed copy reads the folder rather than this, because a manifest can be edited
+    /// and a folder cannot lie about what is in it. It exists so a reader who has only the
+    /// manifest — BetterCommunity's inspector, a moderation queue, a catalogue entry — can
+    /// still see that a plugin ships a script.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub assets: Vec<PluginAssetRef>,
+}
+
+/// One shipped file, as the manifest names it.
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct PluginAssetRef {
+    /// Relative to `assets/`, forward slashes.
+    pub path: String,
+    /// `doc` · `script` · `image` · `data` · `archive` · `other`.
+    #[serde(default)]
+    pub kind: String,
+    #[serde(default)]
+    pub size: u64,
+}
+
+fn default_apply_mode() -> String { "modlist".to_string() }
+
+fn default_version() -> String { "1.0.0".to_string() }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct InstalledPlugin {
+    pub manifest: PluginManifest,
+    pub installed_at: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub icon_path: Option<String>,
+    #[serde(default)]
+    pub install_dir: String,
+}
+
+fn default_true() -> bool { true }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CatalogEntry {
+    pub id: String,
+    pub name: String,
+    #[serde(default = "default_version")]
+    pub version: String,
+    #[serde(default)]
+    pub author: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub game: String,
+    #[serde(default)]
+    pub official: bool,
+    pub download_url: String,
+    /// SHA-256 of the file at `download_url` (64 hex digits, `sha256:` prefix accepted).
+    /// Mandatory in the catalogue format (security summary §9); for the grace release an entry
+    /// without one still installs, after a warning (`plugins::unverified_plugin_grace`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sha256: Option<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub icon_url: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CatalogResponse {
+    #[serde(default = "default_version")]
+    pub version: String,
+    pub plugins: Vec<CatalogEntry>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ModCompareEntry {
+    pub name: String,
+    pub optional: bool,
+    pub found: bool,
+    pub active: bool,
+    pub mod_id: Option<String>,
+    /// Carried through from the requirement, so the screen listing what is MISSING can also
+    /// say where to get it. Nothing else in the compare knows this.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub download_url: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ModCompareResult {
+    pub plugin_id: String,
+    pub plugin_name: String,
+    pub strict: bool,
+    pub required: Vec<ModCompareEntry>,
+    pub strict_extra: Vec<String>,
+    pub all_required_active: bool,
+    pub missing_required: usize,
+    /// The list's fallback repo, repeated here so the compare overlay does not have to go
+    /// back and read the manifest for the one thing it needs from it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fallback_repo: Option<String>,
+    #[serde(default)]
+    pub fallback_protected: bool,
+}

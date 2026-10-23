@@ -1,0 +1,3362 @@
+use crate::commands::crash::log_line;
+use crate::models::plugin::{CatalogResponse, InstalledPlugin, ModCompareResult, PluginManifest};
+use crate::state::AppState;
+use std::path::PathBuf;
+use tauri::Manager;
+use tauri::State;
+
+const CATALOG_URL: &str =
+    "https://raw.githubusercontent.com/BetterDCS/BetterModsManager_Plugins/main/catalog.json";
+
+/// Recursively copy a directory tree from `src` to `dst`.
+fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let path = entry.path();
+        let target = dst.join(entry.file_name());
+        if path.is_dir() {
+            copy_dir_recursive(&path, &target)?;
+        } else {
+            std::fs::copy(&path, &target)?;
+        }
+    }
+    Ok(())
+}
+
+// ── Catalog ────────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn fetch_plugin_catalog(
+    app: tauri::AppHandle,
+    catalog_url: Option<String>,
+) -> Result<CatalogResponse, String> {
+    let url = catalog_url.as_deref().unwrap_or(CATALOG_URL);
+    // catalog_get carries the site identity header for first-party (BetterCommunity)
+    // URLs so PRIVATE community catalogs gate correctly; a third-party feed gets none.
+    let resp = crate::commands::net::catalog_get(&app, url)
+        .timeout(std::time::Duration::from_secs(15))
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if resp.status().as_u16() == 404 {
+        // Catalog not published yet — return empty gracefully
+        return Ok(CatalogResponse {
+            version: String::new(),
+            plugins: vec![],
+        });
+    }
+    // A private catalog the caller isn't allowed to see — surface it distinctly so the
+    // UI can show a "private / access denied" state instead of a generic fetch error.
+    if resp.status().as_u16() == 403 {
+        return Err("forbidden: this catalog is private".to_string());
+    }
+    if !resp.status().is_success() {
+        return Err(format!("Catalog fetch failed (HTTP {})", resp.status()));
+    }
+
+    // Through the universal format: a v1 document parses as it always has; a universal
+    // catalogue, a BetterCommunity v2 feed or a signed envelope is read as its plugin view,
+    // and one whose signature does not hold is refused, never served.
+    let text = resp.text().await.map_err(|e| format!("Network error: {}", e))?;
+    let catalog: CatalogResponse = match crate::commands::catalog_convert::legacy_for(&app, &text, "plugin", Some(url))? {
+        Some(v) => serde_json::from_value(v),
+        None => serde_json::from_str(&text),
+    }
+    .map_err(|e| format!("Parse error: {}", e))?;
+
+    log_line(format!(
+        "[PLUGINS] Fetched catalog: {} plugins",
+        catalog.plugins.len()
+    ));
+    Ok(catalog)
+}
+
+// ── Install / Uninstall ────────────────────────────────────────────────────
+
+/// The first release that no longer installs a catalogue plugin without a `sha256`.
+///
+/// Security summary §9: `sha256` is mandatory in the plugin catalogue format; for ONE release
+/// an entry without it still installs after a warning. That release is 1.0.x; from 1.1.0 on,
+/// such an entry is refused (in the catalogue screen, the auto-update and the link install).
+const UNVERIFIED_GRACE_ENDS: (u64, u64) = (1, 1);
+
+/// Whether this version is still in the grace release for catalogue entries without a checksum.
+pub fn unverified_plugin_grace(version: &str) -> bool {
+    let mut it = version.split(['.', '-', '+']).map(|p| p.parse::<u64>().unwrap_or(0));
+    let (major, minor) = (it.next().unwrap_or(0), it.next().unwrap_or(0));
+    (major, minor) < UNVERIFIED_GRACE_ENDS
+}
+
+/// Why a catalogue install is refused before the download, from its checksum and the user's
+/// answer to the no-checksum warning. `Ok(Some(hash))`: verify against it; `Ok(None)`: the
+/// user accepted an unverified install during the grace release.
+pub fn catalog_checksum_rule(sha256: Option<&str>, allow_unverified: bool, version: &str) -> Result<Option<String>, String> {
+    match sha256.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(s) => crate::commands::link_guard::normalize_sha256(s)
+            .map(Some)
+            .ok_or_else(|| "plugins.errBadChecksum".to_string()),
+        None if allow_unverified && unverified_plugin_grace(version) => Ok(None),
+        None if unverified_plugin_grace(version) => Err("plugins.errNeedsConfirm".to_string()),
+        None => Err("plugins.errNoChecksum".to_string()),
+    }
+}
+
+/// Install a plugin from a catalogue entry.
+///
+/// `sha256` is the entry's checksum: the downloaded bytes must match it. Without one, the
+/// install needs `allow_unverified` (the user said yes to the warning) and the grace release.
+#[tauri::command]
+pub async fn install_plugin(
+    state: State<'_, AppState>,
+    handle: tauri::AppHandle,
+    download_url: String,
+    sha256: Option<String>,
+    allow_unverified: Option<bool>,
+) -> Result<InstalledPlugin, String> {
+    log_line(format!("[PLUGINS] Installing from: {}", download_url));
+    let expected = catalog_checksum_rule(sha256.as_deref(), allow_unverified.unwrap_or(false), env!("CARGO_PKG_VERSION"))?;
+
+    // A Download ticket for the transfer and the unpacking (the governor's queue lists it
+    // and can cancel it between archive entries).
+    let ticket = crate::governor::runtime::global().begin_async(
+        crate::governor::config::OpKind::Download,
+        download_url.rsplit('/').next().unwrap_or("plugin").to_string(),
+    ).await;
+
+    // catalog_get carries the identity header for a first-party (BetterCommunity) /dl
+    // link so a PRIVATE managed-catalog payload passes the gate before redirecting to
+    // storage; third-party download URLs get no header.
+    let resp = crate::commands::net::catalog_get(&handle, &download_url)
+        .timeout(std::time::Duration::from_secs(60))
+        .send()
+        .await
+        .map_err(|e| format!("Download error: {}", e))?;
+    // The size rule of the link install, here too: a plugin is held in memory while checked.
+    let bytes = crate::commands::link_guard::read_body_capped(resp, crate::commands::link_guard::LINK_PLUGIN_MAX_BYTES)
+        .await
+        .map_err(|why| if why == "too-large" { crate::fs_utils::DOWNLOAD_TOO_LARGE.to_string() } else { "Read error".to_string() })?;
+    if let Some(exp) = expected {
+        use sha2::{Digest, Sha256};
+        let actual = hex::encode(Sha256::digest(&bytes));
+        if actual != exp {
+            return Err(format!("plugins.errChecksumMismatch|{exp}|{actual}"));
+        }
+    }
+
+    let app_dir = handle
+        .path()
+        .app_data_dir()
+        .ok()
+        .ok_or("Cannot resolve app data dir")?;
+    let plugins_dir = app_dir.join("plugins");
+    std::fs::create_dir_all(&plugins_dir).map_err(|e| e.to_string())?;
+
+    ticket.add_bytes(bytes.len() as u64, 0);
+    let manifest = extract_plugin_zip(&bytes, &plugins_dir, Some(&ticket))?;
+
+    let mut installed = InstalledPlugin {
+        install_dir: plugins_dir.join(&manifest.id).to_string_lossy().to_string(),
+        icon_path: {
+            let icon = plugins_dir.join(&manifest.id).join("icon.png");
+            if icon.exists() {
+                Some(icon.to_string_lossy().to_string())
+            } else {
+                None
+            }
+        },
+        installed_at: chrono::Utc::now().to_rfc3339(),
+        enabled: true,
+        manifest: manifest.clone(),
+    };
+
+    {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        // An UPDATE keeps the on/off the user chose. A catalogue update (opt-in auto-update
+        // or the Update button) re-enabling a plugin somebody had switched off would be the
+        // catalogue activating something on its own.
+        installed.enabled = keep_enabled_on_update(&data.installed_plugins, &manifest.id);
+        data.installed_plugins
+            .retain(|p| p.manifest.id != manifest.id);
+        data.installed_plugins.push(installed.clone());
+    }
+    let _ = state.save();
+    log_line(format!("[PLUGINS] Installed plugin '{}'", manifest.id));
+    Ok(installed)
+}
+
+/// The `enabled` flag for a plugin being (re)installed from a catalogue: a first install is on
+/// (the user pressed Install), an update keeps whatever the installed copy had.
+pub fn keep_enabled_on_update(installed: &[InstalledPlugin], id: &str) -> bool {
+    installed
+        .iter()
+        .find(|p| p.manifest.id == id)
+        .map(|p| p.enabled)
+        .unwrap_or(true)
+}
+
+#[tauri::command]
+pub async fn install_plugin_from_file(
+    state: State<'_, AppState>,
+    handle: tauri::AppHandle,
+    file_path: String,
+) -> Result<InstalledPlugin, String> {
+    log_line(format!("[PLUGINS] Installing from file: {}", file_path));
+
+    let ticket = crate::governor::runtime::global().begin_async(
+        crate::governor::config::OpKind::Install,
+        std::path::Path::new(&file_path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
+    ).await;
+    let bytes = std::fs::read(&file_path).map_err(|e| format!("Read error: {}", e))?;
+
+    let app_dir = handle
+        .path()
+        .app_data_dir()
+        .ok()
+        .ok_or("Cannot resolve app data dir")?;
+    let plugins_dir = app_dir.join("plugins");
+    std::fs::create_dir_all(&plugins_dir).map_err(|e| e.to_string())?;
+
+    let manifest = extract_plugin_zip(&bytes, &plugins_dir, Some(&ticket))?;
+
+    let installed = InstalledPlugin {
+        install_dir: plugins_dir.join(&manifest.id).to_string_lossy().to_string(),
+        icon_path: {
+            let icon = plugins_dir.join(&manifest.id).join("icon.png");
+            if icon.exists() {
+                Some(icon.to_string_lossy().to_string())
+            } else {
+                None
+            }
+        },
+        installed_at: chrono::Utc::now().to_rfc3339(),
+        enabled: true,
+        manifest: manifest.clone(),
+    };
+
+    {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        data.installed_plugins
+            .retain(|p| p.manifest.id != manifest.id);
+        data.installed_plugins.push(installed.clone());
+    }
+    let _ = state.save();
+    Ok(installed)
+}
+
+/// Install a plugin that arrived in a REPO, from bytes already fetched and hash-checked.
+///
+/// Two differences from the ordinary install path, both because the author is whoever
+/// published a repo rather than somebody the user went looking for:
+///
+///  - It lands **disabled**. A plugin is code that runs inside BMM; syncing a repo is not
+///    a decision to run a stranger's code, and turning it on is one click away for somebody
+///    who has looked at it.
+///  - Any permissions previously granted to that id are **cleared**. Ids are chosen by
+///    whoever writes the manifest, so without this a repo could name its plugin after one
+///    the user had already trusted and inherit the grant silently.
+pub fn install_plugin_bytes(
+    state: &AppState,
+    handle: &tauri::AppHandle,
+    bytes: &[u8],
+) -> Result<String, String> {
+    let plugins_dir = handle
+        .path()
+        .app_data_dir()
+        .ok()
+        .ok_or("Cannot resolve app data dir")?
+        .join("plugins");
+    std::fs::create_dir_all(&plugins_dir).map_err(|e| e.to_string())?;
+
+    // No ticket of its own: this runs inside a repo sync, which holds the operation's ticket;
+    // taking a second one of the same kind could wait forever on a one-slot preset.
+    let manifest = extract_plugin_zip(bytes, &plugins_dir, None)?;
+    let id = manifest.id.clone();
+
+    let installed = InstalledPlugin {
+        install_dir: plugins_dir.join(&id).to_string_lossy().to_string(),
+        icon_path: {
+            let icon = plugins_dir.join(&id).join("icon.png");
+            if icon.exists() { Some(icon.to_string_lossy().to_string()) } else { None }
+        },
+        installed_at: chrono::Utc::now().to_rfc3339(),
+        enabled: false,
+        manifest,
+    };
+
+    {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        data.installed_plugins.retain(|p| p.manifest.id != id);
+        data.installed_plugins.push(installed);
+        data.plugin_permissions.remove(&id);
+    }
+    let _ = state.save();
+    log_line(format!("[PLUGINS] Installed '{}' from a repo (disabled, no permissions)", id));
+    Ok(id)
+}
+
+/// The manifest inside a `.bmmplug`, WITHOUT installing it.
+///
+/// Building a plugin catalogue used to mean installing every plugin that was going in it
+/// first — the only way to add an entry with a file behind it was to pick from what was
+/// installed here. Somebody who was sent a .bmmplug to publish had to install it, publish,
+/// then uninstall it.
+///
+/// Reading the manifest is not running anything: the archive is opened, one JSON entry is
+/// parsed, and nothing is written to disk. Extraction stays where it was, in the install
+/// path, because that is the step that needs the Zip-Slip guard.
+#[tauri::command]
+pub async fn read_plugin_manifest(file_path: String) -> Result<PluginManifest, String> {
+    let bytes = tokio::task::spawn_blocking(move || std::fs::read(&file_path))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| format!("Read error: {}", e))?;
+    let cursor = std::io::Cursor::new(bytes);
+    let mut archive = zip::ZipArchive::new(cursor).map_err(|e| format!("ZIP error: {}", e))?;
+    let manifest_str = (0..archive.len())
+        .find_map(|i| {
+            let mut file = archive.by_index(i).ok()?;
+            if file.name().to_lowercase().ends_with("plugin.json") {
+                let mut s = String::new();
+                std::io::Read::read_to_string(&mut file, &mut s).ok()?;
+                Some(s)
+            } else {
+                None
+            }
+        })
+        .ok_or_else(|| "plugin.json not found in archive".to_string())?;
+    let manifest: PluginManifest = serde_json::from_str(&manifest_str)
+        .map_err(|e| format!("plugin.json parse error: {}", e))?;
+    if manifest.id.is_empty() || manifest.name.is_empty() {
+        return Err("plugin.json: 'id' and 'name' are required".to_string());
+    }
+    Ok(manifest)
+}
+
+/// `ticket`: the install's governor ticket, checked between archive entries. Only asked
+/// `is_cancelled()`, never `checkpoint()`: two of the three callers are async commands, where
+/// a pause must not park a runtime thread.
+fn extract_plugin_zip(bytes: &[u8], plugins_dir: &PathBuf, ticket: Option<&crate::governor::queue::Ticket>) -> Result<PluginManifest, String> {
+    let cursor = std::io::Cursor::new(bytes);
+    let mut archive = zip::ZipArchive::new(cursor).map_err(|e| format!("ZIP error: {}", e))?;
+
+    // Collect file names first for a useful error message
+    let file_names: Vec<String> = (0..archive.len())
+        .filter_map(|i| archive.by_index(i).ok().map(|f| f.name().to_string()))
+        .collect();
+
+    let manifest_str = (0..archive.len())
+        .find_map(|i| {
+            let mut file = archive.by_index(i).ok()?;
+            if file.name().to_lowercase().ends_with("plugin.json") {
+                let mut s = String::new();
+                std::io::Read::read_to_string(&mut file, &mut s).ok()?;
+                Some(s)
+            } else {
+                None
+            }
+        })
+        .ok_or_else(|| {
+            if file_names.is_empty() {
+                "plugin.json not found in archive (archive appears empty)".to_string()
+            } else {
+                format!(
+                    "plugin.json not found in archive. Files found: {}",
+                    file_names.join(", ")
+                )
+            }
+        })?;
+
+    let manifest: PluginManifest = serde_json::from_str(&manifest_str)
+        .map_err(|e| format!("plugin.json parse error: {}", e))?;
+
+    if manifest.id.is_empty() || manifest.name.is_empty() {
+        return Err("plugin.json: 'id' and 'name' are required".to_string());
+    }
+    // The id names the install folder, which uninstall later deletes: one plain folder name
+    // (CWE-22). An id such as `../../../AppData/Roaming/Microsoft/Windows/Start Menu/Programs/
+    // Startup` put the plugin's files, scripts included, wherever the archive said, from a
+    // catalogue entry or a `bmm://catalog/plugin/install` link.
+    if crate::fs_utils::safe_folder_name(&manifest.id).as_deref() != Some(manifest.id.as_str()) {
+        return Err("plugin.json: 'id' must be one plain folder name".to_string());
+    }
+
+    let plugin_dir = plugins_dir.join(&manifest.id);
+    std::fs::create_dir_all(&plugin_dir).map_err(|e| e.to_string())?;
+
+    // Re-open archive to extract files
+    let cursor2 = std::io::Cursor::new(bytes);
+    let mut archive2 = zip::ZipArchive::new(cursor2).map_err(|e| format!("ZIP error: {}", e))?;
+    // The size caps of archive.rs (security summary §9): the declared total first, then every
+    // byte written counted against the same limit.
+    crate::archive::check_zip_declared(&mut archive2, bytes.len() as u64).map_err(|e| e.to_string())?;
+    let budget = crate::archive::ExtractBudget::for_archive(bytes.len() as u64);
+
+    for i in 0..archive2.len() {
+        if ticket.map(|t| t.is_cancelled()).unwrap_or(false) {
+            return Err(crate::fs_utils::CANCELLED.to_string());
+        }
+        let mut file = archive2.by_index(i).map_err(|e| e.to_string())?;
+        let name = file.name().to_string();
+        if name.ends_with('/') {
+            continue;
+        }
+
+        // CWE-22 Zip Slip: resolve a CONTAINED relative path (None ⇒ the entry uses
+        // `..`/absolute to escape → skip). The old `name[after first '/']` slice kept
+        // any `..` in the remainder, so a crafted .bmmplug could write outside the dir.
+        let safe = match file.enclosed_name() {
+            Some(p) => p.to_path_buf(),
+            None => continue,
+        };
+        // Strip the top-level folder (plugins are zipped inside a root dir), keep the rest.
+        let mut stripped = std::path::PathBuf::new();
+        for c in safe.components().skip(1) {
+            stripped.push(c.as_os_str());
+        }
+        let rel = if stripped.as_os_str().is_empty() {
+            safe.clone()
+        } else {
+            stripped
+        };
+        if rel.as_os_str().is_empty() {
+            continue;
+        }
+
+        let dest = plugin_dir.join(&rel);
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        let mut out = budget.writer(std::fs::File::create(&dest).map_err(|e| e.to_string())?);
+        let n = std::io::copy(&mut file, &mut out).map_err(|e| e.to_string())?;
+        if let Some(t) = ticket { t.add_bytes(n, n); }
+    }
+
+    Ok(manifest)
+}
+
+#[tauri::command]
+pub fn uninstall_plugin(state: State<'_, AppState>, plugin_id: String) -> Result<(), String> {
+    let install_dir = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        data.installed_plugins
+            .iter()
+            .find(|p| p.manifest.id == plugin_id)
+            .map(|p| p.install_dir.clone())
+    };
+
+    {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        data.installed_plugins
+            .retain(|p| p.manifest.id != plugin_id);
+        data.plugin_permissions.remove(&plugin_id);
+    }
+
+    if let Some(dir) = install_dir {
+        let path = PathBuf::from(dir);
+        if path.exists() {
+            std::fs::remove_dir_all(&path).ok();
+        }
+    }
+
+    let _ = state.save();
+    log_line(format!("[PLUGINS] Uninstalled plugin '{}'", plugin_id));
+    Ok(())
+}
+
+#[tauri::command]
+pub fn toggle_plugin(
+    state: State<'_, AppState>,
+    plugin_id: String,
+    enabled: bool,
+) -> Result<(), String> {
+    let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+    if let Some(p) = data
+        .installed_plugins
+        .iter_mut()
+        .find(|p| p.manifest.id == plugin_id)
+    {
+        p.enabled = enabled;
+    } else {
+        return Err(format!("Plugin '{}' not found", plugin_id));
+    }
+    drop(data);
+    let _ = state.save();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_installed_plugins(state: State<'_, AppState>) -> Result<Vec<InstalledPlugin>, String> {
+    let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+    Ok(data.installed_plugins.clone())
+}
+
+// ── Mod Comparison ─────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn compare_plugin_mods(
+    state: State<'_, AppState>,
+    plugin_id: String,
+) -> Result<ModCompareResult, String> {
+    let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+    let plugin = data
+        .installed_plugins
+        .iter()
+        .find(|p| p.manifest.id == plugin_id)
+        .ok_or_else(|| format!("Plugin '{}' not found", plugin_id))?
+        .clone();
+
+    let active_id = data.active_profile_id.clone().unwrap_or_default();
+    let active_mods: Vec<String> = data
+        .profiles
+        .iter()
+        .find(|p| p.id == active_id)
+        .map(|p| p.active_mods.clone())
+        .unwrap_or_default();
+
+    Ok(crate::api::compute_compare(
+        &plugin,
+        &data.mods,
+        &active_mods,
+    ))
+}
+
+#[tauri::command]
+pub async fn apply_plugin_modlist(
+    state: State<'_, AppState>,
+    plugin_id: String,
+    force_strict: bool,
+) -> Result<serde_json::Value, String> {
+    let (plugin, active_id) = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        let plugin = data
+            .installed_plugins
+            .iter()
+            .find(|p| p.manifest.id == plugin_id)
+            .ok_or_else(|| format!("Plugin '{}' not found", plugin_id))?
+            .clone();
+        let active_id = data.active_profile_id.clone().ok_or("No active profile")?;
+        (plugin, active_id)
+    };
+
+    let modlist = plugin
+        .manifest
+        .modlist
+        .as_ref()
+        .ok_or("Plugin has no modlist")?
+        .clone();
+
+    let strict = modlist.strict || force_strict;
+    let mut enabled_ids: Vec<String> = Vec::new();
+    let mut not_found: Vec<String> = Vec::new();
+
+    {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        for req in &modlist.required_mods {
+            // Prefer the stable id when the manifest carries one (survives renames);
+            // fall back to a case-insensitive name match for older manifests.
+            let found = req
+                .id
+                .as_ref()
+                .and_then(|id| data.mods.iter().find(|m| &m.id == id))
+                .or_else(|| {
+                    data.mods
+                        .iter()
+                        .find(|m| m.name.to_lowercase() == req.name.to_lowercase())
+                });
+            if let Some(m) = found {
+                enabled_ids.push(m.id.clone());
+            } else if !req.optional {
+                not_found.push(req.name.clone());
+            }
+        }
+    }
+
+    {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some(p) = data.profiles.iter_mut().find(|p| p.id == active_id) {
+            if strict {
+                p.active_mods = enabled_ids.clone();
+            } else {
+                for id in &enabled_ids {
+                    if !p.active_mods.contains(id) {
+                        p.active_mods.push(id.clone());
+                    }
+                }
+            }
+        }
+        for m in data.mods.iter_mut() {
+            if strict {
+                m.enabled = enabled_ids.contains(&m.id);
+            } else if enabled_ids.contains(&m.id) {
+                m.enabled = true;
+            }
+        }
+    }
+
+    let _ = state.save();
+    log_line(format!("[PLUGINS] Applied modlist for '{}'", plugin_id));
+    Ok(serde_json::json!({
+        "enabled": enabled_ids.len(),
+        "not_found": not_found,
+        "strict": strict,
+    }))
+}
+
+// ── Permissions ────────────────────────────────────────────────────────────
+
+/// Give every plugin the READ scope for each domain it already had WRITE on.
+///
+/// Fifty routes used to need a token and no permission at all: `GET /api/mods`,
+/// `POST /api/data/import`, `POST /api/restart`, `DELETE /api/plugins/<id>` and the rest.
+/// They are gated now, which is right — a permission table that two thirds of the surface
+/// ignores is decoration — but it would also stop every installed plugin dead on upgrade,
+/// for a reason nobody would connect to having updated BMM.
+///
+/// So: a plugin already trusted to CHANGE mods keeps being able to LIST them. Nothing else
+/// is granted. A plugin that was relying on a route in a domain it was never trusted with
+/// now gets a 403 that names the scope, one click from being granted — which is the loud
+/// failure the silent hole was hiding.
+///
+/// Runs once; `plugin_scopes_migrated` records it, so a grant the user later REVOKES is not
+/// handed back on the next start.
+pub fn migrate_plugin_read_scopes(data: &mut crate::state::AppData) -> usize {
+    if data.settings.plugin_scopes_migrated {
+        return 0;
+    }
+    data.settings.plugin_scopes_migrated = true;
+    let mut touched = 0usize;
+    for perms in data.plugin_permissions.values_mut() {
+        let mut add: Vec<String> = Vec::new();
+        for p in perms.iter() {
+            if let Some(domain) = p.strip_suffix(".write") {
+                // `system.write` and `telemetry.write` have no read half: there is nothing
+                // to disclose, only settings to change.
+                if matches!(domain, "system" | "telemetry") {
+                    continue;
+                }
+                let read = format!("{domain}.read");
+                if !perms.contains(&read) && !add.contains(&read) {
+                    add.push(read);
+                }
+            }
+        }
+        if !add.is_empty() {
+            touched += 1;
+            perms.extend(add);
+            perms.sort();
+        }
+    }
+    touched
+}
+
+#[cfg(test)]
+mod scope_migration_tests {
+    use super::*;
+
+    fn with(perms: &[&str]) -> crate::state::AppData {
+        let mut d = crate::state::AppData::default();
+        d.plugin_permissions.insert(
+            "p".into(),
+            perms.iter().map(|x| x.to_string()).collect(),
+        );
+        d
+    }
+
+    #[test]
+    fn a_plugin_trusted_to_change_mods_may_still_list_them() {
+        let mut d = with(&["mods.write"]);
+        assert_eq!(migrate_plugin_read_scopes(&mut d), 1);
+        assert!(d.plugin_permissions["p"].contains(&"mods.read".to_string()));
+    }
+
+    #[test]
+    fn nothing_else_is_granted() {
+        let mut d = with(&["mods.write"]);
+        migrate_plugin_read_scopes(&mut d);
+        assert!(!d.plugin_permissions["p"].contains(&"repo.read".to_string()));
+        assert!(!d.plugin_permissions["p"].contains(&"data.read".to_string()));
+    }
+
+    #[test]
+    fn the_two_domains_with_nothing_to_disclose_gain_nothing() {
+        let mut d = with(&["system.write", "telemetry.write"]);
+        migrate_plugin_read_scopes(&mut d);
+        assert_eq!(d.plugin_permissions["p"].len(), 2);
+    }
+
+    #[test]
+    fn it_runs_once_so_a_revoked_grant_stays_revoked() {
+        let mut d = with(&["mods.write"]);
+        migrate_plugin_read_scopes(&mut d);
+        d.plugin_permissions.get_mut("p").unwrap().retain(|x| x != "mods.read");
+        assert_eq!(migrate_plugin_read_scopes(&mut d), 0, "it must not run twice");
+        assert!(!d.plugin_permissions["p"].contains(&"mods.read".to_string()));
+    }
+
+    #[test]
+    fn a_plugin_with_nothing_granted_still_has_nothing() {
+        let mut d = with(&[]);
+        migrate_plugin_read_scopes(&mut d);
+        assert!(d.plugin_permissions["p"].is_empty());
+    }
+}
+
+#[tauri::command]
+pub fn set_plugin_permissions(
+    state: State<'_, AppState>,
+    plugin_id: String,
+    permissions: Vec<String>,
+) -> Result<(), String> {
+    let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+    data.plugin_permissions.insert(plugin_id, permissions);
+    drop(data);
+    let _ = state.save();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_plugin_permissions(
+    state: State<'_, AppState>,
+    plugin_id: String,
+) -> Result<Vec<String>, String> {
+    let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+    Ok(data
+        .plugin_permissions
+        .get(&plugin_id)
+        .cloned()
+        .unwrap_or_default())
+}
+
+// ── API Token ──────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn get_api_token(state: State<'_, AppState>) -> Result<String, String> {
+    let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+    Ok(data.settings.api_token.clone())
+}
+
+/// The key that proves a `bmm://schedule/run` came from this machine's Windows Scheduled
+/// Task. Read by the deep-link handler and by nothing else.
+///
+/// Not exposed over the local API on purpose: a caller holding an API token can already run
+/// a task through `POST /api/schedule/run`, so handing it this would add nothing but a way
+/// for the key to travel.
+#[tauri::command]
+pub fn get_os_schedule_key(state: State<'_, AppState>) -> Result<String, String> {
+    let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+    Ok(data.settings.os_schedule_key.clone())
+}
+
+/// The port the API actually bound THIS session. The frontend must use this
+/// (not settings.api_port) so changing the setting doesn't break calls before
+/// the restart that rebinds the server.
+#[tauri::command]
+pub fn get_effective_api_port() -> u16 {
+    crate::api::api_port()
+}
+
+/// The port AND whether anything is listening on it.
+///
+/// The doc comment above says the frontend must use the effective port, and the frontend
+/// never asked — it read a cached value from localStorage and fetched blindly. When the bind
+/// had failed (a zombie instance still holding the port) every feature that touched the API
+/// logged ERR_CONNECTION_REFUSED, and the only record of the real cause was one line in the
+/// crash log nobody reads.
+///
+/// Two fields rather than a port of 0 for "off": `api_port()` is also read by the script
+/// generators, which want the configured port whatever happened to the bind.
+#[tauri::command]
+pub fn get_api_status() -> serde_json::Value {
+    serde_json::json!({
+        "port": crate::api::api_port(),
+        "running": crate::api::api_running(),
+    })
+}
+
+/// Stop the running Plugin API server and re-spawn it on the CURRENT
+/// `settings.api_port`, so changing the port takes effect immediately without a
+/// full app restart. Returns the port it actually bound (read it back to refresh
+/// the UI / docs). All state access happens before any `.await`.
+#[tauri::command]
+pub async fn restart_api_server(
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> Result<u16, String> {
+    // Signal the current server to stop (graceful shutdown), snapshot what the
+    // server needs, and register the new shutdown channel — all before awaiting.
+    if let Some(tx) = state
+        .api_shutdown_tx
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .take()
+    {
+        let _ = tx.send(());
+    }
+    let data_arc = state.data.clone();
+    let data_path = state.data_path.clone();
+    let creator_id = std::sync::Arc::new(
+        crate::commands::security::get_creator_id(app.clone()).unwrap_or_default(),
+    );
+    let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+    *state
+        .api_shutdown_tx
+        .lock()
+        .unwrap_or_else(|p| p.into_inner()) = Some(tx);
+
+    // Let the OS release the old port before rebinding.
+    tokio::time::sleep(std::time::Duration::from_millis(350)).await;
+
+    let api_handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        crate::api::start_api_server(data_arc, data_path, creator_id, rx, api_handle).await;
+    });
+
+    // Give it a moment to bind, then report the effective port.
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    Ok(crate::api::api_port())
+}
+
+#[tauri::command]
+pub fn reset_api_token(state: State<'_, AppState>) -> Result<String, String> {
+    let new_token = uuid::Uuid::new_v4().to_string();
+    {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        data.settings.api_token = new_token.clone();
+    }
+    let _ = state.save();
+    log_line("[PLUGINS] API token reset".to_string());
+    Ok(new_token)
+}
+
+// ── Per-plugin API tokens (CWE-862/863) ────────────────────────────────────
+// A plugin should call the API with its OWN token (not the shared admin token),
+// so the server resolves its identity from the token and limits it to its
+// declared permissions. The admin `api_token` keeps full access.
+
+/// Issue (or replace) the per-plugin API token bound to `plugin_id`. Returns it.
+#[tauri::command]
+pub fn create_plugin_token(
+    state: State<'_, AppState>,
+    plugin_id: String,
+) -> Result<String, String> {
+    if plugin_id.trim().is_empty() {
+        return Err("plugin_id required".to_string());
+    }
+    let token = uuid::Uuid::new_v4().to_string();
+    {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        // One token per plugin: drop any previous token for this plugin first.
+        data.settings
+            .plugin_tokens
+            .retain(|_, pid| pid != &plugin_id);
+        data.settings
+            .plugin_tokens
+            .insert(token.clone(), plugin_id.clone());
+    }
+    let _ = state.save();
+    log_line(format!(
+        "[PLUGINS] Issued API token for plugin '{}'",
+        plugin_id
+    ));
+    Ok(token)
+}
+
+/// Revoke a plugin's API token (by plugin_id). Returns true if one was removed.
+#[tauri::command]
+pub fn revoke_plugin_token(state: State<'_, AppState>, plugin_id: String) -> Result<bool, String> {
+    let removed = {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        let before = data.settings.plugin_tokens.len();
+        data.settings
+            .plugin_tokens
+            .retain(|_, pid| pid != &plugin_id);
+        before != data.settings.plugin_tokens.len()
+    };
+    if removed {
+        let _ = state.save();
+        log_line(format!(
+            "[PLUGINS] Revoked API token for plugin '{}'",
+            plugin_id
+        ));
+    }
+    Ok(removed)
+}
+
+/// List the plugin_ids that currently have an API token (token values are NEVER
+/// returned).
+#[tauri::command]
+pub fn list_plugin_tokens(state: State<'_, AppState>) -> Vec<String> {
+    let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+    data.settings.plugin_tokens.values().cloned().collect()
+}
+
+// ── Script Generation ──────────────────────────────────────────────────────
+
+#[derive(serde::Deserialize)]
+pub struct ScriptAction {
+    pub action_type: String,
+    pub target_id: String,
+    #[serde(default)]
+    pub extra: serde_json::Value,
+}
+
+#[derive(serde::Deserialize)]
+pub struct GenerateScriptRequest {
+    pub format: String, // "bat" | "ps1" | "vbs"
+    pub actions: Vec<ScriptAction>,
+    #[serde(default)]
+    pub use_deeplink: bool,
+    pub token: Option<String>,
+    #[serde(default)]
+    pub launch_bmm: bool,
+    #[serde(default)]
+    pub exe_path: String,
+}
+
+#[tauri::command]
+pub fn generate_script(req: GenerateScriptRequest) -> Result<String, String> {
+    match req.format.as_str() {
+        "bat" => Ok(gen_bat(&req)),
+        "ps1" => Ok(gen_ps1(&req)),
+        "vbs" => Ok(gen_vbs(&req)),
+        "bmms" => Ok(gen_bmms(&req)),
+        _ => Err(format!("Unknown format: {}", req.format)),
+    }
+}
+
+fn extra_str<'a>(v: &'a serde_json::Value, k: &str) -> &'a str {
+    v.get(k).and_then(|x| x.as_str()).unwrap_or("")
+}
+fn extra_u64(v: &serde_json::Value, k: &str) -> u64 {
+    v.get(k).and_then(|x| x.as_u64()).unwrap_or(0)
+}
+fn extra_bool(v: &serde_json::Value, k: &str) -> bool {
+    v.get(k).and_then(|x| x.as_bool()).unwrap_or(false)
+}
+
+/// BMMScript — the one output that runs INSIDE BMM rather than poking it from outside.
+///
+/// No action-name table: `action_to_deeplink` already knows every action with a native
+/// link, and `action_to_api_call` covers the rest. Emitting those two as `do deeplink(...)`
+/// and `do http.request(...)` keeps this correct as both grow, and avoids a third copy of a
+/// correspondence the repository already keeps twice.
+fn gen_bmms(req: &GenerateScriptRequest) -> String {
+    let mut steps: Vec<String> = Vec::new();
+    let mut needs_http = false;
+
+    for a in &req.actions {
+        let dl = action_to_deeplink(a);
+        // NOT `is_empty`: action_to_deeplink never returns one. Its fallback is the sentinel
+        // `bmm://unknown?id=…`, so an emptiness check silently turned every unrecognised
+        // action into a link that goes nowhere.
+        if !dl.starts_with("bmm://unknown") {
+            steps.push(format!("    do deeplink(url: {})", quote_bmms(&dl)));
+            continue;
+        }
+        if let Some((method, path, body)) = action_to_api_call(a) {
+            needs_http = true;
+            let mut call = format!(
+                "    do http.request(url: {}, method: {}",
+                quote_bmms(&format!("http://127.0.0.1:5173{}", path)),
+                method.to_uppercase()
+            );
+            if !body.is_empty() {
+                call.push_str(&format!(", body: {}", quote_bmms(&body)));
+            }
+            if req.token.is_some() {
+                call.push_str(&format!(
+                    ", headers: {}",
+                    quote_bmms("Authorization: Bearer {bmm.token}")
+                ));
+            }
+            call.push(')');
+            steps.push(call);
+            continue;
+        }
+        // Named rather than dropped. A generated file that is quietly missing a step is
+        // worse than one that says which step it could not write.
+        steps.push(format!(
+            "    // no BMM action for `{}` — nothing was generated for it",
+            a.action_type
+        ));
+    }
+
+    let mut perms = vec!["deeplink"];
+    if needs_http {
+        // http.request runs under the same permission as launching a program: it can post a
+        // captured value anywhere.
+        perms.push("command");
+    }
+
+    let mut out = String::new();
+    out.push_str("// Generated by BetterModsManager\n");
+    out.push_str("// Open this in the Scheduler (Code mode) or import it as a task.\n\n");
+    out.push_str("task \"Generated\" {\n");
+    out.push_str("    manual\n");
+    out.push_str(&format!("    allow {}\n\n", perms.join(", ")));
+    if steps.is_empty() {
+        out.push_str("    // nothing selected\n");
+    } else {
+        out.push_str(&steps.join("\n"));
+        out.push('\n');
+    }
+    out.push_str("}\n");
+    out
+}
+
+/// A BMMScript string literal. Only the two escapes the lexer recognises — anything else it
+/// keeps BOTH characters of, so a Windows path must NOT have its backslashes doubled.
+fn quote_bmms(v: &str) -> String {
+    format!("\"{}\"", v.replace('\\', "\\\\").replace('"', "\\\""))
+}
+
+#[cfg(test)]
+mod bmms_gen_tests {
+    use super::*;
+
+    fn act(t: &str, id: &str) -> ScriptAction {
+        ScriptAction {
+            action_type: t.into(),
+            target_id: id.into(),
+            extra: serde_json::json!({}),
+        }
+    }
+
+    /// A generator that emits text the compiler refuses is worse than no generator: it looks
+    /// like it worked and fails when somebody tries to use the file. So the output goes
+    /// straight through the real parser.
+    #[test]
+    fn what_it_generates_actually_compiles() {
+        let req = GenerateScriptRequest {
+            format: "bmms".into(),
+            actions: vec![
+                act("activate_profile", "prof-1"),
+                act("enable_mod", "some mod"),
+                act("apply_plugin", "my-plugin"),
+                // No native deeplink — takes the HTTP path.
+                act("list_mods", ""),
+            ],
+            use_deeplink: true,
+            token: Some("tok".into()),
+            launch_bmm: false,
+            exe_path: String::new(),
+        };
+        let src = gen_bmms(&req);
+        let r = crate::commands::bmms::bmms_compile(src.clone());
+        assert!(
+            r.ok,
+            "generated BMMScript does not compile: {:?}
+---
+{}",
+            r.errors, src
+        );
+        let task = r.task.unwrap();
+        assert_eq!(task["trigger"]["type"], "manual");
+        assert_eq!(task["perms"]["deeplink"], true);
+        let steps = task["steps"].as_array().unwrap();
+        assert_eq!(
+            steps.len(),
+            4,
+            "every action must produce a step:
+{}",
+            src
+        );
+        assert_eq!(steps[0]["action"]["type"], "deeplink");
+        assert!(steps[0]["action"]["params"]["url"]
+            .as_str()
+            .unwrap()
+            .contains("profile/activate"));
+    }
+
+    #[test]
+    fn an_action_with_no_bmm_equivalent_is_named_not_dropped() {
+        let req = GenerateScriptRequest {
+            format: "bmms".into(),
+            actions: vec![act("something_invented", "x")],
+            use_deeplink: true,
+            token: None,
+            launch_bmm: false,
+            exe_path: String::new(),
+        };
+        let src = gen_bmms(&req);
+        // A generated file quietly missing a step is worse than one that says so.
+        assert!(
+            src.contains("something_invented"),
+            "got:
+{}",
+            src
+        );
+        assert!(
+            crate::commands::bmms::bmms_compile(src.clone()).ok,
+            "the comment must still compile:
+{}",
+            src
+        );
+    }
+
+    #[test]
+    fn a_backslash_in_a_value_survives_the_quoting() {
+        // Asserted by ROUND TRIP rather than against a literal: the expected string needs
+        // four levels of escaping to write down, and I got it wrong twice. What actually
+        // matters is that the path arrives intact on the other side of the parser.
+        let path = r"C:\mods\Skyrim";
+        let src = format!(
+            "task {} {{ do folder.open(path: {}) }}",
+            quote_bmms("T"),
+            quote_bmms(path)
+        );
+        let r = crate::commands::bmms::bmms_compile(src.clone());
+        assert!(r.ok, "{:?} for {}", r.errors, src);
+        assert_eq!(
+            r.task.unwrap()["steps"][0]["action"]["params"]["path"],
+            path,
+            "the path must survive quoting and parsing: {}",
+            src
+        );
+    }
+}
+
+fn gen_bat(req: &GenerateScriptRequest) -> String {
+    let token = req.token.as_deref().unwrap_or("YOUR_TOKEN_HERE");
+    let mut lines = vec![
+        "@echo off".to_string(),
+        ":: Generated by BetterModsManager".to_string(),
+        ":: https://github.com/FreeProject089/BetterModsManager".to_string(),
+        String::new(),
+    ];
+
+    if req.launch_bmm && !req.exe_path.is_empty() {
+        lines.push(format!("set \"BMM_EXE={}\"", req.exe_path));
+        lines.push("echo Starting BetterModsManager...".to_string());
+        lines.push("start \"\" \"%BMM_EXE%\"".to_string());
+        lines.push("timeout /t 3 /nobreak >nul".to_string());
+        lines.push(String::new());
+    }
+
+    if !req.use_deeplink || actions_need_api(req) {
+        lines.push(format!("set \"BMM_TOKEN={}\"", token));
+        lines.push(String::new());
+    }
+
+    for action in &req.actions {
+        lines.extend(bat_action(action, req.use_deeplink));
+    }
+
+    lines.push(String::new());
+    lines.push("echo Done.".to_string());
+    lines.join("\r\n")
+}
+
+fn bat_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    match action.action_type.as_str() {
+        "wait" => {
+            let ms = extra_u64(&action.extra, "duration_ms");
+            let secs = ((ms + 999) / 1000).max(1);
+            out.push(format!("timeout /t {} /nobreak >nul", secs));
+        }
+        "close_process" => {
+            let name = extra_str(&action.extra, "process_name");
+            if !name.is_empty() {
+                out.push(format!("taskkill /F /IM \"{}\" >nul 2>&1", name));
+            }
+        }
+        "open_url" => {
+            let url = extra_str(&action.extra, "url");
+            if !url.is_empty() {
+                out.push(format!("start \"\" \"{}\"", url));
+            }
+        }
+        "show_message" => {
+            let msg = extra_str(&action.extra, "message");
+            if !msg.is_empty() {
+                out.push(format!("echo {}", msg));
+                out.push("pause".to_string());
+            }
+        }
+        "launch_game" => {
+            let exe = extra_str(&action.extra, "exe_path");
+            if !exe.is_empty() {
+                out.push(format!("start \"\" \"{}\"", exe));
+                out.push("timeout /t 1 /nobreak >nul".to_string());
+            }
+        }
+        "log" => {
+            let msg = extra_str(&action.extra, "message");
+            out.push(format!("echo {}", if msg.is_empty() { "." } else { &msg }));
+        }
+        "comment" => {
+            let text = extra_str(&action.extra, "text");
+            out.push(format!(":: {}", text));
+        }
+        "set_variable" => {
+            let expr = extra_str(&action.extra, "expr");
+            if !expr.is_empty() {
+                out.push(format!("set {}", expr));
+            }
+        }
+        "if_file_exists" => {
+            let path = extra_str(&action.extra, "path");
+            if !path.is_empty() {
+                out.push(format!("if exist \"{}\" (", path));
+            }
+        }
+        "if_file_not_exists" => {
+            let path = extra_str(&action.extra, "path");
+            if !path.is_empty() {
+                out.push(format!("if not exist \"{}\" (", path));
+            }
+        }
+        "if_var_eq" => {
+            let cond = extra_str(&action.extra, "cond");
+            let parts: Vec<&str> = cond.splitn(2, '=').collect();
+            if parts.len() == 2 {
+                out.push(format!(
+                    "if \"%{}%\"==\"{}\" (",
+                    parts[0].trim(),
+                    parts[1].trim()
+                ));
+            }
+        }
+        "if_var_neq" => {
+            let cond = extra_str(&action.extra, "cond");
+            let parts: Vec<&str> = cond.splitn(2, '=').collect();
+            if parts.len() == 2 {
+                out.push(format!(
+                    "if not \"%{}%\"==\"{}\" (",
+                    parts[0].trim(),
+                    parts[1].trim()
+                ));
+            }
+        }
+        "if_api_ok" => {
+            // Optionally run a linked API call first, then branch on its result.
+            let linked = extra_str(&action.extra, "api_action");
+            if !linked.is_empty() {
+                out.extend(bat_action(
+                    &ScriptAction {
+                        action_type: linked.to_string(),
+                        target_id: String::new(),
+                        extra: serde_json::Value::Null,
+                    },
+                    false,
+                ));
+            }
+            // curl uses -f below, so a failed HTTP call sets ERRORLEVEL != 0.
+            out.push("if %ERRORLEVEL% EQU 0 (".to_string());
+        }
+        "if_api_err" => {
+            let linked = extra_str(&action.extra, "api_action");
+            if !linked.is_empty() {
+                out.extend(bat_action(
+                    &ScriptAction {
+                        action_type: linked.to_string(),
+                        target_id: String::new(),
+                        extra: serde_json::Value::Null,
+                    },
+                    false,
+                ));
+            }
+            out.push("if %ERRORLEVEL% NEQ 0 (".to_string());
+        }
+        "pause_key" => {
+            out.push("pause".to_string());
+        }
+        "stop_script" => {
+            out.push("exit /b 0".to_string());
+        }
+        "else_block" => {
+            out.push(") else (".to_string());
+        }
+        "end_block" => {
+            out.push(")".to_string());
+        }
+        "raw_code" => {
+            let code = extra_str(&action.extra, "code");
+            if !code.is_empty() {
+                out.push(code.to_string());
+            }
+        }
+        "loop_start" => {
+            let n = extra_str(&action.extra, "count")
+                .parse::<u32>()
+                .unwrap_or(1)
+                .max(1);
+            out.push(format!("for /L %%i in (1,1,{}) do (", n));
+        }
+        "loop_end" => {
+            out.push(")".to_string());
+        }
+        "verify_file" => {
+            let p = extra_str(&action.extra, "path");
+            let vn = {
+                let v = extra_str(&action.extra, "var_name");
+                if v.is_empty() {
+                    "FILE_HASH"
+                } else {
+                    v
+                }
+            };
+            // certutil prints the hash on the 2nd line; capture the first hash line.
+            out.push(format!("set \"{vn}=\" & for /f \"skip=1 tokens=* delims=\" %%H in ('certutil -hashfile \"{p}\" SHA256') do if not defined {vn} set \"{vn}=%%H\""));
+        }
+        "wait_until" => {
+            let p = extra_str(&action.extra, "path");
+            let to = extra_u64(&action.extra, "timeout").max(1);
+            let pl = extra_u64(&action.extra, "poll").max(1);
+            let loops = (to / pl).max(1);
+            // Bounded poll loop (label-free → safe to use several times in one file):
+            // once the file exists, the inner `if not exist` is false so it stops sleeping.
+            out.push(format!("for /L %%w in (1,1,{loops}) do (if not exist \"{p}\" timeout /t {pl} /nobreak >nul)"));
+        }
+        "math_set" => {
+            let v = {
+                let s = extra_str(&action.extra, "var_name");
+                if s.is_empty() {
+                    "RESULT"
+                } else {
+                    s
+                }
+            };
+            out.push(format!(
+                "set /a \"{v}={}\"",
+                extra_str(&action.extra, "expr")
+            ));
+        }
+        "ternary" => {
+            let v = {
+                let s = extra_str(&action.extra, "var_name");
+                if s.is_empty() {
+                    "RESULT"
+                } else {
+                    s
+                }
+            };
+            let (c, tt, ff) = (
+                extra_str(&action.extra, "cond"),
+                extra_str(&action.extra, "val_true"),
+                extra_str(&action.extra, "val_false"),
+            );
+            out.push(format!("if {c} (set \"{v}={tt}\") else (set \"{v}={ff}\")"));
+        }
+        "guard_stop" => {
+            out.push(format!("if {} exit /b 0", extra_str(&action.extra, "cond")));
+        }
+        _ if use_deeplink
+            && action_to_deeplink(action).starts_with("bmm://")
+            && !action_to_deeplink(action).contains("unknown") =>
+        {
+            out.push(format!("start \"\" \"{}\"", action_to_deeplink(action)));
+            out.push("timeout /t 1 /nobreak >nul".to_string());
+        }
+        _ => {
+            if let Some((method, path, body)) = action_to_api_call(action) {
+                // -f makes curl exit non-zero on HTTP >= 400 so `if_api_ok` /
+                // `if_api_err` can branch on %ERRORLEVEL%.
+                let base = format!(
+                    "curl -s -f -X {} \"http://127.0.0.1:{port}{}\" -H \"Authorization: Bearer %BMM_TOKEN%\"",
+                    method, path, port = crate::api::api_port()
+                );
+                if body.is_empty() {
+                    out.push(base);
+                } else {
+                    out.push(format!(
+                        "{} -H \"Content-Type: application/json\" -d \"{}\"",
+                        base,
+                        body.replace('"', "\\\"")
+                    ));
+                }
+            } else {
+                out.push(format!(":: [WARN] Unknown action: {}", action.action_type));
+            }
+        }
+    }
+    out
+}
+
+fn gen_ps1(req: &GenerateScriptRequest) -> String {
+    let token = req.token.as_deref().unwrap_or("YOUR_TOKEN_HERE");
+    let mut lines = vec![
+        "# Generated by BetterModsManager".to_string(),
+        "# https://github.com/FreeProject089/BetterModsManager".to_string(),
+        String::new(),
+    ];
+
+    if req.launch_bmm && !req.exe_path.is_empty() {
+        lines.push(format!("$bmmExe = \"{}\"", req.exe_path));
+        lines.push("Write-Host \"Starting BetterModsManager...\"".to_string());
+        lines.push("Start-Process $bmmExe".to_string());
+        lines.push("Start-Sleep -Seconds 3".to_string());
+        lines.push(String::new());
+    }
+
+    if !req.use_deeplink || actions_need_api(req) {
+        lines.push(format!("$bmmToken = \"{}\"", token));
+        lines.push("$bmmHeaders = @{ Authorization = \"Bearer $bmmToken\"; \"Content-Type\" = \"application/json\" }".to_string());
+        lines.push(
+            "$bmmOk = $true  # set after each API call for if_api_ok / if_api_err".to_string(),
+        );
+        lines.push(String::new());
+    }
+
+    for action in &req.actions {
+        lines.extend(ps1_action(action, req.use_deeplink));
+    }
+
+    lines.push(String::new());
+    lines.push("Write-Host \"Done.\"".to_string());
+    lines.join("\n")
+}
+
+fn ps1_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    match action.action_type.as_str() {
+        "wait" => {
+            let ms = extra_u64(&action.extra, "duration_ms").max(100);
+            out.push(format!("Start-Sleep -Milliseconds {}", ms));
+        }
+        "close_process" => {
+            let name = extra_str(&action.extra, "process_name")
+                .trim_end_matches(".exe")
+                .to_string();
+            if !name.is_empty() {
+                out.push(format!(
+                    "Stop-Process -Name \"{}\" -Force -ErrorAction SilentlyContinue",
+                    name
+                ));
+            }
+        }
+        "open_url" => {
+            let url = extra_str(&action.extra, "url");
+            if !url.is_empty() {
+                out.push(format!("Start-Process \"{}\"", url));
+            }
+        }
+        "show_message" => {
+            let msg = extra_str(&action.extra, "message");
+            if !msg.is_empty() {
+                out.push(format!("Write-Host \"{}\"", msg));
+                out.push("$null = Read-Host 'Press Enter to continue'".to_string());
+            }
+        }
+        "launch_game" => {
+            let exe = extra_str(&action.extra, "exe_path");
+            if !exe.is_empty() {
+                out.push(format!("Start-Process \"{}\"", exe));
+                out.push("Start-Sleep -Seconds 1".to_string());
+            }
+        }
+        "log" => {
+            let msg = extra_str(&action.extra, "message");
+            out.push(format!("Write-Host \"{}\"", msg.replace('"', "''")));
+        }
+        "comment" => {
+            let text = extra_str(&action.extra, "text");
+            out.push(format!("# {}", text));
+        }
+        "set_variable" => {
+            let expr = extra_str(&action.extra, "expr");
+            if !expr.is_empty() {
+                let parts: Vec<&str> = expr.splitn(2, '=').collect();
+                if parts.len() == 2 {
+                    out.push(format!("${} = \"{}\"", parts[0].trim(), parts[1].trim()));
+                }
+            }
+        }
+        "if_file_exists" => {
+            let path = extra_str(&action.extra, "path");
+            if !path.is_empty() {
+                out.push(format!("if (Test-Path \"{}\") {{", path));
+            }
+        }
+        "if_file_not_exists" => {
+            let path = extra_str(&action.extra, "path");
+            if !path.is_empty() {
+                out.push(format!("if (-not (Test-Path \"{}\")) {{", path));
+            }
+        }
+        "if_var_eq" => {
+            let cond = extra_str(&action.extra, "cond");
+            let parts: Vec<&str> = cond.splitn(2, '=').collect();
+            if parts.len() == 2 {
+                out.push(format!(
+                    "if (${} -eq \"{}\") {{",
+                    parts[0].trim(),
+                    parts[1].trim()
+                ));
+            }
+        }
+        "if_var_neq" => {
+            let cond = extra_str(&action.extra, "cond");
+            let parts: Vec<&str> = cond.splitn(2, '=').collect();
+            if parts.len() == 2 {
+                out.push(format!(
+                    "if (${} -ne \"{}\") {{",
+                    parts[0].trim(),
+                    parts[1].trim()
+                ));
+            }
+        }
+        "if_api_ok" => {
+            let linked = extra_str(&action.extra, "api_action");
+            if !linked.is_empty() {
+                out.extend(ps1_action(
+                    &ScriptAction {
+                        action_type: linked.to_string(),
+                        target_id: String::new(),
+                        extra: serde_json::Value::Null,
+                    },
+                    false,
+                ));
+            }
+            out.push("if ($bmmOk) {".to_string());
+        }
+        "if_api_err" => {
+            let linked = extra_str(&action.extra, "api_action");
+            if !linked.is_empty() {
+                out.extend(ps1_action(
+                    &ScriptAction {
+                        action_type: linked.to_string(),
+                        target_id: String::new(),
+                        extra: serde_json::Value::Null,
+                    },
+                    false,
+                ));
+            }
+            out.push("if (-not $bmmOk) {".to_string());
+        }
+        "pause_key" => {
+            out.push("$null = Read-Host 'Press Enter to continue'".to_string());
+        }
+        "stop_script" => {
+            out.push("exit 0".to_string());
+        }
+        "else_block" => {
+            out.push("} else {".to_string());
+        }
+        "end_block" => {
+            out.push("}".to_string());
+        }
+        "raw_code" => {
+            let code = extra_str(&action.extra, "code");
+            if !code.is_empty() {
+                out.push(code.to_string());
+            }
+        }
+        "loop_start" => {
+            let n = extra_str(&action.extra, "count")
+                .parse::<u32>()
+                .unwrap_or(1)
+                .max(1);
+            out.push(format!("1..{} | ForEach-Object {{", n));
+        }
+        "loop_end" => {
+            out.push("}".to_string());
+        }
+        "verify_file" => {
+            let p = extra_str(&action.extra, "path");
+            let vn = {
+                let v = extra_str(&action.extra, "var_name");
+                if v.is_empty() {
+                    "FILE_HASH"
+                } else {
+                    v
+                }
+            };
+            out.push(format!(
+                "${vn} = (Get-FileHash -Path \"{p}\" -Algorithm SHA256).Hash.ToLower()"
+            ));
+        }
+        "wait_until" => {
+            let p = extra_str(&action.extra, "path");
+            let to = extra_u64(&action.extra, "timeout").max(1);
+            let pl = extra_u64(&action.extra, "poll").max(1);
+            out.push(format!("$_end = (Get-Date).AddSeconds({to}); while (-not (Test-Path \"{p}\") -and (Get-Date) -lt $_end) {{ Start-Sleep -Seconds {pl} }}"));
+        }
+        "math_set" => {
+            let v = {
+                let s = extra_str(&action.extra, "var_name");
+                if s.is_empty() {
+                    "RESULT"
+                } else {
+                    s
+                }
+            };
+            out.push(format!("${v} = ({})", extra_str(&action.extra, "expr")));
+        }
+        "ternary" => {
+            let v = {
+                let s = extra_str(&action.extra, "var_name");
+                if s.is_empty() {
+                    "RESULT"
+                } else {
+                    s
+                }
+            };
+            let (c, tt, ff) = (
+                extra_str(&action.extra, "cond"),
+                extra_str(&action.extra, "val_true"),
+                extra_str(&action.extra, "val_false"),
+            );
+            out.push(format!("${v} = if ({c}) {{ {tt} }} else {{ {ff} }}"));
+        }
+        "guard_stop" => {
+            out.push(format!(
+                "if ({}) {{ exit 0 }}",
+                extra_str(&action.extra, "cond")
+            ));
+        }
+        _ if use_deeplink
+            && action_to_deeplink(action).starts_with("bmm://")
+            && !action_to_deeplink(action).contains("unknown") =>
+        {
+            out.push(format!("Start-Process \"{}\"", action_to_deeplink(action)));
+            out.push("Start-Sleep -Seconds 1".to_string());
+        }
+        _ => {
+            if let Some((method, path, body)) = action_to_api_call(action) {
+                // -ErrorAction SilentlyContinue + `$bmmOk = $?` so a failed call
+                // doesn't halt the script and `if_api_ok`/`if_api_err` can branch.
+                if body.is_empty() {
+                    out.push(format!(
+                        "Invoke-RestMethod -Method {} -Uri \"http://127.0.0.1:{port}{}\" -Headers $bmmHeaders -ErrorAction SilentlyContinue; $bmmOk = $?",
+                        method, path, port = crate::api::api_port()
+                    ));
+                } else {
+                    // Escape single-quotes inside body for PS1 single-quoted string
+                    let body_esc = body.replace('\'', "''");
+                    out.push(format!(
+                        "Invoke-RestMethod -Method {} -Uri \"http://127.0.0.1:{port}{}\" -Headers $bmmHeaders -Body '{}' -ErrorAction SilentlyContinue; $bmmOk = $?",
+                        method, path, body_esc, port = crate::api::api_port()
+                    ));
+                }
+            } else {
+                out.push(format!("# [WARN] Unknown action: {}", action.action_type));
+            }
+        }
+    }
+    out
+}
+
+fn gen_vbs(req: &GenerateScriptRequest) -> String {
+    let token = req.token.as_deref().unwrap_or("YOUR_TOKEN_HERE");
+    let need_api = actions_need_api(req);
+    let mut lines = vec![
+        "' Generated by BetterModsManager".to_string(),
+        "' https://github.com/FreeProject089/BetterModsManager".to_string(),
+        String::new(),
+        "Set shell = CreateObject(\"WScript.Shell\")".to_string(),
+        String::new(),
+    ];
+
+    if req.launch_bmm && !req.exe_path.is_empty() {
+        lines.push(format!(
+            "Dim bmmExe : bmmExe = \"{}\"",
+            req.exe_path.replace('"', "\"\"")
+        ));
+        lines.push("shell.Run Chr(34) & bmmExe & Chr(34)".to_string());
+        lines.push("WScript.Sleep 3000".to_string());
+        lines.push(String::new());
+    }
+
+    if need_api {
+        lines.push(format!(
+            "Dim bmmToken : bmmToken = \"{}\"",
+            token.replace('"', "\"\"")
+        ));
+        lines.push("Dim bmmLastStatus : bmmLastStatus = 0  ' set after each API call for if_api_ok / if_api_err".to_string());
+        lines.push("Sub BmmApi(method, path, body)".to_string());
+        lines.push("    Dim http : Set http = CreateObject(\"MSXML2.XMLHTTP\")".to_string());
+        lines.push(format!(
+            "    http.open method, \"http://127.0.0.1:{}\" & path, False",
+            crate::api::api_port()
+        ));
+        lines.push(
+            "    http.setRequestHeader \"Authorization\", \"Bearer \" & bmmToken".to_string(),
+        );
+        lines.push("    On Error Resume Next".to_string());
+        lines.push("    If Len(body) > 0 Then".to_string());
+        lines.push(
+            "        http.setRequestHeader \"Content-Type\", \"application/json\"".to_string(),
+        );
+        lines.push("        http.send body".to_string());
+        lines.push("    Else".to_string());
+        lines.push("        http.send".to_string());
+        lines.push("    End If".to_string());
+        lines.push(
+            "    If Err.Number <> 0 Then bmmLastStatus = 0 Else bmmLastStatus = http.status"
+                .to_string(),
+        );
+        lines.push("    On Error Goto 0".to_string());
+        lines.push("End Sub".to_string());
+        lines.push(String::new());
+    }
+
+    for action in &req.actions {
+        lines.extend(vbs_action(action, req.use_deeplink));
+    }
+
+    lines.push(String::new());
+    lines.push("MsgBox \"Done.\"".to_string());
+    lines.join("\n")
+}
+
+fn vbs_action(action: &ScriptAction, use_deeplink: bool) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    match action.action_type.as_str() {
+        "wait" => {
+            let ms = extra_u64(&action.extra, "duration_ms").max(100);
+            out.push(format!("WScript.Sleep {}", ms));
+        }
+        "close_process" => {
+            let name = extra_str(&action.extra, "process_name");
+            if !name.is_empty() {
+                out.push(format!("shell.Run \"taskkill /F /IM {}\", 0, True", name));
+            }
+        }
+        "open_url" => {
+            let url = extra_str(&action.extra, "url");
+            if !url.is_empty() {
+                out.push(format!("shell.Run \"{}\"", url));
+            }
+        }
+        "show_message" => {
+            let msg = extra_str(&action.extra, "message");
+            if !msg.is_empty() {
+                out.push(format!("MsgBox \"{}\"", msg));
+            }
+        }
+        "launch_game" => {
+            let exe = extra_str(&action.extra, "exe_path");
+            if !exe.is_empty() {
+                out.push(format!("shell.Run Chr(34) & \"{}\" & Chr(34)", exe));
+                out.push("WScript.Sleep 1000".to_string());
+            }
+        }
+        "log" => {
+            let msg = extra_str(&action.extra, "message");
+            out.push(format!(
+                "WScript.Echo \"{}\"",
+                msg.replace('"', "\" & Chr(34) & \"")
+            ));
+        }
+        "comment" => {
+            let text = extra_str(&action.extra, "text");
+            out.push(format!("' {}", text));
+        }
+        "set_variable" => {
+            let expr = extra_str(&action.extra, "expr");
+            if !expr.is_empty() {
+                let parts: Vec<&str> = expr.splitn(2, '=').collect();
+                if parts.len() == 2 {
+                    out.push(format!(
+                        "Dim {} : {} = \"{}\"",
+                        parts[0].trim(),
+                        parts[0].trim(),
+                        parts[1].trim()
+                    ));
+                }
+            }
+        }
+        "if_file_exists" => {
+            let path = extra_str(&action.extra, "path");
+            if !path.is_empty() {
+                out.push(
+                    "Dim fso : Set fso = CreateObject(\"Scripting.FileSystemObject\")".to_string(),
+                );
+                out.push(format!("If fso.FileExists(\"{}\") Then", path));
+            }
+        }
+        "if_file_not_exists" => {
+            let path = extra_str(&action.extra, "path");
+            if !path.is_empty() {
+                out.push(
+                    "Dim fso : Set fso = CreateObject(\"Scripting.FileSystemObject\")".to_string(),
+                );
+                out.push(format!("If Not fso.FileExists(\"{}\") Then", path));
+            }
+        }
+        "if_var_eq" => {
+            let cond = extra_str(&action.extra, "cond");
+            let parts: Vec<&str> = cond.splitn(2, '=').collect();
+            if parts.len() == 2 {
+                out.push(format!(
+                    "If {} = \"{}\" Then",
+                    parts[0].trim(),
+                    parts[1].trim()
+                ));
+            }
+        }
+        "if_var_neq" => {
+            let cond = extra_str(&action.extra, "cond");
+            let parts: Vec<&str> = cond.splitn(2, '=').collect();
+            if parts.len() == 2 {
+                out.push(format!(
+                    "If {} <> \"{}\" Then",
+                    parts[0].trim(),
+                    parts[1].trim()
+                ));
+            }
+        }
+        "if_api_ok" => {
+            let linked = extra_str(&action.extra, "api_action");
+            if !linked.is_empty() {
+                out.extend(vbs_action(
+                    &ScriptAction {
+                        action_type: linked.to_string(),
+                        target_id: String::new(),
+                        extra: serde_json::Value::Null,
+                    },
+                    false,
+                ));
+            }
+            out.push("If bmmLastStatus >= 200 And bmmLastStatus < 400 Then".to_string());
+        }
+        "if_api_err" => {
+            let linked = extra_str(&action.extra, "api_action");
+            if !linked.is_empty() {
+                out.extend(vbs_action(
+                    &ScriptAction {
+                        action_type: linked.to_string(),
+                        target_id: String::new(),
+                        extra: serde_json::Value::Null,
+                    },
+                    false,
+                ));
+            }
+            out.push("If bmmLastStatus >= 400 Or bmmLastStatus = 0 Then".to_string());
+        }
+        "pause_key" => {
+            out.push("MsgBox \"Press OK to continue...\"".to_string());
+        }
+        "stop_script" => {
+            out.push("WScript.Quit 0".to_string());
+        }
+        "else_block" => {
+            out.push("Else".to_string());
+        }
+        "end_block" => {
+            out.push("End If".to_string());
+        }
+        "raw_code" => {
+            let code = extra_str(&action.extra, "code");
+            if !code.is_empty() {
+                out.push(code.to_string());
+            }
+        }
+        "loop_start" => {
+            let n = extra_str(&action.extra, "count")
+                .parse::<u32>()
+                .unwrap_or(1)
+                .max(1);
+            out.push(format!("For _i = 1 To {}", n));
+        }
+        "loop_end" => {
+            out.push("Next".to_string());
+        }
+        "verify_file" => {
+            let p = extra_str(&action.extra, "path");
+            out.push(format!("' verify_file: SHA-256 of {} — use the .ps1/.bat export for hashing (plain VBScript has no SHA-256)", p));
+        }
+        "wait_until" => {
+            let p = extra_str(&action.extra, "path");
+            let to = extra_u64(&action.extra, "timeout").max(1);
+            let pl = extra_u64(&action.extra, "poll").max(1);
+            out.push("Set _fso = CreateObject(\"Scripting.FileSystemObject\")".to_string());
+            out.push(format!("_waited = 0\nDo While (Not _fso.FileExists(\"{p}\")) And _waited < {to}\n  WScript.Sleep {}\n  _waited = _waited + {pl}\nLoop", pl * 1000));
+        }
+        "math_set" => {
+            let v = {
+                let s = extra_str(&action.extra, "var_name");
+                if s.is_empty() {
+                    "RESULT"
+                } else {
+                    s
+                }
+            };
+            out.push(format!("{v} = ({})", extra_str(&action.extra, "expr")));
+        }
+        "ternary" => {
+            let v = {
+                let s = extra_str(&action.extra, "var_name");
+                if s.is_empty() {
+                    "RESULT"
+                } else {
+                    s
+                }
+            };
+            let (c, tt, ff) = (
+                extra_str(&action.extra, "cond"),
+                extra_str(&action.extra, "val_true"),
+                extra_str(&action.extra, "val_false"),
+            );
+            out.push(format!(
+                "If {c} Then\n  {v} = {tt}\nElse\n  {v} = {ff}\nEnd If"
+            ));
+        }
+        "guard_stop" => {
+            out.push(format!(
+                "If {} Then WScript.Quit 0",
+                extra_str(&action.extra, "cond")
+            ));
+        }
+        _ => {
+            let dl = action_to_deeplink(action);
+            if use_deeplink && dl.starts_with("bmm://") && !dl.contains("unknown") {
+                out.push(format!("shell.Run \"{}\"", dl));
+                out.push("WScript.Sleep 1000".to_string());
+            } else if let Some((method, path, body)) = action_to_api_call(action) {
+                let body_esc = body.replace('"', "\"\"");
+                out.push(format!(
+                    "BmmApi \"{}\", \"{}\", \"{}\"",
+                    method, path, body_esc
+                ));
+                out.push("WScript.Sleep 500".to_string());
+            } else {
+                out.push(format!("' [WARN] Unknown action: {}", action.action_type));
+            }
+        }
+    }
+    out
+}
+
+/// True when generating with the given mode requires the API token to be
+/// defined — i.e. at least one action falls through to an HTTP call. In
+/// deeplink mode this happens for API-only actions (repo/modpack) that have
+/// no deeplink equivalent.
+fn actions_need_api(req: &GenerateScriptRequest) -> bool {
+    req.actions.iter().any(|a| {
+        let has_api = action_to_api_call(a).is_some();
+        if req.use_deeplink {
+            let dl = action_to_deeplink(a);
+            has_api && (!dl.starts_with("bmm://") || dl.contains("unknown"))
+        } else {
+            has_api
+        }
+    })
+}
+
+fn action_to_deeplink(action: &ScriptAction) -> String {
+    match action.action_type.as_str() {
+        "enable_mod" => format!("bmm://mod/enable?id={}", action.target_id),
+        "disable_mod" => format!("bmm://mod/disable?id={}", action.target_id),
+        "activate_profile" => format!("bmm://profile/activate?id={}", action.target_id),
+        "apply_plugin" => format!("bmm://plugin/activate?id={}", action.target_id),
+        "compare_plugin" => format!("bmm://plugin/compare?id={}", action.target_id),
+        "enable_modpack" => format!("bmm://modpack/enable?id={}", action.target_id),
+        "disable_modpack" => format!("bmm://modpack/disable?id={}", action.target_id),
+        "telemetry_consent" => format!(
+            "bmm://telemetry/consent?enabled={}",
+            if extra_bool(&action.extra, "enabled") {
+                "1"
+            } else {
+                "0"
+            }
+        ),
+        "telemetry_settings" => format!(
+            "bmm://telemetry/set?replay={}&full={}&bench={}",
+            if extra_bool(&action.extra, "replay") {
+                "1"
+            } else {
+                "0"
+            },
+            if extra_bool(&action.extra, "full") {
+                "1"
+            } else {
+                "0"
+            },
+            if extra_bool(&action.extra, "bench") {
+                "1"
+            } else {
+                "0"
+            }
+        ),
+        "recorder_set" => format!(
+            "bmm://recorder/set?on={}&full={}&rust={}&js={}",
+            if extra_bool(&action.extra, "on") {
+                "1"
+            } else {
+                "0"
+            },
+            if extra_bool(&action.extra, "full") {
+                "1"
+            } else {
+                "0"
+            },
+            if extra_bool(&action.extra, "rust") {
+                "1"
+            } else {
+                "0"
+            },
+            if extra_bool(&action.extra, "js") {
+                "1"
+            } else {
+                "0"
+            }
+        ),
+        "check_mod_updates" => "bmm://mod/check-updates".to_string(),
+        "run_launchpack" => format!("bmm://launchpack/run?id={}", action.target_id),
+        "run_task" => format!("bmm://schedule/run?id={}", action.target_id),
+        "run_benchmark" => {
+            let sources = extra_str(&action.extra, "sources");
+            let dataset = if extra_str(&action.extra, "dataset") == "real" || !sources.is_empty() {
+                "real"
+            } else {
+                "sandbox"
+            };
+            let size = {
+                let s = extra_str(&action.extra, "size");
+                if s.is_empty() {
+                    "M"
+                } else {
+                    s
+                }
+            };
+            format!(
+                "bmm://benchmark/run?dataset={}&size={}&mode=auto&sources={}",
+                dataset,
+                size,
+                percent_encoding::utf8_percent_encode(sources, percent_encoding::NON_ALPHANUMERIC)
+            )
+        }
+        "discord_rpc" => format!(
+            "bmm://discord/rpc?enabled={}",
+            if extra_bool(&action.extra, "enabled") {
+                "1"
+            } else {
+                "0"
+            }
+        ),
+        "export_data" => format!(
+            "bmm://data/export-auto?dir={}&name={}&increment={}",
+            percent_encoding::utf8_percent_encode(
+                extra_str(&action.extra, "dir"),
+                percent_encoding::NON_ALPHANUMERIC
+            ),
+            percent_encoding::utf8_percent_encode(
+                extra_str(&action.extra, "name"),
+                percent_encoding::NON_ALPHANUMERIC
+            ),
+            percent_encoding::utf8_percent_encode(
+                extra_str(&action.extra, "increment"),
+                percent_encoding::NON_ALPHANUMERIC
+            )
+        ),
+        "replay_export" => "bmm://replay/export".to_string(),
+        "replay_import" => format!(
+            "bmm://replay/import?path={}&url={}",
+            percent_encoding::utf8_percent_encode(
+                extra_str(&action.extra, "path"),
+                percent_encoding::NON_ALPHANUMERIC
+            ),
+            percent_encoding::utf8_percent_encode(
+                extra_str(&action.extra, "url"),
+                percent_encoding::NON_ALPHANUMERIC
+            )
+        ),
+        _ => format!("bmm://unknown?id={}", action.target_id),
+    }
+}
+
+/// Returns (method, path, body) for any action that maps to an HTTP call.
+/// Method is one of "POST" | "PUT" | "DELETE". Bodies are built with
+/// `serde_json` so paths/names with spaces, quotes, or backslashes are
+/// escaped correctly.
+fn action_to_api_call(action: &ScriptAction) -> Option<(String, String, String)> {
+    let id = &action.target_id;
+    let ex = &action.extra;
+
+    let opt_str = |k: &str, default: &str| -> String {
+        let v = extra_str(ex, k);
+        if v.is_empty() {
+            default.to_string()
+        } else {
+            v.to_string()
+        }
+    };
+    let port_or = |default: u64| -> u64 {
+        let p = extra_u64(ex, "port");
+        if p == 0 {
+            default
+        } else {
+            p
+        }
+    };
+    // Build a JSON object body, dropping empty-string values so PUT/update
+    // calls don't blank out fields. Mirrors _prune() in the TS generator.
+    let prune = |pairs: &[(&str, &str)]| -> String {
+        let mut m = serde_json::Map::new();
+        for (k, v) in pairs {
+            if !v.is_empty() {
+                m.insert(
+                    (*k).to_string(),
+                    serde_json::Value::String((*v).to_string()),
+                );
+            }
+        }
+        serde_json::Value::Object(m).to_string()
+    };
+
+    match action.action_type.as_str() {
+        "enable_mod"        => Some(("POST".into(),   "/api/mods/enable".into(),       serde_json::json!({ "mod_id": id }).to_string())),
+        "disable_mod"       => Some(("POST".into(),   "/api/mods/disable".into(),      serde_json::json!({ "mod_id": id }).to_string())),
+        "activate_profile"  => Some(("POST".into(),   "/api/profiles/activate".into(), serde_json::json!({ "profile_id": id }).to_string())),
+        "apply_plugin"      => Some(("POST".into(),   "/api/plugins/apply".into(),     serde_json::json!({ "plugin_id": id, "force_strict": false }).to_string())),
+        "compare_plugin"    => Some(("POST".into(),   "/api/plugins/compare".into(),   serde_json::json!({ "plugin_id": id }).to_string())),
+        "enable_modpack"    => Some(("POST".into(),   "/api/modpacks/enable".into(),   serde_json::json!({ "profile_id": id }).to_string())),
+        "disable_modpack"   => Some(("POST".into(),   "/api/modpacks/disable".into(),  serde_json::json!({ "profile_id": id }).to_string())),
+        "update_modpack"    => {
+            let modpack_id = opt_str("modpack_id", "MODPACK_ID");
+            let body = serde_json::json!({
+                "name": extra_str(ex, "name"),
+                "dependency_mode": opt_str("dependency_mode", "none"),
+            });
+            Some(("PUT".into(), format!("/api/modpacks/{}", modpack_id), body.to_string()))
+        }
+        "sync_repo" => {
+            let body = serde_json::json!({
+                "url":           opt_str("url", "REPO_URL"),
+                "modsDir":       extra_str(ex, "mods_dir"),
+                "backupDir":     extra_str(ex, "backup_dir"),
+                "gameDir":       extra_str(ex, "game_dir"),
+                "choices":       [],
+                "overwriteAll":  extra_bool(ex, "overwrite_all"),
+                "deleteExtra":   extra_bool(ex, "delete_extra"),
+                "downloadLimit": extra_u64(ex, "download_limit"),
+            });
+            Some(("POST".into(), "/api/repo/sync".into(), body.to_string()))
+        }
+        "gen_repo" => {
+            let profile_id = extra_str(ex, "profile_id");
+            let profile_ids: Vec<&str> = if profile_id.is_empty() { vec![] } else { vec![profile_id] };
+            let body = serde_json::json!({
+                "profileIds":     profile_ids,
+                "outputDir":      extra_str(ex, "output_dir"),
+                "authorName":     opt_str("author", "Author"),
+                "lightweight":    extra_bool(ex, "lightweight"),
+                "zipOutput":      extra_bool(ex, "zip"),
+                "generateServer": extra_bool(ex, "generate_server"),
+                "autoStart":      extra_bool(ex, "auto_start"),
+                "port":           port_or(8080),
+                "adminPassword":  extra_str(ex, "admin_pass"),
+                "uploadLimit":    extra_u64(ex, "upload_limit"),
+            });
+            Some(("POST".into(), "/api/repo/gen".into(), body.to_string()))
+        }
+        "http_host" => {
+            let body = serde_json::json!({
+                "serveDir":    extra_str(ex, "serve_dir"),
+                "port":        port_or(8080),
+                "uploadLimit": extra_u64(ex, "upload_limit"),
+            });
+            Some(("POST".into(), "/api/repo/host".into(), body.to_string()))
+        }
+        "cancel_sync"    => Some(("DELETE".into(), "/api/repo/sync/cancel".into(), String::new())),
+        "cancel_gen"     => Some(("DELETE".into(), "/api/repo/gen/cancel".into(),  String::new())),
+        "stop_http_host" => Some(("DELETE".into(), "/api/repo/host".into(),        String::new())),
+
+        // ── Read-only (GET, unauthenticated) ──────────────────────────────
+        "get_status"       => Some(("GET".into(), "/api/status".into(),       String::new())),
+        "list_mods"        => Some(("GET".into(), "/api/mods".into(),         String::new())),
+        "list_active_mods" => Some(("GET".into(), "/api/mods/active".into(),  String::new())),
+        "list_profiles"    => Some(("GET".into(), "/api/profiles".into(),     String::new())),
+        "list_plugins"     => Some(("GET".into(), "/api/plugins".into(),      String::new())),
+        "list_modpacks"    => Some(("GET".into(), "/api/modpacks".into(),     String::new())),
+        "check_update"     => Some(("GET".into(), "/api/check-update".into(), String::new())),
+        "get_creator_id"   => Some(("GET".into(), "/api/creator-id".into(),   String::new())),
+        "api_health"       => Some(("GET".into(), "/api/health".into(),       String::new())),
+        "repo_list"        => Some(("GET".into(), "/api/repo/list".into(),    String::new())),
+        "repo_info"        => {
+            use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
+            let url = opt_str("url", "REPO_URL");
+            let enc = utf8_percent_encode(&url, NON_ALPHANUMERIC).to_string();
+            Some(("GET".into(), format!("/api/repo/info?url={}", enc), String::new()))
+        }
+
+        // ── Mods / profiles / modpacks (writes — snake_case bodies) ───────
+        "delete_mod"     => Some(("DELETE".into(), format!("/api/mods/{}", if id.is_empty() { "MOD_ID" } else { id.as_str() }), String::new())),
+        "update_mod"     => {
+            let path = format!("/api/mods/{}", if id.is_empty() { "MOD_ID" } else { id.as_str() });
+            let body = prune(&[
+                ("name", extra_str(ex, "name")),
+                ("version", extra_str(ex, "version")),
+                ("author", extra_str(ex, "author")),
+                ("description", extra_str(ex, "description")),
+            ]);
+            Some(("PUT".into(), path, body))
+        }
+        "create_profile" => {
+            let body = serde_json::json!({
+                "name":        extra_str(ex, "name"),
+                "game_name":   extra_str(ex, "game_name"),
+                "game_path":   extra_str(ex, "game_path"),
+                "mods_path":   extra_str(ex, "mods_path"),
+                "backup_path": extra_str(ex, "backup_path"),
+            });
+            Some(("POST".into(), "/api/profiles".into(), body.to_string()))
+        }
+        "update_profile" => {
+            let path = format!("/api/profiles/{}", if id.is_empty() { "PROFILE_ID" } else { id.as_str() });
+            let body = prune(&[
+                ("name", extra_str(ex, "name")),
+                ("game_name", extra_str(ex, "game_name")),
+                ("color", extra_str(ex, "color")),
+                ("icon", extra_str(ex, "icon")),
+                ("game_path", extra_str(ex, "game_path")),
+                ("mods_path", extra_str(ex, "mods_path")),
+                ("backup_path", extra_str(ex, "backup_path")),
+            ]);
+            Some(("PUT".into(), path, body))
+        }
+        "delete_profile" => Some(("DELETE".into(), format!("/api/profiles/{}", if id.is_empty() { "PROFILE_ID" } else { id.as_str() }), String::new())),
+        "restart"        => Some(("POST".into(), "/api/restart".into(), serde_json::json!({}).to_string())),
+        "create_modpack" => {
+            let body = prune(&[
+                ("name", extra_str(ex, "name")),
+                ("description", extra_str(ex, "description")),
+                ("game_name", extra_str(ex, "game_name")),
+                ("sr_link", extra_str(ex, "sr_link")),
+                ("dependency_mode", &opt_str("dependency_mode", "none")),
+            ]);
+            Some(("POST".into(), "/api/modpacks/create".into(), body))
+        }
+        "delete_modpack" => Some(("DELETE".into(), format!("/api/modpacks/{}", opt_str("modpack_id", "MODPACK_ID")), String::new())),
+        "repo_connect"   => Some(("POST".into(),   "/api/repo/connect".into(), serde_json::json!({ "url": opt_str("url", "REPO_URL") }).to_string())),
+        "repo_remove"    => Some(("DELETE".into(), "/api/repo".into(),          serde_json::json!({ "url": opt_str("url", "REPO_URL") }).to_string())),
+        "check_mod_updates"  => Some(("POST".into(), "/api/mod/check-updates".into(),   serde_json::json!({}).to_string())),
+        "run_launchpack"     => Some(("POST".into(), "/api/launchpack/run".into(),       serde_json::json!({ "id": id }).to_string())),
+        "run_task"           => Some(("POST".into(), "/api/schedule/run".into(),         serde_json::json!({ "id": id }).to_string())),
+        "run_benchmark"      => {
+            let sources: Vec<&str> = extra_str(ex, "sources").split(';').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+            let dataset = if extra_str(ex, "dataset") == "real" || !sources.is_empty() { "real" } else { "sandbox" };
+            let size = { let s = extra_str(ex, "size"); if s.is_empty() { "M" } else { s } };
+            Some(("POST".into(), "/api/benchmark".into(),
+                serde_json::json!({ "dataset": dataset, "size": size, "mode": "auto", "sources": sources }).to_string()))
+        }
+        // The endpoints added with the doorbell, the keys, the catalogue sources and what a
+        // repo carries. This table and the TypeScript one produce the same call for the same
+        // action — one drives the generated script, the other the in-app quick test, and a
+        // gap here is a step that works in the app and does nothing in the file it wrote.
+        "signal"             => Some(("POST".into(), "/api/hook".into(),                 serde_json::json!({ "name": extra_str(ex, "name"), "data": extra_str(ex, "data") }).to_string())),
+        "new_key"            => Some(("POST".into(), "/api/keys".into(),                 prune(&[("name", extra_str(ex, "name")), ("kind", extra_str(ex, "kind"))]))),
+        "follow_catalog"     => Some(("POST".into(), "/api/catalogs".into(),             serde_json::json!({ "type": extra_str(ex, "type"), "url": extra_str(ex, "url"), "follow": extra_bool(ex, "follow") }).to_string())),
+        "repo_take"          => Some(("POST".into(), "/api/repo/extras".into(),          prune(&[("url", extra_str(ex, "url")), ("kind", extra_str(ex, "kind")), ("id", extra_str(ex, "id")), ("password", extra_str(ex, "password"))]))),
+        "set_schedule"       => Some(("POST".into(), "/api/schedules/enabled".into(),    serde_json::json!({ "id": extra_str(ex, "id"), "enabled": extra_bool(ex, "enabled") }).to_string())),
+        "discord_rpc"        => Some(("POST".into(), "/api/discord/rpc".into(),          serde_json::json!({ "enabled": extra_bool(ex, "enabled") }).to_string())),
+        "export_data"        => Some(("POST".into(), "/api/data/export-auto".into(),     prune(&[("dir", extra_str(ex, "dir")), ("name", extra_str(ex, "name")), ("increment", extra_str(ex, "increment"))]))),
+        // ── Privacy & telemetry / local recorder / replay ──────────────────
+        "telemetry_consent"  => Some(("POST".into(), "/api/telemetry/consent".into(),  serde_json::json!({ "enabled": extra_bool(ex, "enabled") }).to_string())),
+        "telemetry_settings" => Some(("POST".into(), "/api/telemetry/settings".into(), serde_json::json!({ "replay": extra_bool(ex, "replay"), "full": extra_bool(ex, "full"), "bench": extra_bool(ex, "bench") }).to_string())),
+        "recorder_set"       => Some(("POST".into(), "/api/recorder".into(),           serde_json::json!({ "on": extra_bool(ex, "on"), "full": extra_bool(ex, "full"), "rust": extra_bool(ex, "rust"), "js": extra_bool(ex, "js") }).to_string())),
+        "replay_export"      => Some(("POST".into(), "/api/replay/export".into(),       serde_json::json!({}).to_string())),
+        "replay_import"      => Some(("POST".into(), "/api/replay/import".into(),       prune(&[("path", extra_str(ex, "path")), ("url", extra_str(ex, "url"))]))),
+        _ => None,
+    }
+}
+
+// ── Export plugin ──────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn export_plugin(
+    app_handle: tauri::AppHandle,
+    state: State<'_, AppState>,
+    plugin_id: String,
+    dest_path: String,
+) -> Result<(), String> {
+    let plugin = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        data.installed_plugins
+            .iter()
+            .find(|p| p.manifest.id == plugin_id)
+            .ok_or_else(|| format!("Plugin '{}' not found", plugin_id))?
+            .clone()
+    };
+
+    let plugin_dir = PathBuf::from(&plugin.install_dir);
+    let dest = PathBuf::from(&dest_path);
+
+    // The manifest's asset list is rewritten from the folder before packing.
+    //
+    // Written rather than trusted, so the declaration cannot drift from what ships: an
+    // author who adds a README and forgets to edit plugin.json would otherwise publish a
+    // plugin whose file list is a lie — and the reader most affected is the moderation queue,
+    // which has only the manifest to go on.
+    let mut plugin = plugin;
+    plugin.manifest.assets = crate::commands::plugin_assets::list_dir(&plugin_dir.join("assets"))
+        .into_iter()
+        .map(|a| crate::models::plugin::PluginAssetRef { path: a.path, kind: a.kind, size: a.size })
+        .collect();
+
+    // Every entry is collected FIRST, so the signature can cover the whole archive: a
+    // plugin's scripts sit beside its manifest, and vouching only for the manifest would say
+    // "this plugin is intact" while the code next to it could be swapped.
+    let mut entries: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut has_manifest = false;
+    if plugin_dir.exists() {
+        for entry in walkdir::WalkDir::new(&plugin_dir) {
+            let entry = entry.map_err(|e| e.to_string())?;
+            let path = entry.path();
+            if path.is_file() {
+                let rel = path.strip_prefix(&plugin_dir).map_err(|e| e.to_string())?;
+                let rel_str = rel.to_string_lossy().replace(char::from(92), "/");
+                // The manifest ON DISK is the one that ships, so the refreshed asset list
+                // is written into it here rather than only into the in-memory copy — which
+                // is used solely by the fallback below and would have left every real
+                // export declaring nothing.
+                if rel_str == "plugin.json" {
+                    has_manifest = true;
+                    let data = serde_json::to_vec_pretty(&plugin.manifest).map_err(|e| e.to_string())?;
+                    entries.push((format!("{}/{}", plugin_id, rel_str), data));
+                    continue;
+                }
+                let data = std::fs::read(path).map_err(|e| e.to_string())?;
+                entries.push((format!("{}/{}", plugin_id, rel_str), data));
+            }
+        }
+    }
+    // Always ensure plugin.json is present (fallback from in-memory manifest)
+    if !has_manifest {
+        let manifest_json =
+            serde_json::to_string_pretty(&plugin.manifest).map_err(|e| e.to_string())?;
+        entries.push((
+            format!("{}/plugin.json", plugin_id),
+            manifest_json.into_bytes(),
+        ));
+    }
+
+    let signed = crate::commands::doc_sign::archive_manifest(&app_handle, "bmmplug", &entries);
+    entries.push((
+        crate::commands::doc_sign::ARCHIVE_ENTRY.to_string(),
+        serde_json::to_vec_pretty(&signed).map_err(|e| e.to_string())?,
+    ));
+
+    let file = std::fs::File::create(&dest).map_err(|e| e.to_string())?;
+    let mut zip = zip::ZipWriter::new(file);
+    let options =
+        zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    for (name, data) in &entries {
+        zip.start_file(name.clone(), options)
+            .map_err(|e| e.to_string())?;
+        std::io::Write::write_all(&mut zip, data).map_err(|e| e.to_string())?;
+    }
+    zip.finish().map_err(|e| e.to_string())?;
+    log_line(format!(
+        "[PLUGINS] Exported plugin '{}' to {:?}",
+        plugin_id, dest
+    ));
+    Ok(())
+}
+
+// ── Write text file helper (for saving generated scripts) ─────────────────
+
+#[tauri::command]
+pub fn write_text_file(path: String, content: String) -> Result<(), String> {
+    // CWE-73 hardening: this command is reachable from the WebView, so an XSS
+    // could try to drop a file into an auto-run location. Reject path traversal,
+    // restrict to the file types legit callers actually write (plugin scripts and
+    // benchmark/report exports), and refuse known auto-run / OS system locations.
+    // Legit callers pass an absolute path the user picked via the native save
+    // dialog, which always carries one of these extensions.
+    let norm = path.replace('/', "\\").to_lowercase();
+    if norm.contains("..") {
+        return Err("Refused: path traversal in target".to_string());
+    }
+    // Extension allowlist: scripts the generator emits + textual report formats.
+    const ALLOWED_WRITE_EXT: &[&str] = &[
+        "ps1",
+        "bat",
+        "cmd",
+        "sh",
+        "py",
+        "js",
+        "mjs",
+        "ts",
+        "vbs",
+        "lua",
+        "rb",
+        "pl",
+        "txt",
+        "csv",
+        "json",
+        "md",
+        "log",
+        "yaml",
+        "yml",
+        "ini",
+        "conf",
+        "xml",
+        "bmmpa",
+        "bmmreplay",
+        "bmmnav",
+        "bmmtut",
+    ];
+    let ext = std::path::Path::new(&path)
+        .extension()
+        .map(|e| e.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default();
+    if !ALLOWED_WRITE_EXT.contains(&ext.as_str()) {
+        return Err(format!("Refused: '.{}' is not an allowed export type", ext));
+    }
+    // Auto-run / OS locations an attacker would target for persistence.
+    const BLOCKED_WRITE_DIRS: &[&str] = &[
+        r"\microsoft\windows\start menu\programs\startup", // per-user + all-users Startup
+        r"\windows\system32",
+        r"\windows\syswow64",
+        r"\windows\tasks",
+        r"\system volume information",
+    ];
+    if BLOCKED_WRITE_DIRS.iter().any(|d| norm.contains(d)) {
+        return Err("Refused: auto-start / system location".to_string());
+    }
+    if let Some(parent) = std::path::Path::new(&path).parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    std::fs::write(&path, content).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Read a shared navbar bundle (.bmmnav) the user picked via the native open
+/// dialog. Restricted to that extension + JSON, with a size cap, so it can't be
+/// abused to slurp arbitrary files.
+#[tauri::command]
+pub fn read_nav_bundle(path: String) -> Result<String, String> {
+    let ext = std::path::Path::new(&path)
+        .extension()
+        .map(|e| e.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default();
+    if ext != "bmmnav" && ext != "json" {
+        return Err("Refused: not a .bmmnav file".to_string());
+    }
+    let meta = std::fs::metadata(&path).map_err(|e| e.to_string())?;
+    if meta.len() > 64 * 1024 * 1024 {
+        return Err("File too large".to_string());
+    }
+    std::fs::read_to_string(&path).map_err(|e| e.to_string())
+}
+
+// ── Write multiple files as a ZIP (for Script Generator "Save as ZIP") ───────
+
+#[derive(serde::Deserialize)]
+pub struct ZipFileEntry {
+    pub name: String,
+    pub content: String,
+}
+
+#[tauri::command]
+pub fn write_zip_files(dest_path: String, files: Vec<ZipFileEntry>) -> Result<(), String> {
+    let file = std::fs::File::create(&dest_path).map_err(|e| e.to_string())?;
+    let mut zip = zip::ZipWriter::new(file);
+    let options =
+        zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    for entry in &files {
+        zip.start_file(&entry.name, options)
+            .map_err(|e| e.to_string())?;
+        std::io::Write::write_all(&mut zip, entry.content.as_bytes()).map_err(|e| e.to_string())?;
+    }
+    zip.finish().map_err(|e| e.to_string())?;
+    log_line(format!(
+        "[PLUGINS] Wrote ZIP with {} files to {}",
+        files.len(),
+        dest_path
+    ));
+    Ok(())
+}
+
+// ── Exe path helper (used by script generator to embed launch command) ────
+
+#[tauri::command]
+pub fn get_app_exe_path() -> Result<String, String> {
+    std::env::current_exe()
+        .map(|p| p.to_string_lossy().to_string())
+        .map_err(|e| e.to_string())
+}
+
+// ── Create local plugin (from Create tab, no zip needed) ──────────────────
+
+/// Bundled scripts/folders the user staged for removal in the editor. Values are the
+/// manifest-relative paths ("scripts/x.bat", "bundle/mydir").
+#[derive(Debug, serde::Deserialize, Default)]
+pub struct RemovedBundled {
+    #[serde(default)]
+    pub scripts: Vec<String>,
+    #[serde(default)]
+    pub folders: Vec<String>,
+}
+
+/// Resolve a manifest-relative bundled path ("<subdir>/<name>") to an absolute path
+/// INSIDE the plugin folder, or None if it doesn't fit that exact shape. Guards against
+/// path traversal: exactly two components, the first must equal `subdir`, the second a
+/// single non-empty name with no separators or "..".
+fn safe_bundled_path(
+    plugin_dir: &std::path::Path,
+    rel: &str,
+    subdir: &str,
+) -> Option<std::path::PathBuf> {
+    let rel = rel.trim().replace('\\', "/");
+    let parts: Vec<&str> = rel.split('/').filter(|s| !s.is_empty()).collect();
+    if parts.len() != 2 || parts[0] != subdir {
+        return None;
+    }
+    let name = parts[1];
+    if name == ".." || name.contains('/') || name.contains('\\') {
+        return None;
+    }
+    Some(plugin_dir.join(subdir).join(name))
+}
+
+/// `rel`, a path a manifest lists, as an existing file or folder INSIDE `root`, or None.
+///
+/// The manifest is the plugin author's text, and duplicating a plugin reads what it names. So:
+/// relative only (no drive, no leading slash, no `..`, via `safe_relative_path`), and no
+/// symlink or junction anywhere on the way down — each component is checked with
+/// `symlink_metadata`, which does not follow it. A link inside a plugin folder pointing at
+/// `C:\Users\…` would otherwise make "Duplicate" copy whatever it points at into a plugin
+/// that gets exported and shared. The canonical path is checked against the canonical root
+/// as well, for anything the component walk would miss.
+fn confined_bundled_source(root: &std::path::Path, rel: &str) -> Option<PathBuf> {
+    let safe_rel = crate::fs_utils::safe_relative_path(rel.trim())?;
+    let root_canon = std::fs::canonicalize(root).ok()?;
+    let mut cur = root.to_path_buf();
+    for comp in safe_rel.components() {
+        match comp {
+            std::path::Component::Normal(c) => cur.push(c),
+            _ => return None,
+        }
+        let meta = std::fs::symlink_metadata(&cur).ok()?;
+        if meta.file_type().is_symlink() {
+            return None;
+        }
+    }
+    let canon = std::fs::canonicalize(&cur).ok()?;
+    if !canon.starts_with(&root_canon) || canon == root_canon {
+        return None;
+    }
+    Some(cur)
+}
+
+/// Copy a bundled folder without following links: a symlink or junction inside it is skipped,
+/// not copied and not entered. Each file goes through the resource governor (an Install copy).
+fn copy_tree_no_links(src: &std::path::Path, dst: &std::path::Path) -> Result<u64, String> {
+    std::fs::create_dir_all(dst).map_err(|e| e.to_string())?;
+    let mut n = 0u64;
+    for entry in std::fs::read_dir(src).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let ft = std::fs::symlink_metadata(entry.path()).map_err(|e| e.to_string())?.file_type();
+        if ft.is_symlink() {
+            continue;
+        }
+        let target = dst.join(entry.file_name());
+        if ft.is_dir() {
+            n += copy_tree_no_links(&entry.path(), &target)?;
+        } else if ft.is_file() {
+            crate::fs_utils::copy_file_install(crate::governor::config::OpKind::Install, &entry.path(), &target, None)
+                .map_err(|e| e.to_string())?;
+            n += 1;
+        }
+    }
+    Ok(n)
+}
+
+/// What duplicating a plugin brings along: the files its manifest lists (scripts, bundled
+/// folders, automations, catalogue bundles) and its icon, copied from the source plugin's
+/// folder into the new one under the same relative paths.
+///
+/// An entry that cannot be copied — absolute, `..`, a link, missing, or outside the source
+/// folder — is dropped from the new manifest instead of being carried over: a duplicate that
+/// lists a file it does not have is the bug this exists to fix. Returns the files copied.
+fn copy_bundled_from_source(
+    src_dir: &std::path::Path,
+    dst_dir: &std::path::Path,
+    manifest: &mut PluginManifest,
+) -> Result<u64, String> {
+    std::fs::create_dir_all(dst_dir).map_err(|e| e.to_string())?;
+    let same = match (std::fs::canonicalize(src_dir), std::fs::canonicalize(dst_dir)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => false,
+    };
+    if same {
+        return Ok(0);
+    }
+    let mut copied = 0u64;
+    let mut carry = |list: &mut Vec<String>| -> Result<(), String> {
+        let mut kept: Vec<String> = Vec::with_capacity(list.len());
+        for rel in std::mem::take(list) {
+            let (Some(src), Some(safe_rel)) = (
+                confined_bundled_source(src_dir, &rel),
+                crate::fs_utils::safe_relative_path(rel.trim()),
+            ) else {
+                log_line(format!("[PLUGINS] Duplicate: not copied (outside the plugin, a link, or missing): {}", rel));
+                continue;
+            };
+            let dst = dst_dir.join(&safe_rel);
+            let meta = std::fs::symlink_metadata(&src).map_err(|e| e.to_string())?;
+            if meta.is_dir() {
+                copied += copy_tree_no_links(&src, &dst)?;
+            } else {
+                crate::fs_utils::copy_file_install(crate::governor::config::OpKind::Install, &src, &dst, None)
+                    .map_err(|e| e.to_string())?;
+                copied += 1;
+            }
+            if !kept.contains(&rel) {
+                kept.push(rel);
+            }
+        }
+        *list = kept;
+        Ok(())
+    };
+    carry(&mut manifest.scripts)?;
+    carry(&mut manifest.folders)?;
+    carry(&mut manifest.automations)?;
+    carry(&mut manifest.bundles)?;
+    // The icon is not in the manifest; it is icon.png or icon.svg at the plugin's root.
+    if !dst_dir.join("icon.png").exists() && !dst_dir.join("icon.svg").exists() {
+        for name in ["icon.png", "icon.svg"] {
+            let Some(src) = confined_bundled_source(src_dir, name) else { continue };
+            if std::fs::symlink_metadata(&src).map(|m| m.is_file()).unwrap_or(false) {
+                crate::fs_utils::copy_file_install(crate::governor::config::OpKind::Install, &src, &dst_dir.join(name), None)
+                    .map_err(|e| e.to_string())?;
+                copied += 1;
+                break;
+            }
+        }
+    }
+    Ok(copied)
+}
+
+#[tauri::command]
+pub fn create_local_plugin(
+    state: State<'_, AppState>,
+    handle: tauri::AppHandle,
+    manifest: PluginManifest,
+    icon_src_path: Option<String>,
+    icon_svg: Option<String>,
+    script_src_paths: Option<Vec<String>>,
+    folder_src_paths: Option<Vec<String>>,
+    automation_src_paths: Option<Vec<String>>,
+    bundle_src_paths: Option<Vec<String>>,
+    removed_bundled: Option<RemovedBundled>,
+    duplicate_of: Option<String>,
+) -> Result<InstalledPlugin, String> {
+    let mut manifest = manifest;
+    if manifest.id.is_empty() || manifest.name.is_empty() {
+        return Err("Plugin id and name are required".to_string());
+    }
+
+    let app_dir = handle
+        .path()
+        .app_data_dir()
+        .ok()
+        .ok_or_else(|| "Cannot resolve app data dir".to_string())?;
+    let plugin_dir = app_dir.join("plugins").join(&manifest.id);
+    std::fs::create_dir_all(&plugin_dir).map_err(|e| e.to_string())?;
+
+    // ── Duplicate: the manifest the form sends lists the SOURCE plugin's bundled files
+    //    (scripts/, bundle/, automations/, bundles/). Copy them, and its icon, from the
+    //    source plugin's folder into this one first, so the new plugin has what it lists.
+    //    Newly picked files below then add to or replace them like any other save.
+    if let Some(src_id) = duplicate_of
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty() && *s != manifest.id)
+    {
+        let src_dir = {
+            let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+            data.installed_plugins
+                .iter()
+                .find(|p| p.manifest.id == src_id)
+                .map(|p| PathBuf::from(&p.install_dir))
+        };
+        let src_dir = src_dir.ok_or_else(|| format!("Plugin '{}' not found", src_id))?;
+        let n = copy_bundled_from_source(&src_dir, &plugin_dir, &mut manifest)?;
+        log_line(format!(
+            "[PLUGINS] Duplicate of '{}': {} file(s) copied into '{}'",
+            src_id, n, manifest.id
+        ));
+    }
+
+    // ── Staged removals: physically delete bundled scripts/folders the user removed
+    //    in the editor. The frontend already excluded them from manifest.scripts/folders;
+    //    here we reclaim the files on disk. Paths are constrained to the plugin's own
+    //    scripts/ and bundle/ subdirs (single filename component, no traversal) so a
+    //    crafted manifest can never delete outside the plugin folder (CWE-22 guard).
+    if let Some(removed) = &removed_bundled {
+        for rel in &removed.scripts {
+            if let Some(safe) = safe_bundled_path(&plugin_dir, rel, "scripts") {
+                let _ = std::fs::remove_file(&safe);
+            }
+        }
+        for rel in &removed.folders {
+            if let Some(safe) = safe_bundled_path(&plugin_dir, rel, "bundle") {
+                let _ = std::fs::remove_dir_all(&safe);
+            }
+        }
+    }
+
+    // ── Import folders: copy each chosen directory into the plugin's bundle/.
+    if let Some(dirs) = folder_src_paths {
+        let bundle_dir = plugin_dir.join("bundle");
+        for src in dirs.iter().filter(|s| !s.trim().is_empty()) {
+            let src_path = std::path::Path::new(src);
+            if let Some(fname) = src_path.file_name().and_then(|f| f.to_str()) {
+                let dest = bundle_dir.join(fname);
+                if copy_dir_recursive(src_path, &dest).is_ok() {
+                    // Append to the carried-over (already-filtered) set instead of
+                    // replacing it, so adding a folder while editing doesn't drop the
+                    // bundled ones the user kept.
+                    let rel = format!("bundle/{}", fname);
+                    if !manifest.folders.contains(&rel) {
+                        manifest.folders.push(rel);
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Import script files: copy each into the plugin folder and record its
+    //    filename in manifest.scripts. Presence of scripts flips has_scripts on.
+    if let Some(srcs) = script_src_paths {
+        let scripts_dir = plugin_dir.join("scripts");
+        for src in srcs.iter().filter(|s| !s.trim().is_empty()) {
+            let src_path = std::path::Path::new(src);
+            if let Some(fname) = src_path.file_name().and_then(|f| f.to_str()) {
+                let _ = std::fs::create_dir_all(&scripts_dir);
+                let dest = scripts_dir.join(fname);
+                if std::fs::copy(src_path, &dest).is_ok() {
+                    let rel = format!("scripts/{}", fname);
+                    if !manifest.scripts.contains(&rel) {
+                        manifest.scripts.push(rel);
+                    }
+                }
+            }
+        }
+    }
+    // ── Import automations: `.bmmpa` files copied into the plugin's automations/.
+    //
+    // Checked as they are copied, not as they are applied. A file that is not a readable
+    // .bmmpa is refused HERE, where the author is standing in front of the editor and can fix
+    // it — rather than at apply time on somebody else's machine, where the only thing anybody
+    // learns is that the plugin does not work.
+    if let Some(srcs) = automation_src_paths {
+        let auto_dir = plugin_dir.join("automations");
+        for src in srcs.iter().filter(|s| !s.trim().is_empty()) {
+            let src_path = std::path::Path::new(src);
+            let Some(fname) = src_path.file_name().and_then(|f| f.to_str()) else { continue };
+            let text = match std::fs::read_to_string(src_path) {
+                Ok(t) => t,
+                Err(_) => continue,
+            };
+            if !looks_like_bmmpa(&text) {
+                return Err(format!("plugins.autoBadFile|{}", fname));
+            }
+            let _ = std::fs::create_dir_all(&auto_dir);
+            let safe = super::plugin_assets_core::safe_component(fname);
+            if std::fs::copy(src_path, auto_dir.join(&safe)).is_ok() {
+                let rel = format!("automations/{}", safe);
+                if !manifest.automations.contains(&rel) {
+                    manifest.automations.push(rel);
+                }
+            }
+        }
+    }
+
+    // ── Import bundles: `.bmmbundle` files copied into the plugin's bundles/.
+    //
+    // Opened rather than sniffed. A bundle is a zip and the only thing that makes it a BMM
+    // one is a `catalog.json` inside, so the check is to actually open it — through the same
+    // function that will read it later, which is what stops this accepting a file the
+    // follow path then refuses. Checked HERE, where the author can pick a different file,
+    // rather than on the machine of whoever applies the plugin.
+    if let Some(srcs) = bundle_src_paths {
+        let bundle_dir = plugin_dir.join("bundles");
+        for src in srcs.iter().filter(|s| !s.trim().is_empty()) {
+            let src_path = std::path::Path::new(src);
+            let Some(fname) = src_path.file_name().and_then(|f| f.to_str()) else { continue };
+            if crate::commands::catalog_bundle::catalog_bundle_open(src.clone()).is_err() {
+                return Err(format!("plugins.bundleBadFile|{}", fname));
+            }
+            let _ = std::fs::create_dir_all(&bundle_dir);
+            let safe = super::plugin_assets_core::safe_component(fname);
+            if std::fs::copy(src_path, bundle_dir.join(&safe)).is_ok() {
+                let rel = format!("bundles/{}", safe);
+                if !manifest.bundles.contains(&rel) {
+                    manifest.bundles.push(rel);
+                }
+            }
+        }
+    }
+
+    if !manifest.scripts.is_empty() {
+        manifest.has_scripts = true;
+    }
+
+    // Determine icon path: prefer file copy, fall back to SVG, then existing
+    let icon_path = if let Some(ref src) = icon_src_path {
+        // User picked a file → copy as icon.png
+        let dest = plugin_dir.join("icon.png");
+        let _ = std::fs::copy(src, &dest);
+        if dest.exists() {
+            Some(dest.to_string_lossy().to_string())
+        } else {
+            None
+        }
+    } else if let Some(ref svg) = icon_svg {
+        // User picked a builtin SVG → save as icon.svg
+        let dest = plugin_dir.join("icon.svg");
+        let _ = std::fs::write(&dest, svg.as_bytes());
+        if dest.exists() {
+            Some(dest.to_string_lossy().to_string())
+        } else {
+            None
+        }
+    } else {
+        // Preserve existing icon (png or svg)
+        let png = plugin_dir.join("icon.png");
+        let svg_f = plugin_dir.join("icon.svg");
+        if png.exists() {
+            Some(png.to_string_lossy().to_string())
+        } else if svg_f.exists() {
+            Some(svg_f.to_string_lossy().to_string())
+        } else {
+            None
+        }
+    };
+
+    let installed = InstalledPlugin {
+        install_dir: plugin_dir.to_string_lossy().to_string(),
+        icon_path,
+        installed_at: chrono::Utc::now().to_rfc3339(),
+        enabled: true,
+        manifest: manifest.clone(),
+    };
+
+    // Write plugin.json to disk — required so export_plugin can zip it correctly
+    let manifest_json = serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?;
+    std::fs::write(plugin_dir.join("plugin.json"), manifest_json).map_err(|e| e.to_string())?;
+
+    {
+        let mut data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        data.installed_plugins
+            .retain(|p| p.manifest.id != manifest.id);
+        data.installed_plugins.push(installed.clone());
+    }
+    let _ = state.save();
+    log_line(format!("[PLUGINS] Created local plugin '{}'", manifest.id));
+    Ok(installed)
+}
+
+// ── Open plugin folder in Explorer ────────────────────────────────────────
+
+#[tauri::command]
+pub fn open_plugin_folder(state: State<'_, AppState>, plugin_id: String) -> Result<(), String> {
+    let install_dir = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        data.installed_plugins
+            .iter()
+            .find(|p| p.manifest.id == plugin_id)
+            .map(|p| p.install_dir.clone())
+    };
+    let dir = install_dir.ok_or_else(|| format!("Plugin '{}' not found", plugin_id))?;
+    crate::commands::mods::open_folder(dir)
+}
+
+// ── Run plugin scripts (UNSAFE — gated by permission + confirmation in UI) ──
+
+/// Launch the external scripts bundled with a plugin. This executes arbitrary
+/// code, so the frontend must only call it after the user granted the "unsafe
+/// plugins" permission AND confirmed. Returns the list of scripts launched.
+/// Extensions that are actually executable as plugin scripts.
+fn is_runnable_script(ext: &str) -> bool {
+    matches!(ext, "bat" | "cmd" | "ps1" | "vbs")
+}
+
+#[tauri::command]
+pub fn run_plugin_scripts(
+    state: State<'_, AppState>,
+    plugin_id: String,
+    script: Option<String>,
+) -> Result<Vec<String>, String> {
+    let (install_dir, scripts) = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        let p = data
+            .installed_plugins
+            .iter()
+            .find(|p| p.manifest.id == plugin_id)
+            .ok_or_else(|| format!("Plugin '{}' not found", plugin_id))?;
+        (p.install_dir.clone(), p.manifest.scripts.clone())
+    };
+    if scripts.is_empty() {
+        return Err("This plugin has no scripts.".to_string());
+    }
+    let base = PathBuf::from(&install_dir);
+
+    // Determine which scripts to run: the chosen one (if given & valid) or all
+    // runnable ones. Only .bat/.cmd/.ps1/.vbs are ever executed.
+    let to_run: Vec<String> = match script {
+        Some(sel) => {
+            if !scripts.iter().any(|s| s == &sel) {
+                return Err(format!("Script '{}' is not part of this plugin.", sel));
+            }
+            vec![sel]
+        }
+        None => scripts.clone(),
+    };
+
+    let mut launched: Vec<String> = Vec::new();
+    for rel in &to_run {
+        // Inside the plugin, or not at all. The manifest lists these and the manifest is the
+        // plugin author's: an absolute `C:\…\x.ps1` or a `..\..\x.bat` made "run this plugin's
+        // scripts" run whatever script sat elsewhere on the disk.
+        let Some(safe_rel) = crate::fs_utils::safe_relative_path(rel) else {
+            log_line(format!("[PLUGINS] Skipped a script outside the plugin folder: {}", rel));
+            continue;
+        };
+        let path = base.join(safe_rel);
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        if !is_runnable_script(&ext) {
+            log_line(format!(
+                "[PLUGINS] Skipped non-runnable script (only .bat/.ps1/.vbs run): {}",
+                rel
+            ));
+            continue;
+        }
+        if !path.exists() {
+            log_line(format!("[PLUGINS] Script missing, skipped: {}", rel));
+            continue;
+        }
+        let p_str = path.to_string_lossy().to_string();
+
+        // io::Result<()> rather than io::Result<Child>: the child is discarded below in
+        // either case, and the default arm no longer produces one.
+        #[cfg(target_os = "windows")]
+        let spawn = match ext.as_str() {
+            "ps1" => crate::commands::proc::hidden_command("powershell")
+                .args(["-ExecutionPolicy", "Bypass", "-File", &p_str])
+                .spawn()
+                .map(|_| ()),
+            "vbs" => crate::commands::proc::hidden_command("wscript")
+                .arg(&p_str)
+                .spawn()
+                .map(|_| ()),
+            // Was `cmd /C start "" <path>`. The path is interpolated into a line cmd
+            // re-parses, and `&` is legal in a Windows filename — a plugin script called
+            // `x&payload.exe` would have run the second half. open::that is the same
+            // "open it with whatever handles it" and never builds a command line.
+            _ => open::that(&p_str),
+        };
+        #[cfg(not(target_os = "windows"))]
+        let spawn = crate::commands::proc::hidden_command("sh")
+            .arg(&p_str)
+            .spawn()
+            .map(|_| ());
+
+        match spawn {
+            Ok(_) => {
+                launched.push(rel.clone());
+                log_line(format!(
+                    "[PLUGINS] Ran script '{}' for plugin '{}'",
+                    rel, plugin_id
+                ));
+            }
+            Err(e) => {
+                log_line(format!("[PLUGINS] Failed to run script '{}': {}", rel, e));
+            }
+        }
+    }
+    Ok(launched)
+}
+
+// ── Compute SHA-256 of all files in plugin directory ─────────────────────
+
+#[tauri::command]
+pub fn compute_plugin_checksum(
+    state: State<'_, AppState>,
+    plugin_id: String,
+) -> Result<String, String> {
+    let install_dir = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        data.installed_plugins
+            .iter()
+            .find(|p| p.manifest.id == plugin_id)
+            .map(|p| p.install_dir.clone())
+    };
+    let dir = install_dir.ok_or_else(|| format!("Plugin '{}' not found", plugin_id))?;
+    let dir_path = std::path::PathBuf::from(&dir);
+
+    // Collect all files sorted for deterministic hash
+    let mut files: Vec<std::path::PathBuf> = Vec::new();
+    fn collect_files(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            let mut sorted: Vec<_> = entries.filter_map(|e| e.ok()).collect();
+            sorted.sort_by_key(|e| e.path());
+            for entry in sorted {
+                let path = entry.path();
+                if path.is_dir() {
+                    collect_files(&path, out);
+                } else {
+                    out.push(path);
+                }
+            }
+        }
+    }
+    collect_files(&dir_path, &mut files);
+
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    for file_path in &files {
+        let data = std::fs::read(file_path).map_err(|e| e.to_string())?;
+        hasher.update(&data);
+    }
+    let result = hasher.finalize();
+    Ok(format!("{:x}", result))
+}
+
+
+/// Is this text a `.bmmpa`, as far as anything here can tell?
+///
+/// Shape, not extension. A file named `.bmmpa` proves nothing, and the author renaming a
+/// `.txt` by accident is the ordinary case this catches.
+///
+/// Deliberately shallow: it checks that the document is one BMM would recognise as carrying
+/// tasks. Whether each task is VALID is the importer's decision, and it is made on the machine
+/// that will run it, against that BMM's own registry — a second opinion written here would be
+/// wrong the day somebody adds an action.
+pub fn looks_like_bmmpa(text: &str) -> bool {
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(text) else { return false };
+    if v.get("magic").and_then(|m| m.as_str()) == Some("BMMPA") {
+        return true;
+    }
+    let has_steps = |x: &serde_json::Value| x.get("steps").map(|s| s.is_array()).unwrap_or(false);
+    if let Some(tasks) = v.get("tasks").and_then(|t| t.as_array()) {
+        return tasks.iter().any(has_steps);
+    }
+    // A bare array of tasks, which is what an older export produced.
+    v.as_array().map(|a| a.iter().any(has_steps)).unwrap_or(false)
+}
+
+/// One automation a plugin ships, read out for the importer.
+#[derive(serde::Serialize, Clone)]
+pub struct PluginAutomation {
+    /// The file name, for showing and for saying which one failed.
+    pub name: String,
+    /// Its contents, verbatim. Parsed by the caller — the scheduler already knows how to read
+    /// a .bmmpa, including the block `includes` a task may depend on, and a second reader here
+    /// would be the one that forgets them.
+    pub text: String,
+}
+
+/// Read the automations a plugin ships.
+///
+/// Through the assets path guard, rooted at `automations/`: the names come from a manifest,
+/// which is a file somebody else wrote.
+#[tauri::command]
+pub fn plugin_automations(
+    state: State<'_, AppState>,
+    plugin_id: String,
+) -> Result<Vec<PluginAutomation>, String> {
+    let (names, dir) = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        let p = data
+            .installed_plugins
+            .iter()
+            .find(|p| p.manifest.id == plugin_id)
+            .ok_or_else(|| format!("plugins.assets.errNoPlugin|{}", plugin_id))?;
+        (p.manifest.automations.clone(), p.install_dir.clone())
+    };
+    let root = std::path::PathBuf::from(&dir);
+    let mut out = Vec::new();
+    for rel in names {
+        // Every one must sit directly under automations/. A manifest naming
+        // `automations/../../anything` is the case this exists for.
+        let Some(name) = rel.strip_prefix("automations/") else { continue };
+        let safe = super::plugin_assets_core::safe_component(name);
+        let full = root.join("automations").join(&safe);
+        let Ok(text) = std::fs::read_to_string(&full) else { continue };
+        if !looks_like_bmmpa(&text) {
+            continue;
+        }
+        out.push(PluginAutomation { name: safe, text });
+    }
+    Ok(out)
+}
+
+/// One bundle a plugin ships, as a path the follow path can take.
+#[derive(serde::Serialize, Clone)]
+pub struct PluginBundle {
+    /// The file name, for showing and for saying which one failed.
+    pub name: String,
+    /// Absolute path on this machine. A PATH and not the contents, unlike an automation:
+    /// following a bundle means recording `bundle:<path>` as a source, and the reader opens
+    /// it when it needs it. Handing back a zip's bytes to write them out again would be a
+    /// copy of a file that is already where it needs to be.
+    pub path: String,
+}
+
+/// Read the bundles a plugin ships.
+///
+/// Through the same path guard as the automations, rooted at `bundles/`: the names come from
+/// a manifest, which is a file somebody else wrote.
+#[tauri::command]
+pub fn plugin_bundles(
+    state: State<'_, AppState>,
+    plugin_id: String,
+) -> Result<Vec<PluginBundle>, String> {
+    let (names, dir) = {
+        let data = state.data.lock().unwrap_or_else(|p| p.into_inner());
+        let p = data
+            .installed_plugins
+            .iter()
+            .find(|p| p.manifest.id == plugin_id)
+            .ok_or_else(|| format!("plugins.assets.errNoPlugin|{}", plugin_id))?;
+        (p.manifest.bundles.clone(), p.install_dir.clone())
+    };
+    let root = std::path::PathBuf::from(&dir);
+    let mut out = Vec::new();
+    for rel in names {
+        let Some(name) = rel.strip_prefix("bundles/") else { continue };
+        let safe = super::plugin_assets_core::safe_component(name);
+        let full = root.join("bundles").join(&safe);
+        if !full.is_file() {
+            continue;
+        }
+        // Opened again on the way out. The manifest is a claim; the file on disk is the fact,
+        // and a bundle that was valid when packed can arrive corrupted.
+        if crate::commands::catalog_bundle::catalog_bundle_open(full.to_string_lossy().to_string())
+            .is_err()
+        {
+            continue;
+        }
+        out.push(PluginBundle {
+            name: safe,
+            path: full.to_string_lossy().to_string(),
+        });
+    }
+    Ok(out)
+}
+
+#[cfg(test)]
+mod plugin_automation_tests {
+    use super::looks_like_bmmpa;
+
+    #[test]
+    fn the_shape_decides_not_the_name() {
+        assert!(looks_like_bmmpa(r#"{"magic":"BMMPA","tasks":[]}"#));
+        assert!(looks_like_bmmpa(r#"{"tasks":[{"name":"x","steps":[]}]}"#));
+        assert!(looks_like_bmmpa(r#"[{"name":"x","steps":[]}]"#), "an older export");
+
+        assert!(!looks_like_bmmpa("not json at all"));
+        assert!(!looks_like_bmmpa("{}"));
+        // Valid JSON that is some OTHER BMM document. Accepting this would import a theme as
+        // an automation and produce a task with no steps, silently.
+        assert!(!looks_like_bmmpa(r#"{"id":"t","name":"A theme","tokens":{}}"#));
+        // Tasks that carry no steps: a shape that reads as a .bmmpa and is not one.
+        assert!(!looks_like_bmmpa(r#"{"tasks":[{"name":"x"}]}"#));
+    }
+}
+
+#[cfg(test)]
+mod catalog_checksum_tests {
+    use super::{catalog_checksum_rule, unverified_plugin_grace};
+
+    const H: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+    /// Security summary §9: `sha256` is mandatory in the plugin catalogue; for one release an
+    /// entry without it installs only after the user's yes to the warning.
+    #[test]
+    fn an_entry_without_a_checksum_needs_the_warning_and_the_grace_release() {
+        assert_eq!(catalog_checksum_rule(Some(H), false, "1.0.0").unwrap().as_deref(), Some(H));
+        assert_eq!(catalog_checksum_rule(Some(&format!("sha256:{}", H.to_uppercase())), false, "1.0.0").unwrap().as_deref(), Some(H));
+        assert!(catalog_checksum_rule(Some("abc"), true, "1.0.0").is_err(), "a malformed checksum is refused");
+        assert_eq!(catalog_checksum_rule(None, false, "1.0.0").unwrap_err(), "plugins.errNeedsConfirm", "no silent install");
+        assert_eq!(catalog_checksum_rule(Some("  "), false, "1.0.3").unwrap_err(), "plugins.errNeedsConfirm");
+        assert_eq!(catalog_checksum_rule(None, true, "1.0.0").unwrap(), None, "after the warning, during the grace release");
+        assert_eq!(catalog_checksum_rule(None, true, "1.1.0").unwrap_err(), "plugins.errNoChecksum", "after it, never");
+    }
+
+    #[test]
+    fn the_grace_release_is_this_one_and_only_this_one() {
+        assert!(unverified_plugin_grace(env!("CARGO_PKG_VERSION")) == (env!("CARGO_PKG_VERSION") < "1.1"));
+        assert!(unverified_plugin_grace("1.0.0") && unverified_plugin_grace("1.0.9-beta"));
+        assert!(!unverified_plugin_grace("1.1.0") && !unverified_plugin_grace("2.0.0"));
+    }
+}
+
+#[cfg(test)]
+mod plugin_folder_tests {
+    use std::io::Write;
+
+    fn plugin_zip(id: &str) -> Vec<u8> {
+        let mut buf = std::io::Cursor::new(Vec::new());
+        {
+            let mut z = zip::ZipWriter::new(&mut buf);
+            let o = zip::write::FileOptions::default();
+            z.start_file("p/plugin.json", o).unwrap();
+            z.write_all(serde_json::json!({ "id": id, "name": "P" }).to_string().as_bytes()).unwrap();
+            z.start_file("p/run.bat", o).unwrap();
+            z.write_all(b"echo hi").unwrap();
+            z.finish().unwrap();
+        }
+        buf.into_inner()
+    }
+
+    /// The manifest id names the install folder (and what uninstall deletes): one plain folder
+    /// name, or the plugin is refused before a file is written.
+    #[test]
+    fn a_plugin_id_cannot_place_the_plugin_outside_the_plugins_folder() {
+        let td = tempfile::tempdir().unwrap();
+        let plugins = td.path().join("plugins");
+        std::fs::create_dir_all(&plugins).unwrap();
+        for bad in ["../escaped", "..", "a/b", r"C:\escaped", r"..\escaped"] {
+            assert!(super::extract_plugin_zip(&plugin_zip(bad), &plugins, None).is_err(), "{bad} was accepted");
+        }
+        assert!(!td.path().join("escaped").exists(), "nothing was written outside the plugins folder");
+        let ok = super::extract_plugin_zip(&plugin_zip("good.plugin"), &plugins, None).unwrap();
+        assert_eq!(ok.id, "good.plugin");
+        assert!(plugins.join("good.plugin").join("run.bat").exists());
+    }
+}
+
+#[cfg(test)]
+mod duplicate_copy_tests {
+    use super::{confined_bundled_source, copy_bundled_from_source};
+    use crate::models::plugin::PluginManifest;
+    use std::path::Path;
+
+    fn manifest(v: serde_json::Value) -> PluginManifest {
+        serde_json::from_value(v).unwrap()
+    }
+
+    fn write(p: &Path, s: &str) {
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, s).unwrap();
+    }
+
+    /// The bug: Duplicate carried the source's bundled paths into the new manifest and the
+    /// new folder had none of the files. Every listed kind, nested folders and the icon now
+    /// land in the copy under the same relative paths.
+    #[test]
+    fn duplicate_copies_every_bundled_file_and_the_icon() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("plugins").join("orig");
+        let dst = tmp.path().join("plugins").join("orig-copy");
+        write(&src.join("scripts").join("run.bat"), "@echo run");
+        write(&src.join("bundle").join("cfg").join("sub").join("a.ini"), "a=1");
+        write(&src.join("automations").join("nightly.bmmpa"), r#"{"tasks":[]}"#);
+        write(&src.join("bundles").join("cat.bmmbundle"), "zip");
+        write(&src.join("icon.png"), "png");
+        let mut m = manifest(serde_json::json!({
+            "id": "orig-copy", "name": "Copy",
+            "scripts": ["scripts/run.bat"], "folders": ["bundle/cfg"],
+            "automations": ["automations/nightly.bmmpa"], "bundles": ["bundles/cat.bmmbundle"],
+        }));
+        let n = copy_bundled_from_source(&src, &dst, &mut m).unwrap();
+        assert_eq!(n, 5);
+        assert_eq!(std::fs::read_to_string(dst.join("scripts/run.bat")).unwrap(), "@echo run");
+        assert_eq!(std::fs::read_to_string(dst.join("bundle/cfg/sub/a.ini")).unwrap(), "a=1");
+        assert!(dst.join("automations/nightly.bmmpa").is_file());
+        assert!(dst.join("bundles/cat.bmmbundle").is_file());
+        assert!(dst.join("icon.png").is_file());
+        assert_eq!(m.scripts, vec!["scripts/run.bat"]);
+        assert_eq!(m.folders, vec!["bundle/cfg"]);
+        // The source is untouched.
+        assert!(src.join("scripts/run.bat").is_file());
+    }
+
+    /// The manifest is the author's text. An absolute path, a `..` climb or a missing file
+    /// is not read, not copied, and not listed in the duplicate either.
+    #[test]
+    fn traversal_and_absolute_paths_are_refused_and_dropped() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("plugins").join("orig");
+        let dst = tmp.path().join("plugins").join("dup");
+        let secret = tmp.path().join("secret.txt");
+        write(&secret, "do not copy");
+        write(&src.join("scripts").join("ok.bat"), "ok");
+        let abs = secret.to_string_lossy().to_string();
+        let mut m = manifest(serde_json::json!({
+            "id": "dup", "name": "Dup",
+            "scripts": ["scripts/ok.bat", "../../secret.txt", "scripts/../../../secret.txt", abs, "/secret.txt", "scripts/missing.bat"],
+            "folders": [".."], "automations": [r"..\..\secret.txt"],
+        }));
+        let n = copy_bundled_from_source(&src, &dst, &mut m).unwrap();
+        assert_eq!(n, 1);
+        assert_eq!(m.scripts, vec!["scripts/ok.bat"]);
+        assert!(m.folders.is_empty());
+        assert!(m.automations.is_empty());
+        assert!(!dst.join("secret.txt").exists());
+        assert!(!tmp.path().join("plugins").join("secret.txt").exists());
+        assert!(confined_bundled_source(&src, "..").is_none());
+        assert!(confined_bundled_source(&src, "").is_none());
+    }
+
+    /// Duplicating onto itself (the id was changed back to the source's) copies nothing.
+    #[test]
+    fn same_folder_is_a_no_op() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("p");
+        write(&src.join("scripts").join("x.bat"), "x");
+        let mut m = manifest(serde_json::json!({ "id": "p", "name": "P", "scripts": ["scripts/x.bat"] }));
+        assert_eq!(copy_bundled_from_source(&src, &src, &mut m).unwrap(), 0);
+        assert_eq!(m.scripts, vec!["scripts/x.bat"]);
+    }
+
+    /// A link inside the source plugin is not followed: neither a linked file listed in the
+    /// manifest nor a link sitting inside a bundled folder. (Skipped where the OS will not
+    /// let an unprivileged test create a symlink.)
+    #[test]
+    fn symlinks_are_not_followed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("plugins").join("orig");
+        let dst = tmp.path().join("plugins").join("dup");
+        let outside = tmp.path().join("outside");
+        write(&outside.join("secret.txt"), "secret");
+        write(&src.join("bundle").join("cfg").join("keep.ini"), "k");
+        std::fs::create_dir_all(src.join("scripts")).unwrap();
+        #[cfg(windows)]
+        let made = std::os::windows::fs::symlink_file(outside.join("secret.txt"), src.join("scripts").join("link.bat")).is_ok()
+            && std::os::windows::fs::symlink_dir(&outside, src.join("bundle").join("cfg").join("out")).is_ok();
+        #[cfg(unix)]
+        let made = std::os::unix::fs::symlink(outside.join("secret.txt"), src.join("scripts").join("link.bat")).is_ok()
+            && std::os::unix::fs::symlink(&outside, src.join("bundle").join("cfg").join("out")).is_ok();
+        if !made {
+            eprintln!("symlinks not permitted here; skipping");
+            return;
+        }
+        let mut m = manifest(serde_json::json!({
+            "id": "dup", "name": "Dup", "scripts": ["scripts/link.bat"], "folders": ["bundle/cfg"],
+        }));
+        copy_bundled_from_source(&src, &dst, &mut m).unwrap();
+        assert!(m.scripts.is_empty(), "a linked script is dropped");
+        assert!(!dst.join("scripts/link.bat").exists());
+        assert!(dst.join("bundle/cfg/keep.ini").is_file());
+        assert!(!dst.join("bundle/cfg/out").exists(), "a link inside a folder is skipped");
+    }
+}
+
+#[cfg(test)]
+mod keep_enabled_tests {
+    use super::keep_enabled_on_update;
+    use crate::models::plugin::InstalledPlugin;
+
+    fn plugin(id: &str, enabled: bool) -> InstalledPlugin {
+        serde_json::from_value(serde_json::json!({
+            "manifest": { "id": id, "name": id },
+            "installed_at": "2026-10-15T00:00:00Z",
+            "enabled": enabled,
+        }))
+        .expect("an installed plugin")
+    }
+
+    #[test]
+    fn an_update_never_switches_a_plugin_back_on() {
+        let list = vec![plugin("off-one", false), plugin("on-one", true)];
+        assert!(!keep_enabled_on_update(&list, "off-one"), "a catalogue update must not re-enable a plugin the user switched off");
+        assert!(keep_enabled_on_update(&list, "on-one"));
+        assert!(keep_enabled_on_update(&list, "new-one"), "a first install from the Install button is on");
+    }
+}

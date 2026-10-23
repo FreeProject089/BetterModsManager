@@ -1,0 +1,98 @@
+/* Old BMM installations: the start-up dialog, its confirmation steps and the Settings card.
+   See src/features/settings/old-installs.ts. Tokens only: it can open over any theme. */
+
+.oi-lede {
+    margin: 0 0 14px;
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--text-secondary);
+}
+
+/* One surface (modal-shell.css, "Inside the body"): an install is a row split from the next
+   by a hairline, with a hover tint, not a framed card. */
+.oi-list { display: flex; flex-direction: column; gap: 0; }
+
+.oi-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 8px;
+    border-radius: 8px;
+}
+.oi-row + .oi-row { border-top: 1px solid var(--bmm-s06); }
+.oi-row:hover { background: var(--bmm-s03); }
+.oi-row.is-off { opacity: 0.7; }
+.oi-row > input[type="checkbox"] { margin-top: 3px; flex-shrink: 0; }
+
+/* min-width:0 or a long Windows path pushes the row wider than the dialog. */
+.oi-info { flex: 1; min-width: 0; }
+.oi-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.oi-chip {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 7px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+}
+.oi-meta {
+    margin-top: 2px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+.oi-path {
+    margin-top: 3px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    overflow-wrap: anywhere;
+}
+.oi-note { margin-top: 4px; font-size: 11px; color: var(--text-muted); }
+.oi-note.is-warn { color: color-mix(in srgb, var(--warning) 60%, var(--text-primary)); }
+.oi-silent {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.oi-status { margin: 12px 0 0; font-size: 12px; color: var(--text-secondary); }
+.oi-status:empty { display: none; }
+.oi-log { margin: 8px 0 0; padding-left: 18px; font-size: 11px; color: var(--text-secondary); }
+.oi-log li.is-bad { color: var(--danger); }
+.oi-foot-note { margin: 12px 0 0; font-size: 11px; color: var(--text-muted); }
+
+.oi-footer { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; width: 100%; }
+.oi-footer .oi-spacer { flex: 1; }
+
+/* Confirmation steps. */
+.oi-confirm-path {
+    margin: 8px 0;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--bmm-s02);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    overflow-wrap: anywhere;
+    color: var(--text-primary);
+}
+.oi-backup-row { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+.oi-backup-row .input { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 11px; }
+.oi-check { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--text-primary); }
+
+/* Settings card: header, help, rows and footer are the shared anatomy (css/settings-page.css). */
+.oi-card-status { font-size: 12px; font-weight: 600; color: var(--text-primary); }
+.oi-card-status:empty { display: none; }
+.oi-card-list { margin: 6px 0 0; padding-left: 18px; font-size: 11.5px; color: var(--text-secondary); }
+.oi-card-list:empty { display: none; }
+.oi-card-rows { margin-top: 10px; }

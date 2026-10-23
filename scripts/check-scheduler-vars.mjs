@@ -1,0 +1,131 @@
+// check-scheduler-vars.mjs — every scheduler variable must be both writable and readable.
+//
+// The scheduler has two lists that have to agree and nothing kept them in step:
+//   - actions write measured values into the run context (`ctx['disk.free_gb'] = …`),
+//   - `VALUE_SOURCES` is what the "value" condition's dropdown offers.
+// The dropdown is the ONLY way to name a source, so a write missing from VALUE_SOURCES is
+// a variable no condition can ever read.
+//
+// They had already drifted: check_disk_space wrote disk.free_gb, disk.free_percent and
+// disk.total_gb, and app.checkUpdate wrote update.available, none of which were offered.
+// Four actions were quietly writing to nowhere — "if an update is available, notify me"
+// was not expressible, with nothing to indicate why.
+//
+// The reverse direction matters too: a source offered with nothing writing it is always
+// zero, so the condition silently never holds — which reads as "the condition was false"
+// rather than "this variable does not exist".
+
+import fs from 'node:fs';
+
+const FILE = 'frontend/src/features/settings/scheduler.ts';
+const src = fs.readFileSync(FILE, 'utf8');
+
+// Assignments only. A read in a comparison does not create a variable.
+//
+// `ctx.nums[...]` since the context gained a text half; the older `ctx[...]` form is still
+// matched so this does not quietly stop seeing anything if some write is left behind.
+// When the shape changed, this check went loud rather than silently passing on zero
+// matches — which is why the pattern below is deliberately permissive about the prefix.
+// The package and game steps write their values in their own module (sched-pkg.ts), called
+// from runAction: those writes count as the runner's.
+const PKG = 'frontend/src/features/settings/sched-pkg.ts';
+const pkgSrc = fs.existsSync(PKG) ? fs.readFileSync(PKG, 'utf8') : '';
+const written = new Set(
+    [...(src + pkgSrc).matchAll(/ctx(?:\.nums)?\['([a-zA-Z0-9._]+)'\]\s*=/g)].map((m) => m[1]),
+);
+if (written.size === 0) {
+    console.error('✗ found no context writes at all — the pattern is stale. Refusing to report success.');
+    process.exit(2);
+}
+
+const block = src.match(/const VALUE_SOURCES = \[(.*?)\];/s);
+if (!block) {
+    console.error(`✗ ${FILE}: could not find VALUE_SOURCES — has it been renamed?`);
+    process.exit(2);
+}
+const offered = new Set([...block[1].matchAll(/'([a-zA-Z0-9._]+)'/g)].map((m) => m[1]));
+
+const unreachable = [...written].filter((v) => !offered.has(v)).sort();
+const alwaysZero = [...offered].filter((v) => !written.has(v)).sort();
+
+// Some actions write under a PREFIX the task author picks: `library.counts` writes
+// `${into}.mods`, `${into}.enabled` and so on, so the full name cannot be in VALUE_SOURCES
+// — the first half of it does not exist until somebody writes the task. What IS fixed is
+// the second half, so that is what gets checked: a source of the form `<anything>.mods` is
+// legitimate exactly when some action writes a templated key ending in `.mods`.
+//
+// Without this, the only way to make such an action usable was to leave it out of every
+// preset, which is how `app.buildInfo` ended up with no example anywhere.
+const templatedSuffixes = new Set(
+    [...src.matchAll(/ctx(?:\.nums|\.text)?\[`\$\{[^}]*\}\.([a-zA-Z0-9_]+)`\]\s*=/g)].map((m) => m[1]),
+);
+
+// ── Presets may only name things that exist ──────────────────────────────────────
+//
+// A preset is offered as the correct way to do something, so an invented action type or
+// condition source is worse there than anywhere else: it fails at run time, in a task the
+// user did not write, and it looks like the feature is broken rather than the example.
+// Nothing else checks these — the params are `Record<string, any>` and the action type is
+// a bare string, so a typo type-checks perfectly.
+// Anchored on the declaration line, not on "everything up to the first =": the type
+// annotation contains `() => Partial<Task>`, so an [^=]* prefix never matched and this
+// whole section silently checked nothing while reporting success.
+const presetBlock = src.match(/const PRESETS\b.*?=\s*\[(.*?)\n\];/s);
+if (!presetBlock) {
+    console.error('✗ could not find the PRESETS array — has it been renamed? Refusing to report success on an unchecked file.');
+    process.exit(2);
+}
+const badRefs = [];
+{
+    const body = presetBlock[1];
+    const knownActions = new Set([...src.matchAll(/\{ v: '([a-zA-Z0-9._]+)', label:/g)].map((m) => m[1]));
+    const knownConds = (src.match(/const COND_TYPES = \[(.*?)\];/s) || [, ''])[1];
+    const condSet = new Set([...knownConds.matchAll(/'([a-zA-Z0-9._]+)'/g)].map((m) => m[1]));
+
+    // `negate: true` sits between the type and the params on a negated condition, and the
+    // pattern used to require them adjacent — so every negated condition in every preset
+    // was unchecked. Found by planting `themeIsActive` in one and watching this pass.
+    // Still anchored on `params:` rather than loosened to any `type:`, because a TRIGGER is
+    // also `{ type: 'weeklyAt', … }` and is neither an action nor a condition.
+    for (const m of body.matchAll(/type: '([a-zA-Z0-9._]+)',(?: negate: (?:true|false),)? params:/g)) {
+        // One arm names an action, the other a condition; a name in neither is a typo.
+        if (!knownActions.has(m[1]) && !condSet.has(m[1])) {
+            badRefs.push(`preset uses '${m[1]}', which is neither an action nor a condition type`);
+        }
+    }
+    // `textIs` is the one condition whose source is NOT from VALUE_SOURCES.
+    //
+    // VALUE_SOURCES is a fixed list because every numeric source is written by a named
+    // action into a name that action chose. `text.extract` is the opposite: the person
+    // writing the task picks the variable name, so no fixed list can contain it, and
+    // checking one against VALUE_SOURCES would report every correct task as broken.
+    //
+    // Matched by looking at what precedes the source, so this exemption cannot be claimed
+    // by a `value` condition that simply happens to sit nearby.
+    const freeSourced = new Set(
+        [...body.matchAll(/type: 'textIs', params: \{[^}]*source: '([a-zA-Z0-9._]+)'/g)].map((m) => m[1]),
+    );
+    // A `for each` names a LOOP source (`mods`, `list`…), not a value: `kind: 'forEach', source:`
+    // is skipped, or every preset that loops over a list would be reported as reading `list`.
+    for (const m of body.matchAll(/(?<!kind: 'forEach', )source: '([a-zA-Z0-9._]+)'/g)) {
+        const suffix = m[1].includes('.') ? m[1].slice(m[1].indexOf('.') + 1) : '';
+        if (!offered.has(m[1]) && !freeSourced.has(m[1]) && !templatedSuffixes.has(suffix)) {
+            badRefs.push(`preset reads value source '${m[1]}', which is not in VALUE_SOURCES and is not a prefixed write either`);
+        }
+    }
+}
+
+if (unreachable.length === 0 && alwaysZero.length === 0 && badRefs.length === 0) {
+    console.log(`✓ scheduler variables: ${written.size} written, all readable, none dangling, ${templatedSuffixes.size} prefixed`);
+    if (presetBlock) console.log('✓ presets reference only real actions, conditions and value sources');
+    process.exit(0);
+}
+for (const v of unreachable) {
+    console.error(`✗ '${v}' is written by an action but not in VALUE_SOURCES — no condition can read it`);
+}
+for (const v of alwaysZero) {
+    console.error(`✗ '${v}' is offered as a condition source but nothing writes it — it is always 0`);
+}
+for (const b of badRefs) console.error(`✗ ${b}`);
+console.error(`\n  Fix: keep VALUE_SOURCES in ${FILE} in step with the context writes in runAction.`);
+process.exit(1);

@@ -1,0 +1,569 @@
+# Référence API & deeplinks
+
+
+BMM expose deux façons de le piloter depuis l'extérieur : les **deeplinks** (`bmm://…`, sans token,
+envoyés à la fenêtre en cours) et une **API HTTP locale** (token, `127.0.0.1` uniquement). Tout ce
+qui suit vient des registres de l'app elle-même, donc c'est cohérent avec ce que montre *Plugins &
+API* dans l'app.
+
+!!! tip "Lequel choisir ?"
+
+    Un deeplink est une URL — tout ce qui sait ouvrir un lien peut le déclencher (un `.bat`, un
+    raccourci, un site, une autre app) et ça ne demande aucun secret. L'API HTTP sert à **relire**
+    des données et à envoyer des payloads qu'une URL ne peut pas exprimer. Si la chose existe sous
+    les deux formes, préfère le deeplink.
+
+---
+
+## Transport
+
+| | |
+|---|---|
+| URL de base | `http://127.0.0.1:51274` |
+| Adresse d'écoute | **`127.0.0.1` uniquement** — jamais `0.0.0.0`, donc rien hors de la machine n'y accède |
+| Port | `51274` par défaut ; surchargeable via `settings.api_port` (`0` = retour au défaut). Nécessite un redémarrage |
+| Port effectif | À lire à l'exécution sur `GET /api/health` → `port` |
+| Limitation de débit | **Aucune.** N'expose pas ce port |
+
+!!! warning "Si le port est déjà pris, l'API ne démarre pas du tout"
+
+    Elle ne **bascule pas** sur un autre port. BMM écoute avec un handler d'arrêt propre ; si
+    quelque chose occupe déjà 51274 — typiquement une instance zombie après un redémarrage
+    in-app — l'API est **désactivée pour toute la session** et une ligne part dans le journal de
+    crash. L'app continue de fonctionner normalement, donc le seul symptôme est un script qui
+    n'arrive pas à se connecter. Commence toujours par `GET /api/health`.
+
+**CORS.** En build release, les origines sont limitées à `https://tauri.localhost`,
+`tauri://localhost`, `http://tauri.localhost`, `https://bettercommunity.ch`, plus ce que tu ajoutes
+dans *Plugins & API → CORS* (une entrée `*` seule = tout autoriser). Un build `tauri dev` autorise
+toutes les origines. La liste est lue **une seule fois au démarrage de l'API**. `curl` et les
+deeplinks n'envoient pas d'`Origin`, donc rien de tout ça ne les concerne.
+
+---
+
+## S'authentifier
+
+```bash
+curl -H "Authorization: Bearer <token>" http://127.0.0.1:51274/api/mods
+```
+
+`Authorization: Bearer …` est la seule forme acceptée, et la comparaison est faite en **temps
+constant**. Il y a deux sortes de token :
+
+| | D'où il vient | Portée |
+|---|---|---|
+| **Token admin** | Un UUID v4 généré au premier lancement, stocké dans `data.json` sous `settings.api_token`. Rotation depuis *Plugins & API* | Tout. Contourne tous les contrôles de permission |
+| **Token plugin** | Émis par plugin, stocké dans `settings.plugin_tokens` (`token → plugin_id`) | Uniquement ce qui a été accordé à ce plugin |
+
+Le token est relu à **chaque** requête : une rotation prend effet immédiatement, sans redémarrage.
+
+### Permissions
+
+Pour un token plugin, l'identité de l'appelant vient **du token**, jamais de l'en-tête
+`X-BMM-Plugin-Id` — un plugin ne peut donc pas s'élever en forgeant ou en omettant cet en-tête.
+Accorde avec `PUT /api/apps/permissions/<plugin_id>` :
+
+`app.read` · `app.write` · `catalog.read` · `catalog.write` · `data.read` · `data.write` ·
+`hooks.read` · `hooks.write` · `keys.read` · `keys.write` · `modpacks.read` · `modpacks.write` ·
+`mods.read` · `mods.write` · `plugins.read` · `plugins.write` · `profiles.read` · `profiles.write` ·
+`repo.read` · `repo.write` · `resources.read` · `resources.write` · `schedules.read` · `schedules.write` · `system.write` · `telemetry.write`
+
+Cette liste vit dans le code sous le nom `api::PLUGIN_SCOPES`, et un test vérifie qu'elle
+correspond au routeur dans les deux sens : une portée exigée que rien ne peut accorder est une
+route inatteignable, et une portée qui ne protège aucune route est une case à cocher qui promet
+une protection inexistante.
+
+!!! warning "`keys.write` ne fait exprès pas partie de `repo.write`"
+
+    Une clé d'identité est ce qui prouve que vous êtes *vous* auprès de chaque source protégée.
+    « Peut publier un repo » ne doit pas vouloir dire « peut créer ce avec quoi je signe » : c'est
+    sa propre autorisation — et `keys.read`, voir quelles identités existent, en est encore une
+    autre.
+
+!!! note "Lecture et écriture sont séparées, et les lectures SONT protégées"
+
+    Elles ne l'étaient pas. Cinquante routes demandaient un jeton et aucune permission, et
+    `require_token` accepte **n'importe quel** jeton de plugin — donc `GET /api/data` (le dump
+    complet), `POST /api/data/import`, `POST /api/restart` et `DELETE /api/plugins/<id>` étaient
+    atteignables par un plugin sans aucune permission. C'est protégé désormais.
+
+    À la mise à jour, chaque plugin conserve la moitié lecture de chaque domaine sur lequel il
+    avait déjà l'écriture : avoir le droit de changer vos mods, c'est garder celui de les
+    lister. Rien d'autre n'est reporté ; un plugin qui s'appuyait sur un domaine jamais accordé
+    reçoit un `403` qui nomme la portée — à un clic d'être accordée, et bien préférable à un trou
+    silencieux.
+
+!!! danger "La table des permissions est réservée au jeton admin"
+
+    `GET`/`PUT /api/apps/permissions*` exigent le **jeton admin**, jamais un jeton de plugin. Un
+    plugin capable de `PUT` ses propres autorisations pourrait tout s'accorder, ce qui rendrait
+    cette page entièrement décorative.
+
+### Erreurs
+
+| Statut | Corps |
+|---|---|
+| `401` | `{"error":"Unauthorized: invalid or missing token"}` |
+| `403` | `{"error":"Forbidden: plugin '<id>' lacks permission '<perm>' — grant it with: PUT /api/apps/permissions/<id>"}` |
+| `400` | corps JSON invalide |
+| `404` / `405` / `500` | `{"error":"…"}` |
+
+---
+
+## Deeplinks
+
+Envoyés à la fenêtre en cours — **sans token**. Depuis un script :
+
+```bat
+start "" "bmm://mod/enable?id=my-mod-folder"
+```
+
+```powershell
+Start-Process "bmm://mod/enable?id=my-mod-folder"
+```
+
+`*` marque un paramètre obligatoire. Chacun affiche un toast à la réception, et un coupe-circuit
+global (`bmm_deeplink_allow_global = blocked`) les refuse tous.
+
+!!! warning "Un lien venu de l'extérieur demande avant de changer quoi que ce soit"
+
+    N'importe quelle page web peut déclencher un lien `bmm://`, et le navigateur ne dit pas à
+    BMM quelle page. Un lien venu de l'extérieur (le système, un bouton de thème, le testeur de
+    liens) qui modifierait un état, téléchargerait, écrirait ou lancerait quelque chose ouvre
+    donc **d'abord une boîte de dialogue dans l'app** : ce qui va se passer en mots simples, la
+    cible exacte (chemin, URL et son serveur sur une ligne à part, nom du plugin ou de l'app) et
+    qui l'a demandé. **Annuler est le choix par défaut** (il a le focus, Échap répond non), et
+    rien n'est appliqué, récupéré, écrit ni lancé avant votre confirmation.
+
+    Certaines choses sont refusées d'office, quelle que soit votre réponse :
+
+    | Refusé depuis un lien | Pourquoi |
+    |---|---|
+    | `app/launch` avec `exe=` | Un lien ne peut démarrer qu'une app enregistrée dans BMM, par son `id` — jamais un chemin qu'il désigne. Les scripts (`.ps1`, `.bat`, `.cmd`, …) ne sont jamais lancés depuis un lien, donc `-ExecutionPolicy Bypass` non plus |
+    | Les téléchargements qui ne sont pas en `https` (`app/install`, `catalog/*/install`, `theme/import`, `catalog/follow`, `catalog/import`, `install`) | Le fichier pourrait être remplacé en chemin |
+    | `app/install` / `catalog/app/install` sans `sha256`, ou dont le fichier ne correspond pas ; tout script | Un installateur s'exécute sur votre machine |
+    | Un chemin réseau, UNC, relatif ou avec `..` dans `dir=` / `path=` | Rien que demander à Windows si `\\hôte\partage` existe envoie vos identifiants à cet hôte. Une suggestion locale ouvre seulement le sélecteur de dossier à cet endroit : c'est **vous** qui choisissez |
+    | `key` / `passphrase` sur `repo/connect`, `repo/sync`, `catalog/follow`, `catalog/import` | Un lien ne peut ni lier ni déverrouiller une clé de signature ; cela se fait dans Réglages → Identité & API |
+    | `full=1` sur `recorder/set` (et sur `telemetry/*`) | L'enregistrement non masqué s'active dans Réglages → Confidentialité, ou pas du tout |
+
+    Les appelants internes de l'app — une **tâche planifiée** que vous avez enregistrée et
+    l'**API locale** (qui exige le jeton) — passent par le même gestionnaire sans la boîte de
+    dialogue, pour qu'une tâche sans surveillance ne reste pas bloquée. Les limites ci-dessus
+    s'appliquent toujours à eux, sauf qu'un `data/export-auto` planifié écrit la sauvegarde
+    complète dans le dossier que nomme sa tâche, et qu'un `replay/export` planifié garde son
+    `path`.
+
+    Laissés sans boîte de dialogue exprès, parce qu'ils ne font qu'ouvrir un écran ou lire :
+    `plugin/compare`, `view/open`, `docs/open`, `theme/editor`, `repo/gen`, `repo/update`,
+    `repo/host`, `repo/sync`, `mod/update`, `mod/check-updates`, `benchmark/open`, et
+    `catalog/*/install` sans `url`. `telemetry/*`, `schedule/*`, `hook`,
+    `catalog/*/add-source`, `catalog/delete`, `repo/fetch-ssh` et `install` gardent leur propre
+    boîte de dialogue.
+
+### Mods, profils, modpacks
+
+| Deeplink | Params | Effet |
+|---|---|---|
+| `bmm://mod/enable` | `id`* | Active un mod dans le profil actif |
+| `bmm://mod/disable` | `id`* | Le désactive |
+| `bmm://profile/activate` | `id`* (UUID du profil) | Change le profil actif |
+| `bmm://modpack/enable` | `id`* | Active tous les mods d'un modpack — `id` accepte un id de **modpack ou de profil** |
+| `bmm://modpack/disable` | `id`* | L'inverse |
+| `bmm://modpack/create` | `name`*, `profile` | Crée un modpack depuis les mods actifs d'un profil |
+| `bmm://install` | `url`*, `name` | Télécharge un mod et ouvre la boîte d'installation (choisir ou créer le profil cible) |
+
+### Plugins
+
+| Deeplink | Params | Effet |
+|---|---|---|
+| `bmm://plugin/activate` | `id`* | Applique la modlist du plugin (et désactive le reste si `strict`) |
+| `bmm://plugin/compare` | `id`* | Ouvre la comparaison modlist / mods actifs |
+| `bmm://plugin/delete` | `id`* | Le désinstalle — registre, permissions et fichiers. Demande d'abord, en nommant le plugin |
+
+### Dépôt serveur & mises à jour
+
+| Deeplink | Params | Effet |
+|---|---|---|
+| `bmm://repo/connect` | `url`*, `name`, `password` | Demande d'abord, et n'applique rien — mot de passe compris — avant la réponse. Enregistre un dépôt distant (le dossier parent suffit). `password` est le mot de passe de téléchargement d'un dépôt protégé, envoyé en `X-Repo-Password` au moment de lire le nom dans `repo.json` — sans lui, un dépôt protégé se connectait sous un nom qui était juste son URL. |
+| `bmm://repo/sync` | `url`*, `profile`*, `game_dir`, `mods_dir`, `backup_dir`, `local_profile`, `password` | Ouvre la synchro pré-remplie et lance la récupération. `password` est envoyé en `X-Repo-Password` |
+| `bmm://repo/gen` | — | Ouvre la section Génération |
+| `bmm://repo/update` | `dir` | Ouvre Mise à jour, pré-rempli |
+| `bmm://repo/host` | `dir`, `port` | Ouvre Hébergement, pré-rempli |
+| `bmm://mod/check-updates` | — | Lance la vérification des mises à jour |
+| `bmm://mod/update` | `url` | Pré-remplit la connexion, ou lance la vérification si omis |
+
+### Apps, thèmes, langue
+
+| Deeplink | Params | Effet |
+|---|---|---|
+| `bmm://app/install` | `id`*, `url`*, `sha256`*, `title`, `type`, `path` | Demande, puis télécharge et installe une app. `https` uniquement, `sha256` obligatoire et vérifié, `type` vaut `exe` · `msi` · `zip` (jamais un script). `path` ne fait que suggérer où s'ouvre le sélecteur de dossier |
+| `bmm://app/launch` | `id`* | Demande, puis lance l'app enregistrée dans BMM sous cet id. **`exe` n'est plus accepté** — un lien qui le porte est refusé — et un script enregistré n'est pas lancé depuis un lien |
+| `bmm://theme/apply` | `id`* | Active un thème installé |
+| `bmm://theme/import` | `url`* | Télécharge et installe un `.bmmtheme.json` |
+| `bmm://theme/editor` | — | Ouvre l'éditeur de thème |
+| `bmm://language/import` | `path` | Importe une traduction `.json` (sélecteur de fichier si omis) |
+
+### Automatisation, confidentialité, divers
+
+| Deeplink | Params | Effet |
+|---|---|---|
+| `bmm://schedule/run` | `id`*, `k` | Exécute une tâche planifiée — c'est le hook utilisé par le Planificateur Windows. **Demande d'abord**, sauf si `k` est la clé de planification OS de cette machine |
+| `bmm://schedule/enable` | `id`*, `on` | Arme (`on=1`, par défaut) ou désarme (`on=0`) une tâche enregistrée. Demande d'abord |
+| `bmm://schedule/runs` | `id`* | Ouvre le journal d’exécution d’une tâche. En lecture seule, donc sans question |
+| `bmm://resources/open` | — | Ouvre le gestionnaire de stockage, où se trouve le tableau de bord des ressources |
+| `bmm://resources/preset` | `name`* | Choisit un préréglage **nommé** (`silent` · `balanced` · `max` · `custom`). De l’extérieur, il demande d’abord, et un second dans les 10 secondes est refusé sans question. Aucune règle par disque ne passe par un lien : toute autre action `resources/…` est refusée |
+| `bmm://catalog/follow` | `type`*, `url`*, `password`, `key` | Suivre un catalogue — un des huit : `plugin`, `theme`, `preset`, `modpack`, `repo`, `tutorial`, `list`, `app`. **Pas `index`** — un index est un catalogue de catalogues, sans magasin à lui, et cette route répond « aucun type de catalogue nommé index » ; c'est `bmm://catalog/import` qui le lit. Un `password` est retenu pour cette session seulement, jamais écrit sur le disque ; `key` désigne QUELLE clé d’identité signe la requête — un id ou un nom. Les ids vivent dans Réglages → Identité & API, sont affichés à côté de chaque clé et survivent à un renommage ; une référence absente du trousseau est signalée plutôt qu’ignorée, parce qu’une requête partie non signée revient en « impossible de le lire » sans rien qui désigne la clé |
+| `bmm://catalog/unfollow` | `type`*, `url`* | Cesser de le suivre |
+| `bmm://catalog/import` | `url`*, `type`, `password` | Lit le document à cette adresse et le suit **sans qu'on lui dise de quel type il s'agit**. Celui qui a un lien ignore en général lequel des huit c'est ; le document, lui, le sait. `type` restreint un index à un seul type |
+| `bmm://catalog/entry` | `type`, `mode` (`add` · `update` · `delete`), `id`, `fields` (JSON) | Écrit une entrée du catalogue **que vous rédigez sur cette machine**. Un JSON invalide dans `fields` est refusé plutôt qu'enregistré comme la chaîne qu'il est |
+| `bmm://catalog/delete` | `type` | Jette le catalogue rédigé de ce type. **Demande confirmation** — et ne touche pas à ce que vous SUIVEZ |
+| `bmm://repo/publish-ssh` | `dir`* | Demande, puis ouvre le sélecteur de dossier sur `dir` ; le dossier que **vous** choisissez est envoyé au serveur SSH déjà enregistré dans l'app. Ne porte ni hôte ni chemin de clé : un lien capable de les nommer pourrait diriger une publication vers un serveur que l'utilisateur n'a jamais choisi |
+| `bmm://repo/fetch-ssh` | `dir` | Pareil, pour récupérer |
+| `bmm://hook` | `name`*, `data` | Sonne un hook qu'une tâche peut attendre. `data` est lu en JSON, sinon passé en texte. Demande d'abord |
+| `bmm://launchpack/run` | `id`* | Exécute un Launch Pack. Demande d'abord, en nommant le pack et ses programmes |
+| `bmm://benchmark/run` | `dataset`, `size`, `mb`, `mode`, `sources`, `profiles`, `folders` | Ouvre le benchmark préconfiguré. **Se lance automatiquement sauf si `mode=manual`** |
+| `bmm://telemetry/consent` | `enabled`* | Consentement télémétrie global ; refuser purge aussi la file locale. Depuis un lien, il ne fait que demander : l'écran de consentement de BMM s'ouvre et rien ne change sans votre accord |
+| `bmm://telemetry/set` | `replay`, `full`, `bench` | Sous-options, confirmées dans l'app avant d'être appliquées. `full` veut dire **non masqué** ; `full=1` est refusé depuis un lien (Paramètres → Confidentialité seulement) |
+| `bmm://recorder/set` | `on`, `full`, `rust`, `js` | Configure l'enregistreur de session local, après avoir demandé. `full=1` (non masqué) est ignoré depuis tout lien |
+| `bmm://replay/export` | `path` | Exporte la session en `.bmmreplay`. Depuis l'extérieur, il demande et la boîte d'enregistrement s'ouvre toujours ; `path` n'est respecté que pour une tâche planifiée ou l'API locale |
+| `bmm://replay/import` | `path`, `url` | Importe et joue un `.bmmreplay` |
+| `bmm://discord/rpc` | `enabled`* | Discord Rich Presence. Demande d'abord — l'activer montre le nom de votre profil et votre Creator ID à quiconque voit votre statut |
+
+!!! warning "Pourquoi trois de ces liens demandent, et pourquoi l'un ne demande parfois pas"
+
+    Un lien `bmm://` peut être écrit par n'importe quelle page sur laquelle tu cliques. Les ids
+    de tâches sont créés en `sched-<horodatage en millisecondes>` : ils sont devinables là où
+    un id aléatoire ne l'est pas — et exécuter la tâche de quelqu'un, c'est
+    exécuter ce qu'il y a écrit dedans, jusqu'à une étape de script. Donc `schedule/run`,
+    `schedule/enable` et `hook` demandent tous, et la question nomme la tâche et dit si elle a
+    le droit d'exécuter des programmes.
+
+    Ça aurait laissé chaque tâche planifiée au niveau OS attendre un clic à 3h du matin, parce
+    que le miroir du Planificateur Windows lance exactement ce lien. Il porte `k=`, une clé
+    créée sur ta machine et gardée dans les paramètres — jamais affichée, jamais
+    envoyée nulle part, et volontairement **pas** le token d'API, puisque réinitialiser
+    celui-là est une chose ordinaire à faire et transformerait en silence chaque tâche
+    enregistrée en une question.
+
+| `bmm://data/export-auto` | `dir`*, `name`, `increment` | Sauvegarde de `data.json`. **Depuis un lien, il demande, vous choisissez le dossier (le sélecteur s'ouvre sur `dir`), et les jetons, clés et mots de passe sont retirés de la copie** ; la sauvegarde complète sans surveillance n'est écrite que pour une tâche planifiée ou `POST /api/data/export-auto`. `name` accepte `{date}` `{time}` `{datetime}` ; `increment` ∈ `paren` `underscore` `timestamp` `overwrite` |
+| `bmm://settings/layout` | `code`* | Applique une disposition de cartes partagée |
+| `bmm://docs/open` | `article` | Ouvre Aide & autres, éventuellement sur un id d'article |
+| `bmm://restart` | — | Redémarre l'app |
+
+### Fonctionnent aussi — jusqu'ici non documentés
+
+Gérés par le routeur mais absents de la liste in-app. Ils sont réels et supportés ; plusieurs sont
+ceux que génère le site BetterCommunity.
+
+| Deeplink | Params | Effet |
+|---|---|---|
+| `bmm://catalog/app/install` | `url`, `name`, `type`, `sha256` | Installation depuis un flux de catalogue (sans `url` → ouvre Apps). Mêmes règles que `app/install` : demande, `https`, `sha256` obligatoire |
+| `bmm://catalog/plugin/install` | `url`, `name`, `sha256` | Idem, pour un plugin : demande, `https` uniquement, `sha256` vérifié s'il est fourni. Le plugin est installé **désactivé, sans aucune permission** |
+| `bmm://catalog/theme/install` | `url`, `name` | Idem, pour un thème (validé comme JSON d'abord) |
+| `bmm://catalog/app/add-source` | `url`* | S'abonne à un catalogue d'apps communautaire (demande confirmation) |
+| `bmm://catalog/plugin/add-source` | `url`* | S'abonne à un catalogue de plugins |
+| `bmm://catalog/theme/add-source` | `url`* | S'abonne à un catalogue de thèmes |
+| `bmm://language/import-inline` | `data`* (base64url), `code`, `gz` | Une traduction entière portée par le lien ; `gz=1` si gzippée |
+| `bmm://theme/import-inline` | `data`* (JSON base64) | Installe **et active** un thème depuis le lien |
+| `bmm://settings/navbar` | `code`* | Applique une disposition de barre de navigation partagée |
+| `bmm://benchmark/open` | comme `benchmark/run` | Même handler, **défaut inversé** — ne se lance que si `mode=auto` |
+| `bmm://import` · `bmm://download` | `url`*, `name` | Alias de `bmm://install` |
+
+**Alias non documentés sur des schémas documentés :** `telemetry/consent` et `telemetry/set`
+acceptent `consent` pour `enabled` et `replayFull` pour `full` ; `benchmark/run` lit aussi
+`folders`, et découpe les listes sur `;` **ou** `|`.
+
+### Lesquels demandent confirmation
+
+Depuis l'extérieur, tout lien qui change quelque chose demande — voir l'encadré en haut de cette
+section pour la règle complète, ce qui est refusé d'office et les routes laissées sans boîte de
+dialogue exprès. `repo/connect` et `bmm://api` (toute méthode, `GET` compris) demandent désormais
+par cette même boîte de dialogue.
+
+---
+
+## Le passe-plat `bmm://api`
+
+Tout endpoint sans deeplink dédié reste atteignable :
+
+```
+bmm://api?method=POST&path=/api/mods/enable&mod_id=my-mod
+```
+
+- `method` vaut `GET` par défaut ; `path` est **obligatoire et doit commencer par `/api/`**.
+- Tous les autres paramètres deviennent le payload : une query string pour `GET`/`DELETE`, un
+  **corps JSON** sinon, avec `"true"` / `"false"` / les entiers convertis en vrais types.
+- Le **token admin est attaché automatiquement** : un lien passe-plat s'exécute donc avec tous les
+  droits.
+- Toute méthode autre que `GET` **demande confirmation** d'abord.
+
+!!! warning "Deux limites dures"
+
+    **Il ne peut pas exprimer de données imbriquées.** Les paramètres sont plats, donc les endpoints
+    qui prennent un tableau ou un objet — `choices`, `mod_overrides`, `permissions`,
+    `updateSources`, `addProfiles` — exigent un vrai client HTTP.
+
+    **Il ne te rend jamais le corps de la réponse.** Tu obtiens un toast succès/statut et rien
+    d'autre : c'est donc inutile pour relire des données. Passe par l'API HTTP pour ça.
+
+---
+
+## Endpoints
+
+**Auth** — `—` = sans token · `token` = n'importe quel token valide · un nom de permission = ce
+droit est requis (le token admin le contourne). **DL** = possède un deeplink dédié ; tout le reste
+passe par `bmm://api`.
+
+### L'enveloppe de réponse
+
+Chaque endpoint qui renvoie une **liste** l'enveloppe :
+
+```json
+{ "ok": true, "data": [ … ] }
+```
+
+C'est donc `body.data`, pas `body.mods` / `body.profiles` / `body.modpacks`. Ça vaut pour
+`/api/mods`, `/api/mods/active`, `/api/profiles`, `/api/plugins`, `/api/modpacks` et
+`/api/repo/list`.
+
+Deux formes échappent à la règle :
+
+| Endpoint | Forme |
+|---|---|
+| `/api/mods/all` | `{ ok, profiles: […], total_mods }` — groupé, donc le tableau est nommé |
+| `/api/health`, `/api/status`, `/api/creator-id` | objets plats ; ni `data`, ni enveloppe |
+
+!!! warning "Ne devine pas ça d'après les noms de champs"
+
+    Un client qui lit `body.profiles` sur `/api/profiles` récupère `undefined` puis échoue à la
+    ligne suivante, en général sur un message sans rapport apparent du genre *« x.filter is not a
+    function »*. Ça vaut le coup d'écrire le désenveloppage une fois — et de le tester contre
+    l'app **réelle** plutôt que contre un bouchon, parce qu'un bouchon construit sur la même
+    mauvaise hypothèse la confirmera avec plaisir.
+
+### Lecture
+
+| Méthode | Chemin | Auth | Renvoie |
+|---|---|---|---|
+| `GET` | `/api/health` | — | `{ok, service, port}` — la sonde de vie, et le moyen de connaître le vrai port |
+| `GET` | `/api/status` | — | Quel BMM c'est — `version`, `channel` (`Release` / `PTB` / `FTB`), `built` (la date de fabrication du binaire), `os`, `arch` — plus le profil actif et le nombre de mods/profils/plugins. `1.0.0` désigne trois binaires différents, et un rapport incapable de les distinguer envoie quelqu'un chasser un bug déjà corrigé. |
+| `GET` | `/api/check-update` | — | Dernière release GitHub vs actuelle : `has_update`, `release_url` |
+| `GET` | `/api/mods` | `mods.read` | Mods visibles du profil actif |
+| `GET` | `/api/mods/active` | `mods.read` | Uniquement les activés |
+| `GET` | `/api/mods/all` | `mods.read` | Tous les mods de **tous** les profils, groupés, plus `total_mods` |
+| `GET` | `/api/profiles` | `profiles.read` | Tous les profils avec leurs listes de mods |
+| `GET` | `/api/plugins` | `plugins.read` | Plugins installés (manifest + `enabled`) |
+| `GET` | `/api/modpacks` | `modpacks.read` | Tous les modpacks sauvegardés |
+| `GET` | `/api/creator-id` | — | L'id créateur de cette installation (utilisé à l'export de plugins) |
+| `GET` | `/api/repo/info` | `repo.read` | Récupère un `repo.json` distant. Query `url`*, `password`. `401` si protégé, `502` si le distant échoue |
+| `GET` | `/api/repo/list` | `repo.read` | Dépôts distants enregistrés |
+| `GET` | `/api/language/template` | — | `lang-template.json`, une map plate `{"clé": "English"}` |
+| `GET` | `/api/data` | `data.read` | **Dump complet de `data.json`** — profils, mods, modpacks, plugins, settings, tags |
+| `GET` | `/api/apps` | `app.read` | Apps installées via le catalogue |
+| `GET` | `/api/apps/permissions` | admin token | `plugin_id → [permissions]` |
+| `GET` | `/api/apps/permissions/:id` | admin token | Les permissions d'un plugin |
+| `GET` | `/api/catalog` | `catalog.read` | Le catalogue d'apps local |
+
+!!! danger "`GET /api/data` c'est toute la base"
+
+    Il renvoie tout, `settings` inclus — et `settings` contient `api_token` et `plugin_tokens`.
+    N'importe quel token capable de l'appeler peut lire le token admin et se fabriquer un accès
+    total. Accorder cet endpoint équivaut à céder les droits admin.
+
+### Mods & profils
+
+| Méthode | Chemin | Auth | Corps | DL |
+|---|---|---|---|---|
+| `POST` | `/api/mods/enable` | `mods.write` | `mod_id`* | ✓ |
+| `POST` | `/api/mods/disable` | `mods.write` | `mod_id`* | ✓ |
+| `GET` | `/api/mods/order` | `mods.read` | — · l'ordre de déploiement, plus chaque fichier disputé et qui le gagne | |
+| `GET` | `/api/mods/order/export` | `mods.read` | `?profileId=` · l'ordre en document portable : `doc`, `code` (`BMMORDER1.`), `link` (`bmm://order`), `text` | |
+| `GET` | `/api/mods/order/mode` | `mods.read` | — · où une activation groupée place ses mods par défaut : `top`, `bottom` ou `keep` | |
+| `GET` | `/api/schedules` | `schedules.read` | — · un résumé de chaque tâche enregistrée : id, nom, activée ou non, son déclencheur. **Pas** ses étapes | |
+| `POST` | `/api/schedules/enabled` | `schedules.write` | `id`*, `enabled`* · armer ou désarmer une tâche. Seul `enabled` est modifiable — une route qui pourrait écrire une tâche entière pourrait en installer une avec une étape de script dedans | |
+| `GET` | `/api/schedules/:id/runs` | `schedules.read` | — · le journal d’exécution de la tâche, le plus récent d’abord : les 50 dernières exécutions, chaque étape avec sa durée, son statut et son erreur. Les secrets sont retirés avant l’écriture. Un id qui ne nomme aucune tâche répond une liste vide | ✓ |
+| `POST` | `/api/hook` | `hooks.write` | `name`*, `data` · sonner une clochette nommée qu'une tâche peut attendre avec `wait.hook`, ou par laquelle elle peut être déclenchée avec `on event` | |
+| `GET` | `/api/hook` | `hooks.read` | — · chaque nom qui a sonné pendant la session, avec le nombre de fois — pour l'écran qui demande « est-ce que mon webhook arrive vraiment ? » | |
+| `GET` | `/api/hook/:name` | `hooks.read` | `?since=<ms>` · les sonneries elles-mêmes, avec leur contenu et leur horodatage — la même vue qu'obtient une tâche en attente, pour que « ça n'a jamais sonné » et « ça a sonné avec le mauvais contenu » cessent de se ressembler. La lecture ne consomme pas : deux tâches peuvent attendre la même clochette | |
+| `DELETE` | `/api/hook` | `hooks.write` | — · oublier toutes les sonneries. Répond combien ont été supprimées | |
+| `DELETE` | `/api/hook/:name` | `hooks.write` | — · oublier un seul nom | |
+| `POST` | `/api/content-id` | token | `kind`*, `doc`* · l'id qui dit ce qu'un document EST plutôt que le nom que cette machine lui donne. Prend le document, donc il ne révèle rien de ce que cette installation contient — d'où le simple jeton plutôt qu'une portée de lecture par type |
+| `GET` | `/api/catalogs` | `catalog.read` | — · les catalogues suivis, par type | |
+| `POST` | `/api/catalogs` | `catalog.write` | `type`*, `url`*, `follow`, `password`, `key` · suivre ou cesser de suivre un catalogue. `password` pour un secret partagé, `key` pour désigner QUELLE clé d’identité signe — un id ou un nom, affichés dans Réglages → Identité & API. Une référence absente du trousseau est signalée, jamais ignorée : une requête partie non signée revient en « impossible de le lire » sans rien qui désigne la clé | |
+| `GET` | `/api/plugins/assets` | `plugins.read` | `id`*, `path` · ce qu'un plugin livre ; avec `path`, le texte d'un fichier | |
+| `POST` | `/api/mods/order` | `mods.write` | `order[]`*, `profileId`, `reapply` · doit être le même ensemble de mods que ceux actifs ; recopie les fichiers qui changent de main (`reapply: true` : chaque fichier disputé) | |
+| `POST` | `/api/mods/order/import` | `mods.write` | `text`*, `profileId`, `dryRun` · un ordre partagé (code, lien, JSON ou noms) : les mods actifs qu'il nomme prennent son ordre dans leurs places ; répond le plan et `moved` | |
+| `POST` | `/api/mods/order/arrange` | `mods.write` | `ids[]`*, `mode`, `profileId` · place un bloc de mods actifs (`top`, `bottom`, `keep` ; aucun = le réglage) | |
+| `POST` | `/api/mods/order/mode` | `mods.write` | `mode`* · fixe le placement par défaut d'une activation groupée | |
+| `PUT` | `/api/mods/:id` | `mods.write` | `name`, `version`, `author`, `description`, `tags[]`, `install_notes` | |
+| `DELETE` | `/api/mods/:id` | `mods.write` | — · retire l'entrée, **garde les fichiers** | |
+| `POST` | `/api/mod/config` | `mods.write` | `modId`*, `repoModId`, `updateUrl`, `directUrl`, `updateSources[]` · relie un mod aux dépôts qui peuvent le mettre à jour | |
+| `POST` | `/api/profiles` | `profiles.write` | `name`*, `game_path`*, `mods_path`*, `backup_path`*, `game_name`, `color`, `icon` · **pas** activé | |
+| `POST` | `/api/profiles/activate` | `profiles.write` | `profile_id`* | ✓ |
+| `PUT` | `/api/profiles/:id` | `profiles.write` | `name`, `color`, `icon`, `game_path`, `mods_path`, `backup_path` | |
+| `DELETE` | `/api/profiles/:id` | `profiles.write` | — · refuse le profil actif | |
+
+### Modpacks & plugins
+
+| Méthode | Chemin | Auth | Corps | DL |
+|---|---|---|---|---|
+| `POST` | `/api/modpacks/create` | `modpacks.write` | `name`*, `mod_ids[]`, `source_profile_id`, `description`, `game_name`, `sr_link`, `multi_profile`, `skip_integrity_check`, `dependency_mode`, `mod_overrides[]` → `201` | ✓ |
+| `POST` | `/api/modpacks/enable` | `modpacks.write` | `modpack_id`* (l'ancien `profile_id` est aussi accepté), `order_mode` (`top`, `bottom`, `keep` ; défaut : celui du pack, puis le réglage) | ✓ |
+| `POST` | `/api/modpacks/disable` | `modpacks.write` | idem | ✓ |
+| `PUT` | `/api/modpacks/:id` | `modpacks.write` | n'importe quel champ de création | |
+| `DELETE` | `/api/modpacks/:id` | `modpacks.write` | — · irréversible, les mods locaux sont conservés | |
+| `POST` | `/api/plugins/compare` | `plugins.read` | `plugin_id`* → `missing_required`, `strict_extra` | ✓ |
+| `POST` | `/api/plugins/apply` | `plugins.write` | `plugin_id`*, `force_strict` → `enabled`, `not_found` | ✓ |
+| `DELETE` | `/api/plugins/:id` | `plugins.write` | — · registre + permissions + fichiers | ✓ |
+
+### Dépôt serveur
+
+| Méthode | Chemin | Auth | Corps | DL |
+|---|---|---|---|---|
+| `POST` | `/api/repo/connect` | `repo.write` | `url`*, `name` | ✓ |
+| `DELETE` | `/api/repo` | `repo.write` | `url`* · fichiers conservés | |
+| `POST` | `/api/repo/update-now` | `repo.write` | `repoDir`*, `authorName`, `ops` · **réécrit le dépôt** et resigne son manifeste, au lieu d’ouvrir la modale. Chaque opération est facultative — un corps qui n’en nomme aucune resigne sans rien changer d’autre, ce qu’on veut après avoir touché des fichiers à la main. Les extras en attente y entrent à la fin → `202` | |
+| `POST` | `/api/repo/host-now` | `repo.write` | `path`*, `port`*, `uploadLimit`, `downloadPassword`, `authorizedKeys[]` · **démarre le service**. `/api/repo/host` n’ouvre que l’écran alors que son jumeau `/api/repo/host-stop` arrête réellement le serveur — voici la moitié qui fonctionne. Elle porte aussi un mot de passe et les clés publiques autorisées, que l’ancienne ne savait pas exprimer : héberger un dépôt PROTÉGÉ n’était pas atteignable par l’API → `202` | |
+| `POST` | `/api/repo/gen-now` | `repo.write` | `outputDir`*, `authorName`*, `profileIds[]`*, `seed`, `zipOutput`, `zipMods`, `compression` (`deflate` par défaut / `zstd` / `bzip2` / `stored` ; autre chose → `400`) · **écrit le dépôt**, au lieu d’ouvrir l’écran d’hébergement. Un `profileIds` vide est REFUSÉ, jamais lu comme « tous » ; un profil nommé puis supprimé arrête l’appel au lieu d’être sauté. Les extras en attente y entrent à la fin → `202` | |
+| `POST` | `/api/repo/sync-now` | `repo.write` | `url`*, `repoProfile`*, `targetProfile`*, `gameDir`*, `modsDir`*, `backupDir`, `password`, `overwriteAll`, `deleteExtra` · **exécute la synchro**, au lieu de remplir le formulaire et d'attendre qu'on presse Synchroniser. Chaque champ obligatoire est refusé avant que rien ne commence : chaque oubli est une façon de synchroniser vers un endroit que personne n'a choisi. Créer un profil local n'est volontairement pas proposé — un appelant capable d'en frapper un par appel remplit la liste. Les deux options destructrices sont à OFF par défaut → `202` | |
+| `POST` | `/api/repo/sync` | `repo.write` | `url`*, `choices[]`*, `gameDir`, `modsDir`, `backupDir`, `password`, `overwriteAll`, `deleteExtra`, `downloadLimit` → `202 {job_id}`. **Un seul à la fois** (`409`). `creatorId` n'est **plus accepté** : c'est l'identité que BMM présente à un dépôt — la valeur sur laquelle une liste blanche et une liste de bannis sont indexées — donc un appelant capable de la fournir pourrait présenter l'identité de quelqu'un d'autre à un serveur qui décide l'accès avec. C'est l'id de cette installation qui est envoyé | ✓ |
+| `DELETE` | `/api/repo/sync/cancel` | `repo.write` | — · s'arrête à la prochaine frontière de mod | |
+| `POST` | `/api/repo/gen` | `repo.write` | `profileIds[]`*, `outputDir`*, `authorName`*, `seed`, `generateServer`, `port`, `uploadLimit`, `adminPassword`, `useCloudflare`, `useUpnp`, `autoStart`, `lang`, `serverVersion` (nombre), `serverType` (`std`/`lux`), `lightweight`, `zipOutput`, `zipMods`, `compression` (`deflate` par défaut / `zstd` / `bzip2` / `stored` ; autre chose → `400`), `useDocker`, `dockerOs` → `202` | ✓ |
+| `DELETE` | `/api/repo/gen/cancel` | `repo.write` | — | |
+| `POST` | `/api/repo/update` | `repo.write` | `repoDir`*, `authorName`, `removeModIds[]`, `removeProfileIds[]`, `addProfiles[]`, `modChangelogs{}` → `202` | ✓ |
+| `POST` | `/api/repo/host` | `repo.write` | `serveDir`*, `port`, `uploadLimit` → `202`, `409` si déjà en service | ✓ |
+| `DELETE` | `/api/repo/host` | `repo.write` | — | |
+| `POST` | `/api/repo/manifest` | `repo.write` | `dir`*, `authorName` · écrit `repo.json` pour un dossier DÉJÀ hébergé. N'a besoin d'aucun profil et ne copie rien — il lit le dossier, écrit un fichier et renvoie le diff. Synchrone, pour qu'un script de publication puisse agir sur le résultat | |
+| `POST` | `/api/repo/convert` | `repo.write` | `path`* (dossier du dépôt ou son `repo.json`), `dryRun`, `rehash` (vrai par défaut), `sign` (vrai par défaut) · convertit le manifeste au format actuel (1.0) : complète les clés que les anciens BMM omettaient, recalcule les empreintes des fichiers, inscrit `format_version`, garde l'ancien manifeste sous `repo.json.v<ancien>-<date>.bak` et re-signe avec la clé de ce BMM. `dryRun` renvoie le plan sans rien écrire. Synchrone ; renvoie `{ok, report}` avec chaque changement | |
+| `POST` | `/api/repo/validate` | `repo.read` | `path`\* (dossier du dépôt ou son `repo.json`), `deep` · vérifie le dépôt sans le modifier : format, lisibilité, signature, identifiants de mod en double, profils vides, chaque fichier listé contre sa taille et son sha256 (hachage en parallèle sur le pool Hash du gouverneur, annulable depuis le tableau de bord ; les fichiers inchangés viennent d'un cache sauf avec `deep`). Synchrone ; renvoie `{ok, report}` | |
+| `GET` | `/api/repo/follow` | `repo.read` | Les dépôts suivis : pour chacun l'interrupteur, l'intervalle (minutes), l'action (`notify` · `download` · `apply`) et la dernière vérification. Renvoie `{ok, repos}` | |
+| `POST` | `/api/repo/follow` | `repo.write` | `url`\*, `name`, `enabled`, `intervalMin` (15 ou plus), `action`, `remove` · suit un dépôt ou change la façon ; `remove: true` arrête de le suivre. Renvoie `{ok, repo}` ou `{ok, removed}` | |
+| `POST` | `/api/repo/follow/check` | `repo.write` | `url`\*, `password`, `force` · vérifie maintenant un dépôt suivi par un GET conditionnel (un dépôt inchangé coûte un 304). Renvoie `{ok, check}` avec les mises à jour trouvées et le plan d'installation ; n'installe rien | |
+| `POST` | `/api/repo/publish-ssh` | `repo.write` | `dir`* · envoie par SSH **en utilisant la connexion déjà enregistrée dans l'app**. L'hôte, l'utilisateur et la clé ne sont volontairement PAS des paramètres : un appelant capable de les nommer pourrait faire lire à BMM une clé privée de son choix et expédier un dépôt vers une machine de son choix. Piloté par l'UI, donc l'envoi est visible et annulable → `202` | |
+| `POST` | `/api/repo/fetch-ssh` | `repo.write` | `dir`* · même règle, et elle compte davantage dans ce sens : publier écrit sur un serveur choisi par le propriétaire, récupérer écrit sur son propre disque. Seule la destination est un paramètre, et le backend refuse tout chemin distant qui en sortirait → `202` | |
+| `POST` | `/api/repo/extras` | `repo.write` | `url`*, `kind`*, `id`*, `password` · prend UNE chose que le dépôt transporte en plus des mods. `creatorId` n'est pas accepté ici non plus, pour la même raison que `/api/repo/sync`. L'entrée est cherchée dans le manifeste que BMM récupère — un appelant ne peut pas fournir ses propres `{kind, url, sha256}` : ce serait se servir de l'installeur de BMM pour installer des fichiers arbitraires, et la vérification de hash vérifierait son propre chiffre. Un plugin ou une automatisation arrive **désactivé** ; un catalogue est suivi ; une liste de mods est enregistrée et son chemin renvoyé | |
+| `GET` | `/api/repo/modpacks` | `repo.read` | `dir`* · quels modpacks un DOSSIER de repo sur cette machine partage, avec le mode de partage de chacun |
+| `POST` | `/api/repo/modpacks` | `repo.write` | `dir`*, `shares[]`* · définit toute la liste et re-signe le manifeste. Omettre `shares` est une lecture, pas « n'en partager aucun » — ce sont deux requêtes différentes, et les confondre ferait qu'un POST vide dépublierait tout |
+| `GET` | `/api/keys` | `keys.read` | — · noms et chemins uniquement. Aucun endpoint ne lit une clé privée | |
+| `POST` | `/api/keys` | `keys.write` | `name`*, `kind` (`ed25519` par défaut · `ecdsa` · `rsa`) → `201 {path, public, ring}`. La réponse porte la ligne **publique** et l'endroit où la moitié privée a été écrite — jamais la moitié privée elle-même, parce que les réponses sont journalisées, relayées et lues dans des onglets. Un nom déjà sur le trousseau est refusé, pas écrasé | |
+| `POST` | `/api/mod/check-updates` | `mods.write` | — → `202` | ✓ |
+| `POST` | `/api/mod/update` | `mods.write` | `repoUrl` → `202` | ✓ |
+
+### Apps & catalogue
+
+| Méthode | Chemin | Auth | Corps | DL |
+|---|---|---|---|---|
+| `POST` | `/api/apps/install` | `app.write` | `appId`*, `appTitle`*, `downloadUrl`*, `fileType`*, `installPath`, `version`, `category`, `thumb` → `202` | ✓ |
+| `POST` | `/api/apps/launch` | `app.write` | `appId`*, `exePath`* | ✓ |
+| `DELETE` | `/api/apps/:id` | `app.write` | — · désenregistre, fichiers conservés | |
+| `PUT` | `/api/apps/permissions/:id` | admin token | `permissions[]`* · **remplace** la liste ; `[]` révoque tout | |
+| `POST` | `/api/catalog/publish` | `catalog.write` | `dir`*, `kind`, `name`, `base` → `202` · construit un DOSSIER de catalogue à partir de ce que contient ce BMM — tutoriels, thèmes, plugins, modpacks, tâches planifiées, ou un `index` des catalogues suivis. Rôle différent de `/api/catalog/new`, qui enregistre des entrées déjà assemblées. N'écrire aucune entrée est signalé comme un avertissement : un catalogue vide a l'air publié et n'installe rien | |
+| `POST` | `/api/catalog/new` | `catalog.write` | `name`, `description`, `partner_catalogs[]`, `community_imports[]`, `apps[]` → `201` | |
+| `POST` | `/api/catalog/apps` | `catalog.write` | `id`*, `title`*, `download`* `{url, file_type}`, `description`, `category`, `price`, `tags` (≤3), `requirements`, `md_link` → `201` | |
+| `PUT` | `/api/catalog/apps/:id` | `catalog.write` | `title`, `description`, `version`, `category`, `download` | |
+| `DELETE` | `/api/catalog/apps/:id` | `catalog.write` | — | |
+| `POST` | `/api/catalog/import` | `catalog.write` | `url`*, `type`, `password` → `202`. Lit le document et décide : un index fait suivre chaque type qu'il liste (ou seulement `type`), un catalogue seul est confronté aux huit formes. Celui qui n'en suit aucune est refusé plutôt que deviné | ✓ |
+| `POST` | `/api/catalog/entries` | `catalog.write` | `type` (`app` · `plugin` · `theme` · `preset` · `modpack` · `repo` · `tutorial` · `list` · `index`, `app` par défaut), `entry`* → `201`. Écrite sous le nom de tableau qu'utilise le format de ce type. L'entrée doit porter un `id` — la mise à jour et la suppression s'y réfèrent, donc une entrée sans id serait ajoutée dans un cul-de-sac | |
+| `PUT` | `/api/catalog/entries/:id` | `catalog.write` | `type`, plus les champs à fusionner. `type` dit quel catalogue ouvrir et n'est jamais écrit dans l'entrée | |
+| `DELETE` | `/api/catalog/entries/:id` | `catalog.write` | Requête `type` · `404` si l'entrée n'existe pas, plutôt qu'annoncer une suppression qui n'a pas eu lieu | |
+| `DELETE` | `/api/catalog` | `catalog.write` | Requête `type` · jette tout le catalogue écrit pour ce type. `404` s'il n'y en a jamais eu. Ne touche PAS ce que tu SUIS — ça, c'est `/api/catalogs` | |
+
+### Import / export — ceux-ci pilotent l'interface
+
+Chacun ouvre le flux in-app correspondant et renvoie `202`. Ils ne sont **pas** headless ; la seule
+exception est `data/export-auto`.
+
+| Méthode | Chemin | Auth | Corps | DL |
+|---|---|---|---|---|
+| `POST` | `/api/data/export` · `/api/data/import` | token | — | |
+| `POST` | `/api/data/export-auto` | `data.read` | `dir`*, `name`, `increment` · **sans intervention**, aucune boîte de dialogue | ✓ |
+| `POST` | `/api/modlists/export` · `/api/modlists/import` | token | — · `.mm`, métadonnées seules, aucun fichier de mod | |
+| `POST` | `/api/modpacks/import` | `modpacks.write` | `path` | |
+| `POST` | `/api/modpacks/export` | `modpacks.read` | `id`*, `destDir` · nommer un `destDir` exige aussi `modpacks.write` : aucune boîte ne s’ouvre, donc personne n’est consulté sur l’endroit où le fichier atterrit | |
+| `POST` | `/api/plugins/import` | `plugins.write` | — | |
+| `POST` | `/api/plugins/export` | `plugins.read` | `id`*, `destDir` → `.bmmplug` · même règle : un `destDir` choisi par l’appelant exige `plugins.write` | |
+| `POST` | `/api/language/import` | `system.write` | `path` · le nom de fichier devient le code de langue ; `template.json` est refusé | ✓ |
+| `POST` | `/api/profiles/import/ovgme` | `profiles.write` | — · scanne `%PROGRAMDATA%/OvGME` | |
+| `POST` | `/api/profiles/import/omm` | `profiles.write` | — · OpenModManager `.omm`/`.omx` | |
+
+### Automatisation & confidentialité
+
+| Méthode | Chemin | Auth | Corps | DL |
+|---|---|---|---|---|
+| `POST` | `/api/schedule/run` | `schedules.write` | `id`* | ✓ |
+| `POST` | `/api/launchpack/run` | `app.write` | `id`* | ✓ |
+| `POST` | `/api/benchmark` | `system.write` | `dataset`, `size`, `mode`, `sources[]`, `profiles[]` | ✓ |
+| `POST` | `/api/telemetry/consent` | `telemetry.write` | `enabled`* | ✓ |
+| `POST` | `/api/telemetry/settings` | `telemetry.write` | `replay`, `full`, `bench` | ✓ |
+| `POST` | `/api/recorder` | `telemetry.write` | `on`, `full`, `rust`, `js` | ✓ |
+| `POST` | `/api/replay/export` | `replay.read` | — | ✓ |
+| `POST` | `/api/replay/import` | `replay.write` | `path`, `url` | ✓ |
+| `POST` | `/api/discord/rpc` | `system.write` | `enabled`* | ✓ |
+| `POST` | `/api/restart` | `system.write` | — · l'API est brièvement indisponible | ✓ |
+| `POST` | `/api/view` | `system.write` | `id`* · affiche un écran. L'id est la valeur `data-view` de la barre latérale (`mapper`, `library`, …) ; un id inconnu ne fait rien et le dit dans la console de l'app, exactement comme le deeplink `bmm://view/open` | ✓ |
+| `GET` | `/api/resources` | `resources.read` | — · le gouverneur de ressources : le `preset` enregistré, celui en vigueur (`effective` ; le mode jeu ou une tâche peuvent différer), le préréglage de tâche et son temps restant, `game_active` / `game_manual`, et la file des opérations lourdes (`tickets`) | |
+| `GET` | `/api/resources/hardware` | `resources.read` | — · cœurs et jeux d’instructions du processeur, cartes graphiques (listées seulement — BMM n’y calcule rien), bus et pénalité de recherche de chaque disque. Le premier appel peut prendre les 3 secondes du pilote graphique | |
+| `POST` | `/api/resources/preset` | `resources.write` | `name`* (`silent` · `balanced` · `max` · `custom`), `scope` (`persistent`, par défaut, ou `task`), `ttlSecs` (task seulement, ≤ 7200) · un préréglage **nommé**. Il ne passe jamais devant le mode jeu | ✓ |
+| `POST` | `/api/resources/game-mode` | `resources.write` | `mode`* (`auto` · `on` · `off`) | |
+| `POST` | `/api/resources/queue` | `resources.write` | `action`* (`pause_all` · `resume_all` · `pause` · `resume` · `cancel`), `id` (un ticket, pour les trois derniers) · **`cancel` demande aussi `mods.write`** : il jette du travail · un `pause_all` envoyé ici prend fin seul au bout de 30 min | |
+| `POST` | `/api/resources/io-rule` | jeton admin | `disk`* (`*`, `d:\`, `\\nas\partage\` ou `/`), `op`* (`*` ou un type d’opération), `rule` (`{ rate_mb_s?, parallel?, buffer_kib?, io_priority? }` ; `null` la supprime) · une règle fine, ramenée dans les bornes dures et enregistrée. **Jeton admin seulement** : un plugin est refusé même avec `resources.write` | |
+
+---
+
+## Observer ce qui appelle
+
+Chaque requête `/api/` émet un événement Tauri portant `{method, path, status}` — c'est ce qui
+produit les toasts in-app et le journal API de la page *Plugins & API*. Les endpoints qui pilotent
+l'interface émettent en plus un événement exec ou rejected. Tu peux donc voir arriver les appels
+externes sans instrumenter ton propre script.
+
+---
+
+## CORS, et qui a le droit de lire un échec
+
+Les réponses en succès passent par la politique CORS configurée : les origines de la webview Tauri,
+`bettercommunity.ch`, et ce que tu ajoutes dans **Réglages → Identité & API**. Rien d'autre ne peut
+en lire une.
+
+Les échecs, eux, étaient différents. Le gestionnaire de rejet tourne *après* le filtre CORS dans la
+chaîne warp : une réponse récupérée ne porte donc aucun en-tête CORS — et plutôt que de laisser
+l'app incapable de lire ses propres `401`, il posait `access-control-allow-origin: *` sur chaque
+échec, y compris en release.
+
+C'est un oracle à token. Une page de n'importe quel site peut faire un `fetch()` sur l'API locale :
+un mauvais token donne un `401` LISIBLE, un bon donne un succès que le filtre CORS refuse d'exposer,
+ce que la page voit comme une erreur réseau. Deux résultats, distinguables, depuis un site
+simplement visité.
+
+Les deux chemins lisent maintenant une seule liste. Un rejet reçoit l'origine qui a demandé quand
+elle est autorisée, avec `Vary: Origin` à côté, et rien du tout sinon — un site inconnu ne peut pas
+plus lire un `401` qu'un `200`. Une requête sans en-tête `Origin` (curl, la CLI, un script de
+plugin) ne reçoit aucun en-tête CORS et n'en a jamais eu besoin.
+
+---
+
+## Corrigées, et nommées pour que personne ne les cherche
+
+Six entrées qui figuraient ici ont disparu parce que le code a changé : les barrières de permission
+(chaque route listée déclare désormais une portée, et les trois routes `/api/apps/permissions*`
+exigent le token **admin**, donc un token plugin ne les atteint plus du tout), le `serverVersion` en
+double sur `POST /api/repo/gen`, la description fausse de `POST /api/repo/host`, le badge `bmm://`
+manquant sur `DELETE /api/plugins/:id`, `bmm://telemetry/settings`, qui n'apparaît plus nulle part,
+et la fuite CORS ci-dessus.
+
+Quatre d'entre elles sont tenues par un check et non par une note — `check-endpoint-fields.mjs`
+compare chaque champ du test rapide à la structure Rust qu'il prétend décrire,
+`check-deeplink-panel.mjs` compare la table des badges aux routes et aux actions, et
+`cors_origin_for` a quatre tests unitaires, dont celui du domaine sosie
+(`bettercommunity.ch.evil.example`) qu'une comparaison par préfixe laisserait passer. Une note se
+périme en silence ; un check, non.
+
+---
+
+## Voir aussi
+
+- [Référence du serveur MCP](doc-page:reference/mcp.fr) — les 95 outils qu'un client IA peut appeler, et ceux qui exigent BMM ouvert
+- [Référence CLI](doc-page:reference/cli.fr) — les 81 sous-commandes du même binaire, pour un terminal ou un `.bat`
+- [Référence des actions](doc-page:reference/actions) — toutes les actions du planificateur et du générateur de scripts
+- [Plugins & API](doc-page:features/plugins) — le navigateur in-app, les tokens et le test rapide
+- [Architecture](doc-page:how-it-works/architecture) — où se situe cette API dans l'app

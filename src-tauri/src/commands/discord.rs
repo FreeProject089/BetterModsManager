@@ -1,23 +1,93 @@
+use tauri::Manager;
 use crate::state::AppState;
 use tauri::State;
 use discord_rich_presence::{DiscordIpc, DiscordIpcClient};
+use crate::error::AppError;
+use tracing::{info, warn, error};
 
 const DISCORD_CLIENT_ID: &str = "1486151779195555920"; // Placeholder BMM Client ID
+
+// Where to fetch links.json remotely (kept in sync with frontend links-config.ts).
+const REMOTE_LINKS_URL: &str =
+    "https://raw.githubusercontent.com/FreeProject089/BetterModsManager/refs/heads/Tdev/frontend/assets/links.json";
+
+/// Resolved Discord RPC buttons, read from links.json.
+/// Button 1 = "Website" (its URL gets ?creator=<id> appended), button 2 = "GitHub".
+struct RpcLinks {
+    website: String, // selected by BoutonRPC1 (WebSiteRPC1 | WebSiteRPC2)
+    github:  String, // selected by BoutonRPC2 (github_RPC1 | github_RPC2)
+}
+
+impl Default for RpcLinks {
+    fn default() -> Self {
+        RpcLinks {
+            website: "https://bettercommunity.ch/".into(),
+            github:  "https://github.com/FreeProject089/BetterModsManager".into(),
+        }
+    }
+}
+
+fn rpc_links_from_json(v: &serde_json::Value) -> RpcLinks {
+    let d = RpcLinks::default();
+    let s = |k: &str, fb: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or(fb).to_string();
+    // BoutonRPC1/2 may be a number or a string ("1"/"2"); default 1.
+    let pick = |k: &str| -> u8 {
+        match v.get(k) {
+            Some(serde_json::Value::Number(n)) => if n.as_u64() == Some(2) { 2 } else { 1 },
+            Some(serde_json::Value::String(s)) => if s.trim() == "2" { 2 } else { 1 },
+            _ => 1,
+        }
+    };
+    let website = if pick("BoutonRPC1") == 2 { s("WebSiteRPC2", &d.website) } else { s("WebSiteRPC1", &d.website) };
+    let github  = if pick("BoutonRPC2") == 2 { s("github_RPC2", &d.github) }  else { s("github_RPC1", &d.github) };
+    RpcLinks { website, github }
+}
+
+/// Load RPC links: remote GitHub links.json first, then the bundled resource
+/// copy as backup, then hardcoded defaults. Network call is capped at ~2.5s so
+/// it never noticeably stalls presence updates.
+fn load_rpc_links(handle: &tauri::AppHandle) -> RpcLinks {
+    // 1. Remote (so links can change without an app update)
+    if let Ok(client) = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_millis(2500)).build()
+    {
+        if let Ok(resp) = client.get(REMOTE_LINKS_URL).send() {
+            if let Ok(text) = resp.text() {
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
+                    return rpc_links_from_json(&json);
+                }
+            }
+        }
+    }
+    // 2. Bundled resource copy (offline backup)
+    if let Some(p) = handle.path().resolve("../frontend/assets/links.json", tauri::path::BaseDirectory::Resource).ok()
+        .or_else(|| handle.path().resolve("frontend/assets/links.json", tauri::path::BaseDirectory::Resource).ok())
+    {
+        if let Ok(text) = std::fs::read_to_string(&p) {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
+                return rpc_links_from_json(&json);
+            }
+        }
+    }
+    // 3. Hardcoded
+    RpcLinks::default()
+}
 
 #[tauri::command]
 pub fn set_discord_presence(
     state: State<AppState>,
+    handle: tauri::AppHandle,
     details: String,
     status: String,
-) -> Result<(), String> {
-    let mut client_lock = state.discord_client.lock().unwrap();
+) -> Result<(), AppError> {
+    let mut client_lock = state.discord_client.lock().map_err(|_| AppError::LockError("Failed to lock discord client".to_string()))?;
     
     // Check if enabled in settings
     {
-        let data = state.data.lock().unwrap();
+        let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
         if !data.settings.discord_rpc_enabled {
-            if client_lock.is_some() {
-                let _ = client_lock.as_mut().unwrap().close();
+            if let Some(client) = client_lock.as_mut() {
+                let _ = client.close();
                 *client_lock = None;
             }
             return Ok(());
@@ -29,23 +99,55 @@ pub fn set_discord_presence(
         let client_res = DiscordIpcClient::new(DISCORD_CLIENT_ID);
         if let Ok(mut client) = client_res {
             if client.connect().is_ok() {
+                info!("Connected to Discord RPC");
                 *client_lock = Some(Box::new(client));
             } else {
-                return Err("FAILED_TO_CONNECT".to_string());
+                warn!("Failed to connect to Discord RPC");
+                return Err(AppError::Internal("FAILED_TO_CONNECT".to_string()));
             }
         } else {
-            return Err("IPC_CLIENT_ERROR".to_string());
+            error!("Failed to create Discord IPC Client");
+            return Err(AppError::Internal("IPC_CLIENT_ERROR".to_string()));
         }
     }
 
+    // Resolve this user's Creator ID (ed25519 public key). Discord activity
+    // buttons can only OPEN a URL — they can't copy to the clipboard — so the
+    // "Copy Creator ID" button links to the BMM web page with the id in the
+    // query string (the page can surface/copy it). Discord caps activities at
+    // 2 buttons, so when a creator id exists we swap "Website" for it.
+    let creator_id = crate::commands::security::get_creator_id(handle.clone()).unwrap_or_default();
+    let links = load_rpc_links(&handle);
+
     // Update presence
     if let Some(client) = client_lock.as_mut() {
+        let version_text = if creator_id.is_empty() {
+            format!("Better Mods Manager v{}", env!("CARGO_PKG_VERSION"))
+        } else {
+            format!("BMM v{} • Creator ID: {}", env!("CARGO_PKG_VERSION"), creator_id)
+        };
+
+        // Button 1 = "Website": append ?creator=<id> (or &creator=<id> if the URL
+        // already has a query) so the site receives the user's Creator ID.
+        let website_url = if creator_id.is_empty() {
+            links.website.clone()
+        } else {
+            let sep = if links.website.contains('?') { '&' } else { '?' };
+            format!("{}{}creator={}", links.website, sep, creator_id)
+        };
+
+        let buttons = vec![
+            discord_rich_presence::activity::Button::new("Website", &website_url),
+            discord_rich_presence::activity::Button::new("GitHub", &links.github),
+        ];
+
         let payload = discord_rich_presence::activity::Activity::new()
             .details(&details)
             .state(&status)
             .assets(discord_rich_presence::activity::Assets::new()
                 .large_image("bmm_logo")
-                .large_text("Better Mods Manager"));
+                .large_text(&version_text))
+            .buttons(buttons);
 
         let _ = client.set_activity(payload);
     }
@@ -54,8 +156,8 @@ pub fn set_discord_presence(
 }
 
 #[tauri::command]
-pub fn init_discord_rpc(state: State<AppState>) -> Result<(), String> {
-    let data = state.data.lock().unwrap();
+pub fn init_discord_rpc(state: State<AppState>, handle: tauri::AppHandle) -> Result<(), AppError> {
+    let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
     if !data.settings.discord_rpc_enabled {
         return Ok(());
     }
@@ -80,5 +182,5 @@ pub fn init_discord_rpc(state: State<AppState>) -> Result<(), String> {
     };
 
     drop(data);
-    set_discord_presence(state, format!("Profil: {}", profile_name), format!("{} mods activés", active_mods_count))
+    set_discord_presence(state, handle, format!("Profil: {}", profile_name), format!("{} mods activés", active_mods_count))
 }

@@ -1,10 +1,11 @@
 use crate::models::tag::TagDef;
 use crate::state::AppState;
 use tauri::State;
+use crate::error::AppError;
 
 #[tauri::command]
-pub fn get_tags(state: State<AppState>) -> Result<Vec<TagDef>, String> {
-    let data = state.data.lock().unwrap();
+pub fn get_tags(state: State<AppState>) -> Result<Vec<TagDef>, AppError> {
+    let data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
     Ok(data.custom_tags.clone())
 }
 
@@ -14,13 +15,15 @@ pub fn create_tag(
     name: String,
     color: String,
     icon: String,
-) -> Result<TagDef, String> {
-    let mut data = state.data.lock().unwrap();
+    color2: Option<String>,
+) -> Result<TagDef, AppError> {
+    let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
     let tag = TagDef {
         id: uuid::Uuid::new_v4().to_string(),
         name,
         color,
         icon,
+        color2: color2.filter(|c| !c.is_empty()),
     };
     data.custom_tags.push(tag.clone());
     drop(data); // Drop the lock before saving to avoid deadlock
@@ -29,8 +32,8 @@ pub fn create_tag(
 }
 
 #[tauri::command]
-pub fn delete_tag(state: State<AppState>, tag_id: String) -> Result<(), String> {
-    let mut data = state.data.lock().unwrap();
+pub fn delete_tag(state: State<AppState>, tag_id: String) -> Result<(), AppError> {
+    let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
     data.custom_tags.retain(|t| t.id != tag_id);
     // Also remove the tag from all mods
     for m in &mut data.mods {
@@ -39,4 +42,27 @@ pub fn delete_tag(state: State<AppState>, tag_id: String) -> Result<(), String> 
     drop(data); // Drop the lock before saving to avoid deadlock
     let _ = state.save();
     Ok(())
+}
+
+
+#[tauri::command]
+pub fn update_tag(
+    state: State<AppState>,
+    tag_id: String,
+    name: String,
+    color: String,
+    icon: String,
+    color2: Option<String>,
+) -> Result<TagDef, AppError> {
+    let mut data = state.data.lock().map_err(|_| AppError::LockError("Failed to lock AppState".to_string()))?;
+    let tag = data.custom_tags.iter_mut().find(|t| t.id == tag_id)
+        .ok_or_else(|| AppError::NotFound(format!("Tag {} not found", tag_id)))?;
+    tag.name = name;
+    tag.color = color;
+    tag.icon = icon;
+    tag.color2 = color2.filter(|c| !c.is_empty());
+    let out = tag.clone();
+    drop(data);
+    let _ = state.save();
+    Ok(out)
 }

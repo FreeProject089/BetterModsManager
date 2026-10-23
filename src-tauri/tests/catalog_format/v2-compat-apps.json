@@ -1,0 +1,10 @@
+{
+  "version": "1.0",
+  "name": "BetterCommunity bmm app catalog",
+  "description": "",
+  "apps": [
+    { "id": "skins-pack", "title": "Skins pack", "description": "Liveries", "md_link": null, "category": "other", "price": "free", "tags": ["skins"],
+      "version": "2.0.0", "requirements": "DCS 2.9",
+      "download": { "url": "https://bc.example/v2/catalog-files/f_abc", "file_type": "zip", "size": 2048, "sha256": "3333333333333333333333333333333333333333333333333333333333333333" } }
+  ]
+}

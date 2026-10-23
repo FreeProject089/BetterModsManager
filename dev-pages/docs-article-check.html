@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>docs-hub article check</title>
+</head>
+<body>
+<!--
+  Renders one docs-hub article's HTML body, in both languages, and checks it.
+
+  tsc compiles the whole hub happily whatever is inside those strings: they are ordinary
+  string literals, so broken markup is still a valid TypeScript program. An unclosed <ul> or
+  a stray </p> stays invisible until someone opens the page. This parses each body with the
+  real HTML parser and reports what the browser actually built.
+
+  Serve the REPOSITORY ROOT, then open
+  /dev-pages/docs-article-check.html?id=server-reach
+-->
+<pre id="out">…</pre>
+<script type="module">
+const id = new URLSearchParams(location.search).get('id') || 'server-reach';
+const log = [];
+let fails = 0;
+const check = (label, cond, detail = '') => {
+    log.push(`${cond ? 'PASS' : 'FAIL'}  ${label}${detail ? '  ' + detail : ''}`);
+    if (!cond) fails++;
+};
+
+const src = await (await fetch('../frontend/js/docs/docs-hub.js')).text();
+
+const start = src.indexOf(`id: '${id}'`);
+check(`article ${id} exists in the compiled hub`, start > -1);
+
+if (start > -1) {
+    // Slice by markers, never by indentation: the compiler re-indents, and the first version
+    // of this looked for the source's spacing and found nothing — reporting "body missing"
+    // for an article that was sitting right there. A probe that cannot find the thing reads
+    // exactly like a thing that is broken.
+    const bodyAt = src.indexOf('body: {', start);
+    const enAt = src.indexOf('en:', bodyAt);
+    const frAt = src.indexOf('fr:', enAt);
+    const endAt = src.indexOf('},', frAt);
+    const cut = (from, to) => src.slice(src.indexOf("'", from), src.lastIndexOf("'", to) + 1);
+    const bodies = { en: cut(enAt, frAt), fr: cut(frAt, endAt) };
+
+    for (const lang of ['en', 'fr']) {
+        let html;
+        try {
+            html = (0, eval)(bodies[lang]);      // our own build output, not user input
+        } catch (e) {
+            check(`${lang}: body is a valid expression`, false, e.message);
+            continue;
+        }
+        check(`${lang}: body is non-trivial`, html.length > 800, `${html.length} chars`);
+
+        const host = document.createElement('div');
+        host.innerHTML = html;
+
+        // The test that matters: re-serialising what the parser built must give back what
+        // was written. If a tag is unbalanced the parser silently corrects it, and the two
+        // differ — which is the only signal that anything is wrong.
+        const flat = (t) => t.replace(/\s+/g, ' ').trim();
+        const roundTrips = flat(host.innerHTML) === flat(html);
+        check(`${lang}: markup survives a parse round trip`, roundTrips,
+              roundTrips ? '' : 'the parser corrected something — a tag is unbalanced');
+
+        check(`${lang}: no element left empty by a bad tag`,
+              ![...host.querySelectorAll('li, p, h4')].some((e) => !e.textContent.trim()));
+
+        check(`${lang}: headings and lists present`,
+              host.querySelectorAll('h4').length >= 3 && host.querySelectorAll('li').length >= 4,
+              `${host.querySelectorAll('h4').length} h4, ${host.querySelectorAll('li').length} li`);
+
+        const leaked = host.textContent.match(/\\u[0-9a-fA-F]{4}/);
+        check(`${lang}: no unresolved escape leaked as text`, !leaked, leaked ? leaked[0] : '');
+
+        // By character code: writing the class as a literal would put raw control bytes back
+        // into THIS file, which is what broke an earlier version of this very check.
+        check(`${lang}: no raw control characters`,
+              ![...host.textContent].some((c) => {
+                  const n = c.charCodeAt(0);
+                  return n < 9 || (n > 13 && n < 32);
+              }));
+
+        log.push(`      ${lang}: ${host.textContent.trim().length} characters of text`);
+    }
+}
+
+log.push('', fails ? `${fails} FAILED` : 'all passed');
+document.getElementById('out').textContent = log.join('\n');
+window.__RESULT__ = { fails, log };
+</script>
+</body>
+</html>

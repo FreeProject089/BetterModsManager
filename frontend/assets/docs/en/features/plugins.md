@@ -1,0 +1,531 @@
+# Plugins & API
+
+
+> Extend BMM with community plugins and automate actions.
+
+If BMM doesn't do the thing you need, this is where the thing gets added — without waiting
+for a release.
+
+!!! warning "Community plugins are not reviewed"
+
+    BMM says it plainly on the banner: these plugins are created by the community and are
+    **not officially reviewed**. Install from people you have some reason to trust, the same
+    way you'd treat any other executable.
+
+    They are, however, **bounded**: a plugin acts through the [API](doc-page:reference/api) with
+    its own token, and only does what you've granted it. Review those grants in
+    **Plugins → Permissions**.
+
+
+
+
+<!-- story:build-plugin -->
+![Build a plugin with a mod list](assets/docs/media/gifs/build-plugin.gif)
+
+*Build a plugin with a mod list. Plugins & API → Create: a plugin that ships a list of mods, its permissions, the live preview, and the plugin saved on this PC.*
+
+<!-- /story:build-plugin -->
+
+## The tabs
+
+**Plugins & API** has six tabs:
+
+| Tab | What it is for |
+|---|---|
+| **Installed** | Your plugins, with filters, the permissions each one asks for and its highest risk; enable, update, duplicate, remove |
+| **Catalogue** | Plugins from the catalogues you follow; installing one asks first and never happens by itself |
+| **Create** | The guided, six-step plugin creator ([below](#create-a-plugin)) |
+| **API** | Your API token, **Try a call** (pick an endpoint, fill the fields, run it or copy the cURL), the endpoints grouped by area, and the `bmm://` deep links |
+| **Automations** | The automation builder: templates, navigation and upkeep steps, catalogue and local API steps, a dry run and preview, and export as `.bmpa`, `.bmmscript` or a script. See [Scheduling & automation](doc-page:features/scheduler) |
+| **Permissions** | What each plugin may do, the global backstop for them |
+
+The **API** tab used to be called *API & Scripts*; the automations that used to live elsewhere are
+now their own tab here.
+
+## What you can grant a plugin
+
+Twenty-six grants, in twelve domains, and each domain splits **read** from **write** —
+knowing is not the same permission as changing.
+
+| Domain | Read | Write |
+|---|---|---|
+| Mods | list mods, see which one wins a shared file | enable, disable, update, delete, reorder |
+| Profiles | list profiles | create, edit, delete, activate |
+| Modpacks | list and export | create, change, apply, delete |
+| Plugins | list plugins, compare a modlist, read shipped files | install, apply, **delete** — including others |
+| Server repo | see what is connected and what it holds | connect, sync, publish, host |
+| Identity keys | see which keys exist | **mint one** |
+| Apps | list installed apps and their permissions | install, launch, remove |
+| App catalogue | read the local catalogue | add, change, remove entries |
+| Your data | read **everything** BMM holds, and export it | import over what you have |
+| Automations | list saved tasks | run one, arm or disarm one |
+| Hooks | see what has fired | fire one a task may be waiting on |
+| The app itself | — | restart BMM, change the open screen, benchmark, import a language |
+| Session recordings | list them, and export one — a recording shows the screen, paths and names included | start and stop recording, import one and play it, delete one |
+| Privacy | — | change what is recorded and what is sent |
+
+Grant the narrowest set that does the job. A plugin asking for `repo.write` when all it does
+is toggle mods is worth a second look, and one asking for `data.read` is asking to read
+everything at once.
+
+!!! warning "Reads used to be ungated, and now are not"
+
+    Fifty routes needed a token and no permission at all — and a per-plugin token is a valid
+    token, so a plugin with an **empty** permission list could read the full data dump,
+    import data over it, restart BMM, delete other plugins and run any saved automation.
+
+    On upgrade each plugin keeps the read half of every domain it already had write on:
+    trusted to change your mods means still able to list them. Nothing else is carried, so a
+    plugin leaning on a domain it was never granted now fails with a `403` naming the scope
+    — which is one click from granted, in **Plugins & API → Permissions**.
+
+!!! danger "The permission list itself is not something a plugin can touch"
+
+    `PUT /api/apps/permissions/<id>` writes the grants, and it takes the **admin** token. A
+    plugin that could set its own permissions could grant itself all twenty-eight, which would
+    make this page a description of nothing.
+
+!!! note "The API & scripts tab draws itself in two beats"
+
+    Opening the tab paints a grey skeleton first and the real panel — token, endpoint list,
+    quick test, script editor — a moment later. It used to build all of that inside the click,
+    so the click landed and nothing moved for a beat, which read as a freeze. Nothing is loaded
+    from the network in between; it is only the drawing that is deferred.
+
+!!! tip "The API isn't only for plugins"
+
+    The same local API answers your own scripts, a `.bat` file, PowerShell, or a `bmm://`
+    deeplink on a web page — anything on your PC. The **global** switches in
+    **Plugins → Permissions** (and the sandbox mode in [Settings](doc-page:features/settings)) govern *all*
+    of those callers at once, not just installed plugins.
+
+## Declaring what your plugin needs
+
+The **Create** tab has a *What it needs* section. Ticking a scope there does not grant it —
+it **asks**. Installing the plugin grants **none** of them, and the request is put to whoever
+installed it, once, right after the install: the scopes the plugin asked for are tagged, and
+*Grant what it asks for* ticks exactly those.
+
+Nothing is granted by dismissing that dialog. It opens with what is currently granted —
+nothing, on a fresh install — rather than with the request, so closing it leaves the plugin
+with the permissions it had, which is none. The same screen is on the plugin's card
+afterwards, and it also names any scope granted **without** having been asked for: usually
+left over from an older version of the plugin.
+
+!!! note "There is no “grant everything” switch, on purpose"
+
+    There used to be one — *Global plugin trust: skip all permission dialogs for every plugin,
+    every time* — and it did nothing at all: the dialog it claimed to skip had no callers, so
+    the switch wrote a setting nothing read. It is gone. A control describing a posture the app
+    does not have is worse than no control: somebody who left it off to be careful gained
+    exactly nothing, and believed otherwise.
+
+Ask for the least that works. A plugin that requests everything is a plugin whose list nobody
+reads.
+
+The same tab now writes three fields it used to leave empty no matter what you typed:
+**author**, **website** and **tags** — the plugin card renders tags, so it was drawing a row
+that nothing could fill. And the **id** is checked as you type: it becomes a folder on disk,
+a segment of a `bmm://` link and a key in a catalogue, so a space in it fails three different
+ways and used to do so silently.
+
+## Strict mode
+
+Some plugins apply a list of mods. *Strict* decides what happens to everything else:
+
+> This plugin will disable all mods not in the list.
+
+Non-strict adds; strict makes your setup **match** the list exactly. BMM asks before doing
+it, and shows you which mods it's about to turn off — read that list rather than clicking
+through it.
+
+## Scheduling & automation
+
+Reachable from here, and the reason the API exists:
+
+> Schedule BMM actions (one-time or recurring) — activate a mod, modpack, profile…
+
+A task can run **even when BMM is closed** (it registers with the OS scheduler). Rules are
+evaluated top to bottom and *the first matching row wins* — so order your rules from most
+specific to most general, exactly like a firewall.
+
+## Create a plugin
+
+**Plugins & API → Create** is a guided form in six steps. A step bar on top shows what is done
+and what still needs attention; click a step to go to it.
+
+1. **Start from** — what is the plugin for? This sets the apply mode; everything stays
+   editable.
+
+    | Template | What it makes |
+    |---|---|
+    | Mod list | Enables a set of mods when applied |
+    | Server mod list | Strict: exactly these mods, the others are turned off |
+    | Script pack | Runs scripts and ships files. Needs the unsafe-plugins permission |
+    | Mods + scripts | Applies the mod list, then runs the scripts |
+    | Automation pack | Ships `.bmmpa` automations, imported disabled and checked |
+    | Catalogue bundle | Ships a `.bmmbundle` catalogue the installer can follow |
+    | Blank | Start empty and choose everything yourself |
+
+2. **Identity** — name, id, version, author, game, website, tags, description and icon. The
+   **id is suggested from the name** while you have not typed one. Letters, digits, `-` and `.`
+   only, and it **must not change once the plugin is shared**: catalogues, `bmm://` links and
+   the plugin's folder all use it.
+3. **Contents** — what the plugin carries: mods (each one required or optional), scripts,
+   folders, automations, catalogue bundles. Add only what it needs. A mod this PC does not have
+   stays in the list, marked *not on this PC*.
+4. **On apply** — what applying does, as four cards (mod list, scripts only, both,
+   automations), next to the **strict** switch.
+5. **Permissions** — what the plugin *asks* for. Ticking here only asks: the person installing
+   sees the request pre-ticked and decides. Each permission shows a risk level, and the bar
+   shows the overall risk:
+
+    | Risk | Means |
+    |---|---|
+    | **Low** | Reads a list. Changes nothing |
+    | **Medium** | Changes your setup: mods, profiles, packs, automations |
+    | **High** | Runs programs, reads or replaces all your data, signs as you or records your screen |
+
+    Ask for the minimum, and say why in the description.
+
+6. **Save & share**
+    - **Save locally** installs it in BMM; it appears under *Installed*.
+    - **Dry run** shows what applying would change on this PC. Nothing is changed.
+    - **Export .bmmplug** makes one file to send; others import it from Plugins.
+    - **Publish in a catalogue**: add the hosted `.bmmplug` to a plugin catalogue with its
+      SHA-256 (**My catalogues** opens the builder).
+    - **Link to apply it**: `bmm://plugin/activate?id=<id>`, with a copy button.
+    - **See the files** opens what was packed.
+
+Next to the form, a live panel shows the **plugin card** as installers will see it, a
+**checklist** (missing name or id, an empty plugin, an apply mode that does not match the
+contents, high-risk permissions without a description…) that reads *Ready to save.* when
+there is nothing left, and the **plugin.json** that will be written, with a copy button.
+
+**Start over** clears the form; nothing saved is deleted. The head says when you are editing
+an existing plugin, and saving over another installed plugin with the same id asks first.
+
+!!! note "Duplicate"
+
+    **Duplicate**, in a plugin's menu, opens the form pre-filled with a copy (`<id>-copy`).
+    When you save it, the original's files — scripts, bundled folders, automations, catalogue
+    bundles and its icon — are copied into the new plugin. Only files inside the original
+    plugin's folder are copied: an absolute path, a `..` or a link is left out.
+
+## The Installed list
+
+Filters above the list: **All**, **Update available**, **Mod lists**, **Scripts**,
+**Automations & catalogues**, **Asks for permissions**. Only the filters that have plugins in
+them are shown, and the search matches name, id, author and tag.
+
+Each card has a status line: how many permissions the plugin asks for, with the highest risk
+among them, and **vX available** when its catalogue has a newer version that was not
+installed automatically (auto-update off, or no checksum).
+
+Auto-update is **off** until you switch it on for a plugin, in its menu. A catalogue proposes a
+newer version; it never installs one on its own. An update keeps the plugin enabled or
+disabled as you left it.
+
+## What a plugin is, on disk
+
+A plugin is a folder with a manifest. Nothing is compiled, nothing is installed into BMM — you
+can read one in a text editor, and so can the person you send it to.
+
+| Field | What it does |
+|---|---|
+| `id`, `name`, `version`, `author` | Identity. `id` is what BMM deduplicates on |
+| `description`, `website`, `tags`, `game` | What the catalogue shows |
+| `permissions` | The capabilities it asks for. This is the whole of what it may do |
+| `modlist` | The mods it wants present, with versions |
+| `scripts` | External scripts it ships, as paths inside its own folder |
+| `has_scripts` | Declares that it contains scripts, so activation can warn you first |
+| `folders` | Folders bundled under `bundle/` |
+| `apply_mode` | `modlist`, `script`, or `both` — what applying it actually does |
+
+`apply_mode` is the field worth reading before you trust one. A `modlist` plugin only asks BMM
+to enable a set of mods; a `script` plugin runs a program on your machine. Running scripts is
+gated behind its own permission, and activating a plugin that declares them asks first — but
+the manifest tells you which kind you have *before* you install it.
+
+!!! note "There are no plugin-defined commands"
+    A plugin cannot add its own entry to the command palette or invent a new action. Its whole
+    surface is the list above: a set of mods, optional scripts, and the permissions it was
+    granted. Anything else it does, it does through the API like any other client.
+
+## The full reference
+
+Everything a plugin — or a script, or an AI assistant, or `curl` — can call is listed in one
+place, generated against the code:
+
+- **[API & deeplink reference](doc-page:reference/api)** — every HTTP endpoint and every `bmm://`
+  link, with the response shape, which ones need a token, and which ones ask before acting.
+- **[Actions reference](doc-page:reference/actions)** — every action BMM can perform for you,
+  including the ones the scheduler can run.
+
+Both are worth skimming once even if you never write a plugin: they are the clearest inventory
+of what BMM can be made to do.
+
+In the app, **Plugins & API → API → Endpoints** has the same list, **grouped by
+area** — mods, profiles, modpacks, plugins, server repos, apps and catalogues, automation and
+hooks, data, keys and privacy, BMM itself — each group with its count per method. The search
+matches a method, a path or a word; the filters show one method (`GET`, `POST`…) or only the
+endpoints that need **No token**. Each endpoint shows its fields, its permission and its
+`bmm://` equivalent when it has one.
+
+
+## Files a plugin ships — `assets/`
+
+A plugin could already carry two kinds of extra: **scripts**, declared so they can be run,
+and **`bundle/`** folders, copied into the game. Everything else an author actually hands
+people — a README, a config template, a sample `.mm`, a spreadsheet of codes, a small tool —
+had nowhere to go. It went in a Discord message.
+
+Put it in `assets/` inside the plugin:
+
+```
+my-plugin/
+  plugin.json
+  assets/
+    README.md
+    setup.ps1
+    docs/codes.csv
+```
+
+The paperclip on the plugin's card opens it. A README opens by itself; other documents,
+`.json`, `.csv` and scripts are shown as text; images are shown; anything else offers
+**Save a copy…**.
+
+!!! note "The folder is the truth, not the manifest"
+
+    `plugin.json` gains an `assets` list, and it is **written from disk when the plugin is
+    packed** — an author who adds a README and forgets to edit the manifest would otherwise
+    publish a file list that is a lie.
+
+    The installed copy still reads the folder. A plugin whose manifest names a file that is
+    not there shows nothing rather than an entry that fails to open, and one carrying a file
+    its manifest never mentioned still shows it — which is the case that matters, because a
+    surprise file is the one somebody should see.
+
+    The declaration exists for readers who have only the manifest: BetterCommunity's
+    inspector, a moderation queue, a catalogue entry. Paste a `plugin.json` into **Inspect a
+    BMM file** and it now lists what the plugin ships, and names any script among them.
+
+!!! warning "Nothing in `assets/` runs on its own"
+
+    A script asset is listed, marked as a script, and its **folder** opens — never the file,
+    because opening a `.ps1` hands it to whatever the OS runs `.ps1` with, and that is not
+    what "show me this" means.
+
+    Running one is a scheduled task's decision, below.
+
+### From an automation
+
+The **Use a file a plugin ships** action (`plugin.asset`) has four modes.
+
+| Mode | What it does |
+|---|---|
+| **Read it into a variable** | The whole file, as text, into `{text.<name>}`. |
+| **Copy it somewhere** | Into a folder you pick. Never overwrites — a name already taken becomes `name (2).ext`. |
+| **Open its folder** | The folder, not the file. |
+| **Run it (script)** | Read, and handed to PowerShell / cmd / bash / Python. |
+
+**Read** is the one worth reaching for. A plugin ships the list of squadron codes, or the
+config template, or the server address — and the task reads it from the plugin instead of
+that value being typed into the task, where it drifts the first time the plugin updates.
+
+!!! danger "Run needs the task's own script permission"
+
+    Not the plugin's, and not a setting about plugins: the **task's**. Whether *this
+    automation* may run programs is a question you answered once, in writing, on the task —
+    and that answer governs a shipped script exactly as it governs a typed one. Without it
+    the step refuses out loud rather than skipping, because a silent skip would look like the
+    plugin shipping a broken file.
+
+    The engine comes from the extension unless you say otherwise. Nobody ships `setup.ps1`
+    and means "run this with Python".
+
+
+### From a script, the CLI or an assistant
+
+```bash
+bmm plugin-assets dcs-helper
+bmm plugin-asset dcs-helper README.md
+```
+
+Both work with **BMM closed** — `data.json` says where the plugin is and the folder says what
+is in it. That matters here: the reason to ask what a plugin ships is usually that you are
+deciding whether to install it, which is not a moment when the app is open on that screen.
+
+`GET /api/plugins/assets?id=…` does the same over HTTP (`plugins.read`), and `&path=…`
+returns one file's text. The MCP tools are `bmm_plugin_assets` and `bmm_read_plugin_asset`.
+
+!!! note "Copying one OUT is not exposed"
+
+    A caller that named both the source and the destination would be a file-copy primitive
+    with BMM's privileges. Anything able to call these can already read the bytes and write
+    them wherever it likes with its own hands, so the endpoint would add reach without adding
+    ability.
+
+## Automations a plugin ships — `automations/`
+
+A plugin can carry `.bmmpa` files. **Import an automation…** in the plugin editor puts one in,
+and the fourth apply mode — **Set up its automations** — makes installing the plugin set them
+up.
+
+```
+my-plugin/
+  plugin.json
+  automations/
+    nightly-tidy.bmmpa
+```
+
+This exists because of what people were shipping instead: a `.bat`, and a message telling you
+where the folder is. A script is opaque — BMM cannot say what it does, cannot show it, and
+cannot take anything away from it, so the only honest thing to do with one is warn you about it.
+
+An automation is the opposite. It has steps, permissions and a trigger, all of which can be
+shown before anything happens, and all of which can be **taken away**.
+
+!!! danger "What a shipped automation cannot do"
+
+    Every one arrives through the same gate as any other `.bmmpa`: **disabled**, and stripped
+    of every capability that has to be granted — running programs, running scripts, firing
+    deeplinks, stopping processes, and deleting profiles, modpacks or mod folders.
+
+    Those are granted by the person who will live with them, never by the plugin's author. A
+    plugin is a file from a stranger like any other.
+
+    That is exactly what makes **Set up its automations** able to offer running them straight
+    away: a task that cannot start a program has a worst case of changing something inside BMM
+    that you just asked for by applying the plugin. Without the stripping, the same button would
+    be arbitrary code execution on install with a friendly label — so the confirmation says out
+    loud what the tasks cannot do rather than asking you to take it on faith. They stay switched
+    off afterwards either way.
+
+Applying a plugin for its **mod list** imports its automations too, and never starts them:
+somebody who applied a mod list asked for a mod list.
+
+!!! note "Checked when it goes IN, not when it comes out"
+
+    A file is validated by its shape as you add it to the plugin — the extension proves
+    nothing, and renaming a `.txt` by accident is the ordinary case. Refused there, the author
+    fixes it; refused at apply time, somebody else just learns the plugin does not work.
+
+    The check is deliberately shallow. Whether each task is valid is decided on the machine
+    that will run it, against that BMM's own registry — a second opinion written into the
+    packer would be wrong the day somebody adds an action.
+
+
+## Catalogues a plugin ships — `bundles/`
+
+A plugin can carry `.bmmbundle` files: a whole catalogue in one file, entries and everything
+they pack. **Catalogues** in the plugin editor puts one in.
+
+```
+my-plugin/
+  plugin.json
+  bundles/
+    my-server-packs.bmmbundle
+```
+
+It closes the gap the automations left. A plugin could ship the automation and not the
+catalogue the automation came from — the half that keeps working next month, when there is a
+new version of the thing it installs.
+
+**Follow its catalogues** on the plugin's ⋮ menu adds them as sources. It asks first, always,
+and that is deliberate: applying a plugin is a one-off act, while following a catalogue is
+something BMM keeps reading from afterwards. Adding one silently would be signing you up to a
+stranger's feed on your behalf.
+
+The kind is read from the catalogue itself, never from anything the plugin claims.
+`plugin.json` is a file somebody else wrote; the `catalog.json` inside the bundle is the
+document that will actually be parsed, and its shape is what every catalogue browser here
+already decides by. A plugin cannot get its bundle filed under Themes by mislabelling it.
+
+!!! note "Nothing is downloaded"
+
+    The bundle is a file inside the plugin, so following it reaches no network at all. It also
+    means **removing the plugin does not unfollow them** — the sources stay until you remove
+    them yourself, the same as any other catalogue you followed.
+
+## The card, and the two questions people ask
+
+A plugin card offered eleven icon buttons in one row. Each did something different and they
+all looked the same, so there was no way to tell which of them only *looked* and which
+*changed* something — and neither of the questions somebody actually has before trusting a
+plugin could be answered from it at all.
+
+Two verbs stay in the open: **Compare** and **Apply**. Then three buttons that only ask:
+
+| | |
+|---|---|
+| **Permissions** | The twenty-eight grants, for THIS plugin, on its card. They lived on a settings screen listing every plugin at once. Ticking here **grants** — nothing is asked again afterwards. |
+| **Contents** | Everything the plugin holds: scripts, bundled folders, automations, assets, the lot. |
+| **Analyse** | What it would change if you applied it. |
+
+Everything that *changes* something moves behind a **⋮** menu that names it in words:
+auto-update, files, open folder, edit, duplicate, export, and **uninstall last, behind a
+separator, in red**. Removing a plugin is not a peer of duplicating one. The menu closes on
+++esc++, on a click outside, and on choosing anything — a menu that only closes by pressing
+its own button again is one people leave open.
+
+!!! note "Contents is not the assets viewer"
+
+    **Add a file…** below shows `assets/`, which answers "what did the author put in assets".
+    **Contents** walks the whole plugin folder, which answers "what IS this" — and the second
+    is the question somebody asks before running something they downloaded. Symbolic links are
+    listed but never followed, the listing is sorted so two readings agree, and it stops at
+    5000 entries or 24 levels deep.
+
+## Seeing a folder before you bundle it
+
+Creating a plugin lets you import a directory. It used to show you its **name** and nothing
+else — how many files, how big, whether `node_modules` or a build output or a `.env` came
+along was invisible until the plugin was built, published, and downloaded by other people.
+
+Each picked folder now carries its own **count and size**, and an eye button opens the same
+listing the Contents modal uses. The facts are fetched per row after the list draws, so a
+folder on a slow drive does not hold up the one beside it.
+
+## Putting a file in, and checking the plugin
+
+Reading, listing and copying **out** of a plugin all existed. Getting a README **in** meant
+finding the install folder in Explorer, which is not something an author should have to know
+about their own plugin. The assets screen now has both halves, and a check.
+
+### Add a file… / Remove
+
+**Add a file…** copies what you pick into `assets/`. A path with a folder in it keeps the
+folder (`docs/codes.csv` lands in `assets/docs/`).
+
+!!! note "It never silently replaces"
+
+    Adding `README.md` twice means you changed it and the second one wins. Adding a
+    *different* file that happens to share a name means you have just lost the first — and
+    only you can tell which of the two it was. So it refuses, and names the file.
+
+    Rename yours, or remove the one that is there first.
+
+**Remove** deletes the selected file from the plugin. It is not recoverable from here, which
+is why it asks first and names what it is about to delete.
+
+### Check this plugin
+
+Everything this reports produces a plugin that **installs and then does not work** — the
+failure with no error message: the manifest is valid JSON, the archive unpacks, and the thing
+simply does nothing on somebody else's machine.
+
+| Reported | Why |
+|---|---|
+| A declared script that is not in the folder | It installs, applying it runs nothing, and nothing says why. |
+| **Contains scripts** ticked with none listed | Applying it prompts about scripts it does not have. |
+| A manifest listing an asset that is not there | That list is written from disk at pack time, so this means the manifest was edited by hand. |
+| Applying it would do nothing | No mod list and no scripts. |
+| A **strict** mod list that is empty | Strict means "these and nothing else". Empty, that reads as *turn everything off*. |
+| No name | It shows as its id everywhere. |
+| No description, no author | A catalogue entry with no description is one nobody installs, and you are the only person who can write it. |
+| A file present that the manifest does not mention | Not an error — the installed copy reads the folder — but a moderation queue has only the manifest to go on. |
+
+The first list is what stops it working elsewhere; the second is worth reading before you
+publish. **"No problems found" is said out loud too** — a check that only speaks when it is
+unhappy is one you never trust when it is quiet.

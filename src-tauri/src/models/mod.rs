@@ -4,3 +4,8 @@ pub mod modlist;
 pub mod tag;
 pub mod history;
 pub mod repo;
+pub mod modpack;
+pub mod launch_pack;
+pub mod plugin;
+pub mod app_catalog;
+pub mod order_list;

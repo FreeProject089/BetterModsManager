@@ -1,0 +1,1477 @@
+{
+  "generatedFrom": "frontend/src/features/settings/scheduler.ts",
+  "actions": [
+    {
+      "type": "profile.activate",
+      "group": "mods",
+      "params": [
+        "id"
+      ]
+    },
+    {
+      "type": "profile.create",
+      "group": "mods",
+      "params": [
+        "name",
+        "into",
+        "gameDir",
+        "modsDir",
+        "backupDir"
+      ]
+    },
+    {
+      "type": "profile.rename",
+      "group": "mods",
+      "params": [
+        "id",
+        "name"
+      ]
+    },
+    {
+      "type": "profile.delete",
+      "group": "mods",
+      "params": [
+        "id",
+        "evenIfActive"
+      ]
+    },
+    {
+      "type": "mod.remove",
+      "group": "mods",
+      "params": [
+        "id",
+        "disableFirst",
+        "deleteFiles"
+      ]
+    },
+    {
+      "type": "modpack.delete",
+      "group": "mods",
+      "params": [
+        "id"
+      ]
+    },
+    {
+      "type": "mod.enable",
+      "group": "mods",
+      "params": [
+        "id"
+      ]
+    },
+    {
+      "type": "mod.disable",
+      "group": "mods",
+      "params": [
+        "id"
+      ]
+    },
+    {
+      "type": "mods.order",
+      "group": "mods",
+      "params": [
+        "order",
+        "id",
+        "mode"
+      ]
+    },
+    {
+      "type": "modpack.enable",
+      "group": "mods",
+      "params": [
+        "id",
+        "placement"
+      ]
+    },
+    {
+      "type": "modpack.disable",
+      "group": "mods",
+      "params": [
+        "id"
+      ]
+    },
+    {
+      "type": "modpack.create",
+      "group": "mods",
+      "params": [
+        "name",
+        "profile"
+      ]
+    },
+    {
+      "type": "mod.add",
+      "group": "mods",
+      "params": [
+        "url",
+        "name"
+      ]
+    },
+    {
+      "type": "modlist.export",
+      "group": "mods",
+      "params": [
+        "path"
+      ]
+    },
+    {
+      "type": "modlist.import",
+      "group": "mods",
+      "params": [
+        "path"
+      ]
+    },
+    {
+      "type": "mods.enableAll",
+      "group": "mods",
+      "params": [
+        "placement"
+      ]
+    },
+    {
+      "type": "mods.disableAll",
+      "group": "mods",
+      "params": []
+    },
+    {
+      "type": "mods.scan",
+      "group": "mods",
+      "params": []
+    },
+    {
+      "type": "plugin.apply",
+      "group": "mods",
+      "params": [
+        "id"
+      ]
+    },
+    {
+      "type": "plugin.compare",
+      "group": "mods",
+      "params": [
+        "id"
+      ]
+    },
+    {
+      "type": "plugin.delete",
+      "group": "mods",
+      "params": [
+        "id"
+      ]
+    },
+    {
+      "type": "mods.checkUpdates",
+      "group": "mods",
+      "params": []
+    },
+    {
+      "type": "mods.autoImportOmm",
+      "group": "mods",
+      "params": []
+    },
+    {
+      "type": "mods.clearHistory",
+      "group": "mods",
+      "params": [
+        "id"
+      ]
+    },
+    {
+      "type": "mods.exportModpack",
+      "group": "mods",
+      "params": [
+        "id",
+        "dir"
+      ]
+    },
+    {
+      "type": "repo.connect",
+      "group": "repo",
+      "params": [
+        "url",
+        "name",
+        "password"
+      ]
+    },
+    {
+      "type": "repo.sync",
+      "group": "repo",
+      "params": [
+        "url",
+        "profile",
+        "password"
+      ]
+    },
+    {
+      "type": "app.buildInfo",
+      "group": "app",
+      "params": [
+        "into"
+      ]
+    },
+    {
+      "type": "library.counts",
+      "group": "app",
+      "params": [
+        "into"
+      ]
+    },
+    {
+      "type": "repo.gen",
+      "group": "repo",
+      "params": []
+    },
+    {
+      "type": "repo.genNow",
+      "group": "repo",
+      "params": [
+        "outputDir",
+        "authorName",
+        "profileIds",
+        "seed",
+        "zipOutput",
+        "zipMods",
+        "compression"
+      ]
+    },
+    {
+      "type": "repo.update",
+      "group": "repo",
+      "params": [
+        "dir"
+      ]
+    },
+    {
+      "type": "repo.host",
+      "group": "repo",
+      "params": [
+        "dir",
+        "port"
+      ]
+    },
+    {
+      "type": "repo.manifest",
+      "group": "repo",
+      "params": [
+        "dir",
+        "name",
+        "author"
+      ]
+    },
+    {
+      "type": "repo.publishSsh",
+      "group": "repo",
+      "params": [
+        "dir",
+        "target",
+        "into"
+      ]
+    },
+    {
+      "type": "repo.fetchSsh",
+      "group": "repo",
+      "params": [
+        "dir",
+        "target",
+        "into"
+      ]
+    },
+    {
+      "type": "app.launch",
+      "group": "apps",
+      "params": [
+        "id",
+        "exePath"
+      ]
+    },
+    {
+      "type": "app.stop",
+      "group": "apps",
+      "params": [
+        "name",
+        "pid",
+        "into"
+      ]
+    },
+    {
+      "type": "file.open",
+      "group": "apps",
+      "params": [
+        "path"
+      ]
+    },
+    {
+      "type": "folder.open",
+      "group": "apps",
+      "params": [
+        "path"
+      ]
+    },
+    {
+      "type": "app.install",
+      "group": "apps",
+      "params": [
+        "id",
+        "url",
+        "title"
+      ]
+    },
+    {
+      "type": "launchpack.run",
+      "group": "apps",
+      "params": [
+        "id"
+      ]
+    },
+    {
+      "type": "theme.set",
+      "group": "look",
+      "params": [
+        "id"
+      ]
+    },
+    {
+      "type": "benchmark.run",
+      "group": "perf",
+      "params": [
+        "dataset",
+        "size",
+        "customMb",
+        "sources"
+      ]
+    },
+    {
+      "type": "storage.diskBenchmark",
+      "group": "perf",
+      "params": [
+        "mountPoint"
+      ]
+    },
+    {
+      "type": "storage.applyLimit",
+      "group": "perf",
+      "params": [
+        "mountPoint",
+        "limitMbS"
+      ]
+    },
+    {
+      "type": "storage.calibration",
+      "group": "perf",
+      "params": [
+        "enabled"
+      ]
+    },
+    {
+      "type": "storage.smartIo",
+      "group": "perf",
+      "params": [
+        "enabled"
+      ]
+    },
+    {
+      "type": "storage.flag",
+      "group": "perf",
+      "params": [
+        "key",
+        "enabled"
+      ]
+    },
+    {
+      "type": "resources.preset",
+      "group": "perf",
+      "params": [
+        "name",
+        "scope",
+        "overridesGame"
+      ]
+    },
+    {
+      "type": "resources.gameMode",
+      "group": "perf",
+      "params": [
+        "mode"
+      ]
+    },
+    {
+      "type": "resources.queue",
+      "group": "perf",
+      "params": [
+        "action"
+      ]
+    },
+    {
+      "type": "perf.diskSpace",
+      "group": "perf",
+      "params": [
+        "mountPoint"
+      ]
+    },
+    {
+      "type": "telemetry.consent",
+      "group": "privacy",
+      "params": [
+        "enabled"
+      ]
+    },
+    {
+      "type": "telemetry.set",
+      "group": "privacy",
+      "params": [
+        "replay",
+        "full",
+        "bench"
+      ]
+    },
+    {
+      "type": "recorder.set",
+      "group": "privacy",
+      "params": [
+        "on",
+        "full",
+        "rust",
+        "js"
+      ]
+    },
+    {
+      "type": "replay.export",
+      "group": "privacy",
+      "params": [
+        "path"
+      ]
+    },
+    {
+      "type": "replay.import",
+      "group": "privacy",
+      "params": [
+        "path",
+        "url"
+      ]
+    },
+    {
+      "type": "notify",
+      "group": "system",
+      "params": [
+        "message"
+      ]
+    },
+    {
+      "type": "discord.rpc",
+      "group": "system",
+      "params": [
+        "enabled"
+      ]
+    },
+    {
+      "type": "data.exportAuto",
+      "group": "system",
+      "params": [
+        "dir",
+        "name",
+        "increment"
+      ]
+    },
+    {
+      "type": "data.backup",
+      "group": "system",
+      "params": [
+        "dir",
+        "sections",
+        "passphrase",
+        "name",
+        "increment"
+      ]
+    },
+    {
+      "type": "var.set",
+      "group": "logic",
+      "params": [
+        "name",
+        "value",
+        "scope"
+      ]
+    },
+    {
+      "type": "app.checkUpdate",
+      "group": "system",
+      "params": [
+        "enabled"
+      ]
+    },
+    {
+      "type": "system.clearApiLog",
+      "group": "system",
+      "params": []
+    },
+    {
+      "type": "system.clearResourceRecords",
+      "group": "system",
+      "params": []
+    },
+    {
+      "type": "math.set",
+      "group": "logic",
+      "params": [
+        "target",
+        "expr"
+      ]
+    },
+    {
+      "type": "var.ternary",
+      "group": "logic",
+      "params": [
+        "condition",
+        "target",
+        "ifTrue",
+        "ifFalse"
+      ]
+    },
+    {
+      "type": "rule.table",
+      "group": "logic",
+      "params": [
+        "source",
+        "target",
+        "rows"
+      ]
+    },
+    {
+      "type": "task.stop",
+      "group": "logic",
+      "params": [
+        "reason"
+      ]
+    },
+    {
+      "type": "task.run",
+      "group": "system",
+      "params": [
+        "id"
+      ]
+    },
+    {
+      "type": "task.spawn",
+      "group": "system",
+      "params": [
+        "id"
+      ]
+    },
+    {
+      "type": "task.setEnabled",
+      "group": "system",
+      "params": [
+        "taskId",
+        "armOn"
+      ]
+    },
+    {
+      "type": "view.open",
+      "group": "system",
+      "params": [
+        "place",
+        "id",
+        "arg"
+      ]
+    },
+    {
+      "type": "restart",
+      "group": "system",
+      "params": []
+    },
+    {
+      "type": "open.url",
+      "group": "system",
+      "params": [
+        "url"
+      ]
+    },
+    {
+      "type": "custom.command",
+      "group": "system",
+      "params": [
+        "args",
+        "program",
+        "workingDir",
+        "into"
+      ]
+    },
+    {
+      "type": "custom.script",
+      "group": "system",
+      "params": [
+        "keepGoing",
+        "engine",
+        "code",
+        "workingDir",
+        "into"
+      ]
+    },
+    {
+      "type": "folder.create",
+      "group": "system",
+      "params": [
+        "path",
+        "into"
+      ]
+    },
+    {
+      "type": "catalog.create",
+      "group": "system",
+      "params": [
+        "dir",
+        "kind",
+        "name",
+        "base",
+        "bundle",
+        "bundleOut"
+      ]
+    },
+    {
+      "type": "catalog.import",
+      "group": "repo",
+      "params": [
+        "url",
+        "catType",
+        "password"
+      ]
+    },
+    {
+      "type": "catalog.entry",
+      "group": "repo",
+      "params": [
+        "mode",
+        "catType",
+        "id",
+        "json"
+      ]
+    },
+    {
+      "type": "catalog.delete",
+      "group": "repo",
+      "params": [
+        "catType"
+      ]
+    },
+    {
+      "type": "code.run",
+      "group": "logic",
+      "params": [
+        "code"
+      ]
+    },
+    {
+      "type": "repo.syncNow",
+      "group": "repo",
+      "params": [
+        "url",
+        "gameDir",
+        "modsDir",
+        "password",
+        "repoProfile",
+        "targetProfile",
+        "newProfile",
+        "backupDir",
+        "overwriteAll",
+        "deleteExtra",
+        "downloadLimit",
+        "keepZipped",
+        "into"
+      ]
+    },
+    {
+      "type": "list.set",
+      "group": "logic",
+      "params": [
+        "name",
+        "value",
+        "sep"
+      ]
+    },
+    {
+      "type": "list.push",
+      "group": "logic",
+      "params": [
+        "name",
+        "value"
+      ]
+    },
+    {
+      "type": "list.clear",
+      "group": "logic",
+      "params": [
+        "name"
+      ]
+    },
+    {
+      "type": "map.set",
+      "group": "logic",
+      "params": [
+        "name",
+        "key",
+        "value"
+      ]
+    },
+    {
+      "type": "map.get",
+      "group": "logic",
+      "params": [
+        "name",
+        "key",
+        "into"
+      ]
+    },
+    {
+      "type": "id.of",
+      "group": "logic",
+      "params": [
+        "into",
+        "kind",
+        "id"
+      ]
+    },
+    {
+      "type": "map.clear",
+      "group": "logic",
+      "params": [
+        "name"
+      ]
+    },
+    {
+      "type": "var.clear",
+      "group": "logic",
+      "params": [
+        "name"
+      ]
+    },
+    {
+      "type": "http.request",
+      "group": "system",
+      "params": [
+        "url",
+        "headers",
+        "method",
+        "body",
+        "timeoutMs",
+        "jsonPath",
+        "allowAnyStatus",
+        "into"
+      ]
+    },
+    {
+      "type": "ai.classify",
+      "group": "ai",
+      "params": [
+        "task",
+        "labels",
+        "text",
+        "path",
+        "into"
+      ]
+    },
+    {
+      "type": "ai.run_task",
+      "group": "ai",
+      "params": [
+        "task",
+        "text",
+        "path",
+        "into"
+      ]
+    },
+    {
+      "type": "ai.ask",
+      "group": "ai",
+      "params": [
+        "question",
+        "into"
+      ]
+    },
+    {
+      "type": "ai.suggest_mod_metadata",
+      "group": "ai",
+      "params": [
+        "id",
+        "into"
+      ]
+    },
+    {
+      "type": "ai.classify_mod",
+      "group": "ai",
+      "params": [
+        "id",
+        "apply",
+        "into"
+      ]
+    },
+    {
+      "type": "ai.library_check",
+      "group": "ai",
+      "params": [
+        "suggest",
+        "into"
+      ]
+    },
+    {
+      "type": "ai.crash_label",
+      "group": "ai",
+      "params": [
+        "scope",
+        "limit",
+        "into"
+      ]
+    },
+    {
+      "type": "ai.explain_crash",
+      "group": "ai",
+      "params": [
+        "allowRemote",
+        "report",
+        "into"
+      ]
+    },
+    {
+      "type": "ai.triage_report",
+      "group": "ai",
+      "params": [
+        "text",
+        "path",
+        "into"
+      ]
+    },
+    {
+      "type": "ai.status",
+      "group": "ai",
+      "params": []
+    },
+    {
+      "type": "wait.http",
+      "group": "system",
+      "params": [
+        "url",
+        "everySeconds",
+        "timeoutSeconds",
+        "status",
+        "bodyContains",
+        "stopOnTimeout"
+      ]
+    },
+    {
+      "type": "wait.hook",
+      "group": "system",
+      "params": [
+        "name",
+        "everySeconds",
+        "timeoutSeconds",
+        "stopOnTimeout"
+      ]
+    },
+    {
+      "type": "text.extract",
+      "group": "logic",
+      "params": [
+        "target",
+        "path",
+        "tailKb",
+        "source",
+        "regex",
+        "group"
+      ]
+    },
+    {
+      "type": "log.print",
+      "group": "logic",
+      "params": [
+        "message",
+        "text"
+      ]
+    },
+    {
+      "type": "data.validate",
+      "group": "logic",
+      "params": [
+        "path",
+        "text",
+        "expect",
+        "strict"
+      ]
+    },
+    {
+      "type": "file.write",
+      "group": "logic",
+      "params": [
+        "path",
+        "text",
+        "append"
+      ]
+    },
+    {
+      "type": "modlist.apply",
+      "group": "mods",
+      "params": [
+        "path",
+        "url",
+        "install",
+        "exact",
+        "passphrase",
+        "placement"
+      ]
+    },
+    {
+      "type": "game.watch",
+      "group": "apps",
+      "params": [
+        "game",
+        "mode",
+        "dir",
+        "path"
+      ]
+    },
+    {
+      "type": "plugin.asset",
+      "group": "mods",
+      "params": [
+        "pluginId",
+        "path",
+        "mode",
+        "target",
+        "dir",
+        "engine",
+        "workingDir",
+        "into"
+      ]
+    },
+    {
+      "type": "key.create",
+      "group": "repo",
+      "params": [
+        "name",
+        "kind",
+        "bindUrl"
+      ]
+    },
+    {
+      "type": "import.file",
+      "group": "system",
+      "params": [
+        "path",
+        "url",
+        "password",
+        "kind",
+        "passphrase",
+        "apply",
+        "install",
+        "exact",
+        "catType",
+        "restore",
+        "sections"
+      ]
+    },
+    {
+      "type": "catalog.follow",
+      "group": "repo",
+      "params": [
+        "catType",
+        "url",
+        "unfollow",
+        "password"
+      ]
+    },
+    {
+      "type": "webhook.send",
+      "group": "notify",
+      "params": [
+        "url",
+        "format",
+        "body",
+        "headers",
+        "secretHeaders",
+        "method",
+        "timeoutMs",
+        "allowLan",
+        "retries"
+      ]
+    },
+    {
+      "type": "discord.send",
+      "group": "notify",
+      "params": []
+    },
+    {
+      "type": "slack.send",
+      "group": "notify",
+      "params": [
+        "url",
+        "message",
+        "username",
+        "retries"
+      ]
+    },
+    {
+      "type": "feed.publish",
+      "group": "notify",
+      "params": [
+        "path",
+        "feedTitle",
+        "title",
+        "body",
+        "link",
+        "max"
+      ]
+    },
+    {
+      "type": "repos.checkFollowed",
+      "group": "repo",
+      "params": [
+        "mode",
+        "dryRun",
+        "only",
+        "notify"
+      ]
+    },
+    {
+      "type": "catalog.updates",
+      "group": "repo",
+      "params": [
+        "mode",
+        "dryRun",
+        "items",
+        "notify"
+      ]
+    },
+    {
+      "type": "repo.server",
+      "group": "repo",
+      "params": [
+        "state",
+        "dryRun",
+        "dir",
+        "port",
+        "uploadLimit",
+        "password",
+        "notify"
+      ]
+    },
+    {
+      "type": "mods.verifyIntegrity",
+      "group": "mods",
+      "params": [
+        "scope",
+        "enabledOnly",
+        "max",
+        "dryRun",
+        "notify",
+        "notifyClean"
+      ]
+    },
+    {
+      "type": "cache.clean",
+      "group": "system",
+      "params": [
+        "dryRun",
+        "targets",
+        "minMb",
+        "notify"
+      ]
+    },
+    {
+      "type": "logs.rotate",
+      "group": "system",
+      "params": [
+        "dryRun",
+        "keepDays",
+        "maxKb",
+        "notify"
+      ]
+    },
+    {
+      "type": "disk.report",
+      "group": "perf",
+      "params": [
+        "top",
+        "dryRun",
+        "write",
+        "file",
+        "notify"
+      ]
+    },
+    {
+      "type": "catalog.install",
+      "group": "repo",
+      "params": [
+        "kind",
+        "id",
+        "onFail",
+        "notify"
+      ]
+    },
+    {
+      "type": "api.call",
+      "group": "system",
+      "params": [
+        "method",
+        "path",
+        "body",
+        "anyStatus"
+      ]
+    },
+    {
+      "type": "nav.page",
+      "group": "nav",
+      "params": [
+        "page",
+        "tab",
+        "note",
+        "seconds"
+      ]
+    },
+    {
+      "type": "nav.settingsCard",
+      "group": "nav",
+      "params": [
+        "card",
+        "note",
+        "seconds"
+      ]
+    },
+    {
+      "type": "nav.item",
+      "group": "nav",
+      "params": [
+        "kind",
+        "id",
+        "note",
+        "seconds",
+        "onMissing"
+      ]
+    },
+    {
+      "type": "nav.highlight",
+      "group": "nav",
+      "params": [
+        "target",
+        "page",
+        "tab",
+        "note",
+        "seconds",
+        "waitSec",
+        "onMissing"
+      ]
+    },
+    {
+      "type": "nav.waitFor",
+      "group": "nav",
+      "params": [
+        "target",
+        "timeoutSec",
+        "onTimeout"
+      ]
+    },
+    {
+      "type": "nav.message",
+      "group": "nav",
+      "params": [
+        "title",
+        "message",
+        "target",
+        "waitOk",
+        "okLabel",
+        "seconds"
+      ]
+    },
+    {
+      "type": "nav.modal",
+      "group": "nav",
+      "params": [
+        "modal"
+      ]
+    },
+    {
+      "type": "nav.click",
+      "group": "nav",
+      "params": [
+        "control"
+      ]
+    },
+    {
+      "type": "pkg.install",
+      "group": "pkg",
+      "params": [
+        "dryRun"
+      ]
+    },
+    {
+      "type": "pkg.verify",
+      "group": "pkg",
+      "params": []
+    },
+    {
+      "type": "modlist.verify",
+      "group": "pkg",
+      "params": []
+    },
+    {
+      "type": "gate.report",
+      "group": "pkg",
+      "params": [
+        "dryRun"
+      ]
+    },
+    {
+      "type": "game.launch",
+      "group": "pkg",
+      "params": [
+        "dryRun"
+      ]
+    },
+    {
+      "type": "ui.ask",
+      "group": "notify",
+      "params": [
+        "dryRun"
+      ]
+    }
+  ],
+  "conditions": [
+    "always",
+    "all",
+    "any",
+    "value",
+    "textIs",
+    "fileContains",
+    "enumIs",
+    "profileActive",
+    "profileExists",
+    "modEnabled",
+    "modDisabled",
+    "modInstalled",
+    "modWins",
+    "fileIsValid",
+    "modpackActive",
+    "modpackInactive",
+    "allModsActive",
+    "pluginInstalled",
+    "themeActive",
+    "taskArmed",
+    "appRunning",
+    "appNotRunning",
+    "fileExists",
+    "pathIsDir",
+    "fileHash",
+    "filesMatch",
+    "fileSize",
+    "fileType",
+    "fileName",
+    "fileNewer",
+    "online",
+    "catalogOk",
+    "repoOk",
+    "timeReached",
+    "dayOfWeek",
+    "timeRange",
+    "commandSucceeds",
+    "gameRunning",
+    "resourcesPresetIs",
+    "queueIdle",
+    "aiLabel",
+    "aiScore",
+    "aiAbstained",
+    "aiAvailable",
+    "crashCause",
+    "aiLibraryCount",
+    "modAiTag"
+  ],
+  "values": [
+    "disk.read_mbps",
+    "disk.write_mbps",
+    "disk.suggested_limit",
+    "disk.free_gb",
+    "disk.free_percent",
+    "disk.total_gb",
+    "benchmark.mbps",
+    "benchmark.total_ms",
+    "update.available",
+    "lasttask.ok",
+    "lasttask.spawned",
+    "list.length",
+    "s queue (A3), read live.\n    ",
+    ",\n    // The previous action (A2): 1 or 0, and how long it took. Also {last.out} as text.\n    ",
+    ", ",
+    ",\n    // Which attempt of a task-level retry this run is (1 on the first run).\n    ",
+    ",\n    // Laya (AI): the last classification",
+    "ai.p",
+    "ai.suggestions",
+    "ai.abstained",
+    "ai.mod.tagCount",
+    "ai.mod.adult",
+    "ai.mod.adultP",
+    "ai.mod.applied",
+    "ai.mod.abstained",
+    "ai.lib.total",
+    "ai.lib.untagged",
+    "ai.lib.duplicates",
+    "ai.lib.conflicts",
+    "ai.lib.suggested",
+    "ai.lib.findings",
+    "ai.crash.count",
+    "ai.crash.unknown",
+    "ai.crash.groups",
+    "ai.crash.pending",
+    "ai.crash.p",
+    "ai.report.kindP",
+    "ai.report.areaP",
+    "ai.report.abstained",
+    "ai.enabled",
+    "ai.available",
+    "ai.installed",
+    "ai.loaded",
+    "ai.writer",
+    "ai.explain.remote",
+    "backup.bytes",
+    "order.moved",
+    "retry.attempts",
+    "valid.ok",
+    "valid.matched",
+    "valid.count",
+    "wait.ok",
+    "wait.tries",
+    "script.code",
+    "script.ok",
+    "import.count",
+    "catalog.entries",
+    "ssh.files",
+    "manifest.mods",
+    "manifest.added",
+    "manifest.removed",
+    "manifest.changed",
+    "http.status",
+    "map.size",
+    "map.hit",
+    "repos.checked",
+    "repos.updates",
+    "repos.errors",
+    "catalog.updates",
+    "catalog.done",
+    "catalog.skipped",
+    "integrity.checked",
+    "integrity.problems",
+    "cache.bytes",
+    "cache.freed",
+    "logs.rotated",
+    "logs.deleted",
+    "logs.freed",
+    "disk.used_gb",
+    "disk.profiles",
+    "server.running",
+    "s single door, and the local API.\n    ",
+    ", ",
+    ", ",
+    ",\n    // Whether the last navigation step found what it was pointed at (1/0), for a step told to\n    // carry on when its target is missing.\n    ",
+    ",\n    // Packages and games (sched-pkg.ts): the person",
+    "s answer.\n    ",
+    ", ",
+    ", ",
+    ", ",
+    ",\n    ",
+    ", ",
+    ", ",
+    ", ",
+    ", ",
+    ",\n    ",
+    ", ",
+    ", ",
+    ", "
+  ],
+  "loopSources": [
+    "enabledMods",
+    "disabledMods",
+    "mods",
+    "profiles",
+    "modpacks",
+    "themes",
+    "list",
+    "mapKeys"
+  ],
+  "keywords": [
+    "after",
+    "allow",
+    "and",
+    "app",
+    "at",
+    "branch",
+    "break",
+    "call",
+    "case",
+    "catch",
+    "clear",
+    "continue",
+    "day",
+    "default",
+    "describe",
+    "disabled",
+    "do",
+    "else",
+    "ensure",
+    "event",
+    "every",
+    "failed",
+    "feed",
+    "file",
+    "for",
+    "if",
+    "in",
+    "lan",
+    "manual",
+    "month",
+    "not",
+    "ok",
+    "on",
+    "once",
+    "or",
+    "orcontinue",
+    "parallel",
+    "poll",
+    "print",
+    "probe",
+    "repeat",
+    "retry",
+    "run",
+    "script",
+    "set",
+    "settle",
+    "shared",
+    "spawn",
+    "start",
+    "stop",
+    "switch",
+    "task",
+    "timeout",
+    "times",
+    "try",
+    "until",
+    "wait",
+    "waitfor",
+    "week",
+    "when",
+    "where",
+    "while"
+  ],
+  "permissions": [
+    "command",
+    "script",
+    "deeplink",
+    "stopProcess",
+    "delete",
+    "resources",
+    "tasks",
+    "network",
+    "ai",
+    "navigate",
+    "files"
+  ],
+  "scriptEngines": [
+    "powershell",
+    "cmd",
+    "bash",
+    "python",
+    "node",
+    "rust"
+  ]
+}

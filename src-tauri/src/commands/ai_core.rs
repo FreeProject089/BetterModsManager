@@ -1,0 +1,3329 @@
+//! Optional AI assistance ("IA optionnelle / Laya") — the half that needs nothing from the app.
+//!
+//! Mounted twice: by the app (`commands::ai_core`) and by the CLI/MCP binary
+//! (`extra_tools/mcp_server.rs` mounts this file at the same path), so it may only use external
+//! crates and `crate::commands::ai_laya` (mounted beside it in both) — no other `crate::` item.
+//! Everything that touches `AppState` lives in `commands::ai`.
+//!
+//! ## What this is, and what it is not
+//!
+//! Laya (`convaiinnovations/laya-multilingual`) is a multilingual CLASSIFIER: it picks one option
+//! from a list (`choice`), gives a calibrated P(true) for a yes/no question (`noul`) or an ordinal
+//! score. It does not write text. BMM can run it three ways: EMBEDDED (« Laya intégré », the model
+//! pack installed next to BMM or downloaded from Settings, run in-process by `ai_embedded` — no
+//! network at all), on the user's own laya-serve, or on BetterCommunity's server. So:
+//!
+//! * a **description** comes from the mod's own files (manifest, readme, entry.lua …), or — only
+//!   if the user configured one — from an OpenAI-compatible **external API** they chose;
+//! * **tags** are picked from the user's EXISTING tag vocabulary, never invented;
+//! * language and "adult content" are shown as hints, never written anywhere.
+//!
+//! ## The one rule
+//!
+//! Every function here that could reach the network starts with [`gate`]. The master switch
+//! is OFF by default (privacy defaults: opt-in), a kill switch (`--no-ai`, `BMM_NO_AI=1`) beats
+//! the file, and a provider that is not configured is not called. The tests below prove it with
+//! a transport that counts calls: with the switch off, the count stays at zero.
+//!
+//! Nothing is ever written to a mod from here: suggestions are returned, and applying them is a
+//! separate call that takes an explicit field list (see [`build_patch`]).
+
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use std::collections::HashMap;
+use std::io::Read;
+use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
+
+use regex::Regex;
+
+/// The settings file, beside data.json.
+pub const SETTINGS_FILE: &str = "ai-settings.json";
+/// DPAPI-sealed secrets (Windows). On macOS/Linux the OS keyring holds them instead.
+pub const SECRETS_FILE: &str = "ai-secrets.json";
+/// Laya's default local server (`laya-serve`, LAYA_PORT=8000).
+pub const DEFAULT_LOCAL_URL: &str = "http://127.0.0.1:8000";
+/// The local generator's default: Ollama's OpenAI-compatible endpoint (LM Studio: :1234/v1,
+/// llama.cpp server: :8080/v1).
+pub const DEFAULT_GEN_LOCAL_URL: &str = "http://127.0.0.1:11434/v1";
+/// The text sent to any provider is capped here (the BCWEB contract accepts ≤ 4000 chars).
+pub const MAX_PROVIDER_TEXT: usize = 4000;
+/// At most this many tags are asked about in one classifier pass (each is one question).
+pub const MAX_TAGS_ASKED: usize = 16;
+/// The mod editor allows three tags per mod; applying never goes beyond it.
+pub const MAX_TAGS_PER_MOD: usize = 3;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Settings
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Everything the user chose. Defaults are OFF: nothing is sent anywhere until the user turns
+/// the master switch on AND picks a provider (AND, for BetterCommunity, accepts what is sent).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct AiSettings {
+    /// Master switch. Off = no network call from any AI feature, anywhere.
+    pub enabled: bool,
+    /// Classifier provider: "off" | "embedded" | "bettercommunity" | "local".
+    pub classifier: String,
+    /// The user picked `classifier` themselves in Settings. Until they do, an installed embedded
+    /// model is the default provider (see [`effective_settings`]) — it sends nothing anywhere.
+    pub classifier_chosen: bool,
+    /// Generative provider (« Rédaction »): "off" | "local" (an OpenAI-compatible server on THIS
+    /// PC: Ollama, LM Studio, llama.cpp server; loopback only) | "external" (a remote
+    /// OpenAI-compatible API, with the user's key). It drafts descriptions and, if the user
+    /// allows it, words an answer to « Ask Laya » from the retrieved sources. Laya still ranks,
+    /// gates and abstains (see `ai_hybrid`).
+    pub generative: String,
+    /// Per-feature toggles — only meaningful while `enabled`.
+    pub mod_suggest: bool,
+    pub report_triage: bool,
+    pub description_drafts: bool,
+    /// « Ask Laya » and the library's smart search may use the embedded model to route and rank
+    /// (retrieval alone runs whatever this says: it is a local search, no AI involved).
+    pub ask: bool,
+    /// « Ask Laya » may add a WRITTEN answer from the generator, built from the retrieved sources
+    /// only and citing them. Off by default: with a remote generator the question and the sources
+    /// (mod names, file names) leave this PC.
+    pub ask_generate: bool,
+    /// The local generator's base URL (OpenAI-compatible, `/v1`) and model name. Loopback only.
+    pub gen_local_url: String,
+    pub gen_local_model: String,
+    /// The user's own `laya-serve`. Loopback only unless `local_allow_remote`.
+    pub local_url: String,
+    pub local_allow_remote: bool,
+    /// OpenAI-compatible base URL (e.g. https://api.openai.com/v1) and model name.
+    pub external_url: String,
+    pub external_model: String,
+    /// The user accepted the disclosure of what is sent to BetterCommunity.
+    pub bc_consent: bool,
+    /// Per-request timeout, clamped to 1–60 s.
+    pub timeout_ms: u64,
+    /// The installer set the master switch (informational; the switch itself is `enabled`).
+    pub installer_choice: Option<bool>,
+    /// « Réglages des réponses de Laya » (`ai_tuning`): thresholds, presets, custom labels and
+    /// tasks. Read leniently (a block that does not parse gives today's behaviour, not an
+    /// error); written only through `ai_laya_save` — the AI card's own Save keeps what is stored.
+    #[serde(deserialize_with = "crate::commands::ai_tuning::lenient")]
+    pub laya: crate::commands::ai_tuning::LayaConfig,
+}
+
+impl Default for AiSettings {
+    fn default() -> Self {
+        AiSettings {
+            enabled: false,
+            classifier: "off".into(),
+            classifier_chosen: false,
+            generative: "off".into(),
+            mod_suggest: true,
+            report_triage: true,
+            description_drafts: true,
+            ask: true,
+            ask_generate: false,
+            gen_local_url: DEFAULT_GEN_LOCAL_URL.into(),
+            gen_local_model: String::new(),
+            local_url: DEFAULT_LOCAL_URL.into(),
+            local_allow_remote: false,
+            external_url: String::new(),
+            external_model: String::new(),
+            bc_consent: false,
+            timeout_ms: 20_000,
+            installer_choice: None,
+            laya: crate::commands::ai_tuning::LayaConfig::default(),
+        }
+    }
+}
+
+impl AiSettings {
+    /// Unknown words become "off"; numbers are clamped; strings are trimmed and bounded.
+    pub fn normalized(mut self) -> Self {
+        if !matches!(self.classifier.as_str(), "off" | "embedded" | "bettercommunity" | "local") {
+            self.classifier = "off".into();
+        }
+        if !matches!(self.generative.as_str(), "off" | "local" | "external") {
+            self.generative = "off".into();
+        }
+        self.timeout_ms = self.timeout_ms.clamp(1_000, 60_000);
+        self.local_url = bounded(self.local_url.trim(), 300);
+        if self.local_url.is_empty() {
+            self.local_url = DEFAULT_LOCAL_URL.into();
+        }
+        // The generator's address as an OpenAI-compatible base: LM Studio shows its root
+        // (`http://127.0.0.1:1234`), people paste `…/v1/models`; both become `…/v1`.
+        self.gen_local_url = bounded(&normalize_gen_base(&self.gen_local_url), 300);
+        if self.gen_local_url.is_empty() {
+            self.gen_local_url = DEFAULT_GEN_LOCAL_URL.into();
+        }
+        self.gen_local_model = bounded(self.gen_local_model.trim(), 120);
+        self.external_url = bounded(&normalize_gen_base(&self.external_url), 300);
+        self.external_model = bounded(self.external_model.trim(), 120);
+        self.laya = self.laya.sanitized();
+        self
+    }
+}
+
+fn bounded(s: &str, max: usize) -> String {
+    s.chars().take(max).collect()
+}
+
+/// Read the settings. Missing or malformed → the defaults (everything off), never an error:
+/// a broken file must not be able to turn anything ON.
+pub fn load_settings(dir: &Path) -> AiSettings {
+    std::fs::read_to_string(dir.join(SETTINGS_FILE))
+        .ok()
+        .and_then(|t| serde_json::from_str::<AiSettings>(&t).ok())
+        .unwrap_or_default()
+        .normalized()
+}
+
+pub fn save_settings(dir: &Path, s: &AiSettings) -> Result<AiSettings, String> {
+    let s = s.clone().normalized();
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let text = serde_json::to_string_pretty(&s).map_err(|e| e.to_string())?;
+    let tmp = dir.join(format!("{}.tmp", SETTINGS_FILE));
+    std::fs::write(&tmp, text).map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, dir.join(SETTINGS_FILE)).map_err(|e| e.to_string())?;
+    Ok(s)
+}
+
+/// The installer's « Laya hors ligne (IA locale, aucune donnée envoyée) » box. Ticked turns the
+/// master switch on and, unless the user already chose a provider, picks the EMBEDDED one — which
+/// sends nothing anywhere; every feature still waits for the user's click. Unticked turns the
+/// master switch off. Either way the choice is remembered for the Settings screen to show.
+pub fn apply_installer_choice(dir: &Path, on: bool) -> Result<AiSettings, String> {
+    let mut s = load_settings(dir);
+    s.enabled = on;
+    s.installer_choice = Some(on);
+    if on && !s.classifier_chosen && s.classifier == "off" {
+        s.classifier = "embedded".into();
+    }
+    save_settings(dir, &s)
+}
+
+/// The settings as they apply right now: while the user has not picked a classifier, an
+/// installed embedded model is the provider (nothing leaves the machine). The master switch,
+/// the per-feature toggles and `--no-ai` are untouched — [`gate`] still decides.
+pub fn effective_settings(mut s: AiSettings, embedded_installed: bool) -> AiSettings {
+    if embedded_installed && !s.classifier_chosen && s.classifier == "off" {
+        s.classifier = "embedded".into();
+    }
+    s
+}
+
+/// `--no-ai` on the command line or `BMM_NO_AI=1` in the environment: AI is off for this run,
+/// whatever the file says. For a locked-down machine or a support session.
+pub fn kill_switch() -> bool {
+    let env = std::env::var("BMM_NO_AI")
+        .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(false);
+    env || std::env::args().any(|a| a == "--no-ai")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The gate
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Feature {
+    ModSuggest,
+    ReportTriage,
+    DescriptionDraft,
+    TestConnection,
+    /// A written answer for « Ask Laya » (the generator, from retrieved sources only).
+    AskAnswer,
+    /// A plain Laya classification of a text among labels (`ai_hybrid::classify`: scheduled
+    /// tasks, scripts, the local API). Only the in-process or the user's own Laya.
+    Classify,
+    /// « Expliquer » a crash in the crash manager: a written explanation of the masked excerpt,
+    /// only when the user configured a generator (local, or a remote one they chose).
+    CrashExplain,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Provider {
+    /// « Laya intégré »: in-process, offline. Not a network provider at all.
+    Embedded,
+    BetterCommunity,
+    Local,
+    External,
+    /// A generator on THIS PC (loopback OpenAI-compatible server): nothing leaves the machine.
+    LocalGen,
+}
+
+/// Why nothing was sent. Short, stable words the UI translates.
+pub type Blocked = &'static str;
+
+/// May `feature` reach the network, and through which provider? This is the ONLY way a
+/// provider gets chosen, so a disabled switch cannot be forgotten on one code path.
+pub fn gate(s: &AiSettings, feature: Feature, killed: bool) -> Result<Provider, Blocked> {
+    if killed {
+        return Err("killed");
+    }
+    if !s.enabled {
+        return Err("ai_off");
+    }
+    let feature_on = match feature {
+        Feature::ModSuggest => s.mod_suggest,
+        Feature::ReportTriage => s.report_triage,
+        Feature::DescriptionDraft => s.description_drafts,
+        Feature::TestConnection => true,
+        Feature::AskAnswer => s.ask_generate,
+        Feature::Classify => true,
+        Feature::CrashExplain => true,
+    };
+    if !feature_on {
+        return Err("feature_off");
+    }
+    if matches!(feature, Feature::DescriptionDraft | Feature::AskAnswer | Feature::CrashExplain) {
+        return match s.generative.as_str() {
+            "local" => Ok(Provider::LocalGen),
+            "external" => Ok(Provider::External),
+            _ => Err("no_provider"),
+        };
+    }
+    if feature == Feature::Classify && s.classifier == "bettercommunity" {
+        // A text classified for a task or a script is not sent to a server.
+        return Err("no_provider");
+    }
+    match s.classifier.as_str() {
+        "embedded" => Ok(Provider::Embedded),
+        "local" => Ok(Provider::Local),
+        "bettercommunity" if s.bc_consent => Ok(Provider::BetterCommunity),
+        "bettercommunity" => Err("no_consent"),
+        _ => Err("no_provider"),
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Endpoint validation (SSRF-ish rules)
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EndpointKind {
+    LocalLaya,
+    External,
+    BetterCommunity,
+    /// The local generator (Ollama / LM Studio / llama.cpp server): loopback, always.
+    LocalGen,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CheckedUrl {
+    pub url: String,
+    /// Set when the URL is accepted but deserves a warning ("remote").
+    pub warning: Option<&'static str>,
+}
+
+/// A literal IP, with an IPv6 that only carries an IPv4 (`::ffff:a.b.c.d` mapped, `::a.b.c.d`
+/// compatible, `64:ff9b::a.b.c.d` NAT64) read as that IPv4: `[::ffff:10.0.0.1]` IS 10.0.0.1.
+fn literal_ip(host: &str) -> Option<std::net::IpAddr> {
+    let h = host.trim_start_matches('[').trim_end_matches(']');
+    let ip: std::net::IpAddr = h.parse().ok()?;
+    Some(match ip {
+        std::net::IpAddr::V6(v6) => {
+            let s = v6.segments();
+            let o = v6.octets();
+            let v4 = std::net::Ipv4Addr::new(o[12], o[13], o[14], o[15]);
+            if let Some(m) = v6.to_ipv4_mapped() {
+                std::net::IpAddr::V4(m)
+            } else if s[..6].iter().all(|x| *x == 0) && !v6.is_loopback() && !v6.is_unspecified() {
+                std::net::IpAddr::V4(v4)
+            } else if s[0] == 0x64 && s[1] == 0xff9b && s[2..6].iter().all(|x| *x == 0) {
+                std::net::IpAddr::V4(v4)
+            } else {
+                ip
+            }
+        }
+        v4 => v4,
+    })
+}
+
+/// Loopback: the name `localhost` itself, 127.0.0.0/8, ::1 (and an IPv6 carrying 127.x).
+/// NOT `*.localhost`: that is a DNS name like any other, and a resolver may send it anywhere.
+fn host_is_loopback(host: &str) -> bool {
+    let h = host.trim_start_matches('[').trim_end_matches(']').to_ascii_lowercase();
+    if h == "localhost" {
+        return true;
+    }
+    literal_ip(&h).map(|ip| ip.is_loopback()).unwrap_or(false)
+}
+
+/// A literal IP that is private, link-local, unspecified, multicast, reserved or otherwise not
+/// the public internet (an IPv4 hidden in an IPv6 literal is judged as that IPv4).
+fn host_is_private_ip(host: &str) -> bool {
+    match literal_ip(host) {
+        Some(std::net::IpAddr::V4(v4)) => {
+            let o = v4.octets();
+            v4.is_private() || v4.is_link_local() || v4.is_unspecified() || v4.is_broadcast() || v4.is_loopback()
+                || v4.is_multicast() || v4.is_documentation()
+                || o[0] == 0
+                || o[0] == 100 && (64..128).contains(&o[1])
+                || o[0] == 192 && o[1] == 0 && o[2] == 0
+                || o[0] == 198 && (o[1] == 18 || o[1] == 19)
+                || o[0] >= 240
+        }
+        Some(std::net::IpAddr::V6(v6)) => {
+            let seg0 = v6.segments()[0];
+            v6.is_loopback() || v6.is_unspecified() || v6.is_multicast()
+                || (seg0 & 0xfe00) == 0xfc00 || (seg0 & 0xffc0) == 0xfe80 || (seg0 & 0xffc0) == 0xfec0
+        }
+        None => false,
+    }
+}
+
+/// Validate a provider URL before anything is sent to it.
+///
+/// * http(s) only; no `user:pass@`; a host is required.
+/// * Local Laya: loopback by default. A remote host needs `allow_remote` and comes back with a
+///   warning (the text leaves this PC).
+/// * External API: https, except on loopback (a local OpenAI-compatible server). A literal
+///   private / link-local IP is refused — the key would be sent there.
+/// * BetterCommunity: https to bettercommunity.ch (or a subdomain). Never loopback: the
+///   account's credential goes with it, and whatever listens on a local port is not
+///   BetterCommunity. The developer test base is [`bc_base_allowed`]'s business (https only).
+pub fn validate_url(raw: &str, kind: EndpointKind, allow_remote: bool) -> Result<CheckedUrl, String> {
+    let raw = raw.trim();
+    let url = reqwest::Url::parse(raw).map_err(|_| "ai.url.invalid".to_string())?;
+    let scheme = url.scheme();
+    if scheme != "http" && scheme != "https" {
+        return Err("ai.url.scheme".into());
+    }
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err("ai.url.userinfo".into());
+    }
+    let host = url.host_str().ok_or_else(|| "ai.url.invalid".to_string())?.to_string();
+    let loopback = host_is_loopback(&host);
+    let mut clean = url.clone();
+    clean.set_fragment(None);
+    let out = |warning| Ok(CheckedUrl { url: clean.to_string().trim_end_matches('/').to_string(), warning });
+    match kind {
+        EndpointKind::LocalLaya => {
+            if loopback {
+                out(None)
+            } else if allow_remote {
+                out(Some("remote"))
+            } else {
+                Err("ai.url.notLoopback".into())
+            }
+        }
+        EndpointKind::LocalGen => {
+            if loopback {
+                out(None)
+            } else {
+                Err("ai.url.notLoopback".into())
+            }
+        }
+        EndpointKind::External => {
+            if loopback {
+                return out(None);
+            }
+            if scheme != "https" {
+                return Err("ai.url.httpsRequired".into());
+            }
+            if host_is_private_ip(&host) {
+                return Err("ai.url.privateHost".into());
+            }
+            out(None)
+        }
+        EndpointKind::BetterCommunity => {
+            let h = host.to_ascii_lowercase();
+            if scheme == "https" && (h == "bettercommunity.ch" || h.ends_with(".bettercommunity.ch")) {
+                out(None)
+            } else {
+                Err("ai.url.notBetterCommunity".into())
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Transport
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The only door to the network. A trait so the tests can prove nobody knocked.
+pub trait Transport {
+    fn post_json(&self, url: &str, headers: &[(String, String)], body: &Value, timeout_ms: u64) -> Result<Value, String>;
+    fn get_json(&self, url: &str, headers: &[(String, String)], timeout_ms: u64) -> Result<Value, String>;
+}
+
+/// The real one: blocking reqwest, no redirects (a provider cannot bounce the request — and
+/// its Authorization header — somewhere else), responses capped at 1 MiB.
+pub struct HttpTransport;
+
+const MAX_RESPONSE: u64 = 1024 * 1024;
+
+impl HttpTransport {
+    pub(crate) fn client(timeout_ms: u64, url: &str) -> Result<reqwest::blocking::Client, String> {
+        let mut b = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_millis(timeout_ms))
+            .redirect(reqwest::redirect::Policy::none())
+            .user_agent(concat!("BetterModsManager/", env!("CARGO_PKG_VERSION"), " (ai)"));
+        // A server on this PC is reached directly: a system proxy (HTTP_PROXY, a corporate
+        // PAC) would otherwise receive the request, and its Authorization header.
+        if wants_no_proxy(url) {
+            b = b.no_proxy();
+        }
+        b.build().map_err(|e| e.to_string())
+    }
+    fn read(resp: reqwest::blocking::Response) -> Result<Value, String> {
+        let status = resp.status();
+        let mut buf = String::new();
+        resp.take(MAX_RESPONSE).read_to_string(&mut buf).map_err(|e| e.to_string())?;
+        let parsed: Option<Value> = serde_json::from_str(&buf).ok();
+        if !status.is_success() {
+            // A JSON body with `ok:false` is an answer, not a transport failure (BCWEB says why).
+            if let Some(v) = parsed.as_ref().filter(|v| v.get("ok").is_some()) {
+                return Ok(v.clone());
+            }
+            return Err(format!("http_{}", status.as_u16()));
+        }
+        parsed.ok_or_else(|| "bad_json".to_string())
+    }
+}
+
+impl Transport for HttpTransport {
+    fn post_json(&self, url: &str, headers: &[(String, String)], body: &Value, timeout_ms: u64) -> Result<Value, String> {
+        let mut rq = Self::client(timeout_ms, url)?.post(url).json(body);
+        for (k, v) in headers {
+            rq = rq.header(k.as_str(), v.as_str());
+        }
+        let resp = rq.send().map_err(|e| if e.is_timeout() { "timeout".to_string() } else { "unreachable".to_string() })?;
+        Self::read(resp)
+    }
+    fn get_json(&self, url: &str, headers: &[(String, String)], timeout_ms: u64) -> Result<Value, String> {
+        let mut rq = Self::client(timeout_ms, url)?.get(url);
+        for (k, v) in headers {
+            rq = rq.header(k.as_str(), v.as_str());
+        }
+        let resp = rq.send().map_err(|e| if e.is_timeout() { "timeout".to_string() } else { "unreachable".to_string() })?;
+        Self::read(resp)
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Secrets (API keys)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Windows: DPAPI (user scope, BMM's own entropy) into ai-secrets.json — undecryptable by another
+// account or PC. macOS/Linux: the OS keyring. When neither works the key is kept in memory for
+// this run only and NOT persisted; the UI says so. Keys are never handed back to the webview.
+
+pub const SECRET_NAMES: &[&str] = &["local_key", "external_key"];
+
+fn memory_secrets() -> &'static Mutex<HashMap<String, String>> {
+    static M: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
+    M.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+#[cfg(target_os = "windows")]
+fn dpapi(data: &[u8], protect: bool) -> Result<Vec<u8>, String> {
+    dpapi_with(data, protect, b"BetterModsManager/ai-secrets/v1")
+}
+
+/// DPAPI (user scope) with the caller's own entropy, so two stores never open each other's
+/// blobs. Also used by the BetterCommunity v2 sign-in (bc_v2_auth.rs).
+#[cfg(target_os = "windows")]
+pub(crate) fn dpapi_with(data: &[u8], protect: bool, entropy_bytes: &[u8]) -> Result<Vec<u8>, String> {
+    use windows::Win32::Foundation::{LocalFree, HLOCAL};
+    use windows::Win32::Security::Cryptography::{
+        CryptProtectData, CryptUnprotectData, CRYPTPROTECT_UI_FORBIDDEN, CRYPT_INTEGER_BLOB,
+    };
+    let input = CRYPT_INTEGER_BLOB { cbData: data.len() as u32, pbData: data.as_ptr() as *mut u8 };
+    let entropy = CRYPT_INTEGER_BLOB { cbData: entropy_bytes.len() as u32, pbData: entropy_bytes.as_ptr() as *mut u8 };
+    let mut out = CRYPT_INTEGER_BLOB::default();
+    // SAFETY: every pointer outlives the call; `out` is allocated by the API, copied, wiped and
+    // released with LocalFree.
+    unsafe {
+        let r = if protect {
+            CryptProtectData(&input, windows::core::PCWSTR::null(), Some(&entropy), None, None, CRYPTPROTECT_UI_FORBIDDEN, &mut out)
+        } else {
+            CryptUnprotectData(&input, None, Some(&entropy), None, None, CRYPTPROTECT_UI_FORBIDDEN, &mut out)
+        };
+        r.map_err(|e| format!("DPAPI: {}", e))?;
+        if out.pbData.is_null() {
+            return Err("DPAPI returned nothing".into());
+        }
+        let v = std::slice::from_raw_parts(out.pbData, out.cbData as usize).to_vec();
+        std::ptr::write_bytes(out.pbData, 0, out.cbData as usize);
+        let _ = LocalFree(HLOCAL(out.pbData as *mut core::ffi::c_void));
+        Ok(v)
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn sealed_map(dir: &Path) -> HashMap<String, String> {
+    std::fs::read_to_string(dir.join(SECRETS_FILE))
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
+}
+
+/// Where a stored key lives: "dpapi", "keychain"/"keyring", "memory" (this run only) or "" (none).
+pub fn secret_storage(dir: &Path, name: &str) -> &'static str {
+    if memory_secrets().lock().map(|m| m.contains_key(name)).unwrap_or(false) {
+        return "memory";
+    }
+    #[cfg(target_os = "windows")]
+    {
+        if sealed_map(dir).contains_key(name) {
+            return "dpapi";
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = dir;
+        if keyring::Entry::new("BetterModsManager.ai", name).ok().and_then(|e| e.get_password().ok()).is_some() {
+            return "keyring";
+        }
+    }
+    ""
+}
+
+/// The stored value as is (a bound value carries its origin, see [`seal_bound`]).
+fn get_raw(dir: &Path, name: &str) -> Option<String> {
+    if let Some(v) = memory_secrets().lock().ok().and_then(|m| m.get(name).cloned()) {
+        return Some(v);
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let hexed = sealed_map(dir).get(name)?.clone();
+        let blob = hex_decode(&hexed)?;
+        let plain = dpapi(&blob, false).ok()?;
+        String::from_utf8(plain).ok().filter(|s| !s.is_empty())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = dir;
+        keyring::Entry::new("BetterModsManager.ai", name).ok()?.get_password().ok().filter(|s| !s.is_empty())
+    }
+}
+
+/// The key alone, wherever it is bound (to mask it out of a report, never to send it).
+pub fn get_secret(dir: &Path, name: &str) -> Option<String> {
+    get_raw(dir, name).map(|r| unseal_bound(&r).1.to_string()).filter(|k| !k.is_empty())
+}
+
+/// Store (or, with an empty value, clear) a raw value. Returns where it went.
+fn store_raw(dir: &Path, name: &str, value: &str) -> Result<&'static str, String> {
+    if !SECRET_NAMES.contains(&name) {
+        return Err("ai.secret.unknown".into());
+    }
+    if value.len() > 4400 {
+        return Err("ai.secret.invalid".into());
+    }
+    if let Ok(mut m) = memory_secrets().lock() {
+        m.remove(name);
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let mut map = sealed_map(dir);
+        if value.is_empty() {
+            map.remove(name);
+        } else {
+            match dpapi(value.as_bytes(), true) {
+                Ok(blob) => {
+                    map.insert(name.to_string(), hex_encode(&blob));
+                }
+                Err(_) => {
+                    if let Ok(mut m) = memory_secrets().lock() {
+                        m.insert(name.to_string(), value.to_string());
+                    }
+                    return Ok("memory");
+                }
+            }
+        }
+        let _ = std::fs::create_dir_all(dir);
+        std::fs::write(dir.join(SECRETS_FILE), serde_json::to_string_pretty(&map).unwrap_or_default())
+            .map_err(|e| e.to_string())?;
+        Ok(if value.is_empty() { "" } else { "dpapi" })
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = dir;
+        let entry = keyring::Entry::new("BetterModsManager.ai", name).map_err(|e| e.to_string());
+        if value.is_empty() {
+            if let Ok(e) = entry {
+                let _ = e.delete_credential();
+            }
+            return Ok("");
+        }
+        match entry.and_then(|e| e.set_password(value).map_err(|e| e.to_string())) {
+            Ok(()) => Ok("keyring"),
+            Err(_) => {
+                if let Ok(mut m) = memory_secrets().lock() {
+                    m.insert(name.to_string(), value.to_string());
+                }
+                Ok("memory")
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+pub(crate) fn hex_encode(b: &[u8]) -> String {
+    b.iter().map(|x| format!("{:02x}", x)).collect()
+}
+
+#[cfg(target_os = "windows")]
+pub(crate) fn hex_decode(s: &str) -> Option<Vec<u8>> {
+    if s.len() % 2 != 0 {
+        return None;
+    }
+    (0..s.len()).step_by(2).map(|i| u8::from_str_radix(s.get(i..i + 2)?, 16).ok()).collect()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Keys bound to an origin
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Marks a stored value as « origin + key ». A key can never contain it (control characters
+/// are refused on the way in), so an old bare key and a bound one cannot be confused.
+const BOUND_MARK: char = '\u{1}';
+
+/// `scheme://host[:port]` of a URL (the port only when it is not the scheme's default).
+pub fn origin_of(url: &str) -> Option<String> {
+    let u = reqwest::Url::parse(url.trim()).ok()?;
+    let o = u.origin();
+    o.is_tuple().then(|| o.ascii_serialization())
+}
+
+pub fn seal_bound(origin: &str, key: &str) -> String {
+    format!("{}{}\n{}", BOUND_MARK, origin, key)
+}
+
+/// (origin, key) of a stored value; an old bare key has no origin.
+pub fn unseal_bound(raw: &str) -> (Option<&str>, &str) {
+    if let Some((o, k)) = raw.strip_prefix(BOUND_MARK).and_then(|r| r.split_once('\n')) {
+        return (Some(o), k);
+    }
+    (None, raw)
+}
+
+/// The URL a key belongs to under the settings `s`: `local_key` → the user's laya-serve,
+/// `external_key` → the remote generator.
+fn key_endpoint<'a>(s: &'a AiSettings, name: &str) -> Option<(&'a str, EndpointKind, bool)> {
+    match name {
+        "local_key" => Some((s.local_url.as_str(), EndpointKind::LocalLaya, s.local_allow_remote)),
+        "external_key" => Some((s.external_url.as_str(), EndpointKind::External, false)),
+        _ => None,
+    }
+}
+
+/// The origin a key for `name` may be sent to under `s`: the URL must pass its rules AND be
+/// https, or loopback (a key over plain http to another machine is readable on the way).
+pub fn key_origin_for(s: &AiSettings, name: &str) -> Result<String, String> {
+    let (url, kind, remote) = key_endpoint(s, name).ok_or_else(|| "ai.secret.unknown".to_string())?;
+    let c = validate_url(url, kind, remote)?;
+    let u = reqwest::Url::parse(&c.url).map_err(|_| "ai.url.invalid".to_string())?;
+    if u.scheme() != "https" && !u.host_str().map(host_is_loopback).unwrap_or(false) {
+        return Err("ai.key.httpRefused".into());
+    }
+    origin_of(&c.url).ok_or_else(|| "ai.url.invalid".to_string())
+}
+
+/// The key to SEND under `s`: only a bound key, only to the origin it was saved for, only over
+/// https or loopback. A bare (old-format) value is never sent from here.
+pub fn resolve_key(raw: Option<&str>, s: &AiSettings, name: &str) -> Option<String> {
+    let (origin, key) = unseal_bound(raw?);
+    let origin = origin?;
+    if key.is_empty() {
+        return None;
+    }
+    let want = key_origin_for(s, name).ok()?;
+    (origin == want).then(|| key.to_string())
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Rebind {
+    Keep,
+    Clear,
+    Rewrite(String),
+}
+
+/// What saving new settings does to a stored key: kept when its provider's origin did not
+/// change, CLEARED when it did (a key is never carried to a new server; the user types it
+/// again for the new one). An old bare key is first bound to the URL it was used with.
+pub fn rebind_plan(raw: &str, before: &AiSettings, after: &AiSettings, name: &str) -> Rebind {
+    let (origin, key) = unseal_bound(raw);
+    if key.is_empty() {
+        return Rebind::Clear;
+    }
+    let bound = match origin {
+        Some(o) => o.to_string(),
+        None => match key_origin_for(before, name) {
+            Ok(o) => o,
+            Err(_) => return Rebind::Clear,
+        },
+    };
+    match key_origin_for(after, name) {
+        Ok(now) if now == bound => {
+            if origin.is_none() {
+                Rebind::Rewrite(seal_bound(&bound, key))
+            } else {
+                Rebind::Keep
+            }
+        }
+        _ => Rebind::Clear,
+    }
+}
+
+/// Store a key typed in Settings, bound to the origin its provider has in the SAVED settings
+/// (never a URL the page passes along). Empty clears it.
+pub fn set_bound_secret(dir: &Path, name: &str, value: &str, saved: &AiSettings) -> Result<&'static str, String> {
+    let value = value.trim();
+    if value.len() > 4096 || value.chars().any(|c| c.is_control()) {
+        return Err("ai.secret.invalid".into());
+    }
+    if value.is_empty() {
+        return store_raw(dir, name, "");
+    }
+    let origin = key_origin_for(saved, name)?;
+    store_raw(dir, name, &seal_bound(&origin, value))
+}
+
+/// The key to send under `s` (see [`resolve_key`]). A key stored before keys were bound is
+/// bound here, once, to the saved URL it was used with.
+pub fn bound_key(dir: &Path, name: &str, s: &AiSettings) -> Option<String> {
+    let raw = get_raw(dir, name)?;
+    if unseal_bound(&raw).0.is_none() && !raw.is_empty() {
+        let origin = key_origin_for(s, name).ok()?;
+        let sealed = seal_bound(&origin, &raw);
+        let _ = store_raw(dir, name, &sealed);
+        return resolve_key(Some(&sealed), s, name);
+    }
+    resolve_key(Some(&raw), s, name)
+}
+
+/// Apply [`rebind_plan`] to every stored key when the settings change.
+pub fn rebind_secrets(dir: &Path, before: &AiSettings, after: &AiSettings) {
+    for name in SECRET_NAMES {
+        let Some(raw) = get_raw(dir, name) else { continue };
+        match rebind_plan(&raw, before, after, name) {
+            Rebind::Keep => {}
+            Rebind::Clear => {
+                let _ = store_raw(dir, name, "");
+            }
+            Rebind::Rewrite(v) => {
+                let _ = store_raw(dir, name, &v);
+            }
+        }
+    }
+}
+
+/// The BetterCommunity base a page may name: production (https, bettercommunity.ch or a
+/// subdomain), or the developer TEST base read from app.cfg by Rust, and then only when it is
+/// https and neither loopback nor a private address. The account key rides on this base.
+pub fn bc_base_allowed(base: &str, test_base: Option<&str>) -> Result<String, String> {
+    if let Ok(c) = validate_url(base, EndpointKind::BetterCommunity, false) {
+        return Ok(c.url);
+    }
+    let refused = || "ai.url.notBetterCommunity".to_string();
+    let tb = test_base.map(str::trim).filter(|t| !t.is_empty()).ok_or_else(refused)?;
+    let u = reqwest::Url::parse(base.trim()).map_err(|_| refused())?;
+    let host = u.host_str().unwrap_or("");
+    let same = origin_of(base).is_some() && origin_of(base) == origin_of(tb);
+    if u.scheme() == "https" && same && u.username().is_empty() && u.password().is_none() && !host_is_loopback(host) && !host_is_private_ip(host) {
+        let mut clean = u.clone();
+        clean.set_fragment(None);
+        return Ok(clean.to_string().trim_end_matches('/').to_string());
+    }
+    Err(refused())
+}
+
+/// Path endings people paste after a generator's base; stripped (repeatedly) before `/v1` is decided.
+const GEN_SUFFIXES: &[&str] = &["/chat/completions", "/completions", "/embeddings", "/models", "/api/v0", "/api/tags", "/api/chat", "/api/generate"];
+
+/// The OpenAI-compatible base (`…/v1`, no trailing slash) for an address as typed. A missing
+/// scheme is `http://`; `0.0.0.0` (what a server prints when it listens everywhere) is read as
+/// `127.0.0.1`; known endpoint paths are removed; an empty path becomes `/v1`. A URL with a query
+/// string is left as typed (some hosted APIs need theirs). Not a validation: [`validate_url`]
+/// still decides whether the address may be used.
+pub fn normalize_gen_base(raw: &str) -> String {
+    let t = raw.trim();
+    if t.is_empty() {
+        return String::new();
+    }
+    let with_scheme = if t.contains("://") { t.to_string() } else { format!("http://{}", t) };
+    let Ok(mut u) = reqwest::Url::parse(&with_scheme) else { return t.to_string() };
+    if u.scheme() != "http" && u.scheme() != "https" {
+        return t.to_string();
+    }
+    u.set_fragment(None);
+    if u.query().is_some() {
+        return u.to_string();
+    }
+    match u.host_str() {
+        Some("0.0.0.0") => {
+            let _ = u.set_host(Some("127.0.0.1"));
+        }
+        Some("[::]") => {
+            let _ = u.set_host(Some("[::1]"));
+        }
+        _ => {}
+    }
+    let mut path = u.path().trim_end_matches('/').to_string();
+    loop {
+        let lower = path.to_ascii_lowercase();
+        match GEN_SUFFIXES.iter().find(|s| lower.ends_with(*s)) {
+            Some(s) => {
+                path.truncate(path.len() - s.len());
+                path = path.trim_end_matches('/').to_string();
+            }
+            None => break,
+        }
+    }
+    if path.is_empty() {
+        path = "/v1".into();
+    }
+    u.set_path(&path);
+    u.to_string().trim_end_matches('/').to_string()
+}
+
+/// A request to a server on this PC goes around any system proxy.
+pub fn wants_no_proxy(url: &str) -> bool {
+    reqwest::Url::parse(url).ok().and_then(|u| u.host_str().map(host_is_loopback)).unwrap_or(false)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PII scrubbing — for anything that leaves the machine
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Finding {
+    /// "user_path" | "email" | "ip" | "token" | "username" | "machine"
+    pub kind: String,
+    pub count: usize,
+}
+
+struct Pii {
+    win_user: Regex,
+    unix_user: Regex,
+    email: Regex,
+    ipv4: Regex,
+    bearer: Regex,
+    github: Regex,
+    openai: Regex,
+    kv_secret: Regex,
+}
+
+fn pii() -> &'static Pii {
+    static P: OnceLock<Pii> = OnceLock::new();
+    P.get_or_init(|| Pii {
+        // C:\Users\<name>\  and  C:/Users/<name>/  (also "Documents and Settings")
+        win_user: Regex::new(r#"(?i)\b([a-z]:[\\/]+(?:users|documents and settings)[\\/]+)([^\\/\s"'<>|:*?]+)"#).expect("win_user"),
+        // /home/<name>/  and  /Users/<name>/
+        unix_user: Regex::new(r#"(/(?:home|Users)/)([^/\s"'<>]+)"#).expect("unix_user"),
+        email: Regex::new(r#"(?i)\b[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}\b"#).expect("email"),
+        // An IPv4 address that is not part of a longer dotted number (a 5-part version).
+        ipv4: Regex::new(r#"(^|[^\d.v])((?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3})($|[^\d.])"#).expect("ipv4"),
+        bearer: Regex::new(r#"(?i)\bbearer\s+[A-Za-z0-9._~+/=\-]{8,}"#).expect("bearer"),
+        github: Regex::new(r#"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b"#).expect("github"),
+        openai: Regex::new(r#"\bsk-[A-Za-z0-9_\-]{16,}\b"#).expect("openai"),
+        kv_secret: Regex::new(r#"(?i)\b((?:api[_-]?key|token|secret|password|passwd|pwd)\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s&,;]+)"#).expect("kv"),
+    })
+}
+
+/// Replace personal data with neutral markers, and report what was found (kinds and counts
+/// only — never the values). `username`/`machine` are the OS account and computer names,
+/// matched whole-word; `extra_literals` are known secrets (the app passes the ones it holds).
+pub fn scrub_pii(text: &str, username: Option<&str>, machine: Option<&str>, extra_literals: &[String]) -> (String, Vec<Finding>) {
+    let p = pii();
+    let mut found: Vec<Finding> = Vec::new();
+    let mut note = |kind: &str, n: usize| {
+        if n == 0 {
+            return;
+        }
+        if let Some(f) = found.iter_mut().find(|f| f.kind == kind) {
+            f.count += n;
+        } else {
+            found.push(Finding { kind: kind.to_string(), count: n });
+        }
+    };
+    let mut s = text.to_string();
+
+    let mut lit_n = 0;
+    for lit in extra_literals.iter().filter(|l| l.chars().count() >= 6) {
+        let n = s.matches(lit.as_str()).count();
+        if n > 0 {
+            lit_n += n;
+            s = s.replace(lit.as_str(), "<secret>");
+        }
+    }
+    note("token", lit_n);
+
+    for re in [&p.bearer, &p.github, &p.openai] {
+        let n = re.find_iter(&s).count();
+        note("token", n);
+        s = re.replace_all(&s, "<secret>").into_owned();
+    }
+    let n = p.kv_secret.find_iter(&s).count();
+    note("token", n);
+    s = p.kv_secret.replace_all(&s, "${1}<secret>").into_owned();
+
+    let n = p.win_user.find_iter(&s).count() + p.unix_user.find_iter(&s).count();
+    note("user_path", n);
+    s = p.win_user.replace_all(&s, "${1}<user>").into_owned();
+    s = p.unix_user.replace_all(&s, "${1}<user>").into_owned();
+
+    let n = p.email.find_iter(&s).count();
+    note("email", n);
+    s = p.email.replace_all(&s, "<email>").into_owned();
+
+    let mut ip_n = 0;
+    s = p
+        .ipv4
+        .replace_all(&s, |c: &regex::Captures| {
+            let ip = &c[2];
+            if ip.starts_with("127.") || ip == "0.0.0.0" {
+                return c[0].to_string();
+            }
+            ip_n += 1;
+            format!("{}<ip>{}", &c[1], &c[3])
+        })
+        .into_owned();
+    note("ip", ip_n);
+
+    for (kind, lit, marker) in [("username", username, "<user>"), ("machine", machine, "<pc>")] {
+        let Some(lit) = lit.map(str::trim).filter(|l| l.chars().count() >= 3) else { continue };
+        if let Ok(re) = Regex::new(&format!(r"(?i)\b{}\b", regex::escape(lit))) {
+            let n = re.find_iter(&s).count();
+            note(kind, n);
+            s = re.replace_all(&s, marker).into_owned();
+        }
+    }
+    (s, found)
+}
+
+/// The OS account and computer names, for [`scrub_pii`].
+pub fn os_identity() -> (Option<String>, Option<String>) {
+    let user = std::env::var("USERNAME").or_else(|_| std::env::var("USER")).ok();
+    let pc = std::env::var("COMPUTERNAME").or_else(|_| std::env::var("HOSTNAME")).ok();
+    (user, pc)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Untrusted text — prompt-injection hygiene
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// A readme, a manifest, a report, a question: all of it is DATA written by someone else. Two
+// passes, both pure:
+//   · `clean_untrusted` — what the extractor reads: invisible characters (zero-width, bidi
+//     overrides, other format controls), control characters and HTML comments go. Text a person
+//     cannot see must not steer anything.
+//   · `neutralize` — what a MODEL is given: the above, plus markdown images (an image URL is the
+//     classic exfiltration channel), links reduced to their words, HTML tags dropped, and the
+//     fence markers `<<<` / `>>>` defanged so the data can never close the block it sits in.
+
+/// True for the characters nobody sees: zero-width, joiners, bidi embeddings/overrides/isolates,
+/// the BOM, soft hyphen, word joiner and the invisible math operators.
+pub fn is_invisible(c: char) -> bool {
+    matches!(c as u32,
+        0x00AD | 0x034F | 0x061C | 0x115F | 0x1160 | 0x17B4 | 0x17B5 | 0x180E
+        | 0x200B..=0x200F | 0x202A..=0x202E | 0x2060..=0x2064 | 0x2066..=0x206F
+        | 0x3164 | 0xFE00..=0xFE0F | 0xFEFF | 0xFFA0 | 0xFFF9..=0xFFFB | 0xE0000..=0xE007F)
+}
+
+fn html_comment_re() -> &'static Regex {
+    static R: OnceLock<Regex> = OnceLock::new();
+    R.get_or_init(|| Regex::new(r"(?s)<!--.*?(?:-->|$)").expect("html comment"))
+}
+
+/// Invisible and control characters out (newlines and tabs stay), HTML comments out.
+pub fn clean_untrusted(text: &str) -> String {
+    let s: String = text
+        .chars()
+        .filter(|c| !is_invisible(*c) && (!c.is_control() || *c == '\n' || *c == '\t' || *c == '\r'))
+        .collect();
+    html_comment_re().replace_all(&s, " ").into_owned()
+}
+
+/// What a model may be given: [`clean_untrusted`], then no images, links as words, no HTML
+/// tags, no fence markers. Idempotent.
+pub fn neutralize(text: &str) -> String {
+    static IMG: OnceLock<Regex> = OnceLock::new();
+    static LINK: OnceLock<Regex> = OnceLock::new();
+    static TAG: OnceLock<Regex> = OnceLock::new();
+    let img = IMG.get_or_init(|| Regex::new(r"!\[[^\]]*\]\([^)]*\)").expect("img"));
+    let link = LINK.get_or_init(|| Regex::new(r"\[([^\]]*)\]\([^)]*\)").expect("link"));
+    let tag = TAG.get_or_init(|| Regex::new(r"</?[A-Za-z][^>]{0,200}>").expect("tag"));
+    let s = clean_untrusted(text);
+    let s = img.replace_all(&s, "");
+    let s = link.replace_all(&s, "$1");
+    let s = tag.replace_all(&s, " ");
+    s.replace("<<<", "‹‹‹").replace(">>>", "›››")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Deterministic extraction
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// One proposed value for one field. `applicable: false` = a hint only (language, adult
+/// content): BMM has no such field on a mod, so it is shown and never written.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Suggestion {
+    /// "name" | "version" | "author" | "description" | "tags" | "links" | "language" | "nsfw"
+    pub field: String,
+    /// String for scalar fields; a tag id for "tags"; {url,label,link_type} for "links".
+    pub value: Value,
+    /// "file" | "folder" | "laya" | "bettercommunity" | "api"
+    pub source: String,
+    /// Where exactly: "README.md", "entry.lua", "folder name", the provider…
+    pub origin: String,
+    /// 0..1. For a file, how reliable that kind of file is; for a model, its own probability.
+    pub confidence: f32,
+    pub applicable: bool,
+    /// Extra words for the UI ("draft", the tag's name…).
+    #[serde(default)]
+    pub note: String,
+    /// The best guess kept although it failed the user's threshold or margin
+    /// (« Réglages des réponses » → abstain: flag). Shown as such, never auto-applied.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub uncertain: bool,
+}
+
+/// What the mod currently says — to skip suggestions that change nothing.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ModFacts {
+    pub name: String,
+    pub version: String,
+    pub author: String,
+    pub description: String,
+    pub tags: Vec<String>,
+    pub links: Vec<String>,
+    /// The mod's folder or archive on disk.
+    pub path: PathBuf,
+}
+
+/// The user's tag vocabulary: (id, name).
+pub type Vocab = Vec<(String, String)>;
+
+/// Everything the extractor read, kept for the classifier/generative passes.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct Extracted {
+    pub suggestions: Vec<Suggestion>,
+    /// Plain-text excerpts (readme paragraph, manifest description) that describe the mod.
+    pub excerpts: Vec<String>,
+    /// Relative file names seen (capped).
+    pub files: Vec<String>,
+    /// Which metadata files were found.
+    pub sources_read: Vec<String>,
+    /// Every file read or listed, with its kind, encoding and size.
+    pub sources: Vec<SourceInfo>,
+}
+
+/// Largest manifest read (a manifest cut in half does not parse, so a bigger one is skipped).
+const MAX_FILE_BYTES: u64 = 256 * 1024;
+/// A readme / changelog / text file: its first 64 KiB (the head is where the facts are).
+const MAX_TEXT_BYTES: u64 = 64 * 1024;
+/// Everything read for one mod, all files together.
+const MAX_TOTAL_BYTES: u64 = 1024 * 1024;
+/// Files read for one mod, and among them « other » .md/.txt files.
+const MAX_FILES_READ: usize = 24;
+const MAX_GENERIC_FILES: usize = 4;
+const MAX_WALK: usize = 4000;
+
+/// What a file is to the extractor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum FileKind {
+    /// mod.json, modinfo, descriptor.mod, About.xml, fomod/info.xml, mod.toml, entry.lua …
+    Manifest,
+    Readme,
+    /// VERSION, version.txt, version.md (version.json is a manifest).
+    Version,
+    /// CHANGELOG*, CHANGES*, HISTORY*, release notes, patch notes.
+    Changelog,
+    /// Another .md / .txt / .nfo at the top of the mod (not a licence, not a log).
+    Text,
+}
+
+impl FileKind {
+    pub fn label(self) -> &'static str {
+        match self {
+            FileKind::Manifest => "manifest",
+            FileKind::Readme => "readme",
+            FileKind::Version => "version",
+            FileKind::Changelog => "changelog",
+            FileKind::Text => "text",
+        }
+    }
+    fn cap(self) -> u64 {
+        if self == FileKind::Manifest { MAX_FILE_BYTES } else { MAX_TEXT_BYTES }
+    }
+}
+
+/// Which files are worth reading, by their path inside the mod (`/`-separated). Two folders deep
+/// at most; « other » text files only at the top or one folder down.
+pub fn classify_file(rel: &str) -> Option<FileKind> {
+    let rel = rel.trim_start_matches("./");
+    let depth = rel.matches('/').count();
+    if depth > 2 {
+        return None;
+    }
+    let base = rel.rsplit('/').next().unwrap_or("").to_lowercase();
+    const MANIFESTS: &[&str] = &[
+        "mod.json", "modinfo.json", "manifest.json", "info.json", "bmm-mod.json", "metadata.json", "version.json",
+        "descriptor.mod", "about.xml", "modinfo.xml", "info.xml", "manifest.xml", "mod.info",
+        "mod.toml", "manifest.toml", "mod.yml", "mod.yaml", "manifest.yml", "manifest.yaml", "entry.lua",
+    ];
+    if MANIFESTS.contains(&base.as_str()) {
+        return Some(FileKind::Manifest);
+    }
+    let (stem, ext) = match base.rsplit_once('.') {
+        Some((s, e)) => (s.to_string(), e.to_string()),
+        None => (base.clone(), String::new()),
+    };
+    let texty = ext.is_empty() || matches!(ext.as_str(), "md" | "txt" | "markdown" | "rst" | "nfo");
+    if !texty {
+        return None;
+    }
+    let starts = |list: &[&str]| list.iter().any(|p| stem.starts_with(p));
+    if starts(&["readme", "read me", "read_me", "read-me", "lisezmoi", "lisez-moi", "leeme", "liesmich", "leggimi"]) {
+        return Some(FileKind::Readme);
+    }
+    if starts(&["changelog", "change log", "change_log", "changes", "history", "release notes", "release_notes", "releasenotes", "patchnotes", "patch notes", "patch_notes", "whatsnew", "what's new"]) {
+        return Some(FileKind::Changelog);
+    }
+    if stem == "version" {
+        return Some(FileKind::Version);
+    }
+    if ext.is_empty() || depth > 1 {
+        return None;
+    }
+    const SKIP: &[&str] = &["license", "licence", "copying", "eula", "notice", "thirdparty", "third_party", "third-party", "requirements", "cmakelists", "robots", "log", "output", "debug", "crash", "dxdiag"];
+    if starts(SKIP) {
+        return None;
+    }
+    Some(FileKind::Text)
+}
+
+/// Bytes → text, and which encoding it was: a BOM (UTF-8, UTF-16 LE/BE), UTF-16 without one
+/// (every other byte zero), valid UTF-8, else Windows-1252 (what an old Windows editor saved).
+pub fn decode_text(bytes: &[u8]) -> (String, &'static str) {
+    fn utf16(b: &[u8], le: bool) -> String {
+        let units: Vec<u16> = b.chunks_exact(2).map(|c| if le { u16::from_le_bytes([c[0], c[1]]) } else { u16::from_be_bytes([c[0], c[1]]) }).collect();
+        String::from_utf16_lossy(&units)
+    }
+    fn cp1252(b: u8) -> char {
+        const HI: [u16; 32] = [
+            0x20AC, 0xFFFD, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021, 0x02C6, 0x2030, 0x0160, 0x2039, 0x0152, 0xFFFD, 0x017D, 0xFFFD,
+            0xFFFD, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014, 0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0xFFFD, 0x017E, 0x0178,
+        ];
+        if (0x80..0xA0).contains(&b) { char::from_u32(HI[(b - 0x80) as usize] as u32).unwrap_or('\u{FFFD}') } else { b as char }
+    }
+    if let Some(rest) = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]) {
+        return (String::from_utf8_lossy(rest).into_owned(), "utf-8-bom");
+    }
+    if let Some(rest) = bytes.strip_prefix(&[0xFF, 0xFE]) {
+        return (utf16(rest, true), "utf-16le");
+    }
+    if let Some(rest) = bytes.strip_prefix(&[0xFE, 0xFF]) {
+        return (utf16(rest, false), "utf-16be");
+    }
+    let n = bytes.len().min(512) / 2 * 2;
+    if n >= 4 {
+        let half = n / 2;
+        let zero_odd = (1..n).step_by(2).filter(|&i| bytes[i] == 0).count();
+        let zero_even = (0..n).step_by(2).filter(|&i| bytes[i] == 0).count();
+        if zero_odd * 10 >= half * 7 && zero_even * 10 <= half {
+            return (utf16(bytes, true), "utf-16le");
+        }
+        if zero_even * 10 >= half * 7 && zero_odd * 10 <= half {
+            return (utf16(bytes, false), "utf-16be");
+        }
+    }
+    match std::str::from_utf8(bytes) {
+        Ok(s) => (s.to_string(), "utf-8"),
+        // Cut at the size cap in the middle of a character: still UTF-8.
+        Err(e) if e.error_len().is_none() => (String::from_utf8_lossy(&bytes[..e.valid_up_to()]).into_owned(), "utf-8"),
+        Err(_) => (bytes.iter().map(|&b| cp1252(b)).collect(), "windows-1252"),
+    }
+}
+
+/// One file the extractor looked at: what it is, how it was decoded, how much was read.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct SourceInfo {
+    pub file: String,
+    /// "manifest" | "readme" | "version" | "changelog" | "text"
+    pub kind: String,
+    /// "utf-8" | "utf-8-bom" | "utf-16le" | "utf-16be" | "windows-1252"; "" when listed only.
+    pub encoding: String,
+    /// Bytes read (at most the cap for its kind).
+    pub bytes: u64,
+    /// Seen inside a 7z / rar archive: its name is known, its content is not read.
+    #[serde(default)]
+    pub listed_only: bool,
+}
+
+/// What [`gather_detailed`] found.
+#[derive(Debug, Clone, Default)]
+pub struct Gathered {
+    /// (relative path, decoded and cleaned text), manifests first, shallow first.
+    pub texts: Vec<(String, String)>,
+    /// Every file name seen (capped), sorted.
+    pub names: Vec<String>,
+    pub sources: Vec<SourceInfo>,
+}
+
+/// Read the metadata-bearing files of a mod folder, or of a .zip mod (7z/rar: names only,
+/// passed in `extra_names` by the caller that can list them), with the detail of every file read: its kind, its encoding, its size. Caps: 256 KiB
+/// per manifest, the first 64 KiB of a text file, 24 files and 1 MiB in all, four « other »
+/// text files. Every text goes through [`clean_untrusted`] before anything parses it.
+pub fn gather_detailed(root: &Path, extra_names: &[String]) -> Gathered {
+    // (rel, kind, size, where): where = a path on disk, or an index in the zip.
+    enum At {
+        Disk(PathBuf),
+        Zip(usize),
+    }
+    let mut cands: Vec<(String, FileKind, u64, At)> = Vec::new();
+    let mut names: Vec<String> = extra_names.iter().take(MAX_WALK).cloned().collect();
+    let is_zip = root.extension().and_then(|e| e.to_str()).map(|e| e.eq_ignore_ascii_case("zip")).unwrap_or(false);
+    if root.is_dir() {
+        let mut stack = vec![(root.to_path_buf(), 0usize)];
+        let mut seen = 0usize;
+        'walk: while let Some((dir, depth)) = stack.pop() {
+            let Ok(rd) = std::fs::read_dir(&dir) else { continue };
+            for e in rd.flatten() {
+                seen += 1;
+                if seen > MAX_WALK {
+                    break 'walk;
+                }
+                let p = e.path();
+                let rel = p.strip_prefix(root).map(|r| r.to_string_lossy().replace('\\', "/")).unwrap_or_default();
+                let Ok(ft) = e.file_type() else { continue };
+                if ft.is_symlink() {
+                    continue;
+                }
+                if ft.is_dir() {
+                    if depth < 2 {
+                        stack.push((p, depth + 1));
+                    }
+                    continue;
+                }
+                names.push(rel.clone());
+                if let Some(kind) = classify_file(&rel) {
+                    let size = e.metadata().map(|m| m.len()).unwrap_or(0);
+                    cands.push((rel, kind, size, At::Disk(p)));
+                }
+            }
+        }
+    } else if is_zip {
+        if let Ok(f) = std::fs::File::open(root) {
+            if let Ok(mut z) = zip::ZipArchive::new(f) {
+                for i in 0..z.len().min(MAX_WALK) {
+                    let Ok(entry) = z.by_index(i) else { continue };
+                    if entry.is_dir() {
+                        continue;
+                    }
+                    let rel = entry.name().replace('\\', "/");
+                    if rel.contains("..") {
+                        continue;
+                    }
+                    names.push(rel.clone());
+                    if let Some(kind) = classify_file(&rel) {
+                        cands.push((rel, kind, entry.size(), At::Zip(i)));
+                    }
+                }
+            }
+        }
+    }
+    // Manifests first, then readmes, version files, changelogs, other text; shallow first.
+    cands.sort_by(|a, b| (a.1, a.0.matches('/').count(), a.0.to_lowercase()).cmp(&(b.1, b.0.matches('/').count(), b.0.to_lowercase())));
+    let mut texts: Vec<(String, String)> = Vec::new();
+    let mut sources: Vec<SourceInfo> = Vec::new();
+    let mut total = 0u64;
+    let mut generic = 0usize;
+    let mut zip = if is_zip { std::fs::File::open(root).ok().and_then(|f| zip::ZipArchive::new(f).ok()) } else { None };
+    for (rel, kind, size, at) in cands {
+        if texts.len() >= MAX_FILES_READ || total >= MAX_TOTAL_BYTES {
+            break;
+        }
+        if kind == FileKind::Manifest && size > MAX_FILE_BYTES {
+            continue;
+        }
+        if kind == FileKind::Text {
+            if generic >= MAX_GENERIC_FILES {
+                continue;
+            }
+            generic += 1;
+        }
+        let cap = kind.cap().min(MAX_TOTAL_BYTES - total);
+        let mut buf = Vec::new();
+        let ok = match at {
+            At::Disk(p) => std::fs::File::open(&p).and_then(|f| f.take(cap).read_to_end(&mut buf)).is_ok(),
+            At::Zip(i) => match zip.as_mut().and_then(|z| z.by_index(i).ok()) {
+                Some(entry) => entry.take(cap).read_to_end(&mut buf).is_ok(),
+                None => false,
+            },
+        };
+        if !ok || buf.is_empty() {
+            continue;
+        }
+        total += buf.len() as u64;
+        let (text, encoding) = decode_text(&buf);
+        sources.push(SourceInfo { file: rel.clone(), kind: kind.label().into(), encoding: encoding.into(), bytes: buf.len() as u64, listed_only: false });
+        texts.push((rel, clean_untrusted(&text)));
+    }
+    // 7z / rar: what the metadata files are called is known, not what they say.
+    for n in extra_names.iter().take(MAX_WALK) {
+        if let Some(kind) = classify_file(n) {
+            if sources.len() < 40 {
+                sources.push(SourceInfo { file: n.clone(), kind: kind.label().into(), encoding: String::new(), bytes: 0, listed_only: true });
+            }
+        }
+    }
+    names.sort();
+    names.dedup();
+    Gathered { texts, names, sources }
+}
+
+struct Rx {
+    kv_quoted: Regex,
+    desc_tags: Regex,
+    quoted: Regex,
+    xml_tag: Regex,
+    xml_value: Regex,
+    lua_field: Regex,
+    url: Regex,
+    md_link: Regex,
+    md_noise: Regex,
+    author_line: Regex,
+    version_line: Regex,
+    version_in_name: Regex,
+    author_prefix: Regex,
+    kv_line: Regex,
+    tag_line: Regex,
+    changelog_ver: Regex,
+    fomod_element: Regex,
+}
+
+fn rx() -> &'static Rx {
+    static R: OnceLock<Rx> = OnceLock::new();
+    R.get_or_init(|| Rx {
+        kv_quoted: Regex::new(r#"(?m)^\s*([A-Za-z_]+)\s*=\s*"([^"]*)""#).expect("kv"),
+        desc_tags: Regex::new(r#"(?s)\btags\s*=\s*\{([^}]*)\}"#).expect("desc_tags"),
+        quoted: Regex::new(r#""([^"]+)""#).expect("quoted"),
+        xml_tag: Regex::new(r#"(?is)<(name|author|description|url|modversion|packageid|version|website)>\s*(.*?)\s*</"#).expect("xml_tag"),
+        xml_value: Regex::new(r#"(?i)<(name|displayname|author|version|description|website)\s+value\s*=\s*"([^"]*)""#).expect("xml_value"),
+        lua_field: Regex::new(r#"(?m)\b(displayName|developerName|version|info|shortName)\s*=\s*_?\(?\s*"([^"]+)""#).expect("lua_field"),
+        url: Regex::new(r#"https?://[^\s<>()\[\]"'`]+"#).expect("url"),
+        md_link: Regex::new(r#"!?\[([^\]]*)\]\([^)]*\)"#).expect("md_link"),
+        md_noise: Regex::new(r#"(\*\*|__|`|~~|<[^>]+>)"#).expect("md_noise"),
+        author_line: Regex::new(r#"(?im)^\s*[*\-]?\s*(?:author|authors|auteur|auteurs|autor|made by|created by|cr[ée]{1,2} par|developer|d[ée]veloppeur)\s*[:：\-]\s*(.{2,60})$"#).expect("author_line"),
+        version_line: Regex::new(r#"(?im)^\s*[*\-]?\s*(?:version|ver\.?)\s*[:：\-]?\s*v?(\d+(?:\.\d+){1,3}[A-Za-z0-9.\-]*)\s*$"#).expect("version_line"),
+        version_in_name: Regex::new(r#"(?i)(?:^|[\s_\-(\[])v?(\d+(?:\.\d+){1,3}[a-z]?)(?:[\s_\-)\]]|$)"#).expect("version_in_name"),
+        author_prefix: Regex::new(r#"^\[([^\]]{2,40})\]\s*"#).expect("author_prefix"),
+        // `key = "value"` (TOML, mod.info), `key: value` (YAML): one line, top-level or not.
+        kv_line: Regex::new(r#"(?m)^[ \t]*([A-Za-z_][A-Za-z0-9_\-]*)[ \t]*[:=][ \t]*(?:"([^"\n]*)"|'([^'\n]*)'|([^\n#]*?))[ \t]*$"#).expect("kv_line"),
+        // « Tags: a, b » / « Keywords: » / « Catégorie : » in a readme or a text file.
+        tag_line: Regex::new(r#"(?im)^[ \t]*[*\-]?[ \t]*(?:tags|keywords|categories|category|cat[ée]gories?|mots[ -]cl[ée]s)[ \t]*[:：][ \t]*(.{2,200})$"#).expect("tag_line"),
+        // The first release a changelog lists: « ## [1.2.0] - 2024-01-01 », « v1.2 (…) », « Version 1.2.0 ».
+        changelog_ver: Regex::new(r#"(?im)^[ \t]*(?:#{1,4}[ \t]*)?(?:version[ \t]+|ver\.?[ \t]*)?\[?v?(\d+(?:\.\d+){1,3}(?:-[A-Za-z0-9.]+)?)\]?(?:[ \t]*[-:(\x{2013}]|[ \t]*$)"#).expect("changelog_ver"),
+        // FOMOD info.xml: <Groups><element>Weapons</element></Groups>.
+        fomod_element: Regex::new(r#"(?i)<element>\s*([^<]{2,40}?)\s*</element>"#).expect("fomod_element"),
+    })
+}
+
+fn clean_text(s: &str) -> String {
+    let r = rx();
+    let s = r.md_link.replace_all(s, "$1");
+    let s = r.md_noise.replace_all(&s, "");
+    s.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// The first real paragraph of a readme: skips headings, badges, images, rules and HTML.
+pub fn first_paragraph(readme: &str) -> Option<String> {
+    let mut para: Vec<&str> = Vec::new();
+    for line in readme.lines() {
+        let t = line.trim();
+        let noise = t.starts_with('#') || t.starts_with("![") || t.starts_with("[![") || t.starts_with('<')
+            || t.starts_with("---") || t.starts_with("===") || t.starts_with("```") || t.starts_with('|')
+            || t.starts_with('>') && t.len() < 3;
+        if t.is_empty() {
+            if !para.is_empty() {
+                let joined = clean_text(&para.join(" "));
+                if joined.chars().count() >= 25 {
+                    return Some(joined.chars().take(600).collect());
+                }
+                para.clear();
+            }
+            continue;
+        }
+        if noise {
+            if !para.is_empty() {
+                let joined = clean_text(&para.join(" "));
+                if joined.chars().count() >= 25 {
+                    return Some(joined.chars().take(600).collect());
+                }
+                para.clear();
+            }
+            continue;
+        }
+        para.push(t);
+    }
+    let joined = clean_text(&para.join(" "));
+    (joined.chars().count() >= 25).then(|| joined.chars().take(600).collect())
+}
+
+fn link_type(url: &str) -> &'static str {
+    if url.contains("github.com/") {
+        "github"
+    } else {
+        "other"
+    }
+}
+
+fn useful_link(url: &str) -> bool {
+    let l = url.to_ascii_lowercase();
+    // The extension of the PATH: `p.png?d=secret` is an image (and a tracking pixel) too.
+    let path = l.split(['?', '#']).next().unwrap_or(&l);
+    let is_image = [".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".bmp"].iter().any(|x| path.ends_with(x));
+    // A host with no dot is a placeholder or a markdown artefact, not a place to send anyone.
+    let host_ok = l.split("//").nth(1).and_then(|r| r.split('/').next()).map(|h| h.contains('.')).unwrap_or(false);
+    host_ok && !is_image && !l.contains("shields.io") && !l.contains("badge") && l.len() <= 300
+}
+
+fn norm(s: &str) -> String {
+    s.chars()
+        .map(|c| match c {
+            'à' | 'á' | 'â' | 'ä' | 'ã' | 'å' => 'a',
+            'ç' => 'c',
+            'è' | 'é' | 'ê' | 'ë' => 'e',
+            'ì' | 'í' | 'î' | 'ï' => 'i',
+            'ñ' => 'n',
+            'ò' | 'ó' | 'ô' | 'ö' | 'õ' => 'o',
+            'ù' | 'ú' | 'û' | 'ü' => 'u',
+            c => c,
+        })
+        .collect::<String>()
+        .to_lowercase()
+}
+
+/// Rough language guess from stop-words (and scripts). Good enough for a hint, which is all
+/// it is: BMM has no language field on a mod.
+pub fn detect_language(text: &str) -> Option<(&'static str, f32)> {
+    let cyr = text.chars().filter(|c| ('\u{0400}'..='\u{04FF}').contains(c)).count();
+    let cjk = text.chars().filter(|c| ('\u{4E00}'..='\u{9FFF}').contains(c)).count();
+    let kana = text.chars().filter(|c| ('\u{3040}'..='\u{30FF}').contains(c)).count();
+    let letters = text.chars().filter(|c| c.is_alphabetic()).count().max(1);
+    if kana * 10 > letters {
+        return Some(("ja", 0.8));
+    }
+    if cjk * 5 > letters {
+        return Some(("zh", 0.7));
+    }
+    if cyr * 3 > letters {
+        return Some(("ru", 0.7));
+    }
+    // Stop-words, and words or letters that belong to ONE of the languages (« la » is French
+    // and Spanish and Italian; « ñ », « ł », « ß », « não » are not). Measured on the eval set:
+    // the Laya checkpoint is NOT a language identifier (37 % right on mods' prose, about chance
+    // over ten languages), so this detector is the language hint — Laya is not asked.
+    const SW: &[(&str, &[&str])] = &[
+        ("en", &["the", "and", "is", "this", "with", "for", "you", "of", "to", "it", "adds", "new", "your", "from", "requires", "known", "into", "at", "night"]),
+        ("fr", &["le", "la", "les", "et", "est", "une", "des", "pour", "avec", "ce", "du", "vous", "dans", "sur", "au", "aux", "nouvelles", "nouveaux", "puis", "nuit", "clignote", "nécessite", "problème"]),
+        ("de", &["der", "die", "und", "ist", "das", "mit", "für", "nicht", "ein", "eine", "sie", "den", "im", "zu", "auf", "neue", "nachts"]),
+        ("es", &["el", "los", "las", "y", "es", "una", "para", "con", "por", "que", "del", "en", "requiere", "última", "noche", "nuevo", "nuevos"]),
+        ("it", &["il", "gli", "e", "è", "una", "per", "con", "che", "della", "non", "sono", "di", "nella", "nel", "richiede", "notte", "nuovi", "nuove"]),
+        ("pt", &["o", "os", "as", "e", "é", "uma", "para", "com", "que", "não", "do", "da", "na", "requer", "noite", "novos"]),
+        ("pl", &["i", "w", "z", "na", "się", "nie", "do", "jest", "dla", "oraz", "wymaga", "nocy", "włącz", "po"]),
+    ];
+    const LETTERS: &[(&str, &[char])] = &[
+        ("es", &['ñ', '¿', '¡']),
+        ("pt", &['ã', 'õ']),
+        ("pl", &['ł', 'ś', 'ż', 'ź', 'ą', 'ę', 'ń', 'ć']),
+        ("de", &['ß']),
+        ("fr", &['ê', 'œ', 'û']),
+    ];
+    let words: Vec<String> = text
+        .split(|c: char| !c.is_alphabetic())
+        .filter(|w| !w.is_empty())
+        .map(|w| w.to_lowercase())
+        .collect();
+    let lower = text.to_lowercase();
+    let mut score: Vec<(&'static str, f32)> = SW.iter().map(|(c, list)| (*c, words.iter().filter(|w| list.contains(&w.as_str())).count() as f32)).collect();
+    for (code, chars) in LETTERS {
+        let n = lower.chars().filter(|c| chars.contains(c)).count() as f32;
+        if let Some(s) = score.iter_mut().find(|(c, _)| c == code) {
+            s.1 += (n * 1.5).min(4.5);
+        }
+    }
+    let total: f32 = score.iter().map(|(_, n)| n).sum();
+    let (code, n) = score.iter().cloned().fold(("", 0.0f32), |a, b| if b.1 > a.1 { b } else { a });
+    // Enough evidence: two points, or one point in a text of four words or fewer.
+    let enough = n >= 2.0 || (n >= 1.0 && words.len() <= 4 && words.len() >= 2);
+    if code.is_empty() || !enough || total <= 0.0 || words.len() < 2 {
+        return None;
+    }
+    let share = n / total;
+    // A near-tie between two languages is no hint at all.
+    if share < 0.45 {
+        return None;
+    }
+    Some((code, share.clamp(0.3, 0.9)))
+}
+
+fn push(out: &mut Vec<Suggestion>, field: &str, value: Value, source: &str, origin: &str, confidence: f32) {
+    out.push(Suggestion {
+        field: field.into(),
+        value,
+        source: source.into(),
+        origin: origin.into(),
+        confidence,
+        applicable: true,
+        note: String::new(), uncertain: false,
+    });
+}
+
+/// Pull name / version / author / description / links / raw tags out of the files.
+/// Pure: `texts` are (relative path, content) pairs, as [`gather`] returns them.
+pub fn extract_from_texts(texts: &[(String, String)], folder_name: &str) -> (Vec<Suggestion>, Vec<String>, Vec<String>, Vec<String>) {
+    let r = rx();
+    let mut out: Vec<Suggestion> = Vec::new();
+    let mut excerpts: Vec<String> = Vec::new();
+    let mut raw_tags: Vec<String> = Vec::new();
+    let mut read: Vec<String> = Vec::new();
+
+    for (rel, content) in texts {
+        let base = rel.rsplit('/').next().unwrap_or("").to_ascii_lowercase();
+        let origin = rel.as_str();
+        if base.ends_with(".json") {
+            let Ok(v) = serde_json::from_str::<Value>(content.trim_start_matches('\u{feff}')) else { continue };
+            read.push(rel.clone());
+            let s = |k: &str| v.get(k).and_then(|x| x.as_str()).map(str::trim).filter(|x| !x.is_empty()).map(str::to_string);
+            if let Some(n) = s("name").or_else(|| s("title")).or_else(|| s("displayName")) {
+                push(&mut out, "name", json!(n), "file", origin, 0.9);
+            }
+            if let Some(n) = s("version") {
+                push(&mut out, "version", json!(n), "file", origin, 0.9);
+            }
+            let author = s("author").or_else(|| {
+                let a = v.get("authors").or_else(|| v.get("author"))?;
+                let list: Vec<String> = a
+                    .as_array()?
+                    .iter()
+                    .filter_map(|x| x.as_str().map(str::to_string).or_else(|| x.get("name").and_then(|n| n.as_str()).map(str::to_string)))
+                    .collect();
+                (!list.is_empty()).then(|| list.join(", "))
+            }).or_else(|| v.get("author").and_then(|a| a.get("name")).and_then(|n| n.as_str()).map(str::to_string));
+            if let Some(a) = author {
+                push(&mut out, "author", json!(a), "file", origin, 0.9);
+            }
+            if let Some(d) = s("description").or_else(|| s("summary")) {
+                let d = clean_text(&d);
+                excerpts.push(d.clone());
+                push(&mut out, "description", json!(d), "file", origin, 0.85);
+            }
+            for k in ["tags", "keywords", "categories"] {
+                if let Some(a) = v.get(k).and_then(|x| x.as_array()) {
+                    raw_tags.extend(a.iter().filter_map(|x| x.as_str().map(str::to_string)));
+                }
+            }
+            for k in ["url", "homepage", "website", "repository", "source"] {
+                let u = v.get(k).and_then(|x| x.as_str().map(str::to_string).or_else(|| x.get("url").and_then(|u| u.as_str()).map(str::to_string)));
+                if let Some(u) = u.filter(|u| u.starts_with("http://") || u.starts_with("https://")) {
+                    push(&mut out, "links", json!({ "url": u, "label": k, "link_type": link_type(&u) }), "file", origin, 0.85);
+                }
+            }
+        } else if base == "descriptor.mod" {
+            read.push(rel.clone());
+            for c in r.kv_quoted.captures_iter(content) {
+                let (k, val) = (c[1].to_ascii_lowercase(), c[2].trim().to_string());
+                if val.is_empty() {
+                    continue;
+                }
+                match k.as_str() {
+                    "name" => push(&mut out, "name", json!(val), "file", origin, 0.9),
+                    "version" => push(&mut out, "version", json!(val), "file", origin, 0.9),
+                    "remote_file_id" if val.chars().all(|c| c.is_ascii_digit()) => {
+                        let u = format!("https://steamcommunity.com/sharedfiles/filedetails/?id={}", val);
+                        push(&mut out, "links", json!({ "url": u, "label": "Steam Workshop", "link_type": "other" }), "file", origin, 0.9)
+                    }
+                    _ => {}
+                }
+            }
+            if let Some(c) = r.desc_tags.captures(content) {
+                raw_tags.extend(r.quoted.captures_iter(&c[1]).map(|q| q[1].to_string()));
+            }
+        } else if base.ends_with(".xml") {
+            read.push(rel.clone());
+            for c in r.xml_tag.captures_iter(content) {
+                let val = clean_text(&c[2]);
+                if val.is_empty() {
+                    continue;
+                }
+                match c[1].to_ascii_lowercase().as_str() {
+                    "name" => push(&mut out, "name", json!(val), "file", origin, 0.85),
+                    "author" => push(&mut out, "author", json!(val), "file", origin, 0.85),
+                    "modversion" | "version" if val.chars().count() <= 30 && val.chars().any(|c| c.is_ascii_digit()) => push(&mut out, "version", json!(val), "file", origin, 0.85),
+                    "description" => {
+                        let d: String = val.chars().take(1500).collect();
+                        excerpts.push(d.clone());
+                        push(&mut out, "description", json!(d), "file", origin, 0.8)
+                    }
+                    "url" | "website" if val.starts_with("http") => push(&mut out, "links", json!({ "url": val, "label": "Website", "link_type": link_type(&val) }), "file", origin, 0.8),
+                    _ => {}
+                }
+            }
+            if base == "info.xml" {
+                // FOMOD: the author's own categories.
+                raw_tags.extend(r.fomod_element.captures_iter(content).take(10).map(|c| c[1].trim().to_string()));
+            }
+            for c in r.xml_value.captures_iter(content) {
+                let val = c[2].trim().to_string();
+                if val.is_empty() {
+                    continue;
+                }
+                match c[1].to_ascii_lowercase().as_str() {
+                    "name" | "displayname" => push(&mut out, "name", json!(val), "file", origin, 0.85),
+                    "author" => push(&mut out, "author", json!(val), "file", origin, 0.85),
+                    "version" => push(&mut out, "version", json!(val), "file", origin, 0.85),
+                    "description" => {
+                        excerpts.push(val.clone());
+                        push(&mut out, "description", json!(val), "file", origin, 0.8)
+                    }
+                    "website" if val.starts_with("http") => push(&mut out, "links", json!({ "url": val, "label": "Website", "link_type": link_type(&val) }), "file", origin, 0.8),
+                    _ => {}
+                }
+            }
+        } else if base == "entry.lua" {
+            read.push(rel.clone());
+            for c in r.lua_field.captures_iter(content) {
+                let val = c[2].trim().to_string();
+                match &c[1] {
+                    "displayName" => push(&mut out, "name", json!(val), "file", origin, 0.9),
+                    "developerName" => push(&mut out, "author", json!(val), "file", origin, 0.9),
+                    "version" => push(&mut out, "version", json!(val), "file", origin, 0.9),
+                    "info" => {
+                        excerpts.push(val.clone());
+                        push(&mut out, "description", json!(val), "file", origin, 0.75)
+                    }
+                    _ => {}
+                }
+            }
+        } else if base.ends_with(".toml") || base.ends_with(".yml") || base.ends_with(".yaml") || base == "mod.info" {
+            // mod.toml (Forge), mod.yml, mod.info: `key = "value"` / `key: value`, first one wins.
+            read.push(rel.clone());
+            let mut done: Vec<&str> = Vec::new();
+            for c in r.kv_line.captures_iter(content) {
+                let key = c[1].to_ascii_lowercase();
+                let val = c.get(2).or_else(|| c.get(3)).or_else(|| c.get(4)).map(|m| m.as_str().trim()).unwrap_or("");
+                // Unfilled build placeholders (${file.jarVersion}), multi-line openers (''' / |).
+                if val.is_empty() || val.contains("${") || val.starts_with("'''") || val == "|" || val == ">" {
+                    continue;
+                }
+                let field = match key.as_str() {
+                    "name" | "title" | "displayname" | "display_name" => "name",
+                    "version" | "modversion" | "mod_version" => "version",
+                    "author" | "authors" | "credits" => "author",
+                    "description" | "summary" => "description",
+                    "homepage" | "url" | "website" | "displayurl" | "display_url" | "repository" | "source" | "sources" => "links",
+                    _ => continue,
+                };
+                if done.contains(&field) {
+                    continue;
+                }
+                done.push(field);
+                let val = val.trim_matches(['[', ']']).split(',').map(|x| x.trim().trim_matches(['"', '\''])).filter(|x| !x.is_empty()).collect::<Vec<_>>().join(", ");
+                match field {
+                    "links" if val.starts_with("http://") || val.starts_with("https://") => push(&mut out, "links", json!({ "url": val, "label": key, "link_type": link_type(&val) }), "file", origin, 0.8),
+                    "links" => {}
+                    "version" if val.chars().count() > 30 || !val.chars().any(|c| c.is_ascii_digit()) => {}
+                    "description" => {
+                        let d = clean_text(&val);
+                        excerpts.push(d.clone());
+                        push(&mut out, "description", json!(d), "file", origin, 0.8)
+                    }
+                    f => push(&mut out, f, json!(val), "file", origin, 0.85),
+                }
+            }
+        } else {
+            let kind = classify_file(rel);
+            read.push(rel.clone());
+            match kind {
+                Some(FileKind::Version) => {
+                    if let Some(line) = content.lines().map(str::trim).find(|l| !l.is_empty()) {
+                        if line.chars().count() <= 30 && line.chars().any(|c| c.is_ascii_digit()) {
+                            push(&mut out, "version", json!(line.trim_start_matches(['v', 'V'])), "file", origin, 0.8);
+                        }
+                    }
+                }
+                Some(FileKind::Changelog) => {
+                    // The first release it lists is the newest one (a date is not a version).
+                    let head: String = content.lines().take(80).collect::<Vec<_>>().join("\n");
+                    let v = r.changelog_ver.captures_iter(&head).map(|c| c[1].to_string()).find(|v| {
+                        let first: u32 = v.split('.').next().and_then(|x| x.parse().ok()).unwrap_or(0);
+                        !(first >= 1900 && v.matches('.').count() >= 2)
+                    });
+                    if let Some(v) = v {
+                        push(&mut out, "version", json!(v), "file", origin, 0.6);
+                    }
+                }
+                _ => {
+                    // readme / lisezmoi, or another text file (weaker, and a description only
+                    // when its name says it describes the mod).
+                    let text_file = kind == Some(FileKind::Text);
+                    let stem = base.split('.').next().unwrap_or("");
+                    let describes = !text_file || matches!(stem, "about" | "description" | "desc" | "info" | "modinfo" | "mod" | "a propos" | "apropos");
+                    let k = if text_file { 0.8 } else { 1.0 };
+                    if describes {
+                        if let Some(p) = first_paragraph(content) {
+                            excerpts.push(p.clone());
+                            push(&mut out, "description", json!(p), "file", origin, if text_file { 0.45 } else { 0.6 });
+                        }
+                    }
+                    if let Some(c) = r.author_line.captures(content) {
+                        push(&mut out, "author", json!(clean_text(&c[1])), "file", origin, 0.7 * k);
+                    }
+                    if let Some(c) = r.version_line.captures(content) {
+                        push(&mut out, "version", json!(c[1].to_string()), "file", origin, 0.7 * k);
+                    }
+                    for c in r.tag_line.captures_iter(content).take(3) {
+                        raw_tags.extend(c[1].split([',', ';', '|', '/']).map(|x| clean_text(x).trim_matches(['#', '.', ' ']).to_string()).filter(|x| (2..=40).contains(&x.chars().count())).take(10));
+                    }
+                    let mut n = 0;
+                    for m in r.url.find_iter(content) {
+                        let u = m.as_str().trim_end_matches(['.', ',', ';', ':', '!', '?']).to_string();
+                        // A Markdown image target (`![alt](url)`) is never a page to send anyone to.
+                        let before = &content[..m.start()];
+                        let is_img_target = before.ends_with("](") && before.rfind("![").map(|i| !before[i..].contains('\n')).unwrap_or(false);
+                        if is_img_target || !useful_link(&u) {
+                            continue;
+                        }
+                        push(&mut out, "links", json!({ "url": u, "label": "", "link_type": link_type(&u) }), "file", origin, 0.5 * k);
+                        n += 1;
+                        if n >= 5 {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // The folder (or archive) name: the weakest source, but often the only one.
+    if !folder_name.trim().is_empty() {
+        let stem = folder_name.trim();
+        let stem = stem.strip_suffix(".zip").or_else(|| stem.strip_suffix(".7z")).or_else(|| stem.strip_suffix(".rar")).unwrap_or(stem);
+        let mut rest = stem.to_string();
+        if let Some(c) = r.author_prefix.captures(stem) {
+            push(&mut out, "author", json!(c[1].trim()), "folder", "folder name", 0.4);
+            rest = stem[c.get(0).map(|m| m.end()).unwrap_or(0)..].to_string();
+        }
+        if let Some(c) = r.version_in_name.captures(&rest) {
+            push(&mut out, "version", json!(c[1].to_string()), "folder", "folder name", 0.45);
+            let at = c.get(0).map(|m| m.start()).unwrap_or(rest.len());
+            rest = rest[..at].to_string();
+        }
+        let pretty = rest.replace(['_', '.'], " ").split_whitespace().collect::<Vec<_>>().join(" ");
+        if pretty.chars().count() >= 3 && pretty != stem {
+            push(&mut out, "name", json!(pretty), "folder", "folder name", 0.35);
+        }
+    }
+    (out, excerpts, raw_tags, read)
+}
+
+/// Tag ids whose name appears (whole word) in the text, or equals a tag the manifest declares.
+pub fn match_vocab(vocab: &Vocab, text: &str, raw_tags: &[String]) -> Vec<Suggestion> {
+    let hay = format!(" {} ", norm(text).split(|c: char| !c.is_alphanumeric()).filter(|w| !w.is_empty()).collect::<Vec<_>>().join(" "));
+    let declared: Vec<String> = raw_tags.iter().map(|t| norm(t.trim())).collect();
+    let mut out = Vec::new();
+    for (id, name) in vocab {
+        let n = norm(name.trim());
+        if n.chars().count() < 3 {
+            continue;
+        }
+        let words = n.split(|c: char| !c.is_alphanumeric()).filter(|w| !w.is_empty()).collect::<Vec<_>>().join(" ");
+        let (conf, origin) = if declared.contains(&n) {
+            (0.85, "manifest tags")
+        } else if !words.is_empty() && hay.contains(&format!(" {} ", words)) {
+            (0.5, "text match")
+        } else {
+            continue;
+        };
+        out.push(Suggestion {
+            field: "tags".into(),
+            value: json!(id),
+            source: "file".into(),
+            origin: origin.into(),
+            confidence: conf,
+            applicable: true,
+            note: name.clone(), uncertain: false,
+        });
+    }
+    out
+}
+
+fn same(a: &str, b: &str) -> bool {
+    a.trim().eq_ignore_ascii_case(b.trim())
+}
+
+/// Drop what changes nothing, keep the best source per scalar field, one row per tag/link.
+pub fn finalize(mut list: Vec<Suggestion>, facts: &ModFacts) -> Vec<Suggestion> {
+    list.retain(|s| match s.field.as_str() {
+        "name" => s.value.as_str().map(|v| !v.trim().is_empty() && !same(v, &facts.name)).unwrap_or(false),
+        "version" => s.value.as_str().map(|v| !v.trim().is_empty() && !same(v.trim_start_matches(['v', 'V']), facts.version.trim_start_matches(['v', 'V']))).unwrap_or(false),
+        "author" => s.value.as_str().map(|v| !v.trim().is_empty() && !same(v, &facts.author)).unwrap_or(false),
+        "description" => s.value.as_str().map(|v| v.trim().chars().count() >= 10 && !same(v, &facts.description)).unwrap_or(false),
+        "tags" => s.value.as_str().map(|id| !facts.tags.iter().any(|t| t == id)).unwrap_or(false),
+        "links" => s.value.get("url").and_then(|u| u.as_str()).map(|u| !facts.links.iter().any(|l| l.trim_end_matches('/') == u.trim_end_matches('/'))).unwrap_or(false),
+        _ => true,
+    });
+    // Best first, then dedupe on (field, value): the first of each is kept.
+    list.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap_or(std::cmp::Ordering::Equal));
+    let mut seen: Vec<(String, String)> = Vec::new();
+    let mut out: Vec<Suggestion> = Vec::new();
+    let mut scalar_count: HashMap<String, usize> = HashMap::new();
+    for s in list {
+        let key_val = match s.field.as_str() {
+            "links" => s.value.get("url").and_then(|u| u.as_str()).unwrap_or("").trim_end_matches('/').to_ascii_lowercase(),
+            _ => s.value.as_str().map(|v| v.trim().to_ascii_lowercase()).unwrap_or_else(|| s.value.to_string()),
+        };
+        let key = (s.field.clone(), key_val);
+        if seen.contains(&key) {
+            continue;
+        }
+        // Scalar fields: at most two alternatives (the best, and one runner-up to choose from).
+        if matches!(s.field.as_str(), "name" | "version" | "author" | "description" | "language" | "nsfw") {
+            let n = scalar_count.entry(s.field.clone()).or_insert(0);
+            if *n >= 2 {
+                continue;
+            }
+            *n += 1;
+        }
+        seen.push(key);
+        out.push(s);
+    }
+    let order = |f: &str| ["name", "version", "author", "description", "tags", "links", "language", "nsfw"].iter().position(|x| *x == f).unwrap_or(99);
+    out.sort_by(|a, b| order(&a.field).cmp(&order(&b.field)).then(b.confidence.partial_cmp(&a.confidence).unwrap_or(std::cmp::Ordering::Equal)));
+    out
+}
+
+/// The whole deterministic pass for one mod. No network, ever.
+pub fn extract(facts: &ModFacts, vocab: &Vocab, extra_names: &[String]) -> Extracted {
+    let g = gather_detailed(&facts.path, extra_names);
+    let (texts, names) = (g.texts, g.names);
+    let folder = facts.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let (mut sugg, excerpts, raw_tags, read) = extract_from_texts(&texts, &folder);
+    let text_for_tags = format!("{} {} {}", facts.name, facts.description, excerpts.join(" "));
+    sugg.extend(match_vocab(vocab, &text_for_tags, &raw_tags));
+    let lang_text = if excerpts.is_empty() { facts.description.clone() } else { excerpts.join(" ") };
+    if let Some((code, conf)) = detect_language(&lang_text) {
+        sugg.push(Suggestion {
+            field: "language".into(),
+            value: json!(code),
+            source: "file".into(),
+            origin: "text".into(),
+            confidence: conf,
+            applicable: false,
+            note: String::new(), uncertain: false,
+        });
+    }
+    Extracted {
+        suggestions: finalize(sugg, facts),
+        excerpts,
+        files: names.into_iter().take(200).collect(),
+        sources_read: read,
+        sources: g.sources,
+    }
+}
+
+/// The text a provider is given about a mod: name, author, the excerpts, some file names —
+/// scrubbed of personal data and capped. Returned so the UI can show EXACTLY what is sent.
+pub fn provider_text(facts: &ModFacts, ex: &Extracted) -> String {
+    let mut s = String::new();
+    if !facts.name.is_empty() {
+        s.push_str(&format!("Name: {}\n", facts.name));
+    }
+    if !facts.author.is_empty() {
+        s.push_str(&format!("Author: {}\n", facts.author));
+    }
+    if !facts.description.trim().is_empty() {
+        s.push_str(&format!("Description: {}\n", facts.description.trim()));
+    }
+    for e in ex.excerpts.iter().take(3) {
+        s.push_str(&format!("Excerpt: {}\n", e));
+    }
+    if !ex.files.is_empty() {
+        let files: Vec<&str> = ex.files.iter().take(40).map(String::as_str).collect();
+        s.push_str(&format!("Files: {}\n", files.join(", ")));
+    }
+    let (user, pc) = os_identity();
+    // Untrusted: whatever the readme says, a model reads it as data (no hidden text, no image
+    // URLs, no fence it could close).
+    let (clean, _) = scrub_pii(&neutralize(&s), user.as_deref(), pc.as_deref(), &[]);
+    clean.chars().take(MAX_PROVIDER_TEXT).collect()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Providers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// How BMM proves who it is to BetterCommunity: the base URL (validated) and the headers
+/// (a Bearer API key read in Rust and/or the creator-proof headers the frontend computed).
+#[derive(Debug, Clone, Default)]
+pub struct BcAuth {
+    pub base: String,
+    pub headers: Vec<(String, String)>,
+}
+
+/// One Laya question as BMM builds it: (id, "choice" | "noul" | "score", instructions,
+/// criteria in order).
+pub type LayaQuestion<'a> = (String, &'a str, String, Vec<(String, String)>);
+
+/// The embedded engine (`ai_embedded::Embedded` in the app and the CLI; a fake in the tests).
+/// Answers in laya-serve's response shape, so one parser reads both.
+pub trait LocalModel {
+    fn available(&self) -> bool;
+    fn predict(&self, state_text: &str, questions: &[LayaQuestion]) -> Result<Value, String>;
+}
+
+pub struct Ctx<'a> {
+    pub settings: &'a AiSettings,
+    pub transport: &'a dyn Transport,
+    /// The embedded engine, when this binary has one. `None` → the embedded provider is absent.
+    pub local_model: Option<&'a dyn LocalModel>,
+    pub killed: bool,
+    pub local_key: Option<String>,
+    pub external_key: Option<String>,
+    pub bc: Option<BcAuth>,
+}
+
+/// A readable one-word reason out of a provider failure (for the UI and the MCP result).
+pub fn short_reason(e: &str) -> String {
+    e.chars().take(80).collect()
+}
+
+fn laya_url(ctx: &Ctx) -> Result<String, String> {
+    let u = validate_url(&ctx.settings.local_url, EndpointKind::LocalLaya, ctx.settings.local_allow_remote)?;
+    Ok(if u.url.ends_with("/v1/systemone") { u.url } else { format!("{}/v1/systemone", u.url) })
+}
+
+/// Ask Laya: in-process when the provider is the embedded engine (no request of any kind),
+/// otherwise the user's laya-serve over HTTP.
+pub fn ask_laya(ctx: &Ctx, provider: Provider, text: &str, qs: &[LayaQuestion]) -> Result<Value, String> {
+    match provider {
+        Provider::Embedded => {
+            let m = ctx.local_model.filter(|m| m.available()).ok_or_else(|| "embedded:absent".to_string())?;
+            m.predict(text, qs)
+        }
+        _ => {
+            let url = laya_url(ctx)?;
+            let started = std::time::Instant::now();
+            let r = ctx.transport.post_json(&url, &laya_headers(ctx), &laya_body(text, qs), ctx.settings.timeout_ms);
+            record_laya_call("laya", started.elapsed().as_millis() as u64, qs.len(), r.as_ref().err().map(|e| e.as_str()));
+            r
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Recent Laya calls (the debug menu's « Laya » panel)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// A small in-memory ring, never written to disk, never sent anywhere. One row per model call:
+// which feature asked (a fixed word from `laya_scope`), the provider, the latency, how many
+// questions, and — when the caller noted it — the decision. NO text: not the question, not
+// the report, not a label the user typed (`note_decision` only keeps a label from BMM's own
+// fixed vocabularies; anything else is recorded as accepted / guess / abstained).
+
+/// How many calls the ring keeps.
+pub const LAYA_CALLS_KEPT: usize = 50;
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct LayaCall {
+    pub seq: u64,
+    /// Unix milliseconds.
+    pub at: u64,
+    pub feature: &'static str,
+    /// "embedded" | "laya" (the user's own laya-serve).
+    pub provider: &'static str,
+    pub ms: u64,
+    pub questions: usize,
+    pub ok: bool,
+    /// A short reason code on failure ("embedded:absent", "laya:timeout"), never a message body.
+    pub error: Option<String>,
+    /// The accepted label when it comes from a fixed BMM vocabulary, else None.
+    pub decision: Option<String>,
+    pub abstained: Option<bool>,
+    pub uncertain: Option<bool>,
+}
+
+fn laya_calls() -> &'static Mutex<std::collections::VecDeque<LayaCall>> {
+    static R: OnceLock<Mutex<std::collections::VecDeque<LayaCall>>> = OnceLock::new();
+    R.get_or_init(|| Mutex::new(std::collections::VecDeque::with_capacity(LAYA_CALLS_KEPT)))
+}
+
+static LAYA_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+thread_local! {
+    static LAYA_SCOPE: std::cell::Cell<&'static str> = const { std::cell::Cell::new("") };
+    static LAYA_LAST: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// While the guard lives, Laya calls made on this thread are recorded under `feature`.
+pub struct LayaScope(&'static str);
+
+impl Drop for LayaScope {
+    fn drop(&mut self) {
+        let prev = self.0;
+        LAYA_SCOPE.with(|s| s.set(prev));
+    }
+}
+
+/// Name the feature for the calls this thread makes until the guard drops (nested: innermost wins).
+pub fn laya_scope(feature: &'static str) -> LayaScope {
+    let prev = LAYA_SCOPE.with(|s| s.replace(feature));
+    LayaScope(prev)
+}
+
+/// A provider error as a short code: the first two `:`-separated words, bounded.
+pub fn short_code(e: &str) -> String {
+    let mut parts = e.splitn(3, ':');
+    let a = parts.next().unwrap_or("");
+    let code = match parts.next() {
+        Some(b) => format!("{}:{}", a, b.split_whitespace().next().unwrap_or("")),
+        None => a.split_whitespace().next().unwrap_or("").to_string(),
+    };
+    code.chars().filter(|c| c.is_ascii_alphanumeric() || matches!(c, ':' | '_' | '-' | '.')).take(40).collect()
+}
+
+/// Record one model call (the embedded engine and the laya-serve request both end here).
+pub fn record_laya_call(provider: &'static str, ms: u64, questions: usize, error: Option<&str>) {
+    let feature = LAYA_SCOPE.with(|s| s.get());
+    let seq = LAYA_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+    let at = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
+    let row = LayaCall {
+        seq,
+        at,
+        feature: if feature.is_empty() { "other" } else { feature },
+        provider,
+        ms,
+        questions,
+        ok: error.is_none(),
+        error: error.map(short_code),
+        decision: None,
+        abstained: None,
+        uncertain: None,
+    };
+    LAYA_LAST.with(|l| l.set(seq));
+    if let Ok(mut q) = laya_calls().lock() {
+        if q.len() >= LAYA_CALLS_KEPT {
+            q.pop_front();
+        }
+        q.push_back(row);
+    }
+}
+
+/// The decision taken on this thread's last call. `label` is kept only when it is one of
+/// `vocabulary` (BMM's fixed labels); a user-defined label is never recorded.
+pub fn note_decision(label: Option<&str>, vocabulary: &[&str], abstained: bool, uncertain: bool) {
+    let seq = LAYA_LAST.with(|l| l.get());
+    if seq == 0 {
+        return;
+    }
+    if let Ok(mut q) = laya_calls().lock() {
+        if let Some(row) = q.iter_mut().rev().find(|r| r.seq == seq) {
+            row.decision = label.filter(|l| vocabulary.contains(l) || *l == "none").map(str::to_string);
+            row.abstained = Some(abstained);
+            row.uncertain = Some(uncertain);
+        }
+    }
+}
+
+/// The last calls, newest first. (Unused by the CLI/MCP binary, which mounts this file too.)
+#[allow(dead_code)]
+pub fn recent_laya_calls(n: usize) -> Vec<LayaCall> {
+    laya_calls().lock().map(|q| q.iter().rev().take(n).cloned().collect()).unwrap_or_default()
+}
+
+/// Forget the recorded calls (the debug panel's « Clear »).
+#[allow(dead_code)]
+pub fn clear_laya_calls() {
+    if let Ok(mut q) = laya_calls().lock() {
+        q.clear();
+    }
+}
+
+/// A Laya failure as a note: the embedded engine's reasons already say "embedded:…".
+pub fn laya_note(provider: Provider, e: &str) -> String {
+    if e.starts_with("embedded:") {
+        short_reason(e)
+    } else if provider == Provider::Embedded {
+        format!("embedded:{}", short_reason(e))
+    } else {
+        format!("laya:{}", short_reason(e))
+    }
+}
+
+fn laya_headers(ctx: &Ctx) -> Vec<(String, String)> {
+    ctx.local_key.as_ref().filter(|k| !k.is_empty()).map(|k| vec![("Authorization".to_string(), format!("Bearer {}", k))]).unwrap_or_default()
+}
+
+/// Build Laya's request body. `questions` are (id, type, instructions, criteria).
+pub fn laya_body(text: &str, questions: &[(String, &str, String, Vec<(String, String)>)]) -> Value {
+    let mut q = serde_json::Map::new();
+    for (id, kind, instr, criteria) in questions {
+        let mut o = serde_json::Map::new();
+        o.insert("type".into(), json!(kind));
+        o.insert("instructions".into(), json!(instr));
+        if !criteria.is_empty() {
+            let c: serde_json::Map<String, Value> = criteria.iter().map(|(k, v)| (k.clone(), json!(v))).collect();
+            o.insert("criteria".into(), Value::Object(c));
+        }
+        q.insert(id.clone(), Value::Object(o));
+    }
+    json!({ "state": { "body": text }, "questions": Value::Object(q) })
+}
+
+/// Read one answer out of Laya's response, whatever shape the version answers in:
+/// a bare label, a bare probability, or an object carrying either (+ probabilities).
+pub fn laya_answer(resp: &Value, id: &str) -> (Option<String>, Option<f64>, Option<f64>) {
+    let a = resp.get("answers").and_then(|a| a.get(id)).cloned().unwrap_or(Value::Null);
+    let conf = resp
+        .get("answer_confidence")
+        .and_then(|c| c.get(id))
+        .and_then(|c| c.as_f64().or_else(|| c.get("confidence").and_then(|x| x.as_f64())))
+        .or_else(|| resp.get("confidence").and_then(|c| c.get(id)).and_then(|c| c.as_f64()));
+    match a {
+        Value::String(s) => (Some(s), None, conf),
+        Value::Number(n) => (None, n.as_f64(), conf),
+        Value::Bool(b) => (None, Some(if b { 1.0 } else { 0.0 }), conf),
+        Value::Object(o) => {
+            let choice = ["choice", "answer", "label", "value"].iter().find_map(|k| o.get(*k).and_then(|v| v.as_str()).map(str::to_string));
+            // `noul` is where laya-serve (and the embedded engine) put P(true) for a yes/no
+            // question; without it every tag answer from a real server read as "no answer".
+            let p = ["noul", "p", "prob", "probability", "p_true", "value", "score"].iter().find_map(|k| o.get(*k).and_then(|v| v.as_f64()));
+            let c2 = o.get("answer_confidence").or_else(|| o.get("confidence")).and_then(|v| v.as_f64()).or(conf);
+            (choice, p, c2)
+        }
+        _ => (None, None, conf),
+    }
+}
+
+const LANGS: &[(&str, &str)] = &[
+    ("en", "English"), ("fr", "French"), ("de", "German"), ("es", "Spanish"), ("it", "Italian"),
+    ("pt", "Portuguese"), ("ru", "Russian"), ("pl", "Polish"), ("zh", "Chinese"), ("ja", "Japanese"),
+];
+
+fn bc_suggest(ctx: &Ctx, task: &str, text: &str, options: &[String]) -> Result<Value, String> {
+    let bc = ctx.bc.as_ref().ok_or_else(|| "not_signed_in".to_string())?;
+    // The base was checked by the caller (`bc_base_allowed`); https is required here again.
+    if !bc.base.starts_with("https://") {
+        return Err("ai.url.notBetterCommunity".into());
+    }
+    let url = format!("{}/api/ai/bmm/suggest", bc.base.trim_end_matches('/').trim_end_matches("/api"));
+    let body = json!({ "task": task, "text": text.chars().take(MAX_PROVIDER_TEXT).collect::<String>(), "options": options });
+    let v = ctx.transport.post_json(&url, &bc.headers, &body, ctx.settings.timeout_ms)?;
+    if v.get("ok").and_then(|o| o.as_bool()) == Some(true) {
+        Ok(v.get("result").cloned().unwrap_or(Value::Null))
+    } else {
+        Err(v.get("reason").and_then(|r| r.as_str()).unwrap_or("unavailable").to_string())
+    }
+}
+
+/// Classifier pass for one mod: tags from the user's vocabulary, language, adult content.
+/// Returns suggestions and human-readable notes (a provider error is a note, not a failure:
+/// the deterministic suggestions stand on their own).
+#[cfg_attr(not(test), allow(dead_code))]
+pub fn classify_mod(ctx: &Ctx, text: &str, vocab: &Vocab) -> (Vec<Suggestion>, Vec<String>) {
+    classify_mod_in(ctx, text, vocab, crate::commands::ai_tuning::Area::ModSuggest)
+}
+
+/// [`classify_mod`] with the answer settings of `area` (« Suggestions » for one mod, or
+/// « Analyser la bibliothèque »).
+pub fn classify_mod_in(ctx: &Ctx, text: &str, vocab: &Vocab, area: crate::commands::ai_tuning::Area) -> (Vec<Suggestion>, Vec<String>) {
+    use crate::commands::ai_tuning as tu;
+    let tune = ctx.settings.laya.resolve(area);
+    let _scope = laya_scope(area.key());
+    let provider = match gate(ctx.settings, Feature::ModSuggest, ctx.killed) {
+        Ok(p) => p,
+        Err(why) => return (Vec::new(), vec![format!("classifier:{}", why)]),
+    };
+    let asked: Vec<&(String, String)> = vocab.iter().filter(|(_, n)| !n.trim().is_empty()).take(MAX_TAGS_ASKED).collect();
+    let mut out = Vec::new();
+    let mut notes = Vec::new();
+    match provider {
+        Provider::Local | Provider::Embedded => {
+            if provider == Provider::Local {
+                if let Err(e) = laya_url(ctx) {
+                    return (out, vec![format!("laya:{}", e)]);
+                }
+            }
+            let (source, origin) = if provider == Provider::Embedded { ("laya", "Laya (embedded)") } else { ("laya", "laya (local)") };
+            // « Laya v2 » (commands/ai_laya.rs): keyword evidence picks the candidates, each is
+            // asked with a descriptive criterion (a yes/no each + one choice among them), the
+            // votes are combined and nothing under the calibrated threshold is suggested.
+            let names: Vec<String> = asked.iter().map(|(_, n)| n.clone()).collect();
+            let lex = crate::commands::ai_laya::lexical_tag_scores(text, &names);
+            let cands = crate::commands::ai_laya::tag_candidates(&names, &lex, crate::commands::ai_laya::MAX_CHOICE);
+            // The user's descriptions / examples / wording for their tags, when they wrote some
+            // (« Réglages des réponses »); otherwise exactly the questions above.
+            let mut qs: Vec<LayaQuestion> = tu::tag_questions(&ctx.settings.laya, &names, &cands);
+            qs.push(crate::commands::ai_laya::nsfw_question());
+            match ask_laya(ctx, provider, text, &qs) {
+                Ok(resp) => {
+                    let choice = tu::averaged(&resp, "tags_choice", &crate::commands::ai_laya::choice_probs);
+                    let noul: Vec<Option<f64>> = cands.iter().map(|i| crate::commands::ai_laya::noul_p(&resp, &format!("tag_{}", i))).collect();
+                    let combined = crate::commands::ai_laya::combine_tag_votes(&names, &cands, &lex, &noul, &choice);
+                    // Threshold, temperature, margin, max per mod: the user's (« Équilibré » =
+                    // `pick_tags` exactly). A mod still holds at most three tags.
+                    let mut t = tune.clone();
+                    t.max_labels = t.max_labels.min(MAX_TAGS_PER_MOD as u32);
+                    let scores: Vec<(String, f64)> = combined.iter().map(|(i, p)| (i.to_string(), *p)).collect();
+                    let d = tu::decide_independent(&scores, &t);
+                    for s in &d.labels {
+                        let Some(i) = s.id.parse::<usize>().ok().filter(|i| *i < asked.len()) else { continue };
+                        let (id, name) = asked[i];
+                        out.push(Suggestion { field: "tags".into(), value: json!(id), source: source.into(), origin: origin.into(), confidence: s.p.min(1.0) as f32, applicable: true, note: name.clone(), uncertain: d.uncertain });
+                    }
+                    // The language hint is the detector's (`extract` already adds it): the model
+                    // is no language identifier (measured, see ai_laya::language_hint).
+                    if let (_, Some(p), _) = laya_answer(&resp, "nsfw") {
+                        out.push(Suggestion { field: "nsfw".into(), value: json!(p >= 0.5), source: source.into(), origin: origin.into(), confidence: p.max(1.0 - p) as f32, applicable: false, note: format!("{:.2}", p), uncertain: false });
+                    }
+                }
+                Err(e) => notes.push(laya_note(provider, &e)),
+            }
+        }
+        Provider::BetterCommunity => {
+            let names: Vec<String> = asked.iter().map(|(_, n)| n.clone()).collect();
+            if !names.is_empty() {
+                match bc_suggest(ctx, "tags", text, &names) {
+                    Ok(r) => {
+                        let mut ranked: Vec<(f64, String)> = r
+                            .get("probs")
+                            .and_then(|p| p.as_object())
+                            .map(|m| m.iter().filter_map(|(k, v)| v.as_f64().map(|p| (p, k.clone()))).collect())
+                            .unwrap_or_default();
+                        if ranked.is_empty() {
+                            if let Some(c) = r.get("choice").and_then(|c| c.as_str()) {
+                                ranked.push((r.get("p").and_then(|p| p.as_f64()).unwrap_or(0.6), c.to_string()));
+                            }
+                        }
+                        ranked.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+                        for (p, name) in ranked.into_iter().filter(|(p, _)| *p >= 0.3).take(MAX_TAGS_PER_MOD) {
+                            if let Some((id, _)) = asked.iter().find(|(_, n)| *n == name) {
+                                out.push(Suggestion { field: "tags".into(), value: json!(id), source: "bettercommunity".into(), origin: "BetterCommunity (Laya)".into(), confidence: p as f32, applicable: true, note: name, uncertain: false });
+                            }
+                        }
+                    }
+                    Err(e) => notes.push(format!("bettercommunity:{}", short_reason(&e))),
+                }
+            }
+            let codes: Vec<String> = LANGS.iter().map(|(c, _)| c.to_string()).collect();
+            match bc_suggest(ctx, "language", text, &codes) {
+                Ok(r) => {
+                    if let Some(c) = r.get("choice").and_then(|c| c.as_str()).filter(|c| codes.iter().any(|k| k == c)) {
+                        out.push(Suggestion { field: "language".into(), value: json!(c), source: "bettercommunity".into(), origin: "BetterCommunity (Laya)".into(), confidence: r.get("p").and_then(|p| p.as_f64()).unwrap_or(0.6) as f32, applicable: false, note: String::new(), uncertain: false });
+                    }
+                }
+                Err(e) => notes.push(format!("bettercommunity:{}", short_reason(&e))),
+            }
+            match bc_suggest(ctx, "nsfw", text, &[]) {
+                Ok(r) => {
+                    if let Some(p) = r.get("p").and_then(|p| p.as_f64()) {
+                        out.push(Suggestion { field: "nsfw".into(), value: json!(p >= 0.5), source: "bettercommunity".into(), origin: "BetterCommunity (Laya)".into(), confidence: p.max(1.0 - p) as f32, applicable: false, note: format!("{:.2}", p), uncertain: false });
+                    }
+                }
+                Err(e) => notes.push(format!("bettercommunity:{}", short_reason(&e))),
+            }
+        }
+        Provider::External | Provider::LocalGen => {}
+    }
+    notes.dedup();
+    (out, notes)
+}
+
+fn external_url(ctx: &Ctx, path: &str) -> Result<String, String> {
+    let u = validate_url(&normalize_gen_base(&ctx.settings.external_url), EndpointKind::External, false)?;
+    let base = u.url.trim_end_matches('/').to_string();
+    Ok(format!("{}{}", base, path))
+}
+
+fn external_headers(ctx: &Ctx) -> Vec<(String, String)> {
+    ctx.external_key.as_ref().filter(|k| !k.is_empty()).map(|k| vec![("Authorization".to_string(), format!("Bearer {}", k))]).unwrap_or_default()
+}
+
+/// Where the generator is (« Rédaction »): the base URL (…/v1), the headers, the model, and
+/// whether it runs on this PC. Only through [`gate`]: with the master switch off, the feature
+/// off, or `--no-ai`, there is no target and so no request.
+#[derive(Debug, Clone)]
+pub struct GenTarget {
+    pub base: String,
+    pub headers: Vec<(String, String)>,
+    pub model: String,
+    pub provider: Provider,
+}
+
+impl GenTarget {
+    /// "local" (loopback: nothing leaves this PC) or "external".
+    pub fn kind(&self) -> &'static str {
+        if self.provider == Provider::LocalGen { "local" } else { "external" }
+    }
+}
+
+pub fn gen_target(ctx: &Ctx, feature: Feature) -> Result<GenTarget, String> {
+    let provider = gate(ctx.settings, feature, ctx.killed).map_err(|w| format!("generative:{}", w))?;
+    let (url, model, headers) = match provider {
+        Provider::LocalGen => (
+            validate_url(&normalize_gen_base(&ctx.settings.gen_local_url), EndpointKind::LocalGen, false).map_err(|e| format!("generative:{}", e))?.url,
+            ctx.settings.gen_local_model.clone(),
+            Vec::new(),
+        ),
+        Provider::External => (
+            validate_url(&normalize_gen_base(&ctx.settings.external_url), EndpointKind::External, false).map_err(|e| format!("generative:{}", e))?.url,
+            ctx.settings.external_model.clone(),
+            external_headers(ctx),
+        ),
+        _ => return Err("generative:no_provider".into()),
+    };
+    if model.trim().is_empty() {
+        return Err("generative:no_model".into());
+    }
+    let base = url.trim_end_matches("/chat/completions").trim_end_matches('/').to_string();
+    Ok(GenTarget { base, headers, model, provider })
+}
+
+/// One chat completion, and the only way BMM talks to a generator. The request carries a system
+/// message and a user message — never `tools`, `functions` or `tool_choice`: the generator can
+/// write text, nothing else. A `tool_calls` answer is ignored (no content = no answer).
+pub fn chat(ctx: &Ctx, target: &GenTarget, system: &str, user: &str, max_tokens: u32) -> Result<String, String> {
+    let url = format!("{}/chat/completions", target.base);
+    let body = json!({
+        "model": target.model,
+        "temperature": 0.2,
+        "max_tokens": max_tokens.clamp(16, 1200),
+        "stream": false,
+        "messages": [
+            { "role": "system", "content": system },
+            { "role": "user", "content": user }
+        ]
+    });
+    let who = if target.provider == Provider::LocalGen { "local" } else { "api" };
+    let v = ctx.transport.post_json(&url, &target.headers, &body, ctx.settings.timeout_ms).map_err(|e| format!("{}:{}", who, short_reason(&e)))?;
+    // An `{error}` body with HTTP 200 (LM Studio: no model loaded, unknown path) is a failure,
+    // not an empty answer.
+    if v.get("error").is_some() && v.get("choices").is_none() {
+        return Err(format!("{}:model_error", who));
+    }
+    Ok(v.pointer("/choices/0/message/content").and_then(|c| c.as_str()).map(str::trim).unwrap_or("").chars().take(8000).collect())
+}
+
+/// Report categories and severities the triage picks from.
+pub const REPORT_CATEGORIES: &[&str] = &["crash", "bug", "performance", "install", "mod_conflict", "ui", "other"];
+pub const REPORT_SEVERITIES: &[&str] = &["low", "medium", "high", "critical"];
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct Triage {
+    pub category: Option<String>,
+    pub category_p: Option<f64>,
+    pub severity: Option<String>,
+    pub severity_p: Option<f64>,
+    /// The known report this one most likely duplicates (index into `known`), with P.
+    pub duplicate_of: Option<usize>,
+    pub duplicate_p: Option<f64>,
+    pub provider: String,
+    /// The category is the best guess kept under the user's threshold or margin (abstain:
+    /// flag), to be shown as unsure.
+    pub uncertain: bool,
+    /// The best categories with their probabilities (the user's top-k), for the percent bars.
+    pub ranked: Vec<crate::commands::ai_tuning::Scored>,
+    /// Show the percent bars (« Réglages des réponses »).
+    pub show_probs: bool,
+}
+
+/// A HINT for a report the user is about to send: category, severity, likely duplicate among
+/// their recent reports. The user still decides what is sent; this never changes the report.
+pub fn triage_report(ctx: &Ctx, text: &str, known: &[String]) -> Result<Triage, String> {
+    let provider = gate(ctx.settings, Feature::ReportTriage, ctx.killed).map_err(|w| format!("classifier:{}", w))?;
+    let _scope = laya_scope("triage");
+    let known: Vec<&String> = known.iter().take(8).collect();
+    let mut t = Triage::default();
+    match provider {
+        Provider::Local | Provider::Embedded => {
+            t.provider = if provider == Provider::Embedded { "embedded".into() } else { "laya".into() };
+            // « Laya v2 »: descriptive criteria per category and severity, the report cut to its
+            // most telling lines, severity from the kind of problem with Laya as tie-breaker,
+            // and a duplicate only among the closest earlier reports, confirmed by a yes/no.
+            use crate::commands::ai_laya as lv;
+            let body = lv::informative_chunks(text, 1500);
+            let known_owned: Vec<String> = known.iter().map(|k| k.to_string()).collect();
+            let dup_cands = lv::dup_candidates(text, &known_owned, lv::DUP_CANDIDATES);
+            use crate::commands::ai_tuning as tu;
+            let tune = ctx.settings.laya.resolve(tu::Area::Triage);
+            t.show_probs = tune.show_probs;
+            // The user's descriptions / examples / wording for the categories, when they wrote
+            // some (« Réglages des réponses »); otherwise exactly `report_questions`.
+            let mut qs: Vec<LayaQuestion> = tu::report_questions(&ctx.settings.laya);
+            qs.extend(lv::dup_questions(&known_owned, &dup_cands));
+            let resp = ask_laya(ctx, provider, &body, &qs).map_err(|e| laya_note(provider, &e))?;
+            let cat: Vec<(String, f64)> = tu::averaged(&resp, "category", &lv::choice_probs).into_iter().filter(|(c, _)| REPORT_CATEGORIES.contains(&c.as_str())).collect();
+            let cat = tu::calibrate(&cat, tune.temperature);
+            // « Équilibré »: the best category at 0.30 or more, as before. The user's threshold,
+            // margin and « je ne sais pas / meilleure hypothèse » otherwise.
+            let d = tu::decide(&cat, &tu::Tuning { multi_label: false, ..tune.clone() }, None);
+            note_decision(d.labels.first().map(|l| l.id.as_str()), REPORT_CATEGORIES, d.abstained, d.uncertain);
+            t.ranked = d.ranked.clone();
+            if let Some(best) = d.labels.first() {
+                let (c, p) = (best.id.clone(), best.p);
+                let (sev, sp) = lv::combine_severity(&c, text, &lv::choice_probs(&resp, "severity"));
+                if REPORT_SEVERITIES.contains(&sev.as_str()) {
+                    t.severity = Some(sev);
+                    t.severity_p = Some(sp);
+                }
+                t.category = Some(c);
+                t.category_p = Some(p);
+                t.uncertain = d.uncertain;
+            }
+            let noul: Vec<Option<f64>> = dup_cands.iter().map(|(i, _)| lv::noul_p(&resp, &format!("dup_{}", i))).collect();
+            if let Some((i, p)) = lv::combine_dup(&dup_cands, &noul) {
+                t.duplicate_of = Some(i);
+                t.duplicate_p = Some(p);
+            }
+        }
+        Provider::BetterCommunity => {
+            t.provider = "bettercommunity".into();
+            let opts: Vec<String> = REPORT_CATEGORIES.iter().map(|c| c.to_string()).collect();
+            let r = bc_suggest(ctx, "crash_triage", text, &opts).map_err(|e| format!("bettercommunity:{}", short_reason(&e)))?;
+            if let Some(c) = r.get("choice").and_then(|c| c.as_str()).filter(|c| REPORT_CATEGORIES.contains(c)) {
+                t.category = Some(c.to_string());
+                t.category_p = r.get("p").and_then(|p| p.as_f64()).or_else(|| r.get("probs").and_then(|m| m.get(c)).and_then(|p| p.as_f64()));
+            }
+        }
+        Provider::External | Provider::LocalGen => {}
+    }
+    Ok(t)
+}
+
+/// "Test connection" from Settings. Still behind the master switch: with AI off, not even a
+/// test leaves the machine.
+pub fn test_connection(ctx: &Ctx, target: &str) -> Result<Value, String> {
+    gate(ctx.settings, Feature::TestConnection, ctx.killed).or_else(|w| if w == "no_provider" || w == "no_consent" { Ok(Provider::Local) } else { Err(w) }).map_err(|w| w.to_string())?;
+    let started = std::time::Instant::now();
+    match target {
+        "embedded" => {
+            let q: Vec<LayaQuestion> = vec![("ping".into(), "noul", "Is this text a test?".into(), Vec::new())];
+            let resp = ask_laya(ctx, Provider::Embedded, "BetterModsManager connection test.", &q)?;
+            if resp.get("answers").is_none() {
+                return Err("bad_response".into());
+            }
+        }
+        "local" => {
+            let url = laya_url(ctx)?;
+            let body = laya_body("BetterModsManager connection test.", &[("ping".into(), "noul", "Is this text a test?".into(), Vec::new())]);
+            let resp = ctx.transport.post_json(&url, &laya_headers(ctx), &body, ctx.settings.timeout_ms)?;
+            if resp.get("answers").is_none() {
+                return Err("bad_response".into());
+            }
+        }
+        "bettercommunity" => {
+            if !ctx.settings.bc_consent {
+                return Err("no_consent".into());
+            }
+            bc_suggest(ctx, "language", "BetterModsManager connection test.", &["en".into(), "fr".into()])?;
+        }
+        "external" | "gen_local" | "generator" => {
+            // The generator: `GET …/models`, which Ollama, LM Studio, llama.cpp server and the
+            // hosted APIs all answer; the model ids come back so the card can suggest one.
+            let local = target == "gen_local" || (target == "generator" && ctx.settings.generative == "local");
+            let (url, headers) = if local {
+                let u = validate_url(&normalize_gen_base(&ctx.settings.gen_local_url), EndpointKind::LocalGen, false)?;
+                (format!("{}/models", u.url), Vec::new())
+            } else {
+                (external_url(ctx, "/models")?, external_headers(ctx))
+            };
+            let v = ctx.transport.get_json(&url, &headers, ctx.settings.timeout_ms)?;
+            // LM Studio answers a path it does not know with HTTP 200 and `{error}`: that is not
+            // « connected, no models ».
+            if v.get("error").is_some() && v.get("data").is_none() && v.get("models").is_none() {
+                return Err("wrong_path".into());
+            }
+            let models: Vec<String> = v
+                .get("data")
+                .or_else(|| v.get("models"))
+                .and_then(|d| d.as_array())
+                .map(|a| a.iter().filter_map(|m| m.get("id").or_else(|| m.get("name")).and_then(|x| x.as_str()).map(|x| x.chars().take(120).collect())).take(30).collect())
+                .unwrap_or_default();
+            return Ok(json!({ "ok": true, "target": if local { "gen_local" } else { "external" }, "latencyMs": started.elapsed().as_millis() as u64, "models": models }));
+        }
+        _ => return Err("unknown_target".into()),
+    }
+    Ok(json!({ "ok": true, "target": target, "latencyMs": started.elapsed().as_millis() as u64 }))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Applying — explicit fields only
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct LinkIn {
+    pub url: String,
+    pub label: String,
+    pub link_type: String,
+}
+
+/// What the user ticked. `None` = leave that field alone.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Patch {
+    pub name: Option<String>,
+    pub version: Option<String>,
+    pub author: Option<String>,
+    pub description: Option<String>,
+    pub add_tags: Vec<String>,
+    pub add_links: Vec<LinkIn>,
+}
+
+/// Validate the `fields` object of an apply call against the same limits as the mod editor
+/// (name 100, version 30, author 50, description 2000; tags must be existing tag ids; links
+/// http(s) only, at most 5). Unknown keys are refused rather than ignored — a caller that
+/// thinks it is setting `language` must learn it is not.
+pub fn build_patch(fields: &Value, known_tag_ids: &[String]) -> Result<Patch, String> {
+    let obj = fields.as_object().ok_or("fields must be an object")?;
+    if obj.is_empty() {
+        return Err("fields is empty: nothing to apply".into());
+    }
+    let mut p = Patch::default();
+    for (k, v) in obj {
+        let text = |max: usize, min: usize| -> Result<String, String> {
+            let s = v.as_str().ok_or_else(|| format!("{} must be a string", k))?.trim().to_string();
+            if s.chars().count() < min {
+                return Err(format!("{} is empty", k));
+            }
+            if s.chars().any(|c| c.is_control() && c != '\n' && c != '\t' && c != '\r') {
+                return Err(format!("{} contains control characters", k));
+            }
+            Ok(s.chars().take(max).collect())
+        };
+        match k.as_str() {
+            "name" => p.name = Some(text(100, 1)?),
+            "version" => p.version = Some(text(30, 1)?),
+            "author" => p.author = Some(text(50, 1)?),
+            "description" => p.description = Some(text(2000, 1)?),
+            "tags" => {
+                let arr = v.as_array().ok_or("tags must be an array of tag ids")?;
+                for t in arr {
+                    let id = t.as_str().ok_or("tags must be an array of tag ids")?;
+                    if !known_tag_ids.iter().any(|k| k == id) {
+                        return Err(format!("unknown tag id: {}", id));
+                    }
+                    if !p.add_tags.iter().any(|x| x == id) {
+                        p.add_tags.push(id.to_string());
+                    }
+                }
+            }
+            "links" => {
+                let arr = v.as_array().ok_or("links must be an array of { url, label? }")?;
+                if arr.len() > 5 {
+                    return Err("at most 5 links at once".into());
+                }
+                for l in arr {
+                    let url = l.get("url").and_then(|u| u.as_str()).or_else(|| l.as_str()).ok_or("each link needs a url")?.trim().to_string();
+                    let parsed = reqwest::Url::parse(&url).map_err(|_| format!("not a URL: {}", url))?;
+                    if !matches!(parsed.scheme(), "http" | "https") || url.len() > 500 {
+                        return Err(format!("only http(s) links: {}", url));
+                    }
+                    let label: String = l.get("label").and_then(|x| x.as_str()).unwrap_or("").trim().chars().take(40).collect();
+                    let lt = l.get("link_type").and_then(|x| x.as_str()).unwrap_or(link_type(&url));
+                    let lt = if matches!(lt, "github" | "direct" | "other") { lt } else { "other" };
+                    p.add_links.push(LinkIn { url, label, link_type: lt.to_string() });
+                }
+            }
+            other => return Err(format!("{} cannot be applied (applicable: name, version, author, description, tags, links)", other)),
+        }
+    }
+    Ok(p)
+}
+
+/// Tags after adding, within the per-mod limit. Returns (new list, ids that did not fit).
+pub fn merge_tags(existing: &[String], add: &[String]) -> (Vec<String>, Vec<String>) {
+    let mut out = existing.to_vec();
+    let mut skipped = Vec::new();
+    for id in add {
+        if out.contains(id) {
+            continue;
+        }
+        if out.len() >= MAX_TAGS_PER_MOD {
+            skipped.push(id.clone());
+        } else {
+            out.push(id.clone());
+        }
+    }
+    (out, skipped)
+}
+
+/// A status snapshot (Settings, `bmm_ai_status`, `bmm ai-status`). Never contains a key.
+/// `embedded` is the embedded engine's own report (`ai_embedded::status()`), which this file
+/// cannot ask for itself (it may only use external crates).
+pub fn status_with(dir: &Path, embedded: Value, embedded_installed: bool) -> Value {
+    let s = effective_settings(load_settings(dir), embedded_installed);
+    let killed = kill_switch();
+    let can = |f| gate(&s, f, killed).map(|p| format!("{:?}", p).to_lowercase()).unwrap_or_else(|w| format!("blocked:{}", w));
+    json!({
+        "enabled": s.enabled && !killed,
+        "masterSwitch": s.enabled,
+        "killSwitch": killed,
+        "classifier": s.classifier,
+        "classifierChosen": s.classifier_chosen,
+        "generative": s.generative,
+        "features": { "modSuggest": s.mod_suggest, "reportTriage": s.report_triage, "descriptionDrafts": s.description_drafts, "ask": s.ask, "askGenerate": s.ask_generate },
+        "localUrl": s.local_url,
+        "localAllowRemote": s.local_allow_remote,
+        "externalUrl": s.external_url,
+        "externalModel": s.external_model,
+        "genLocalUrl": s.gen_local_url,
+        "genLocalModel": s.gen_local_model,
+        "bcConsent": s.bc_consent,
+        "installerChoice": s.installer_choice,
+        "keys": { "local": secret_storage(dir, "local_key"), "external": secret_storage(dir, "external_key") },
+        "network": { "modSuggest": can(Feature::ModSuggest), "reportTriage": can(Feature::ReportTriage), "descriptionDrafts": can(Feature::DescriptionDraft), "askAnswer": can(Feature::AskAnswer) },
+        "bundledModel": embedded_installed,
+        "pipeline": crate::commands::ai_laya::pipeline(&s, killed, &embedded.get("packs").and_then(|v| v.as_array()).map(|a| a.iter().map(|p| crate::commands::ai_laya::PackRef {
+            id: p.get("id").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+            languages: p.get("languages").and_then(|x| x.as_str()).unwrap_or("*").to_string(),
+            installed: p.get("installed").and_then(|x| x.as_bool()).unwrap_or(false),
+        }).collect::<Vec<_>>()).unwrap_or_default()),
+        "embedded": embedded,
+        // True when nothing an enabled feature does can leave this PC.
+        "offline": !s.enabled || killed || (matches!(s.classifier.as_str(), "off" | "embedded") && matches!(s.generative.as_str(), "off" | "local")),
+    })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::Cell;
+
+    /// Counts every request and answers with a canned body.
+    struct Counting {
+        calls: Cell<usize>,
+        answer: Value,
+        last_url: std::cell::RefCell<String>,
+        last_body: std::cell::RefCell<Value>,
+    }
+    impl Counting {
+        fn new(answer: Value) -> Self {
+            Counting { calls: Cell::new(0), answer, last_url: Default::default(), last_body: Default::default() }
+        }
+    }
+    impl Transport for Counting {
+        fn post_json(&self, url: &str, _h: &[(String, String)], body: &Value, _t: u64) -> Result<Value, String> {
+            self.calls.set(self.calls.get() + 1);
+            *self.last_url.borrow_mut() = url.to_string();
+            *self.last_body.borrow_mut() = body.clone();
+            Ok(self.answer.clone())
+        }
+        fn get_json(&self, url: &str, _h: &[(String, String)], _t: u64) -> Result<Value, String> {
+            self.calls.set(self.calls.get() + 1);
+            *self.last_url.borrow_mut() = url.to_string();
+            Ok(self.answer.clone())
+        }
+    }
+    struct Failing(&'static str);
+    impl Transport for Failing {
+        fn post_json(&self, _: &str, _: &[(String, String)], _: &Value, _: u64) -> Result<Value, String> { Err(self.0.to_string()) }
+        fn get_json(&self, _: &str, _: &[(String, String)], _: u64) -> Result<Value, String> { Err(self.0.to_string()) }
+    }
+
+    fn vocab() -> Vocab {
+        vec![("t-weap".into(), "Weapons".into()), ("t-map".into(), "Maps".into()), ("t-snd".into(), "Sound".into())]
+    }
+
+    fn all_on() -> AiSettings {
+        AiSettings { enabled: true, classifier: "local".into(), generative: "external".into(), external_url: "https://api.example.com/v1".into(), external_model: "m".into(), bc_consent: true, ..Default::default() }
+    }
+
+    /// The description draft through the hybrid pipeline (`ai_hybrid::draft_mod`), reduced to
+    /// « an error / nothing / one description »: `Err` when the gate or the request refused.
+    /// Laya is not asked here (no classifier), so a draft that passes the rules is kept.
+    fn draft(c: &Ctx, facts: &str) -> Result<Option<Suggestion>, String> {
+        let mut s = c.settings.clone();
+        s.classifier = "off".into();
+        let c2 = Ctx { settings: &s, transport: c.transport, local_model: None, killed: c.killed, local_key: None, external_key: c.external_key.clone(), bc: None };
+        let d = super::super::ai_hybrid::draft_mod(&c2, facts, &vocab());
+        if let Some(e) = d.notes.iter().find(|n| (n.starts_with("generative:") || n.starts_with("api:") || n.starts_with("local:")) && !n.ends_with(":insufficient")) {
+            return Err(e.clone());
+        }
+        Ok(d.suggestions.into_iter().find(|x| x.field == "description"))
+    }
+
+    fn ctx<'a>(s: &'a AiSettings, t: &'a dyn Transport) -> Ctx<'a> {
+        Ctx { settings: s, transport: t, local_model: None, killed: false, local_key: None, external_key: Some("k".into()), bc: Some(BcAuth { base: "https://bettercommunity.ch".into(), headers: vec![] }) }
+    }
+
+    /// A stand-in for the embedded engine: counts calls, answers like laya-serve does.
+    struct FakeModel {
+        calls: Cell<usize>,
+        present: bool,
+    }
+    impl LocalModel for FakeModel {
+        fn available(&self) -> bool {
+            self.present
+        }
+        fn predict(&self, _text: &str, qs: &[LayaQuestion]) -> Result<Value, String> {
+            self.calls.set(self.calls.get() + 1);
+            let mut a = serde_json::Map::new();
+            for (id, kind, _, crit) in qs {
+                let v = if *kind == "noul" {
+                    json!({ "type": "noul", "noul": if id == "tag_0" { 0.93 } else { 0.1 }, "confidence": 0.9, "answer_confidence": 0.9 })
+                } else {
+                    json!({ "type": "choice", "choice": crit[0].0, "probabilities": {}, "confidence": 0.4, "answer_confidence": 0.77 })
+                };
+                a.insert(id.clone(), v);
+            }
+            Ok(json!({ "answers": a }))
+        }
+    }
+
+    /// The embedded provider: answers from the engine, and not one request leaves — whatever
+    /// the transport would have said. The master switch and --no-ai still stop it.
+    #[test]
+    fn embedded_provider_never_touches_the_network() {
+        let mut s = all_on();
+        s.classifier = "embedded".into();
+        s.generative = "off".into();
+        let t = Counting::new(json!({ "answers": {} }));
+        let m = FakeModel { calls: Cell::new(0), present: true };
+        let mut c = ctx(&s, &t);
+        c.local_model = Some(&m);
+        let (sugg, notes) = classify_mod(&c, "a mod about weapons", &vocab());
+        assert!(notes.is_empty(), "{notes:?}");
+        assert_eq!(m.calls.get(), 1);
+        assert!(sugg.iter().any(|x| x.field == "tags" && x.value == json!("t-weap") && x.origin == "Laya (embedded)"));
+        // The language hint is the detector's, never the model's (measured: no language identifier).
+        assert!(sugg.iter().all(|x| x.field != "language"));
+        let tr = triage_report(&c, "it crashed", &["old".into()]).unwrap();
+        assert_eq!(tr.provider, "embedded");
+        assert_eq!(tr.category.as_deref(), Some("crash"));
+        assert!(test_connection(&c, "embedded").is_ok());
+        assert_eq!(t.calls.get(), 0, "the embedded provider made a network request");
+
+        // Switch off → the engine is not even asked.
+        let mut off = s.clone();
+        off.enabled = false;
+        let mut c2 = ctx(&off, &t);
+        c2.local_model = Some(&m);
+        let before = m.calls.get();
+        let _ = classify_mod(&c2, "x", &vocab());
+        assert!(triage_report(&c2, "x", &[]).is_err());
+        let mut c3 = ctx(&s, &t);
+        c3.local_model = Some(&m);
+        c3.killed = true;
+        let _ = classify_mod(&c3, "x", &vocab());
+        assert_eq!(m.calls.get(), before, "master switch / --no-ai let the engine run");
+
+        // Not installed → a note, never a fallback to some server.
+        let absent = FakeModel { calls: Cell::new(0), present: false };
+        let mut c4 = ctx(&s, &t);
+        c4.local_model = Some(&absent);
+        let (sugg, notes) = classify_mod(&c4, "x", &vocab());
+        assert!(sugg.is_empty());
+        assert_eq!(notes, vec!["embedded:absent".to_string()]);
+        let c5 = ctx(&s, &t);
+        assert_eq!(classify_mod(&c5, "x", &vocab()).1, vec!["embedded:absent".to_string()]);
+        assert_eq!(t.calls.get(), 0);
+    }
+
+    #[test]
+    fn an_installed_model_is_the_default_until_the_user_chooses() {
+        let s = AiSettings::default();
+        assert_eq!(effective_settings(s.clone(), true).classifier, "embedded");
+        assert_eq!(effective_settings(s.clone(), false).classifier, "off");
+        let chosen = AiSettings { classifier_chosen: true, ..AiSettings::default() };
+        assert_eq!(effective_settings(chosen, true).classifier, "off", "an explicit « off » stays off");
+        let local = AiSettings { classifier: "local".into(), ..AiSettings::default() };
+        assert_eq!(effective_settings(local, true).classifier, "local");
+        // The default provider changes nothing about the master switch.
+        assert!(!effective_settings(AiSettings::default(), true).enabled);
+        assert_eq!(gate(&effective_settings(AiSettings::default(), true), Feature::ModSuggest, false), Err("ai_off"));
+    }
+
+    /// laya-serve answers a yes/no question as { "type": "noul", "noul": p }: that is P(true).
+    #[test]
+    fn laya_answer_reads_the_noul_field() {
+        let resp = json!({ "answers": { "t": { "type": "noul", "noul": 0.82, "confidence": 0.82, "answer_confidence": 0.82 },
+                                        "c": { "type": "choice", "choice": "fr", "confidence": 0.3, "answer_confidence": 0.61 } } });
+        assert_eq!(laya_answer(&resp, "t").1, Some(0.82));
+        let (c, _, conf) = laya_answer(&resp, "c");
+        assert_eq!(c.as_deref(), Some("fr"));
+        assert_eq!(conf, Some(0.61));
+    }
+
+    #[test]
+    fn defaults_are_off() {
+        let s = AiSettings::default();
+        assert!(!s.enabled);
+        assert_eq!(s.classifier, "off");
+        assert_eq!(s.generative, "off");
+        assert!(!s.bc_consent);
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(load_settings(dir.path()), AiSettings::default().normalized());
+        std::fs::write(dir.path().join(SETTINGS_FILE), "{ not json").unwrap();
+        assert!(!load_settings(dir.path()).enabled, "a broken file cannot turn anything on");
+    }
+
+    /// THE test: master switch off → not one request, from any feature.
+    #[test]
+    fn master_switch_off_means_no_network_anywhere() {
+        let mut s = all_on();
+        s.enabled = false;
+        let t = Counting::new(json!({ "answers": {}, "ok": true, "result": {} }));
+        let c = ctx(&s, &t);
+        let (sugg, notes) = classify_mod(&c, "a mod about weapons", &vocab());
+        assert!(sugg.is_empty());
+        assert_eq!(notes, vec!["classifier:ai_off".to_string()]);
+        assert!(draft(&c, "facts").is_err());
+        assert!(triage_report(&c, "it crashed", &["old".into()]).is_err());
+        for target in ["local", "bettercommunity", "external"] {
+            assert!(test_connection(&c, target).is_err(), "{target}");
+        }
+        for p in ["local", "bettercommunity"] {
+            let mut s2 = s.clone();
+            s2.classifier = p.into();
+            let c2 = ctx(&s2, &t);
+            let _ = classify_mod(&c2, "x", &vocab());
+            let _ = triage_report(&c2, "x", &[]);
+        }
+        assert_eq!(t.calls.get(), 0, "the master switch let a request through");
+    }
+
+    #[test]
+    fn kill_switch_beats_the_file() {
+        let s = all_on();
+        let t = Counting::new(json!({ "answers": {} }));
+        let mut c = ctx(&s, &t);
+        c.killed = true;
+        let _ = classify_mod(&c, "x", &vocab());
+        let _ = draft(&c, "x");
+        let _ = triage_report(&c, "x", &[]);
+        let _ = test_connection(&c, "local");
+        assert_eq!(t.calls.get(), 0);
+    }
+
+    #[test]
+    fn per_feature_toggles_and_consent() {
+        let mut s = all_on();
+        s.mod_suggest = false;
+        assert_eq!(gate(&s, Feature::ModSuggest, false), Err("feature_off"));
+        s.mod_suggest = true;
+        s.classifier = "bettercommunity".into();
+        s.bc_consent = false;
+        assert_eq!(gate(&s, Feature::ModSuggest, false), Err("no_consent"));
+        s.classifier = "off".into();
+        assert_eq!(gate(&s, Feature::ReportTriage, false), Err("no_provider"));
+        s.generative = "off".into();
+        assert_eq!(gate(&s, Feature::DescriptionDraft, false), Err("no_provider"));
+        let t = Counting::new(json!({}));
+        let (_, notes) = classify_mod(&ctx(&s, &t), "x", &vocab());
+        assert_eq!(notes, vec!["classifier:no_provider".to_string()]);
+        assert_eq!(t.calls.get(), 0);
+    }
+
+    #[test]
+    fn url_rules() {
+        use EndpointKind::*;
+        assert!(validate_url("http://127.0.0.1:8000", LocalLaya, false).is_ok());
+        assert!(validate_url("http://localhost:8000/", LocalLaya, false).is_ok());
+        assert!(validate_url("http://[::1]:8000", LocalLaya, false).is_ok());
+        assert_eq!(validate_url("http://192.168.1.4:8000", LocalLaya, false).unwrap_err(), "ai.url.notLoopback");
+        assert_eq!(validate_url("http://192.168.1.4:8000", LocalLaya, true).unwrap().warning, Some("remote"));
+        assert_eq!(validate_url("file:///etc/passwd", LocalLaya, true).unwrap_err(), "ai.url.scheme");
+        assert_eq!(validate_url("ftp://127.0.0.1", External, false).unwrap_err(), "ai.url.scheme");
+        assert_eq!(validate_url("http://user:pw@127.0.0.1:8000", LocalLaya, false).unwrap_err(), "ai.url.userinfo");
+        assert_eq!(validate_url("http://api.example.com/v1", External, false).unwrap_err(), "ai.url.httpsRequired");
+        assert!(validate_url("https://api.example.com/v1", External, false).is_ok());
+        assert!(validate_url("http://127.0.0.1:11434/v1", External, false).is_ok());
+        for bad in ["https://10.0.0.5/v1", "https://169.254.169.254/latest", "https://[fd00::1]/v1", "https://0.0.0.0/v1", "https://100.64.0.1/"] {
+            assert_eq!(validate_url(bad, External, false).unwrap_err(), "ai.url.privateHost", "{bad}");
+        }
+        assert!(validate_url("https://bettercommunity.ch", BetterCommunity, false).is_ok());
+        assert!(validate_url("https://api.bettercommunity.ch", BetterCommunity, false).is_ok());
+        assert_eq!(validate_url("http://localhost:3000", BetterCommunity, false).unwrap_err(), "ai.url.notBetterCommunity");
+        for bad in ["http://bettercommunity.ch", "https://bettercommunity.ch.evil.com", "https://evilbettercommunity.ch", "https://example.com"] {
+            assert_eq!(validate_url(bad, BetterCommunity, false).unwrap_err(), "ai.url.notBetterCommunity", "{bad}");
+        }
+        assert_eq!(validate_url("not a url", External, false).unwrap_err(), "ai.url.invalid");
+    }
+
+    #[test]
+    fn remote_laya_is_refused_without_the_opt_in() {
+        let mut s = all_on();
+        s.local_url = "http://192.168.1.10:8000".into();
+        let t = Counting::new(json!({ "answers": {} }));
+        let (_, notes) = classify_mod(&ctx(&s, &t), "x", &vocab());
+        assert_eq!(t.calls.get(), 0);
+        assert!(notes[0].contains("ai.url.notLoopback"), "{notes:?}");
+    }
+
+    fn write(dir: &Path, rel: &str, body: &str) {
+        let p = dir.join(rel);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, body).unwrap();
+    }
+
+    fn field<'a>(v: &'a [Suggestion], f: &str) -> Vec<&'a Suggestion> {
+        v.iter().filter(|s| s.field == f).collect()
+    }
+
+    #[test]
+    fn extracts_a_json_manifest_and_readme() {
+        let root = tempfile::tempdir().unwrap();
+        let m = root.path().join("Cool_Mod_v1.2");
+        write(&m, "mod.json", r#"{"name":"Cool Mod","version":"1.2.0","authors":["Alice","Bob"],"description":"Adds **new** weapons to the game.","tags":["Weapons"],"homepage":"https://github.com/alice/coolmod"}"#);
+        write(&m, "README.md", "# Cool Mod\n\n[![badge](https://img.shields.io/x.svg)](https://x)\n\nThis mod adds twelve new weapons and rebalances the sound of every rifle in the game.\n\nAuthor: Alice\n\nSee https://www.nexusmods.com/game/mods/1 for more.\n");
+        let facts = ModFacts { name: "Cool_Mod_v1.2".into(), version: "1.0".into(), path: m.clone(), ..Default::default() };
+        let ex = extract(&facts, &vocab(), &[]);
+        let s = &ex.suggestions;
+        assert_eq!(field(s, "name")[0].value, json!("Cool Mod"));
+        assert_eq!(field(s, "name")[0].source, "file");
+        assert_eq!(field(s, "version")[0].value, json!("1.2.0"));
+        assert_eq!(field(s, "author")[0].value, json!("Alice, Bob"));
+        assert!(field(s, "description").iter().any(|d| d.value == json!("Adds new weapons to the game.")));
+        assert!(field(s, "description").iter().any(|d| d.value.as_str().unwrap().starts_with("This mod adds twelve")));
+        let tags: Vec<&Value> = field(s, "tags").iter().map(|t| &t.value).collect();
+        assert!(tags.contains(&&json!("t-weap")), "manifest tag matched to the vocabulary");
+        assert!(tags.contains(&&json!("t-snd")), "text match on 'sound'");
+        assert!(!tags.contains(&&json!("t-map")));
+        let links: Vec<&str> = field(s, "links").iter().map(|l| l.value["url"].as_str().unwrap()).collect();
+        assert!(links.contains(&"https://github.com/alice/coolmod"));
+        assert!(links.contains(&"https://www.nexusmods.com/game/mods/1"));
+        assert!(!links.iter().any(|l| l.contains("shields.io")), "badges are not links");
+        assert!(field(s, "language").iter().all(|l| !l.applicable));
+        assert!(ex.sources_read.iter().any(|r| r == "mod.json"));
+    }
+
+    #[test]
+    fn extracts_dcs_entry_lua_descriptor_xml_and_version_txt() {
+        let root = tempfile::tempdir().unwrap();
+        let a = root.path().join("A");
+        write(&a, "entry.lua", "declare_plugin(\"A-4E\", {\n displayName = _(\"A-4E Skyhawk\"),\n developerName = _(\"Community A-4E\"),\n version = \"2.2.0\",\n info = _(\"The A-4E Skyhawk community module for DCS World.\"),\n})");
+        let ex = extract(&ModFacts { path: a, ..Default::default() }, &vec![], &[]);
+        assert_eq!(field(&ex.suggestions, "name")[0].value, json!("A-4E Skyhawk"));
+        assert_eq!(field(&ex.suggestions, "author")[0].value, json!("Community A-4E"));
+        assert_eq!(field(&ex.suggestions, "version")[0].value, json!("2.2.0"));
+
+        let b = root.path().join("B");
+        write(&b, "descriptor.mod", "name=\"Better Maps\"\nversion=\"3.1\"\ntags={\n\t\"Maps\"\n\t\"Gameplay\"\n}\nremote_file_id=\"123456\"\n");
+        let ex = extract(&ModFacts { path: b, ..Default::default() }, &vocab(), &[]);
+        assert_eq!(field(&ex.suggestions, "name")[0].value, json!("Better Maps"));
+        assert!(field(&ex.suggestions, "tags").iter().any(|t| t.value == json!("t-map")));
+        assert!(field(&ex.suggestions, "links")[0].value["url"].as_str().unwrap().contains("id=123456"));
+
+        let c = root.path().join("C");
+        write(&c, "About/About.xml", "<ModMetaData><name>Rim Tweaks</name><author>Zed</author><description>Small quality of life tweaks for colonists.</description><url>https://example.org/rim</url></ModMetaData>");
+        write(&c, "VERSION.txt", "v0.9.1\n");
+        let ex = extract(&ModFacts { path: c, ..Default::default() }, &vec![], &[]);
+        assert_eq!(field(&ex.suggestions, "name")[0].value, json!("Rim Tweaks"));
+        assert_eq!(field(&ex.suggestions, "author")[0].value, json!("Zed"));
+        assert!(field(&ex.suggestions, "version").iter().any(|v| v.value == json!("0.9.1")));
+
+        let d = root.path().join("D");
+        write(&d, "ModInfo.xml", "<xml><ModInfo><Name value=\"Zombie Pack\"/><Author value=\"Kay\"/><Version value=\"1.4\"/></ModInfo></xml>");
+        let ex = extract(&ModFacts { path: d, ..Default::default() }, &vec![], &[]);
+        assert_eq!(field(&ex.suggestions, "author")[0].value, json!("Kay"));
+    }
+
+    #[test]
+    fn folder_name_is_the_weakest_source_and_nothing_unchanged_is_suggested() {
+        let root = tempfile::tempdir().unwrap();
+        let m = root.path().join("[Bob] Night_Sky_Textures_v2.1");
+        std::fs::create_dir_all(&m).unwrap();
+        let ex = extract(&ModFacts { path: m.clone(), ..Default::default() }, &vec![], &[]);
+        let a = field(&ex.suggestions, "author");
+        assert_eq!(a[0].value, json!("Bob"));
+        assert!(a[0].confidence < 0.5);
+        assert_eq!(field(&ex.suggestions, "version")[0].value, json!("2.1"));
+        assert_eq!(field(&ex.suggestions, "name")[0].value, json!("Night Sky Textures"));
+        // Same values already on the mod → nothing to suggest.
+        let facts = ModFacts { path: m, author: "bob".into(), version: "v2.1".into(), name: "Night Sky Textures".into(), ..Default::default() };
+        let ex = extract(&facts, &vec![], &[]);
+        assert!(field(&ex.suggestions, "author").is_empty());
+        assert!(field(&ex.suggestions, "version").is_empty());
+        assert!(field(&ex.suggestions, "name").is_empty());
+    }
+
+    #[test]
+    fn reads_a_zip_mod() {
+        let root = tempfile::tempdir().unwrap();
+        let zp = root.path().join("ZipMod.zip");
+        {
+            let f = std::fs::File::create(&zp).unwrap();
+            let mut z = zip::ZipWriter::new(f);
+            let o = zip::write::FileOptions::default();
+            z.start_file("ZipMod/mod.json", o).unwrap();
+            std::io::Write::write_all(&mut z, br#"{"name":"Zipped","version":"0.3"}"#).unwrap();
+            z.finish().unwrap();
+        }
+        let ex = extract(&ModFacts { path: zp, ..Default::default() }, &vec![], &[]);
+        assert_eq!(field(&ex.suggestions, "name")[0].value, json!("Zipped"));
+        assert!(ex.files.iter().any(|f| f == "ZipMod/mod.json"));
+    }
+
+    #[test]
+    fn laya_classifier_ranks_existing_tags_only() {
+        let s = all_on();
+        let t = Counting::new(json!({
+            "answers": { "tags_choice": { "choice": "t0", "probabilities": { "t0": 0.8, "none": 0.2 } }, "tag_0": 0.91, "tag_1": 0.95, "nsfw": 0.05 }
+        }));
+        let (sugg, notes) = classify_mod(&ctx(&s, &t), "Ce mod ajoute des armes", &vocab());
+        assert!(notes.is_empty(), "{notes:?}");
+        assert_eq!(t.calls.get(), 1, "one request for the whole pass");
+        assert!(t.last_url.borrow().ends_with("/v1/systemone"));
+        let body = t.last_body.borrow();
+        // Only the tag with keyword evidence is asked about (« armes » → Weapons), with its
+        // descriptive criterion; no language question (the detector gives that hint).
+        assert_eq!(body["questions"]["tag_0"]["type"], "noul");
+        assert!(body["questions"]["tag_0"]["instructions"].as_str().unwrap().contains("adds or changes weapons"));
+        assert!(body["questions"].get("tag_1").is_none(), "a known tag without evidence is not asked");
+        assert_eq!(body["questions"]["tags_choice"]["type"], "choice");
+        assert!(body["questions"].get("language").is_none());
+        let tags: Vec<&Value> = sugg.iter().filter(|s| s.field == "tags").map(|s| &s.value).collect();
+        assert_eq!(tags, vec![&json!("t-weap")]);
+        assert!(sugg.iter().any(|s| s.field == "nsfw" && s.value == json!(false)));
+    }
+
+    #[test]
+    fn bettercommunity_errors_are_notes_not_failures() {
+        let mut s = all_on();
+        s.classifier = "bettercommunity".into();
+        let t = Counting::new(json!({ "ok": false, "reason": "rate_limited" }));
+        let (sugg, notes) = classify_mod(&ctx(&s, &t), "x", &vocab());
+        assert!(sugg.is_empty());
+        assert!(notes.iter().all(|n| n == "bettercommunity:rate_limited"), "{notes:?}");
+        assert!(t.last_url.borrow().ends_with("/api/ai/bmm/suggest"));
+        // A good answer.
+        let t = Counting::new(json!({ "ok": true, "provider": "laya", "result": { "choice": "Maps", "probs": { "Maps": 0.7, "Weapons": 0.2 }, "p": 0.7 } }));
+        let (sugg, _) = classify_mod(&ctx(&s, &t), "x", &vocab());
+        assert!(sugg.iter().any(|s| s.field == "tags" && s.value == json!("t-map") && s.source == "bettercommunity"));
+        // Unreachable.
+        let f = Failing("unreachable");
+        let (sugg, notes) = classify_mod(&ctx(&s, &f), "x", &vocab());
+        assert!(sugg.is_empty());
+        assert!(notes.contains(&"bettercommunity:unreachable".to_string()));
+        // Not signed in: nothing sent.
+        let t = Counting::new(json!({}));
+        let mut c = ctx(&s, &t);
+        c.bc = None;
+        let (_, notes) = classify_mod(&c, "x", &vocab());
+        assert!(notes.contains(&"bettercommunity:not_signed_in".to_string()));
+        assert_eq!(t.calls.get(), 0);
+    }
+
+    #[test]
+    fn external_draft_and_its_refusals() {
+        let s = all_on();
+        let t = Counting::new(json!({ "choices": [ { "message": { "content": "  A tidy weapons pack.  " } } ] }));
+        let d = draft(&ctx(&s, &t), "facts").unwrap().unwrap();
+        assert_eq!(d.value, json!("A tidy weapons pack."));
+        assert_eq!(d.source, "api");
+        assert_eq!(*t.last_url.borrow(), "https://api.example.com/v1/chat/completions");
+        let t = Counting::new(json!({ "choices": [ { "message": { "content": "INSUFFICIENT" } } ] }));
+        assert!(draft(&ctx(&s, &t), "x").unwrap().is_none());
+        let mut s2 = s.clone();
+        s2.external_url = "http://api.example.com/v1".into();
+        let t = Counting::new(json!({}));
+        assert!(draft(&ctx(&s2, &t), "x").unwrap_err().contains("httpsRequired"));
+        assert_eq!(t.calls.get(), 0);
+    }
+
+    #[test]
+    fn triage_is_a_hint_with_a_duplicate_pick() {
+        let s = all_on();
+        let t = Counting::new(json!({ "answers": { "category": "crash", "severity": { "choice": "medium", "confidence": 0.7 }, "dup_1": 0.9 } }));
+        let tr = triage_report(&ctx(&s, &t), "BMM crashes on start", &["UI glitch".into(), "Crash at startup".into()]).unwrap();
+        assert_eq!(tr.category.as_deref(), Some("crash"));
+        // A crash is « high » unless the text says more: Laya's « medium » only breaks ties.
+        assert_eq!(tr.severity.as_deref(), Some("high"));
+        assert_eq!(tr.duplicate_of, Some(1));
+        // Only the closest earlier report was asked about, as a yes/no.
+        let body = t.last_body.borrow();
+        assert_eq!(body["questions"]["dup_1"]["type"], "noul");
+        assert!(body["questions"]["category"]["criteria"]["crash"].as_str().unwrap().contains("closes"));
+        drop(body);
+        // An invented category is ignored; a duplicate needs words in common AND a yes.
+        let t = Counting::new(json!({ "answers": { "category": "alien", "duplicate": "r9" } }));
+        let tr = triage_report(&ctx(&s, &t), "x", &["a".into()]).unwrap();
+        assert_eq!(tr.category, None);
+        assert_eq!(tr.duplicate_of, None);
+    }
+
+    #[test]
+    fn pii_scrubbing() {
+        let text = "Crash in C:\\Users\\JeanDupont\\AppData\\Roaming\\x and /home/jean/.cache, mail me jean@example.com, \
+                    server 82.12.34.56 but version 1.2.3.4.5 stays, Authorization: Bearer abcdefghijklmnop, token=s3cr3tvalue, \
+                    ghp_abcdefghijklmnopqrstuvwxyz0123 on PC JEAN-PC by JeanDupont";
+        let (s, found) = scrub_pii(text, Some("JeanDupont"), Some("JEAN-PC"), &[]);
+        assert!(!s.contains("JeanDupont"), "{s}");
+        assert!(!s.contains("/home/jean/"), "{s}");
+        assert!(!s.contains("jean@example.com"));
+        assert!(!s.contains("82.12.34.56"));
+        assert!(s.contains("1.2.3.4.5"), "a version is not an address: {s}");
+        assert!(!s.contains("abcdefghijklmnop"));
+        assert!(!s.contains("s3cr3tvalue"));
+        assert!(!s.contains("ghp_"));
+        assert!(!s.contains("JEAN-PC"));
+        let kinds: Vec<&str> = found.iter().map(|f| f.kind.as_str()).collect();
+        for k in ["user_path", "email", "ip", "token", "machine"] {
+            assert!(kinds.contains(&k), "{k} in {kinds:?}");
+        }
+        let (s, found) = scrub_pii("nothing to see, 127.0.0.1 is fine", None, None, &[]);
+        assert_eq!(s, "nothing to see, 127.0.0.1 is fine");
+        assert!(found.is_empty());
+    }
+
+    #[test]
+    fn provider_text_is_scrubbed_and_capped() {
+        let facts = ModFacts { name: "X".into(), description: "see C:\\Users\\Alice\\mods ".repeat(400), ..Default::default() };
+        let t = provider_text(&facts, &Extracted::default());
+        assert!(t.chars().count() <= MAX_PROVIDER_TEXT);
+        assert!(!t.contains("Alice"));
+    }
+
+    #[test]
+    fn apply_is_explicit_and_validated() {
+        let ids = vec!["t-weap".to_string(), "t-map".to_string()];
+        let p = build_patch(&json!({ "name": " New ", "tags": ["t-map"], "links": [{ "url": "https://x.org/a", "label": "Home" }] }), &ids).unwrap();
+        assert_eq!(p.name.as_deref(), Some("New"));
+        assert_eq!(p.version, None, "a field not listed is not touched");
+        assert_eq!(p.add_tags, vec!["t-map"]);
+        assert_eq!(p.add_links[0].url, "https://x.org/a");
+        assert!(build_patch(&json!({}), &ids).is_err());
+        assert!(build_patch(&json!({ "tags": ["invented"] }), &ids).unwrap_err().contains("unknown tag"));
+        assert!(build_patch(&json!({ "links": [{ "url": "javascript:alert(1)" }] }), &ids).is_err());
+        assert!(build_patch(&json!({ "links": [{ "url": "file:///C:/x" }] }), &ids).is_err());
+        assert!(build_patch(&json!({ "language": "fr" }), &ids).unwrap_err().contains("cannot be applied"));
+        assert!(build_patch(&json!({ "name": "" }), &ids).is_err());
+        let long = "x".repeat(5000);
+        assert_eq!(build_patch(&json!({ "description": long }), &ids).unwrap().description.unwrap().chars().count(), 2000);
+        let (tags, skipped) = merge_tags(&["a".into(), "b".into()], &["c".into(), "d".into(), "a".into()]);
+        assert_eq!(tags, vec!["a", "b", "c"]);
+        assert_eq!(skipped, vec!["d"]);
+    }
+
+    #[test]
+    fn installer_choice_and_status() {
+        let dir = tempfile::tempdir().unwrap();
+        let s = apply_installer_choice(dir.path(), true).unwrap();
+        assert!(s.enabled);
+        assert_eq!(s.classifier, "embedded", "the « Laya hors ligne » box picks the offline engine, nothing else");
+        assert!(!s.classifier_chosen);
+        let st = status_with(dir.path(), Value::Null, false);
+        assert_eq!(st["masterSwitch"], json!(true));
+        assert_eq!(st["network"]["modSuggest"], json!("embedded"));
+        assert_eq!(st["offline"], json!(true));
+        // A provider the user chose is never replaced by the installer box.
+        let mut mine = load_settings(dir.path());
+        mine.classifier = "bettercommunity".into();
+        mine.classifier_chosen = true;
+        save_settings(dir.path(), &mine).unwrap();
+        assert_eq!(apply_installer_choice(dir.path(), true).unwrap().classifier, "bettercommunity");
+        let s = apply_installer_choice(dir.path(), false).unwrap();
+        assert!(!s.enabled);
+        assert_eq!(s.installer_choice, Some(false));
+        assert!(!status_with(dir.path(), Value::Null, false).to_string().contains("secret"));
+    }
+
+    #[test]
+    fn unknown_provider_words_become_off() {
+        let s = AiSettings { classifier: "gpt".into(), generative: "ollama".into(), timeout_ms: 5, ..Default::default() }.normalized();
+        assert_eq!(s.classifier, "off");
+        assert_eq!(s.generative, "off");
+        assert_eq!(s.timeout_ms, 1000);
+    }
+
+    #[test]
+    fn language_hint() {
+        assert_eq!(detect_language("Ce mod ajoute des armes et des sons pour le jeu avec une carte").map(|x| x.0), Some("fr"));
+        assert_eq!(detect_language("This mod adds weapons and sounds to the game with a new map").map(|x| x.0), Some("en"));
+        assert_eq!(detect_language("hi"), None);
+    }
+
+    // ── Security fixes (Oct 2026 audit) ──────────────────────────────────────
+
+    /// Finding 1: a key follows the URL. A compromised page saved `external_url = attacker`,
+    /// then asked for a connection test, and the stored key went to the attacker.
+    #[test]
+    fn a_key_only_goes_to_the_origin_it_was_saved_for() {
+        let mut good = all_on();
+        good.external_url = "https://api.good.example/v1".into();
+        let stored = seal_bound(&key_origin_for(&good, "external_key").unwrap(), "sk-secret");
+        assert_eq!(resolve_key(Some(&stored), &good, "external_key").as_deref(), Some("sk-secret"));
+        // Same origin, another path: still the provider the key was given for.
+        let mut path = good.clone();
+        path.external_url = "https://api.good.example/v2/chat/completions".into();
+        assert_eq!(resolve_key(Some(&stored), &path, "external_key").as_deref(), Some("sk-secret"));
+        // Another host, another port, another scheme: no key.
+        for evil in ["https://attacker.example/v1", "https://api.good.example:8443/v1", "http://127.0.0.1:9/v1"] {
+            let mut bad = good.clone();
+            bad.external_url = evil.into();
+            assert_eq!(resolve_key(Some(&stored), &bad, "external_key"), None, "{evil}");
+        }
+        // Saving the attacker's URL CLEARS the key; the same origin keeps it.
+        let mut bad = good.clone();
+        bad.external_url = "https://attacker.example/v1".into();
+        assert_eq!(rebind_plan(&stored, &good, &bad, "external_key"), Rebind::Clear);
+        assert_eq!(rebind_plan(&stored, &good, &path, "external_key"), Rebind::Keep);
+        // A key stored before this fix (no origin) is bound to the URL it was used with, or cleared.
+        assert_eq!(rebind_plan("sk-old", &good, &path, "external_key"), Rebind::Rewrite(seal_bound("https://api.good.example", "sk-old")));
+        assert_eq!(rebind_plan("sk-old", &good, &bad, "external_key"), Rebind::Clear);
+    }
+
+    /// Finding 1, second half: `local_key` went over plain http when `local_allow_remote` was on.
+    #[test]
+    fn no_key_over_http_except_loopback() {
+        let mut s = all_on();
+        s.local_url = "http://192.168.1.10:8000".into();
+        s.local_allow_remote = true;
+        assert_eq!(key_origin_for(&s, "local_key").unwrap_err(), "ai.key.httpRefused");
+        let stored = seal_bound("http://192.168.1.10:8000", "lk");
+        assert_eq!(resolve_key(Some(&stored), &s, "local_key"), None, "a key over http to a LAN host");
+        s.local_url = "https://laya.lan:8443".into();
+        let stored = seal_bound(&key_origin_for(&s, "local_key").unwrap(), "lk");
+        assert_eq!(resolve_key(Some(&stored), &s, "local_key").as_deref(), Some("lk"));
+        s.local_url = "http://127.0.0.1:8000".into();
+        let stored = seal_bound(&key_origin_for(&s, "local_key").unwrap(), "lk");
+        assert_eq!(resolve_key(Some(&stored), &s, "local_key").as_deref(), Some("lk"), "loopback http is fine");
+        // A bare key of the old format is never sent as is.
+        assert_eq!(resolve_key(Some("lk"), &s, "local_key"), None);
+    }
+
+    /// Finding 4: an IPv4-mapped IPv6 literal and `*.localhost` names slipped through.
+    #[test]
+    fn url_rules_close_mapped_ipv6_and_localhost_subdomains() {
+        use EndpointKind::*;
+        for bad in ["https://[::ffff:10.0.0.1]/v1", "https://[::ffff:169.254.169.254]/", "https://[64:ff9b::a00:1]/v1", "https://[::10.0.0.1]/v1", "https://[ff02::1]/v1", "https://224.0.0.1/"] {
+            assert_eq!(validate_url(bad, External, false).unwrap_err(), "ai.url.privateHost", "{bad}");
+        }
+        // `evil.localhost` is a DNS name like any other: not loopback, so https and no LAN.
+        assert_eq!(validate_url("http://evil.localhost/v1", External, false).unwrap_err(), "ai.url.httpsRequired");
+        assert_eq!(validate_url("http://laya.localhost:8000", LocalLaya, false).unwrap_err(), "ai.url.notLoopback");
+        assert_eq!(validate_url("http://gen.localhost:11434/v1", LocalGen, false).unwrap_err(), "ai.url.notLoopback");
+        // The real loopback still works, the mapped one included.
+        assert!(validate_url("http://localhost:8000", LocalLaya, false).is_ok());
+        assert!(validate_url("http://127.0.0.2:8000", LocalLaya, false).is_ok());
+        assert!(validate_url("http://[::ffff:127.0.0.1]:8000", LocalLaya, false).is_ok());
+        // Loopback bypasses the system proxy (a key never reaches a proxy for a local server).
+        assert!(wants_no_proxy("http://127.0.0.1:8000/v1/systemone"));
+        assert!(wants_no_proxy("http://localhost:11434/v1/models"));
+        assert!(!wants_no_proxy("https://api.example.com/v1"));
+    }
+
+    /// Finding 5: a `bc_base` from the page could be loopback, and the BetterCommunity account key
+    /// went to whatever listened there over plain http.
+    #[test]
+    fn bettercommunity_base_is_production_or_the_configured_https_test_base() {
+        assert!(bc_base_allowed("https://bettercommunity.ch", None).is_ok());
+        assert!(bc_base_allowed("https://beta.bettercommunity.ch/", None).is_ok());
+        for bad in ["http://localhost:5176", "http://127.0.0.1:3000", "https://127.0.0.1", "http://[::1]:5176", "https://evil.example", "http://bettercommunity.ch"] {
+            assert!(bc_base_allowed(bad, None).is_err(), "{bad}");
+        }
+        // The test base from app.cfg is accepted when it is https, and only that origin.
+        assert!(bc_base_allowed("https://staging.example.org", Some("https://staging.example.org/")).is_ok());
+        assert!(bc_base_allowed("https://other.example.org", Some("https://staging.example.org")).is_err());
+        assert!(bc_base_allowed("http://localhost:5176", Some("http://localhost:5176")).is_err(), "a local http test base never carries the key");
+        assert_eq!(validate_url("http://localhost:3000", EndpointKind::BetterCommunity, false).unwrap_err(), "ai.url.notBetterCommunity");
+    }
+}

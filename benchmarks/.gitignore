@@ -1,0 +1,9 @@
+# Generated benchmark artifacts — re-created by the run scripts, not committed.
+rust/target/
+js/results/
+# results/: everything is regenerated, except the small per-version summary the release tool
+# writes (results/<version>/summary.json), kept so the next release can compare against it.
+results/*
+!results/[0-9]*/
+results/[0-9]*/*
+!results/[0-9]*/summary.json

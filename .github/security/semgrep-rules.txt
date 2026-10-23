@@ -1,0 +1,43 @@
+# Semgrep rules used by .github/workflows/security.yml (BMM, application code: src-tauri/src, frontend/src, workflows).
+#
+# Source: https://github.com/semgrep/semgrep-rules at the commit pinned as SEMGREP_RULES_REF in
+# security.yml (a84ff9cc2453ca91d581380de4b8b3f272f6f4be, 2026-09-25). One rule file per line,
+# relative to that repository; lines starting with # are ignored.
+#
+# Selection: every rule file under the directories below whose rules are NOT tagged
+# `subcategory: audit`. Audit rules flag every use of a sink (each innerHTML, each temp_dir)
+# for a human to review; on this codebase they produced 3,700 hits, 1,480 of them at ERROR, with
+# no way to tell a real one from the rest. They belong in a manual review, not a CI gate.
+# To regenerate after bumping the pin, see "Semgrep rules" in the Security CI docs.
+#
+# Directories: rust/lang/security, javascript/lang/security, javascript/browser/security, yaml/github-actions/security
+rust/lang/security/reqwest-accept-invalid.yml
+rust/lang/security/rustls-dangerous.yml
+rust/lang/security/ssl-verify-none.yml
+javascript/lang/security/detect-eval-with-expression.yaml
+javascript/lang/security/insecure-object-assign.yaml
+javascript/lang/security/audit/code-string-concat.yaml
+javascript/lang/security/audit/dangerous-spawn-shell.yaml
+javascript/lang/security/audit/detect-non-literal-fs-filename.yaml
+javascript/lang/security/audit/detect-non-literal-regexp.yaml
+javascript/lang/security/audit/detect-non-literal-require.yaml
+javascript/lang/security/audit/detect-redos.yaml
+javascript/lang/security/audit/md5-used-as-password.yaml
+javascript/lang/security/audit/path-traversal/path-join-resolve-traversal.yaml
+javascript/lang/security/audit/sqli/node-knex-sqli.yaml
+javascript/lang/security/audit/sqli/node-mssql-sqli.yaml
+javascript/lang/security/audit/sqli/node-mysql-sqli.yaml
+javascript/lang/security/audit/sqli/node-postgres-sqli.yaml
+javascript/browser/security/open-redirect-from-function.yaml
+javascript/browser/security/open-redirect.yaml
+javascript/browser/security/raw-html-concat.yaml
+yaml/github-actions/security/allowed-unsecure-commands.yaml
+yaml/github-actions/security/detect-shai-hulud-backdoor.yaml
+yaml/github-actions/security/gha-curl-pipe-shell.yaml
+yaml/github-actions/security/github-actions-mutable-action-tag.yaml
+yaml/github-actions/security/github-script-injection.yaml
+yaml/github-actions/security/pull-request-target-code-checkout.yaml
+yaml/github-actions/security/run-shell-injection.yaml
+yaml/github-actions/security/secrets-inherit.yaml
+yaml/github-actions/security/workflow-run-target-code-checkout.yaml
+yaml/github-actions/security/audit/third-party-action-not-pinned-to-commit-sha.yml

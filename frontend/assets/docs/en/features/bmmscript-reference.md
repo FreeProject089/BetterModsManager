@@ -1,0 +1,331 @@
+# BMMScript — every action, condition and value
+
+!!! info ""
+
+    143 actions · 47 conditions · 99 values · 8 loop sources
+
+> Generated from BMM's own registry, so it cannot describe a version of the app that does not exist. If an action is in the block editor, it is in this list.
+
+Nothing here is a separate BMMScript feature. `do <name>(…)` writes whatever the block editor calls the action, and the parameter names are the ones the runner reads — which is why this page is extracted from the code rather than written beside it.
+
+## Actions
+
+Written `do <name>(param: value, …)`. An action with no parameters takes empty brackets: `do mods.scan()`.
+
+### Mods & profiles
+
+| Action | What it does | Parameters |
+|---|---|---|
+| `profile.activate` | Switch the active profile | `id` |
+| `profile.create` | Makes a profile and remembers its id for the next step. Reuses one of the same name. | `name` · `into` · `gameDir` · `modsDir` · `backupDir` |
+| `profile.rename` | Renames a profile, keeping its folders and its mods. | `id` · `name` |
+| `profile.delete` | Deletes a profile. Refuses the active one unless told otherwise. | `id` · `evenIfActive` |
+| `mod.remove` | Takes a mod out of the list, and optionally deletes its folder. | `id` · `disableFirst` · `deleteFiles` |
+| `modpack.delete` | Deletes a modpack file. The mods it lists are left alone. | `id` |
+| `mod.enable` | Activate one mod | `id` |
+| `mod.disable` | Deactivate one mod | `id` |
+| `mods.order` | Move a mod in the deployment order. When two mods ship the same file, the last deployed wins. | `order` · `id` · `mode` |
+| `modpack.enable` | Enable all mods in a modpack | `id` · `placement` |
+| `modpack.disable` | Disable all mods in a modpack | `id` |
+| `modpack.create` | Create a modpack from a profile | `name` · `profile` |
+| `mod.add` | Download & install a mod from a URL | `url` · `name` |
+| `modlist.export` | Save the current mods as a .mmlist | `path` |
+| `modlist.import` | Load mods from a .mmlist file | `path` |
+| `mods.enableAll` | Activate every mod | `placement` |
+| `mods.disableAll` | Deactivate every mod | — |
+| `mods.scan` | Rescan the mods folder | — |
+| `plugin.apply` | Apply a plugin's modlist | `id` |
+| `plugin.compare` | Compare a plugin to active mods | `id` |
+| `plugin.delete` | Uninstall a plugin | `id` |
+| `mods.checkUpdates` | Check linked mods for updates | — |
+| `mods.autoImportOmm` | Imports mods found in the OvGME/OMM folders BMM knows about. | — |
+| `mods.clearHistory` | Empties the mod history list. The mods themselves are untouched. | `id` |
+| `mods.exportModpack` | Writes the active profile out as a shareable modpack. | `id` · `dir` |
+| `modlist.apply` | Installs anything the list names that is not here, then turns exactly those on. | `path` · `url` · `install` · `exact` · `passphrase` · `placement` |
+| `plugin.asset` | Read one into a variable, copy it somewhere, open its folder, or run it. | `pluginId` · `path` · `mode` · `target` · `dir` · `engine` · `workingDir` · `into` |
+| `mods.verifyIntegrity` | The game folder against the active mods, or each mod against its recorded hashes. Only reads. | `scope` · `enabledOnly` · `max` · `dryRun` · `notify` · `notifyClean` |
+
+### Repo & sharing
+
+| Action | What it does | Parameters |
+|---|---|---|
+| `repo.connect` | Add a remote repo | `url` · `name` · `password` |
+| `repo.sync` | Download & integrate a remote profile | `url` · `profile` · `password` |
+| `repo.gen` | Open repo generation | — |
+| `repo.genNow` | Generates the repo in place, without opening the page. | `outputDir` · `authorName` · `profileIds` · `seed` · `zipOutput` · `zipMods` · `compression` |
+| `repo.update` | Update an exported repo | `dir` |
+| `repo.host` | Serve a repo over HTTP | `dir` · `port` |
+| `repo.manifest` | Reads the folder, rewrites repo.json, and reports what changed. Pairs with Publish over SSH as the next step. | `dir` · `name` · `author` |
+| `repo.publishSsh` | Uploads the exported folder to the SSH target saved in Server Repo | `dir` · `target` · `into` |
+| `repo.fetchSsh` | Fetches the repo from the saved SSH target into a local folder | `dir` · `target` · `into` |
+| `catalog.import` | Reads the document at that address. An index follows everything it lists; a single catalogue is matched to one of the eight kinds. Anything else is refused. | `url` · `catType` · `password` |
+| `catalog.entry` | One entry of a catalogue this machine AUTHORS, not one it follows. An id is required. | `mode` · `catType` · `id` · `json` |
+| `catalog.delete` | Throws away the whole authored catalogue of one kind. Asks first, and needs the delete permission like every other step that destroys something of yours. Does not touch the catalogues you follow. | `catType` |
+| `repo.syncNow` | Syncs a server repo into a local profile, unattended. | `url` · `gameDir` · `modsDir` · `password` · `repoProfile` · `targetProfile` · `newProfile` · `backupDir` · `overwriteAll` · `deleteExtra` · `downloadLimit` · `keepZipped` · `into` |
+| `key.create` | Generates a keypair on the ring. A name already taken is left alone, never replaced. | `name` · `kind` · `bindUrl` |
+| `catalog.follow` | Adds a catalogue source through the app's own screens, so it appears in the following list with an origin. | `catType` · `url` · `unfollow` · `password` |
+| `repos.checkFollowed` | Reads every repo you follow; reports, asks you, or lets each repo sync as it is set to. | `mode` · `dryRun` · `only` · `notify` |
+| `catalog.updates` | Only the apps and plugins you tick. Downloads are verified by SHA-256; installs go through the catalogue’s own rules. | `mode` · `dryRun` · `items` · `notify` |
+| `repo.server` | The built-in server for a repo folder: started on a port, or stopped. Starting needs the Network permission. | `state` · `dryRun` · `dir` · `port` · `uploadLimit` · `password` · `notify` |
+| `catalog.install` | An app, plugin, theme or modpack by its id, through the catalogue’s own rules: https and SHA-256, a plugin arrives disabled, a theme is never applied. | `kind` · `id` · `onFail` · `notify` |
+
+### Apps & launch
+
+| Action | What it does | Parameters |
+|---|---|---|
+| `app.launch` | Launch an installed catalog app | `id` · `exePath` |
+| `app.stop` | Terminates a running program, by name or by process id. Needs the “Stop programs” permission. | `name` · `pid` · `into` |
+| `file.open` | Open or run any file / .exe | `path` |
+| `folder.open` | Open a folder in the explorer | `path` |
+| `app.install` | Install an app from a URL | `id` · `url` · `title` |
+| `launchpack.run` | Run a saved launch pack | `id` |
+| `game.watch` | DCS gets a hook installed; every other game resolves which log to watch and hands it to the next steps. | `game` · `mode` · `dir` · `path` |
+
+### Appearance
+
+| Action | What it does | Parameters |
+|---|---|---|
+| `theme.set` | Switch the active theme | `id` |
+
+### Benchmarks & storage
+
+| Action | What it does | Parameters |
+|---|---|---|
+| `benchmark.run` | Run a storage benchmark | `dataset` · `size` · `customMb` · `sources` |
+| `storage.diskBenchmark` | Benchmark a disk's read/write | `mountPoint` |
+| `storage.applyLimit` | Cap a disk's I/O speed | `mountPoint` · `limitMbS` |
+| `storage.calibration` | Toggle auto performance calibration | `enabled` |
+| `storage.smartIo` | Toggle Smart I/O | `enabled` |
+| `storage.flag` | Toggle any advanced setting | `key` · `enabled` |
+| `resources.preset` | Quiet, Balanced or Max, for this task only or for good | `name` · `scope` · `overridesGame` |
+| `resources.gameMode` | Force app mode on or off, or let detection decide | `mode` |
+| `resources.queue` | Hold or release every waiting BMM operation | `action` |
+| `perf.diskSpace` | Reads free space and records it, so a condition can act on it. | `mountPoint` |
+| `disk.report` | Measures every profile, its backups and the heaviest mods; writes disk-usage.md in the task’s folder. | `top` · `dryRun` · `write` · `file` · `notify` |
+
+### Privacy & recorder
+
+| Action | What it does | Parameters |
+|---|---|---|
+| `telemetry.consent` | Enable/disable telemetry consent | `enabled` |
+| `telemetry.set` | Tune telemetry options | `replay` · `full` · `bench` |
+| `recorder.set` | Configure the session recorder | `on` · `full` · `rust` · `js` |
+| `replay.export` | Export the current session | `path` |
+| `replay.import` | Import & play a replay | `path` · `url` |
+
+### Logic & math
+
+| Action | What it does | Parameters |
+|---|---|---|
+| `var.set` | Store a value for conditions/loops | `name` · `value` · `scope` |
+| `math.set` | Compute an expression into a variable | `target` · `expr` |
+| `var.ternary` | Set a variable from a condition (a if true, else b) | `condition` · `target` · `ifTrue` · `ifFalse` |
+| `rule.table` | Map a variable to a result via a decision table | `source` · `target` · `rows` |
+| `task.stop` | Stop the whole task now (use inside an IF as a guard) | `reason` |
+| `code.run` | Run a BMMScript snippet in this task (same variables and permissions). | `code` |
+| `list.set` | Replaces the whole list. Accepts a JSON array or a plain a, b, c line. Read it back with {list.<name>.length}, or walk it with FOR EACH. | `name` · `value` · `sep` |
+| `list.push` | Adds one item to the end. Unlike “set it”, running twice appends twice. | `name` · `value` |
+| `list.clear` | Empties the list without deleting its name, so a later push starts from nothing. | `name` |
+| `map.set` | Stores one value under one key. A list answers “which ones”; a map answers “what goes with what”. | `name` · `key` · `value` |
+| `map.get` | Reads one key into a variable. A missing key gives an empty value; {map.hit} tells if it existed. | `name` · `key` · `into` |
+| `id.of` | Stores the content id of a modpack, plugin or automation in a variable. Compare it to check you have the right thing, without downloading. | `into` · `kind` · `id` |
+| `map.clear` | Empties the map without deleting its name. | `name` |
+| `var.clear` | Removes one shared variable, or all of them. A run’s own values disappear with it anyway. | `name` |
+| `text.extract` | Runs a pattern over a file's last KB, or over a variable, and keeps what it matched. | `target` · `path` · `tailKb` · `source` · `regex` · `group` |
+| `log.print` | Puts a line in the running panel and in the task's run.log. In code this is `print "…"`. | `message` · `text` |
+| `data.validate` | Works out what a document IS from its shape, and what is wrong with it. Use it before acting on something you downloaded. | `path` · `text` · `expect` · `strict` |
+| `file.write` | Write or append text to a file. A relative path lands in the task's output folder. | `path` · `text` · `append` |
+
+### Notifications & web
+
+| Action | What it does | Parameters |
+|---|---|---|
+| `webhook.send` | POST or PUT a JSON (or text) body to any web address, with headers, secret headers and retries. | `url` · `format` · `body` · `headers` · `secretHeaders` · `method` · `timeoutMs` · `allowLan` · `retries` |
+| `discord.send` | Post a message to a Discord channel through its webhook address. | — |
+| `slack.send` | Post a message to a Slack channel through an incoming webhook. | `url` · `message` · `username` · `retries` |
+| `feed.publish` | Add an entry to an Atom feed file this task keeps: any RSS reader can follow it. | `path` · `feedTitle` · `title` · `body` · `link` · `max` |
+| `ui.ask` | A BMM dialog with two buttons. The answer is ask.yes (1 or 0). | `dryRun` |
+
+### System & flow
+
+| Action | What it does | Parameters |
+|---|---|---|
+| `notify` | Show a toast notification | `message` |
+| `discord.rpc` | Toggle Discord Rich Presence | `enabled` |
+| `data.exportAuto` | Unattended data backup | `dir` · `name` · `increment` |
+| `data.backup` | The Export data archive: sections you pick, locked if you give a passphrase. | `dir` · `sections` · `passphrase` · `name` · `increment` |
+| `app.checkUpdate` | Asks whether a BMM update exists. Sets update.available; downloads nothing. | `enabled` |
+| `system.clearApiLog` | Empties the API request log. | — |
+| `system.clearResourceRecords` | Empties the recorded CPU/memory samples. | — |
+| `task.run` | Trigger another scheduled task. Needs the “Other tasks” permission. | `id` |
+| `task.spawn` | Starts the other task without waiting. To wait, use “Run another task”. Needs the “Other tasks” permission. | `id` |
+| `task.setEnabled` | Turns another scheduled task on or off. A task can arm the one that follows it; it cannot arm or disarm itself (that is refused). Needs the “Other tasks” permission. | `taskId` · `armOn` |
+| `view.open` | Opens any BMM screen or window by name. | `place` · `id` · `arg` |
+| `restart` | Restart BMM | — |
+| `open.url` | Open a URL or link | `url` |
+| `custom.command` | Run a program with arguments | `args` · `program` · `workingDir` · `into` |
+| `custom.script` | Runs PowerShell, CMD, Bash or Python you write. Needs “Run scripts”. | `keepGoing` · `engine` · `code` · `workingDir` · `into` |
+| `folder.create` | Creates a folder inside BMM’s own data folder. It cannot reach outside it. | `path` · `into` |
+| `catalog.create` | Write a catalog.json into a folder, plus the files it points at. Tutorials and plugins are linked; themes are embedded. | `dir` · `kind` · `name` · `base` · `bundle` · `bundleOut` |
+| `http.request` | Sends a request to any address and captures the reply. Needs “Run external programs”. | `url` · `headers` · `method` · `body` · `timeoutMs` · `jsonPath` · `allowAnyStatus` · `into` |
+| `wait.http` | Polls it until it answers (by status or reply content), or gives up. | `url` · `everySeconds` · `timeoutSeconds` · `status` · `bodyContains` · `stopOnTimeout` |
+| `wait.hook` | Sleeps until something posts to /api/hook with this name, or until BMM itself raises that event. | `name` · `everySeconds` · `timeoutSeconds` · `stopOnTimeout` |
+| `import.file` | Takes a file or an address and reads it as whatever BMM format it is. | `path` · `url` · `password` · `kind` · `passphrase` · `apply` · `install` · `exact` · `catType` · `restore` · `sections` |
+| `cache.clean` | Empties the cache folders you pick once they pass a size. Needs the Delete permission. | `dryRun` · `targets` · `minMb` · `notify` |
+| `logs.rotate` | Task logs past a size become .1.log; rotated copies and session reports older than N days go. Crash reports stay. | `dryRun` · `keepDays` · `maxKb` · `notify` |
+| `api.call` | Any route of BMM’s local API, picked from its reference; the answer is kept in {api.body}. Needs Fire deeplinks. | `method` · `path` · `body` · `anyStatus` |
+
+### Laya (AI)
+
+| Action | What it does | Parameters |
+|---|---|---|
+| `ai.classify` | Picks one of your labels, with its probability. Needs the Laya permission. | `task` · `labels` · `text` · `path` · `into` |
+| `ai.run_task` | Sorts a text with a task saved in Laya’s settings. | `task` · `text` · `path` · `into` |
+| `ai.ask` | Searches the docs and your mods. The answer is data, never run. | `question` · `into` |
+| `ai.suggest_mod_metadata` | Lists suggestions only. Nothing is written to the mod. | `id` · `into` |
+| `ai.classify_mod` | Picks tags among yours, and flags adult content. Can apply the sure tags. | `id` · `apply` · `into` |
+| `ai.library_check` | Lists duplicates, overlapping mods and mods with no tag. Changes nothing. | `suggest` · `into` |
+| `ai.crash_label` | Family, cause and probability for each new crash report. | `scope` · `limit` · `into` |
+| `ai.explain_crash` | A short written explanation. Needs a writing model. Untrusted text. | `allowRemote` · `report` · `into` |
+| `ai.triage_report` | Says if a text is a bug, an idea or a crash, and which part of BMM. | `text` · `path` · `into` |
+| `ai.status` | Is Laya on, installed, loaded? Runs no model. | — |
+
+### Navigate BMM
+
+| Action | What it does | Parameters |
+|---|---|---|
+| `nav.page` | Shows a screen of BMM, and one of its tabs. Needs no permission. | `page` · `tab` · `note` · `seconds` |
+| `nav.settingsCard` | Scrolls Settings to one card, unfolds it and lights it up. | `card` · `note` · `seconds` |
+| `nav.item` | Opens its page and points at its card, by id. | `kind` · `id` · `note` · `seconds` · `onMissing` |
+| `nav.highlight` | A named control or a selector, brought into view and ringed, with a caption. | `target` · `page` · `tab` · `note` · `seconds` · `waitSec` · `onMissing` |
+| `nav.waitFor` | Waits for a control or a selector to appear, up to a timeout. | `target` · `timeoutSec` · `onTimeout` |
+| `nav.message` | A card with a title and a text, near an element or at the bottom; can wait for OK. | `title` · `message` · `target` · `waitOk` · `okLabel` · `seconds` |
+| `nav.modal` | One of the listed dialogs (Tools, Storage, Hashing…), through its own opener. Needs Navigate and click. | `modal` |
+| `nav.click` | Only listed controls (checks, refreshes); never a delete, a consent or a field. Needs Navigate and click. | `control` |
+
+### Packages & games
+
+| Action | What it does | Parameters |
+|---|---|---|
+| `pkg.install` | Copies a file or folder of the package into DCS Saved Games, the game or the mods folder, after your yes. | `dryRun` |
+| `pkg.verify` | Is it there, identical (SHA-256)? Sets pkg.ok. | — |
+| `modlist.verify` | Installed, switched on, deployed, files matching the list’s hashes. Changes nothing. | — |
+| `gate.report` | A signed file in Saved Games\DCS\Config that the join-gate hook sends to the server. | `dryRun` |
+| `game.launch` | Starts an .exe with your arguments, without a shell. Needs the command permission. | `dryRun` |
+
+## Conditions
+
+Written where a condition goes — after `if`, `case`, `waitfor`, `repeat while` and `repeat until`. `and` / `or` combine them, `not` inverts one, and brackets group.
+
+| Condition | What it tests |
+|---|---|
+| `always` | Always |
+| `all` | All of (AND) |
+| `any` | Any of (OR) |
+| `value` | Value compare (if X > Y …) |
+| `textIs` | A text variable is… |
+| `fileContains` | A file contains… |
+| `enumIs` | variable is an enum member |
+| `profileActive` | Profile is active |
+| `profileExists` | Profile exists |
+| `modEnabled` | Mod is enabled |
+| `modDisabled` | Mod is disabled |
+| `modInstalled` | Mod is installed |
+| `modWins` | Mod wins its shared files |
+| `fileIsValid` | File is a valid BMM document |
+| `modpackActive` | Modpack is active |
+| `modpackInactive` | Modpack is inactive |
+| `allModsActive` | All active-profile mods are on |
+| `pluginInstalled` | Plugin is installed |
+| `themeActive` | Theme is active |
+| `taskArmed` | Another task is armed |
+| `appRunning` | App is running |
+| `appNotRunning` | App is NOT running |
+| `fileExists` | File/folder exists |
+| `pathIsDir` | File or folder |
+| `fileHash` | File hash equals |
+| `filesMatch` | Every file still matches its checksum |
+| `fileSize` | File size |
+| `fileType` | File type (extension) |
+| `fileName` | File name contains |
+| `fileNewer` | File modified recently |
+| `online` | Internet is available |
+| `catalogOk` | A catalog answers |
+| `repoOk` | A repository answers |
+| `timeReached` | Clock time reached |
+| `dayOfWeek` | Day of week |
+| `timeRange` | Time is within |
+| `commandSucceeds` | Command succeeds |
+| `gameRunning` | An app is running (app mode) |
+| `resourcesPresetIs` | Resource preset is |
+| `queueIdle` | BMM is idle (queue empty) |
+| `aiLabel` | Laya’s label is… |
+| `aiScore` | Laya’s score for a label |
+| `aiAbstained` | Laya could not tell |
+| `aiAvailable` | Laya is available |
+| `crashCause` | Crash cause is… |
+| `aiLibraryCount` | Library check found… |
+| `modAiTag` | Laya tagged the mod… |
+
+`all` and `any` are the grouping conditions; in script you normally write `and` and `or` instead and get the same thing. `value` is the comparison row, which is what `count >= 3` compiles to.
+
+## Values you can read
+
+Written by an action into the task, and readable afterwards in a comparison or an expression — `if disk.free_gb < 5`, `set total = benchmark.mbps * 2`.
+
+`disk.read_mbps` · `disk.write_mbps` · `disk.suggested_limit` · `disk.free_gb` · `disk.free_percent` · `disk.total_gb` · `benchmark.mbps` · `benchmark.total_ms` · `update.available` · `lasttask.ok` · `lasttask.spawned` · `list.length` · `s queue (A3), read live.
+    ` · `,
+    // The previous action (A2): 1 or 0, and how long it took. Also {last.out} as text.
+    ` · `, ` · `,
+    // Which attempt of a task-level retry this run is (1 on the first run).
+    ` · `,
+    // Laya (AI): the last classification` · `ai.p` · `ai.suggestions` · `ai.abstained` · `ai.mod.tagCount` · `ai.mod.adult` · `ai.mod.adultP` · `ai.mod.applied` · `ai.mod.abstained` · `ai.lib.total` · `ai.lib.untagged` · `ai.lib.duplicates` · `ai.lib.conflicts` · `ai.lib.suggested` · `ai.lib.findings` · `ai.crash.count` · `ai.crash.unknown` · `ai.crash.groups` · `ai.crash.pending` · `ai.crash.p` · `ai.report.kindP` · `ai.report.areaP` · `ai.report.abstained` · `ai.enabled` · `ai.available` · `ai.installed` · `ai.loaded` · `ai.writer` · `ai.explain.remote` · `backup.bytes` · `order.moved` · `retry.attempts` · `valid.ok` · `valid.matched` · `valid.count` · `wait.ok` · `wait.tries` · `script.code` · `script.ok` · `import.count` · `catalog.entries` · `ssh.files` · `manifest.mods` · `manifest.added` · `manifest.removed` · `manifest.changed` · `http.status` · `map.size` · `map.hit` · `repos.checked` · `repos.updates` · `repos.errors` · `catalog.updates` · `catalog.done` · `catalog.skipped` · `integrity.checked` · `integrity.problems` · `cache.bytes` · `cache.freed` · `logs.rotated` · `logs.deleted` · `logs.freed` · `disk.used_gb` · `disk.profiles` · `server.running` · `s single door, and the local API.
+    ` · `, ` · `, ` · `,
+    // Whether the last navigation step found what it was pointed at (1/0), for a step told to
+    // carry on when its target is missing.
+    ` · `,
+    // Packages and games (sched-pkg.ts): the person` · `s answer.
+    ` · `, ` · `, ` · `, ` · `,
+    ` · `, ` · `, ` · `, ` · `, ` · `,
+    ` · `, ` · `, ` · `, `
+
+A value nothing has written yet reads as zero. `lasttask.ok` is 1 or 0, and only means anything after a `run`.
+
+## What a loop can walk
+
+Written `for item in <source>`. Inside the loop, `{item.id}` and `{item.name}` are replaced in every text value.
+
+`enabledMods` · `disabledMods` · `mods` · `profiles` · `modpacks` · `themes` · `list` · `mapKeys`
+
+`list` and `mapKeys` need a name: `for x in list "queue"`.
+
+## Statements
+
+The grammar itself, which — unlike everything above — is fixed. The full explanation of each is on the [main BMMScript page](doc-page:features/bmmscript).
+
+| | |
+|---|---|
+| `do <action>(k: v)` | Run one action |
+| `if <cond> { } else { }` | Branch |
+| `for x in <source> { }` | Loop over a list |
+| `repeat N times { }` | Loop a fixed number of times |
+| `repeat while|until <cond> { }` | Loop until something changes |
+| `wait 30s` | Pause |
+| `waitfor <cond> timeout 2h poll 10s` | Wait for something to become true |
+| `try { } catch { }` | Carry on when a step fails |
+| `switch { case <cond> { } default { } }` | The first case that holds, and only that one |
+| `parallel { branch { } branch { } }` | Run branches at the same time |
+| `parallel settle { … }` | Let every branch finish, then report failures |
+| `set x = <expr>` | A number, through the expression evaluator |
+| `set s = "text"` | A text variable |
+| `set n: number = 0` | Typed, checked as you write it |
+| `shared set k = "v"` | A variable every task can read |
+| `clear x` | Remove a variable |
+| `call "block name"` | Run a shared block here |
+| `run "Task" · spawn "Task"` | Another task, waiting or not |
+| `script python { … }` | Real code, taken exactly as written |
+| `break · continue · stop` | Leave the loop, skip an item, end the task |
+
+## Why this page is generated
+
+BMMScript holds no list of action names: it compiles to the blocks, so an action added to BMM is writable in script the same day. That makes a hand-written reference the one part of the language that can go stale — it would keep promising the old count while the app grew. This page is extracted from the same arrays the block editor renders from, and CI fails if it is out of date.

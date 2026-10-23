@@ -1,0 +1,1462 @@
+# Technical Architecture & Source Code Analysis - Better Mod Manager (BMM)
+
+This document provides a comprehensive analysis of the software architecture, internal engines, data models, and implementation strategies of Better Mod Manager.
+
+---
+
+## 1. Architecture Overview
+
+BMM is built on the **Tauri v2 Framework**, a Rust-first desktop stack that provides a WebView-based UI with a high-performance Rust backend.
+
+| Layer | Technology | Responsibility |
+| :--- | :--- | :--- |
+| **Backend Core** | Rust 1.70+, Tauri Commands | Filesystem I/O, state management, archive extraction, network requests, concurrency control |
+| **Bridge Layer** | Tauri IPC (Invoke + Events) | Type-safe message passing between Rust and JS without shared memory |
+| **Frontend** | Vanilla ES6+ JavaScript | DOM rendering, view routing, i18n, mod metadata display |
+| **Styling** | Vanilla CSS3 (Custom Properties) | Variable-driven dark theme, Flexbox/Grid layouts, keyframe animations |
+| **Data Persistence** | JSON files via `serde_json` | Profiles, mod entries, tags, and last active profile stored on disk |
+
+---
+
+## 2. Automated Build & Versioning System
+
+BMM implements a robust automated system to ensure versioning integrity across the entire application stack.
+
+### Build-Time Date Capture (`build.rs`)
+A dedicated Rust build script intercepts the compilation process to capture the current system date.
+- **Logic**: Uses the `chrono` crate to format the current UTC date as `YYYY-MM-DD`.
+- **Injection**: The date is exported as a compile-time environment variable `BMM_BUILD_DATE`.
+- **Persistence**: This ensures the build date is "burned" into the binary and remains static for that specific build.
+
+### Dynamic UI Synchronization
+The frontend fetches this information at boot via specialized Tauri commands:
+- `get_build_date`: Returns the static build date captured at compilation.
+- `is_ptb_mode`: Checks `app.cfg` to determine if PTB markers should be rendered.
+- **Boot Sequence**: `initVersionDisplay()` in `app.js` performs a synchronized injection into the titlebar, footer, and credits view after i18n initialization.
+
+---
+
+## 3. Backend — State Management
+
+### AppState Structure
+
+The global `AppState` wraps all mutable data in `Arc<Mutex<AppData>>`, ensuring thread-safe access across all concurrent Tauri commands.
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `profiles` | `Vec<Profile>` | All user-defined game profiles |
+| `mods` | `Vec<ModEntry>` | All registered mods across every profile |
+| `active_profile_id` | `Option<String>` | UUID of the currently selected profile |
+| `custom_tags` | `Vec<TagDef>` | User-defined taxonomy labels (name + color) |
+| `disk_limits` | `HashMap<String, u64>` | Per-path disk I/O speed limits (MB/s) |
+| `settings` | `AppSettings` | App preferences/configuration |
+| `launch_packs` | `Vec<LaunchPack>` | Application launch groups |
+| `installed_plugins` | `Vec<InstalledPlugin>` | Installed plugin manifests |
+| `plugin_permissions` | `HashMap<String, Vec<String>>` | Granted permissions per plugin id |
+| `modpacks` | `Vec<LocalModpack>` | Locally stored `.bmp` modpacks |
+
+### Persistence Strategy
+
+| Mechanism | Location | Trigger |
+| :--- | :--- | :--- |
+| JSON serialization | `AppData/Roaming/bmm/` (Windows) | Called via `state.save()` after every mutation |
+| Deserialization on boot | Same path | `AppState::load()` at application startup |
+| Activity history log | Adjacent JSON file per profile | Written on every `enable_mod` / `disable_mod` call |
+
+---
+
+## 4. Backend — Data Models
+
+### Profile
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `id` | `String` (UUID v4) | Unique identifier |
+| `name` | `String` | Display name |
+| `game_name` | `String` | Friendly game name |
+| `game_path` | `PathBuf` | Absolute path to the game ROOT directory |
+| `mods_path` | `PathBuf` | Directory where mod folders are stored |
+| `backup_path` | `PathBuf` | Directory where original game files are backed up |
+| `active_mods` | `Vec<String>` | Ordered list of currently enabled mod IDs |
+| `color` | `String` | Accent color hex code for the sidebar profile chip |
+| `icon` | `String` | SVG icon identifier |
+
+### ModEntry
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `id` | `String` (UUID v4) | Unique identifier |
+| `name` | `String` | Display name |
+| `version` | `String` | Semantic version string |
+| `author` | `Option<String>` | Author attribution |
+| `description` | `Option<String>` | Freetext description |
+| `dependencies` | `Vec<String>` | Declared mod dependencies |
+| `mod_folder_path` | `PathBuf` | Absolute path to the mod's root folder on disk |
+| `enabled` | `bool` | Whether the mod is currently active in the game |
+| `status` | `ModStatus` | Enum: `Enabled`, `Disabled`, `Error(String)` |
+| `installed_files` | `Vec<String>` | Paths of files injected into the game ROOT |
+| `tags` | `Vec<String>` | Assigned tag names |
+| `download_links` | `Vec<DownloadLink>` | Web links (GitHub, NexusMods, etc.) with type and label |
+| `install_notes` | `String` | Placement/setup instructions (inherited from `.MM`) |
+| `activation_order` | `u32` | Activation order (0 = first applied), used for conflict resolution |
+| `file_hashes` | `Option<HashMap<String,String>>` | Per-file SHA-256 map for the integrity engine |
+| `content_id` | `Option<String>` | Deterministic content fingerprint (see §46) |
+
+---
+
+## 5. Backend — The Smart Copy Filesystem Engine
+
+The core of BMM's mod management is the **Stacked Physical Copy** engine: the `enable_mod`/`disable_mod` commands and `apply_mod_stacked`/`unapply_mod_stacked`/`run_mod_io_worker` live in `src-tauri/src/commands/mods.rs`, while the low-level chunked copy + throttling primitives live in `src-tauri/src/fs_utils.rs`.
+
+### Activation Flow (`enable_mod` command)
+
+| Step | Function | Action |
+| :--- | :--- | :--- |
+| 1 | `MOD_OP_LOCK.lock()` | Acquires a global Mutex to block any concurrent operation |
+| 2 | `apply_mod_stacked()` | Walks every file in the mod's folder recursively |
+| 3 | Conflict Check | For each mod file, checks if a file already exists at the target path |
+| 4 | Backup | If conflict exists, the original game file is moved to `backup_path`, preserving structure |
+| 5 | Injection | The mod file is copied to the game ROOT path |
+| 6 | Track | All installed file paths are stored in `ModEntry.installed_files` |
+| 7 | State Update | `mod.enabled = true`, `profile.active_mods` is updated, `state.save()` is called |
+| 8 | History Log | A timestamped "Enabled" event is written |
+
+### Deactivation Flow (`disable_mod` command)
+
+| Step | Function | Action |
+| :--- | :--- | :--- |
+| 1 | `MOD_OP_LOCK.lock()` | Acquires the global Mutex |
+| 2 | File Resolution | Merges `installed_files` with `list_mod_files()` into a deduplicated set via `HashSet` |
+| 3 | `unapply_mod_stacked()` | For each file, deletes the installed copy from the game ROOT |
+| 4 | Restoration | Moves the backed-up original file from `backup_path` back to its original location |
+| 5 | State Update | `mod.enabled = false`, cleared from `profile.active_mods`, `state.save()` called |
+| 6 | History Log | A timestamped "Disabled" event is written |
+
+### Selective Conflict Checking (introduced in v0.9.7)
+ 
+To improve performance during mod activation, BMM now uses **Selective Conflict Checking**:
+- Only active mods and the currently selected mod are processed for conflicts.
+- This results in up to 80% reduction in IPC calls and filesystem operations during bulk activation/deactivation.
+
+### Disk I/O Limiting (introduced in v0.9.7)
+
+BMM addresses the "system freeze" problem common in heavy I/O applications:
+- **Chunked Transfer**: Files are copied in 2MB chunks rather than a single stream.
+- **Adaptive Throttling**: After each chunk, the engine sleeps for a duration calculated based on the user-defined MB/s limit.
+- **Per-Disk Awareness**: The limiter detects disk physical mapping and applies limits accordingly.
+
+### Conflict Check Cache (v0.9.9)
+
+To further optimize performance, BMM implements a metadata-based caching system:
+- **Logic**: Before scanning a mod folder, BMM compares its last modification date (`mtime`) with a stored metadata cache using `std::fs::metadata().modified()`.
+- **I/O Optimization**: (v0.9.9) The disk monitoring system now caches the hardware disk list during bulk operations, preventing redundant refreshes.
+- **Cache Leveraging**: (v0.9.9) The `apply_mod_stacked` engine leverages the global `mod_files_cache` to determine file ownership, eliminating recursive disk scans for already-active mods.
+- **Performance Gain**: These combined optimizations result in up to 90% faster activation for mods with complex dependency chains.
+
+### Why Physical Copy Instead of Symlinks
+
+| Method | Stability | Anti-Cheat Compatible | Network Drive Support |
+| :--- | :--- | :--- | :--- |
+| Symlinks | Low (Windows permissions fragile) | No | No |
+| BMM Physical Copy | High | Yes | Yes |
+
+---
+
+## 6. Backend — Concurrent Safety
+
+| Mechanism | Purpose |
+| :--- | :--- |
+| `MOD_OP_LOCK: Mutex<()>` | Prevents concurrent mod activation/deactivation |
+| `Arc<Mutex<AppData>>` | Guarantees sequentially consistent reads/writes to app state |
+| `tauri::async_runtime::spawn_blocking()` | Offloads all heavy I/O to background workers |
+
+---
+
+## 7. Backend — Mass Installation Engine (.MM Format)
+
+### Install from Modlist Flow
+
+| Step | Mechanism | Detail |
+| :--- | :--- | :--- |
+| 1 | Parse | `serde_json::from_str()` deserializes the `.mm` JSON into a `ModList` struct |
+| 2 | Profile Creation | If `create_profile = true`, a new `Profile` is created and set as active |
+| 3 | Local Deduplication | Re-uses existing mod files if found on disk to save bandwidth |
+| 4 | HTTP Download | Fetches missing files via `reqwest::blocking::get()` |
+| 5 | Zip Detection | Magic number inspection for reliable extraction |
+| 6 | Extraction | Writes files to disk via `zip::ZipArchive` |
+| 7 | Progress Events | Emits `bmm://mod-download-progress` with granular details |
+| 8 | Cancellation | Checks `AtomicBool` in the `AppState` to allow termination |
+
+### Deep Integrity Engine (v0.9.9)
+
+- **SHA-256 Hashing**: Full cryptographic verification of every installed file against its source. This identifies corruption, partial overwrites, or unauthorized modifications that simple file-size checks would miss.
+- **Thread Isolation**: The CPU-intensive hashing logic is offloaded to the asynchronous `spawn_blocking` worker pool to maintain a 60 FPS UI experience.
+
+---
+
+## 8. Backend — OvGME Migration (`ovgme.rs`)
+
+BMM can directly parse OvGME's proprietary binary `.dat` configuration files.
+
+| Step | Implementation Detail |
+| :--- | :--- |
+| **Discovery** | Scans `C:\ProgramData\OvGME\` for `game.dat` |
+| **Binary Parsing** | Reads UTF-16 LE data from fixed byte offsets |
+| **Profile Mapping** | Maps OvGME paths to native BMM `Profile` structs |
+
+---
+
+## 9. Frontend — Modular Architecture
+
+The frontend is **TypeScript** (`// @ts-nocheck`) under `frontend/src/`, compiled to `frontend/js/` (see §22). Modules are grouped into `core/` (cross-cutting), `features/` (per-page logic) and `ui/`.
+
+| Module | Responsibility |
+| :--- | :--- |
+| `core/api.ts` | Direct IPC bridge with Tauri (invokes, listeners, file pickers). |
+| `core/i18n.ts` | Dynamic internationalization engine. |
+| `core/utils.ts` | Shared escapers/sanitizers (`escHtml`, `escAttr`). |
+| `core/links-config.ts` | Central external-link registry (`links.json`). |
+| `features/profiles/profiles.ts` | Profile management and grid rendering. |
+| `features/mods/*.ts` | Library logic, mod list/detail, conflict handling. |
+| `ui/app.ts` | Boot sequence, view routing, global wiring. |
+
+---
+
+## 10. Dynamic Internationalization Engine
+
+- **Detection**: `get_available_languages` scans the `Lang` directory.
+- **Activation**: Instant language switching via `data-i18n` attributes.
+
+---
+
+## 11. Frontend — Security
+
+| Threat | Mitigation | Implementation |
+| :--- | :--- | :--- |
+| XSS | HTML entity escaping | `escHtml()` converts special characters |
+| Attribute injection | Attribute escaping | `escAttr()` sanitizes attribute strings |
+| Path traversal | Scope enforcement | Rust backend validates paths against profile bounds |
+
+---
+
+## 12. Technical Specification Summary
+
+| Parameter | Implementation |
+| :--- | :--- |
+| **RAM (Idle)** | ~60 MB |
+| **RAM (Active)** | < 130 MB |
+| **UI Framerate** | 60 FPS |
+| **Cold Boot Time** | < 1.5 seconds |
+| **Backend** | Rust 1.70+ (Tauri v1) |
+| **Frontend** | ES2022 JavaScript |
+
+---
+
+## 13. Crash & Logging System (`crash.rs`)
+
+- **LOG_BUFFER**: Thread-safe circular buffer for in-memory logging.
+- **Panic Hook**: Captures backtraces and packages ZIP reports on failure.
+
+---
+
+## 14. Advanced Troubleshooting (Debug Menu)
+
+- **Config Check**: `is_debug_mode` controlled via `app.cfg`.
+- **State Reset**: Overwrites `AppData` and clears local storage.
+
+---
+
+## 15. Auto-Update Engine (`autoupdate.rs`)
+
+Async updater over the GitHub Releases API with SemVer comparison and two channels (stable,
+pre-release). Since 1.0.2 nothing runs unverified without the person's explicit choice: the
+installer is checked against the release's signed `update-manifest.json`, else its signed
+`update.json`, else the person decides, and it is started through `ShellExecuteExW`. See §81.
+
+---
+
+## 16. PTB System (Public Test Build)
+
+Distribution mode controlled via `app.cfg` with themed release note modals.
+
+---
+
+## 17. Legal & EULA System (v0.9.9)
+
+- **Installer Integration**: Forced EULA acceptance in NSIS and WiX/MSI configurations (0.9.x; since 1.0.0 the installer is BetterInstaller, which shows the Terms and Privacy Policy and, since 1.0.2, writes a consent receipt for each).
+- **Dynamic Localization**: Backend command `get_eula_text` dynamically selects `EULA_{LANG}.md` with fallback to `EULA.md`.
+- **Markdown Rendering**: Frontend uses `renderMarkdown` utility to display legal text with full formatting in a dedicated modal.
+- **Community Governance**: Formalized "Server Repositories & Moderation" clauses to protect community hosts.
+
+---
+
+## 18. Real-Time Performance Monitoring
+
+`sysinfo` backend with high-perf Canvas/SVG visualization and timeline scrubbing. (v1.0.0) Enhanced with an **Advanced Performance Monitor** for deep-dive system health (Latency, Thread usage, Async tasks) and automated reporting.
+- **Solid Progress Design**: Replaced linear-gradient animations with high-visibility flat blue (`var(--accent)`) background-color for consistent performance rendering.
+
+---
+
+## 19. Interactive Documentation Engine
+
+- **Mermaid.js bridge**: Technical visualization with localized node labels.
+- **Pan-Zoom**: Persistent viewport management.
+
+---
+
+## 20. Multimedia & Credits Engine
+
+Video backgrounds using `asset://` protocol with Intersection Observer throttling.
+
+---
+
+## 21. Server Repository System (Server Mode)
+
+Integrated HTTP server with manifest generation and Smart Sync (SHA-256).
+
+---
+
+## 22. Javascript to TypeScript Migration (v0.9.9)
+
+Complete transition to Strictly Typed ESM for structural stability and IPC safety.
+
+---
+
+## 23. Semantic Search Algorithm & Weighted Scoring
+
+BMM's interactive documentation engine features a dual-mode search system with full semantic expansion capabilities.
+
+### 23.1. Index Architecture
+
+The search index is built at startup (and on every language change) via `buildDiagramIndex()` in `docs-ui.ts`. Each index entry carries a **weight tier**:
+
+| Weight | Source | Example |
+| :--- | :--- | :--- |
+| **1.0** | Diagram title | "Mod Activation Flow" |
+| **0.8** | Main node label + description | `APPLY_MOD`: "Apply Mod" + desc |
+| **0.6** | Secondary node (via `explanationPrefix`) | Detail nodes |
+| **0.4** | Edge labels | "Conflict detected" |
+
+The final relevance score for a result is: `raw_score × weight_tier`. Results are deduplicated per `diagramId + nodeId`, keeping only the highest score.
+
+### 23.2. Classic Mode
+
+A fast substring-based engine. If the normalized query string appears in the normalized text, a score is computed:
+```
+score = 0.7 + (queryLength / textLength) × 0.2
+```
+Results are shown/hidden without synonym expansion.
+
+### 23.3. Semantic Mode
+
+A full word-level engine with three phases:
+
+1. **Synonym Expansion**: Every query word is expanded via a bidirectional FR/EN synonym dictionary (~25 canonical groups covering: activation, backup, conflict, integrity, performance, security, launch, etc.). Each expansion is pre-built into a flat lookup `Map<string, string[]>`.
+
+2. **Matching Pipeline** (per query word):
+   - **Exact boundary match** (`\bword\b`) → score `1.0`
+   - **Substring match** → score `0.75`
+   - **Levenshtein ≤ 1** (for words ≥ 5 chars) → score `0.7`
+   - **Levenshtein = 2** → score `0.45`
+
+3. **Final Score Composition**:
+```
+finalScore = (matchRatio × 0.35) + (avgWordScore × 0.45) + substringBonus(0.2)
+```
+Adaptive threshold: `0.45` for single-word queries, `0.32` for multi-word.
+
+### 23.4. UX Details
+
+- **Debounce**: 150ms delay prevents thrashing during fast typing.
+- **Score badges**: % badge on each result card (green >85%, blue >65%, amber otherwise), visible only in Semantic mode.
+- **Context labels**: Each result shows its tier (`📌 Title`, `● Node`, `○ Detail`, `→ Edge`).
+- **No-results state**: Informative empty state with a "Try Semantic mode →" shortcut when in Classic mode.
+- **Result cap**: Top 12 results displayed after deduplication.
+
+---
+
+## 24. Advanced SVG Manipulation & Highlighting (v0.9.9)
+
+Recursive DOM traversal to prevent filter clipping and "Pulsing Glow" effect for diagram search.
+
+---
+
+## 25. Core Threading & I/O Isolation
+
+Isolation of Disk I/O and Network tasks in background workers to ensure 60 FPS UI.
+
+---
+
+## 26. Premium UI Animation & Usability Framework (v0.9.9)
+
+BMM v0.9.9 introduces a specialized logic layer for high-fidelity interactive elements.
+
+### 26.1. Dropdown State Machine
+The global dropdown system (`modals.ts`) uses an asynchronous state machine to manage entry and exit phases.
+- **Portal Injection**: Menus are cloned and injected into a top-level `#global-dropdown-portal`.
+- **Async Closure**: The `closeGlobalDropdown` function implements a two-stage removal. It first triggers a CSS `.closing` animation before physically purging the DOM after a 200ms safety window.
+
+### 26.2. Mouse Grace Period & State Recovery
+To solve common "hover loss" issues during rapid mouse movement:
+- **100ms Grace Delay**: The closure trigger is buffered by a 100ms timer.
+- **State "Catching"**: Entering the dropdown or re-entering the trigger clears the `dropTimer` and immediately restores the `.open` state, effectively canceling the closure mid-animation.
+- **Invisible Bridging**: Uses pseudo-elements (`::before`) to create an invisible hover bridge between the trigger and the floating menu, preventing `mouseleave` events in the gap.
+
+---
+
+## 27. Modpack Engine — `.bmp` Format (v0.9.9)
+
+BMM implements a complete modpack lifecycle system in `commands/modpack.rs`.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Data Model** | `LocalModpack` struct containing metadata, a `Vec<ModpackModRef>` and per-file `ModpackFileRef` with SHA-256 hashes |
+| **Persistence** | Each modpack serialized as `<id>.json` in `AppData/modpacks/` via `serde_json` |
+| **Integrity Verification** | `check_modpack_integrity` compares local files byte-level against the manifest: Missing, Corrupted, or Valid |
+| **Repair Engine** | `repair_modpack_mod` supports two repair modes: Direct Download (zip extraction) and Server Repo (file-by-file SHA-256 fetch) |
+| **Local Recovery** | `find_file_by_hash_in_dir` recursively scans the target directory for files matching an expected hash before initiating network downloads |
+| **Progress Events** | Emits `bmm://repair-progress` IPC events with per-file progress percentages |
+| **Export/Import** | File dialog integration via `tauri::api::dialog` for `.bmp` format with UUID collision avoidance on import |
+
+---
+
+## 28. BetaHub Integration & Proof-of-Work (v0.9.9, removed 2026-09-25)
+
+Removed on 25 September 2026: `betahub-api.ts`, `betahub-modals.ts`, `betahub-pow.ts`, the
+gitignored `betahub-config.local.ts` that held a personal access token, the `app.betahub.io`
+source of the network CSP preset and the `BETAHUB_CONFIG` release secret. Reports go only through
+`features/feedback/bc-feedback.ts` (the BetterCommunity feedback centre, with its own
+proof-of-work in `feedback-modal.ts` and an offline queue); the "My recent reports" list moved
+to `features/feedback/report-history.ts`. The MCP tool `bmm_generate_betahub_report` became
+`bmm_generate_diagnostic_report` (same JSON, it never sent anything).
+
+---
+
+## 29. System Access Control (v0.9.9)
+
+`security-modal.ts` implements a dual-mode filesystem security gate.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Security Modal** | Glassmorphic first-launch modal with radio-card selection (Full/Limited) |
+| **Full Access** | `fs_security_mode = "full"` — unrestricted filesystem access across all drives |
+| **Limited Access** | `fs_security_mode = "limited"` — JS interface restricted to profile-defined folders |
+| **Backend Command** | `apply_fs_security_mode_command` applies the selected mode via Tauri scope reconfiguration |
+| **Mouse Glow Effect** | `mousemove` tracking via CSS custom properties (`--x`, `--y`) for premium radial-gradient hover effects |
+
+---
+
+## 30. Onboarding System (v0.9.9)
+
+`onboarding.ts` implements a guided first-use tutorial.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Step Definition** | 14+ steps defined as typed objects with `navTarget`, `selector`, `img`, and `icon` |
+| **Language Picker** | Step -1 renders a full language menu with FlagCDN integration and reactive re-rendering on `langChanged` events |
+| **Element Highlighting** | Computes target element `getBoundingClientRect()` relative to `#app-window-outer` and overlays a focus ring with `box-shadow: 0 0 0 9999px rgba(0,0,0,0.6)` |
+| **Typewriter Effect** | Character-by-character rendering at 18ms intervals via `setInterval` |
+| **Persistence** | `onboarding_shown` boolean flag in `settings` prevents re-display on subsequent launches |
+
+---
+
+## 31. Markdown Alert Engine (v0.9.9)
+
+The `renderMarkdown` function in `update-notes.ts` now supports GitHub-style alerts.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Regex Parser** | Matches `<blockquote>\s*<p>\[!(NOTE\|TIP\|IMPORTANT\|WARNING\|CAUTION\|...)\]` patterns in rendered HTML |
+| **Bilingual Support** | French equivalents (`REMARQUE`, `ASTUCE`, `AVERTISSEMENT`, `ATTENTION`) map to the same alert classes |
+| **CSS Classes** | `.md-alert-note` (blue), `.md-alert-tip` (green), `.md-alert-important` (purple), `.md-alert-warning` (amber), `.md-alert-caution` (red) |
+| **i18n Titles** | Alert titles fetched via `t('update.alert.<type>')` for localized rendering |
+
+---
+
+## 32. Frontend Interaction Telemetry (v0.9.9)
+
+`user-logger.ts` implements comprehensive frontend telemetry.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Click Logger** | Captures button/link clicks via delegated `click` handler with `closest()` traversal |
+| **Keyboard Logger** | Tracks `Ctrl+Alt+D` (DevTools), `Ctrl+Shift+F` (FSDM), `Ctrl+D` (Debug Menu toggle) |
+| **Scroll Logger** | Debounced (1s) scroll position logging with active view identification |
+| **Drop Logger** | `drop` event captures file names from `DataTransfer` |
+| **Error Capture** | `window.error` and `unhandledrejection` forwarded to `log_frontend_line` backend command |
+| **Focus/Blur** | Window focus changes logged to aid crash timeline reconstruction |
+
+---
+
+## 33. Launch Pack Module — Invisible Execution & Asset Pipeline (v1.0.0)
+
+BMM v1.0.0 implements a cross-platform (Windows-centric) application grouping and silent execution engine.
+
+| Component | Implementation |
+| :--- | :--- |
+| **VBScript Launcher** | Generates dynamic `launcher.vbs` scripts using `WScript.Shell.Run` with `WindowStyle=0` (Hidden) to prevent console pop-ups for `.exe` and `.bat` files. |
+| **PowerShell Stealth** | Leverages `powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass` for non-intrusive script execution. |
+| **Escaping Logic** | Custom double-quote escaping for VBScript strings to prevent `800A0401` syntax errors in long file paths. |
+| **Icon Pipeline** | Uses the `image` crate (Lanczos3 filter) to downsample source images into a standardized 256x256 `.ico` buffer. |
+| **Shortcut Engine** | Dynamically executes a hidden PowerShell sub-process to interface with `WScript.Shell` COM objects for creating desktop `.lnk` shortcuts. |
+| **Asset Persistence** | Managed storage in `AppData/Local/bmm/LaunchPacks/<id>/` with automatic recursive cleanup on pack deletion. |
+
+---
+
+## 34. Model Context Protocol (MCP) Server (v1.0.0)
+
+BMM v1.0.0 features a professional-grade JSON-RPC implementation for AI integration.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Protocol** | JSON-RPC 2.0 over standard I/O (stdio) streams. |
+| **Serialization** | Intensive use of `serde` and `serde_json` for type-safe tool definitions and result mapping. |
+| **Tool Surface** | 95 atomic tools exposed via the `mcp-server` binary, plus 81 CLI subcommands on the same binary, covering the entire BMM command surface. |
+| **State Bridge** | The MCP binary initializes a secondary instance of the `AppState` engine to access local data without requiring the main BMM UI to be running. |
+| **Async Handling** | Fully asynchronous request processing using `tokio` to handle concurrent tool calls from AI agents. |
+
+---
+
+## 35. Unified Command Line Interface (CLI) (v1.0.0)
+
+The new unified CLI provides a powerful terminal-based interface for BMM management.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Command Parser** | Built on the `clap` (Command Line Argument Parser) crate with multi-level subcommands and typed arguments. |
+| **Visual Feedback** | Integration of `colored` for log levels and `tabular` for structured data presentation in the terminal. |
+| **Banner Engine** | High-fidelity ASCII art rendering engine for branding and version display on startup. |
+| **Environment Discovery** | Automatic `PathBuf` resolution logic to locate the BMM data directory across different Windows user profiles. |
+| **Error Reporting** | Direct integration with the new `AppError` strategy for consistent error codes between CLI and GUI. |
+
+---
+
+## 36. UI Polish & Contextual Help Logic (v1.0.0)
+
+BMM v1.0.0 introduces a centralized assistance and visual refinement engine.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Tasky Help Engine** | `window.showTaskyHelp(key, type)` triggers localized bubbles. (v1.0.0) Redesigned for compactness with centered alignment, reduced padding, and optimized anchor positioning. |
+| **Tooltip Isolation** | Tooltips are rendered in a high-z-index portal to prevent clipping from parent `overflow: hidden` containers. |
+| **Resize Strip Logic** | A custom resize engine in `titlebar.ts` listens for `mousedown` on edge strips and uses `tauri::window::start_dragging` or manual bounds calculation for precision. |
+| **Glassmorphism Tokens** | Standardized CSS variables (`--bmm-glass-bg`, `--bmm-glass-border`) used across all 1.0 components for visual consistency. |
+
+---
+
+## 37. Directory Mapping & Analytics (v1.0.0)
+
+The Directory Mapping engine (Visual Mapper) is a high-performance recursive scanner designed for large-scale mod collections.
+
+### 37.1. Recursive Walking Engine (Rust)
+The backend `scan_directory` command implements a multi-threaded recursive walker.
+- **Cycle Detection**: Uses a `HashSet` of inode/path combinations to detect and terminate infinite recursion caused by circular symlinks or folder loops.
+- **Infinite Depth Support**: (v1.0.0) The stack-based walker is optimized for memory, allowing for theoretical infinite nesting depth without stack overflow.
+- **Filtering Logic**: Implements a blacklisting system to ignore hidden system folders (`.git`, `System Volume Information`) and irrelevant binary artifacts, keeping the tree clean.
+
+### 37.2. Real-time Mod Statistics
+BMM v1.0.0 introduces advanced telemetry for profile health.
+- **Global Mod Counter**: The `get_profiles_with_stats` command performs a pre-emptive scan of the `mods` directory. It differentiates between valid mod folders (containing files) and orphaned metadata entries.
+- **Reactive State Bridge**: The results are piped through an async IPC stream, allowing the UI to update the "Total Mods" badge in the sidebar and profile cards without blocking user interaction.
+- **Ownership Analysis**: The mapper correlates file ownership across multiple active mods, identifying which mod physically "owns" a file in the game root at any given time.
+
+### 37.3. Frontend Tree Rendering
+The `Mapper.ts` module handles the visual presentation of the directory tree.
+- **Virtual Scrolling**: Optimized to render only the visible nodes in the viewport, allowing for smooth 60 FPS interaction even with libraries containing 10,000+ files.
+- **Contextual Actions**: Every node in the tree is bound to a native Shell command, enabling "Open in Explorer" and "Copy Relative Path" functionality.
+- **Visual Taxonomy**: Uses distinct SVG iconography and color tokens to distinguish between:
+    - **Root Mods**: Base installation folders.
+    - **Asset Containers**: Sub-folders containing textures, scripts, or models.
+    - **Binary Payloads**: `.exe` or `.dll` files that trigger high-priority conflict checks.
+
+---
+
+## 38. Metadata Updates History Engine (v1.0.0)
+
+BMM v1.0.0 introduces a persistent tracking system for all mod metadata mutations.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Tracking Trigger** | Integrated into the `update_mod_metadata` command. Compares the "before" and "after" state of each field using `PartialEq`. |
+| **Event Schema** | `HistoryEntry` struct capturing: Mod ID, Timestamp (UNIX), Action Type, and a bitmask/list of modified field identifiers. |
+| **Data Storage** | Serialized as a separate `history.json` file per profile to ensure high performance and avoid bloating the main `mods.json`. |
+| **Retention Worker** | A background cleanup task that executes on application startup, purging entries older than the user-defined threshold (default: 30 days). |
+| **Search & Filter** | The frontend uses a specialized filter state to perform client-side matching on the history collection without re-fetching from disk. |
+
+---
+
+## 39. Export Cancellation Architecture (v1.0.0)
+
+BMM implements a cooperative cancellation pattern for the `.MM` export operation.
+
+| Component | Implementation |
+| :--- | :--- |
+| **AtomicBool Flag** | `export_cancelled: Arc<AtomicBool>` added to `AppState`. Reset to `false` at the start of every `export_modlist` invocation. |
+| **Check Point** | The Rust export loop inspects `state.export_cancelled.load(Ordering::SeqCst)` before processing each mod entry. |
+| **Cancel Command** | `cancel_export_modlist` Tauri command sets the flag to `true` via `state.export_cancelled.store(true, Ordering::SeqCst)`. |
+| **Event Protocol** | When the flag is detected, the loop emits `bmm://export-progress` with `cancelled: true`, then returns an `AppError::LockError`. |
+| **Frontend Handling** | The JS `wasCancelled` flag is set on abort button click. The `finally` block checks it to decide between "Export cancelled" and "Export complete" toasts. |
+
+---
+
+## 40. Folder Size Command (v1.0.0)
+
+A dedicated Tauri command provides recursive disk usage measurement for arbitrary directories.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Command** | `get_folder_size(path: String) -> u64` in `commands/disk.rs` |
+| **Algorithm** | Depth-first `std::fs::read_dir` recursion. Each regular file contributes `metadata().len()` bytes. Errors (permissions, broken symlinks) are silently skipped. |
+| **Frontend Usage** | `profiles.js` calls this for each profile's `mods_path` after the card grid renders. Results are formatted via `formatBytes()` and injected into `.profile-disk-usage` spans. |
+| **Performance** | Runs synchronously in the Tauri command thread. For very large libraries (>50 GB), the async IIFE isolates the blocking call, keeping the grid responsive during measurement. |
+
+---
+
+## 41. Server Browse Verification (v1.0.0)
+
+The public repository browser enforces a `hash` field gate.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Gate Filter** | `renderRepoList()` applies `filtered.filter(r => r.hash && r.hash.length > 0)` before all other filters. |
+| **Schema Contract** | `repos.json` entries must carry a `hash` string field (set by the BMM team when validating a server). Entries without it are silently excluded. |
+| **Verified Badge** | Each displayed card renders a green "Verified" badge with a checkmark SVG in the name row. |
+| **Fallback** | If the remote `repos.json` is unreachable, the browser shows its existing error/empty state — no unverified servers leak through. |
+
+---
+
+## 42. Centralized Link Registry (v1.0.0)
+
+All external URLs are decoupled from code into `frontend/assets/links.json`, loaded through `frontend/src/core/links-config.ts`.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Schema** | `BmmLinks` interface: `plugin_catalog`, `plugin_github`, `server_browse`, `contributors`, `autoupdate_api`, `apps_catalog`, plus social links (`github_repo`, `discord`, `reddit`, `kofi`, `kofi_community`, `ed_forum`). |
+| **Load order** | `loadLinks()` tries `REMOTE_LINKS_URL` → local `assets/links.json` → hardcoded `DEFAULTS`. First success wins; each merge is spread over `DEFAULTS` so missing keys never break. |
+| **Observability** | A single `console.log` reports the resolved source (`remote (...)`, `local file (...)`, or `built-in defaults`). |
+| **Accessor** | `getLinks()` returns the cached `Readonly<BmmLinks>`; called by `repo.ts`, `plugins.ts`, `update-notes.ts`, `apps-catalog.ts` and `app.ts`. |
+| **Backend pass-through** | `fetch_plugin_catalog(catalog_url)` and `check_for_update(api_base_url)` accept the URL from the frontend, falling back to a Rust constant. |
+| **Runtime HTML patching** | `patchHtmlLinks()` runs after `loadLinks()` and rewrites every `[data-link-key]` element's `href` / `data-url`, so static links in `index.html` track the JSON. |
+| **Update integration** | `links.json` is listed in `TRACKED_FILES` of `scripts/gen-update-manifest.mjs`, so the incremental updater can patch URLs without a new installer. |
+
+---
+
+## 43. App Catalog Engine (v1.0.0)
+
+The App Catalog is implemented in `src-tauri/src/commands/apps.rs` (+ `models/app_catalog.rs`) and `frontend/src/features/apps/apps-catalog.ts`. State persists to `apps_state.json` in the app data directory.
+
+### Catalog Fetch & Trust Chain
+- `fetch_app_catalogs(catalog_url, extra_community_urls)` merges multiple catalogs in tiers and assigns trust **by source**, never by JSON content (`apply_trust()` overwrites `official`/`partner` and truncates `tags` to 3).
+  - **Tier 0 — Official**: the `apps_catalog` URL → `official = true`. Its `partner_catalogs` defines Tier 1; its `community_imports` feed Tier 2.
+  - **Tier 1 — Partner**: URLs in the official `partner_catalogs` → `partner = true`.
+  - **Tier 2 — Community**: `community_imports` + user-added sources → no badge.
+- Entries are de-duplicated by `id` (higher tier wins). A visited-set + a 30-source cap prevent loops.
+
+### Install Engine
+- `install_app(...)` downloads to a managed `<install_path>/<id>/` folder, then branches on type:
+  - **zip** → extracted; if it contains a portable exe it's kept (`is_managed = true`) and the main exe chosen by `pick_main_exe()` (name-score, skips installers). If it contains **only** an installer, that installer is run via `run_installer_and_detect()`.
+  - **exe/msi** (or filename containing `setup`/`install`) → `run_installer_and_detect()`.
+  - **script** → kept and registered as the launch target.
+- `run_installer_and_detect()` snapshots `common_install_roots()` (Program Files, Program Files (x86), LocalAppData\Programs) **before** launch, `child.wait()`s on a `spawn_blocking` task, then resolves exe/dir/uninstaller from `find_registry_app()` (registry `DisplayIcon` / `InstallLocation` / `UninstallString`) with a folder-diff fallback (`auto_detect_installed_exe()` + `match_score()`).
+
+### Launch, Usage Tracking & Uninstall
+- `launch_app()` selects an interpreter by extension (`.ps1`→PowerShell `-ExecutionPolicy Bypass`, `.bat`/`.cmd`→cmd, `.py`→python, `.vbs`→wscript, `.sh`→bash, else direct), then spawns a background thread that `wait()`s for exit and adds the elapsed seconds to `usage_seconds`.
+- `uninstall_app(app_id, delete_files, run_uninstaller)`:
+  - `run_uninstaller` → resolves the command from state or a live `find_registry_app()` lookup, parses it with `parse_command()` (handles quoted paths + args), and spawns it directly (OS handles UAC).
+  - else deletes the managed folder **before** mutating state (so a failed delete leaves state intact).
+- Commands registered: `fetch_app_catalogs`, `install_app`, `detect_app_executables`, `launch_app`, `get_apps_state`, `uninstall_app`, `toggle_app_favorite`, `add/remove_community_source`, `get_default_apps_path`, `set_app_exe_path`, `register_installed_exe`, `app_has_uninstaller`, `open_app_folder`, `clear_app_history`.
+
+### Frontend
+- Tabs: Browse / Installed / Favorites / History / Sources / Create. State is refreshed via a lightweight `get_apps_state` read after every mutation (no polling).
+- `renderMarkdown()` is a dependency-free Markdown→HTML renderer (headings, bold/italic, inline + fenced code, lists, blockquotes, links, images) used in the detail modal; README URLs are normalized to raw via `toRawUrl()` to avoid CORS.
+
+---
+
+## 44. Plugin System Architecture (v1.0.0)
+
+Implemented in `src-tauri/src/commands/plugins.rs` with models in `models/plugin.rs`; the catalog is fetched from `links.json`'s `plugin_catalog`.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Manifest** | `PluginManifest` (id/name/version/author/description/game/permissions/tags/website/folders) plus `apply_mode` (`modlist`/`script`/`both`) and `has_scripts`/`scripts`. |
+| **Modlist model** | `PluginModList { strict, required_mods }`; each `PluginModRequirement { name, optional, sha256 }`. `compare_plugin_mods` diffs the active library vs. requirements; `apply_plugin_modlist` enables the set. |
+| **Install** | `install_plugin` (from catalog), `install_plugin_from_file` (`.bmmplug`), `create_local_plugin` (in-app authoring), `export_plugin`. `compute_plugin_checksum` validates contents. |
+| **Permissions** | `get_plugin_permissions` / `set_plugin_permissions`; external script execution (`run_plugin_scripts`) is gated behind an "unsafe plugins" permission. |
+| **Lifecycle** | `toggle_plugin`, `uninstall_plugin`, `get_installed_plugins`, `open_plugin_folder`. |
+| **Automation** | `generate_script` emits cURL / PowerShell snippets; `get_app_exe_path`, `write_text_file`, `write_zip_files` support authoring/export flows. |
+
+## 45. Local REST API Server (v1.0.0)
+
+`src-tauri/src/api/mod.rs` runs a **Warp** server on `API_PORT = 51274` (`127.0.0.1`), started on app boot.
+
+| Aspect | Detail |
+| :--- | :--- |
+| **Routes** | ~97 endpoints via `path!("api" / ...)`: `health`, `status`, `mods` (+ `active`/`enable`/`disable`/`{id}`), `profiles` (+ `activate`/`{id}`), `plugins` (+ `compare`/`apply`), `modpacks` (+ `create`/`enable`/`disable`/`import`/`{id}`), `repo` (`info`/`connect`/`list`/`sync`/`gen`/`host`), `data` (`export`/`import`), `modlists` (`export`/`import`), `creator-id`, `check-update`, `restart`. |
+| **Auth** | A per-install token (`get_api_token` / `reset_api_token`) guards mutating routes; SHA-256 is used for token handling. |
+| **Concurrency** | Shares `AppData` via `Arc`; uses a `oneshot` channel + `AtomicBool` for graceful shutdown. |
+| **Consumers** | The in-app API explorer, generated automation scripts, and external companion tools. |
+
+## 46. ContentID Engine (v1.0.0)
+
+Deterministic mod identity lives in `models/mod_entry.rs`.
+
+| Function | Behaviour |
+| :--- | :--- |
+| `derive_content_id(folder_path)` | Computes a stable id from the mod's file set — deterministic across machines for identical content. |
+| `content_id_from_file_hashes(hashes)` | Folds the per-file SHA-256 map into a single content id. |
+| `update_content_id_from_hashes(entry)` | Refreshes `entry.content_id` from already-computed `file_hashes`, keeping it in lockstep with the integrity engine. |
+| **Usage** | Mod matching for `.MM` lists, modpacks, repository sync, and the import "already present" check — all keyed on `content_id` rather than folder name. |
+
+---
+
+## 47. Theme System Engine (v1.0.0)
+
+A runtime CSS-variable theming engine. Frontend: `frontend/src/features/themes/theme-engine.ts` (apply/observe) and `theme-editor.ts` (the floating editor). Backend: `src-tauri/src/commands/themes.rs` persists installed themes as `.json` files in a `themes/` directory under the app data dir, plus `import_theme`/`export_theme` (`.bmmtheme` = ZIP) and `fetch_theme_catalogs`.
+
+| Mechanism | Detail |
+| :--- | :--- |
+| **Token injection** | `applyTheme()` writes `--bmm-*` CSS variables into dedicated `<style>` blocks (vars / css / fonts / patch); source files are never mutated. |
+| **Inline patcher** | A `MutationObserver` rewrites hardcoded inline colours on dynamically inserted DOM to the matching token, so late content follows the theme. |
+| **Contrast enforcer** | On `mode: 'light'` themes, `enforceLightContrast()` darkens unreadable light text/surfaces via inline `!important` (`data-bmm-contrast`); cleared (`clearAllEnforced()`) when switching back to a dark theme so dynamic cards revert without a refresh. |
+| **Element overrides** | The pick tool stores per-selector overrides (colours, states, CSS, icon SVG swap, image) applied as a generated CSS block. |
+| **Auto-palette** | `genPalette()` derives a full coherent dark/light token set from a single HSL seed colour. |
+| **Sharing** | Export to `.bmmtheme`, a `bmm://theme/import-inline` link, or install from the theme catalog. |
+
+---
+
+## 48. Translation Sandbox (v1.0.0)
+
+`frontend/src/features/settings/i18n-sandbox.ts` — a non-destructive editor over the i18n system (§10). Edits live in an in-memory `_sandbox` map and only touch disk on export.
+
+| Mechanism | Detail |
+| :--- | :--- |
+| **Sandbox model** | Keys are edited against a base language; `buildExportObject()` merges the full source file with sandbox edits, preserving order and meta keys. |
+| **Pointer mode** | Clicking any element resolves its `data-i18n` key (or surfaces hardcoded text) via DOM walking. |
+| **Hardcoded scanner** | `find_hardcoded_strings` (Rust) scans source for literals without an i18n key. |
+| **Overlay mode** | The modal detaches into a draggable/resizable overlay; the original inline `style` is snapshotted and restored verbatim on exit (avoids the panel sticking at overlay size). |
+| **Install path** | Exported `.json` files install via `import_language`; the `import_language_data(code, content)` command also accepts raw JSON. |
+
+## 49. Customizable Navbar & Sandboxed Pages (`bmmpage://`)
+
+The navigation bar is user-configurable (reorder/add/remove entries), and custom
+entries can open **sandboxed pages** served over a dedicated `bmmpage://` scheme.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Custom scheme** | `bmmpage://` pages are rendered in an isolated context, keeping third-party page markup/scripts away from the core app surface. |
+| **Permissioned broker** | A broker mediates every privileged call a sandboxed page attempts, granting only explicitly-allowed capabilities (no ambient access to Tauri commands). |
+| **Deep-link manager** | `deep_link_manager` (TS + JS core) routes external `bmm://` / `bmmpage://` invocations, incl. web → app **install / add-source** deeplinks from BetterCommunity Web. |
+
+## 50. Plugin Scheduler & Deeplink Actions
+
+`scheduler.ts` runs plugin/script-generation actions on a schedule by firing
+deeplinks at chosen times.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Sources** | Plugins are added via endpoint or deeplink sources; HTML docs ship alongside. |
+| **Scheduler** | Time-based execution of script-generation actions, dispatched through the deep-link manager so a scheduled run reuses the same execution path as a manual one. |
+| **Web catalog** | The App Catalog Engine (§43) also consumes the BCWEB `catalog.json` feed (apps/plugins/themes) so community content is installable from inside BMM. |
+
+## 51. Platform: Tauri v2 Migration & Hidden Process Spawning
+
+| Component | Implementation |
+| :--- | :--- |
+| **Tauri v2** | Migrated to Tauri v2 (compiles green on `cargo` + `tsc`; runtime validation ongoing). Capabilities/permissions model updated accordingly. |
+| **Hidden spawn** | All background process spawns route through the `crate::commands::proc` hidden-spawn helpers so no console window ever flashes (Windows `CREATE_NO_WINDOW`). |
+| **Interactive Tutorial Hub** | `tutorial-engine.ts` powers an in-app, step-driven tutorial hub layered over the onboarding system (§30). |
+
+---
+
+## 52. Command Registry & Palette (v1.0.0+)
+
+One registry (`frontend/src/core/commands.ts`) powers BOTH the Ctrl/⌘+K palette and the rebindable shortcuts manager in Settings.
+
+| Component | Implementation |
+| :--- | :--- |
+| **Command model** | `{ id, category, title:{en,fr}, keywords, run(), defaultChord }` in a `Map` registry. Categories: nav / mods / profiles / repo / tools / settings / help. |
+| **Dynamic nav commands** | `refreshNavCommands()` rebuilds `nav.*` commands from the LIVE navbar (`.nav-item[data-view]` + `[data-custom-id]`) on every palette open — custom sandboxed pages are first-class, rebindable targets. |
+| **Bindings** | User overrides persist in `localStorage` (`bmm_cmd_bindings`) layered over defaults; a single global keydown dispatcher matches chords (modifier-less chords are suppressed while typing). Conflict detection warns on double-assignment. |
+| **Palette rendering** | The overlay mounts inside `#app-window-outer` (the rounded, clipped app frame) as `position:absolute` — this is what keeps the backdrop/box-shadow from bleeding into the transparent OS-webview margin. Classic search is substring scoring; Semantic expands query tokens through the merged `_synonyms` map from the language files. |
+| **Actions** | Commands run through the exact UI paths a human would use (`clickNav`, `clickAfterNav`, tab-switch helpers), so dialogs/confirmations still apply. The palette dispatches `bmm:action:palette-opened` for the tutorial engine. |
+
+## 53. Repo Download Password (v1.0.0+)
+
+An optional subscriber-facing gate for self-hosted repos, distinct from `admin_password` (which only guards the host's `/admin` panel).
+
+| Layer | Implementation |
+| :--- | :--- |
+| **Generated server** | `DOWNLOAD_PASSWORD` is templated into `server.express.js`; when non-empty, every content request (repo.json + mod files) must carry `X-Repo-Password` (or `?pw=`) or receives 401. `/dashboard`, `/monitoring.json`, `/admin/*` and local access are exempt. Comparison is constant-time (`crypto.timingSafeEqual`, CWE-208) — as is the admin `Authorization` gate, in both the single-repo and hub-server templates. |
+| **Rust client** | `fetch_repo_info(url, creator_id, password)` and `SyncArgs.password` send the header; a remote 401 surfaces as the typed error `repo.errPasswordRequired`. |
+| **Frontend** | On that error the subscriber gets a themed prompt; the password is kept for the session (`setRepoPassword`) and passed to `sync_server_repo`. Host forms (mini-server + export) expose a "download password (optional)" field. |
+| **API / automation** | `GET /api/repo/info?password=`, `POST /api/repo/sync {password}`, the Plugins Quick Test fields, and the `bmm://repo/sync` deeplink (`&password=`) all thread it through — the deeplink was also rewired to actually pre-fill and drive the sync form via `bmm:repo-focus`. |
+
+## 54. Offline Mode & Telemetry Pipeline (v1.0.0+)
+
+| Subsystem | Implementation |
+| :--- | :--- |
+| **Offline detection** | `core/offline.ts` probes two lightweight endpoints (5 s timeout) instead of trusting `navigator.onLine`; offline state shows a banner and dispatches `bmm-connectivity`; it gates nothing (network features report their own error, and a LAN repo keeps working). Re-probe every 15 s offline / 120 s online. |
+| **Telemetry consent** | Opt-in only (`settings.analytics_consent: Option<bool>`, `None` = never asked → nothing collected; declining wipes the buffer). Sub-toggles: benchmark/extra-hardware, session replay, replay unmask. |
+| **Pipeline** | Events buffer to `analytics_queue.jsonl` (10 MB cap) and flush as ONE gzipped batch (packet id) every 90 s while visible; endpoint allow-list accepts `https://` (or loopback) only. |
+| **Session replay** | rrweb with no mouse-move capture, masked-by-default sensitive selectors, animating subtrees blocked; chunks gzip via `CompressionStream`. Local `.bmmreplay` files + a rolling crash-session buffer, pruned by retention limits (30 / 2 GB defaults). |
+| **GDPR** | Export raw buffer; per-packet deletion requests honoured within 72 h; sent-packet list shows event names/counts only. |
+
+### §34 addendum — MCP dependency
+The MCP server now builds against **rmcp 1.8** (stdio transport unchanged), clearing RUSTSEC-2026-0189; `ServerInfo`/`Implementation` are `#[non_exhaustive]` in 1.x and are built via mutate-from-`Default`.
+
+---
+
+*Better Mod Manager is developed by FreeProject089 — Engineered for uncompromising performance, file safety, and modern mod management.*
+
+## 55. Icon library: loading and sharding (v1.0.0+)
+
+The packs are JSON generated offline by `scripts/gen-icon-pack.mjs` from the npm packages
+`lucide` (ISC) and `simple-icons` (CC0) — never runtime dependencies. The libraries' own
+formats are kept: Lucide's `iconNode` arrays (`[tag, attrs][]`) and Simple Icons' single
+24×24 path. The SVG is built **at render time**, so the JSON stays data rather than markup.
+
+The brand pack is 4.6 MB. It ships **twice**: whole, for the picker (which needs every name
+to search), and as **27 first-letter shards** for painting a stored ref. Rendering
+`si:github` therefore loads `si/g.json`. Without that, a single brand tag pulled 4.6 MB on
+the startup path — exactly the kind of cost that makes a manager feel slow.
+
+Rendering (`renderPackIcon`) is **synchronous**: card generators cannot await. A ref whose
+pack is not loaded yet renders an empty string and the next render finds the glyph — so the
+warm-up is fired without being awaited, never in front of `get_mods`.
+
+## 56. Docked panel space reservation (v1.0.0+)
+
+Three panels can dock to the same edge. Each used to write `.app-shell`'s `padding-right`
+as an inline style, so the second clobbered the first's reservation and closing either one
+removed the padding the other still depended on.
+
+`ui/dock-space.ts` is the single owner: each panel **claims** its width under its own name,
+the widest wins (they stack at the same edge), and releasing a claim recomputes from
+whatever is left. The module also sets `body.bmm-docked` and `--bmm-dock-w` — one state for
+every layout rule to key on, instead of one class per panel.
+
+## 57. Responsiveness: synchronous commands and the main thread (v1.0.0+)
+
+In Tauri v2, a command declared `#[tauri::command]` **without** `(async)` runs on the
+window's main thread. Any command that walks the disk therefore freezes the UI for the
+duration of that walk. `get_mods` was one, and it rebuilds the file cache after every mod
+activation — the cause of the freeze reported in the field.
+
+The rule adopted: **any command touching `read_dir`, `WalkDir` or `metadata` over a
+user-sized tree is `(async)`**, not only the ones a freeze has already been reported for.
+
+The UI corollary was written here before it was true, and is corrected in §58.
+
+## 58. The spinner that was switched off, not frozen
+
+Three diagnoses were needed, and the first two are worth recording because both were
+plausible and both were wrong.
+
+The first blamed compositor layer promotion: a `transform` animation only runs on the
+compositor once its layer is promoted, and that promotion is committed by the main thread,
+so a spinner inserted during heavy work never gets its layer. The second blamed a name
+collision: `@keyframes spin` is declared three times across the stylesheets and the last
+one parsed wins globally. Both changes were made, both are harmless, and neither moved the
+symptom.
+
+The actual cause is that the indicators were never frozen — they had been **switched off**.
+A global rule sets, under `prefers-reduced-motion`:
+
+```css
+animation-duration: 0.01ms !important;
+animation-iteration-count: 1 !important;
+```
+
+A 0.01ms duration is survivable for an infinite loop. It is `iteration-count: 1` that
+kills: the spinner completes exactly one instant turn and stops, static and pixel-identical
+to a hung application — the one message a loading indicator must never send. Windows
+reports `prefers-reduced-motion: reduce` whenever Accessibility → Visual effects →
+"Animation effects" is off, so this fires on a stock machine with nothing set inside BMM.
+
+The fix carves progress indicators out of that rule and out of the app's own `bmm-no-anim`
+kill-switch, at a deliberately slow 2.4s rather than simply re-enabled. Reduced-motion
+exists to stop large-area parallax, zoom and slide; a small glyph rotating in place is the
+textbook permitted exception.
+
+**The lesson, which cost two commits:** before blaming the renderer for an animation that
+will not play, check whether a global rule has turned it off. A comment describing an
+intention is never proof the code realises it, and neither is a plausible mechanism.
+
+## 59. Running user code without a shell
+
+The scheduler could launch a program with arguments. That is the wrong shape for "do these
+five things in order": expressing it as argv means five steps, and the alternative — one
+long string handed to a shell — is precisely the command-injection surface the module was
+written to avoid (CWE-78).
+
+A script is the honest form. The user writes code, it goes to a **file**, and the
+interpreter is handed the file. The body is never concatenated into a command line and
+never reaches a shell as text, so there is nothing to escape and no quoting rule for the
+user to get wrong. The interpreter is selected from a closed table (`powershell` / `cmd` /
+`bash` / `python`) and the `engine` parameter can therefore never *be* the program. The
+temp file is named from the process id and a nanosecond stamp — two tasks firing on the
+same tick must not write each other's script — and is removed on every path, including a
+failed spawn.
+
+Both spawners are `#[tauri::command(async)]`. `cmd.output()` blocks until the child exits;
+synchronous, it froze the window for the child's entire lifetime. This is §57's rule
+applied to waiting rather than to walking a disk.
+
+## 60. Permissions that name what they unlock
+
+A single checkbox labelled "allow custom commands" told the user a permission was being
+granted but not what it covered — and it did not cover deeplinks at all. Firing a `bmm://`
+link reaches anything the app exposes, including actions that have no scheduler step of
+their own, so it was simultaneously the widest capability in the subsystem and the only one
+nobody had to ask for.
+
+It is now three separate grants: run external programs, run scripts, fire deeplinks.
+
+The migration is the interesting part. An existing task carries only the old flag, and
+`taskPerms()` derives from it: the flag meant "may run external programs", so it maps to
+`command`; it also maps to `deeplink`, because deeplinks previously required nothing and
+revoking them on upgrade would break automations that work today. It does **not** map to
+`script`. That capability did not exist when the user ticked the box, so granting it
+retroactively would not be honouring consent — it would be inventing it.
+
+## 61. The bubble that outlived its tutorial
+
+Minimising the interactive tutorial after a "Show me", then closing it, left the hint
+bubble floating over the application with nothing behind it.
+
+The ghost cursor and its caption are two elements, and the caption is a **sibling** on
+`<body>`, not a child of the ghost. Removing the ghost therefore never took the caption
+with it. Only the normal-completion path removed both explicitly; the teardown removed
+just the ghost, so every route out of the tutorial that was not "finish it" leaked the
+caption. Creating a second Show-me stacked another one on top.
+
+The same lesson arrived twice in one file, because the minimised panel's layout was also
+wrong, and its stylesheet said why in a comment that was false:
+
+```css
+/* These rules must beat the side-dock column rules, which they do by class count
+   and by coming later in this file. */
+.tut-engine-panel.minimized.pill-float { … }
+```
+
+The dock rules are `body.tut-dock-right .tut-engine-panel.minimized` — the *same* three
+classes, plus two element selectors. Class count is tied; element selectors break the tie,
+in the dock's favour. So `height: 46px` and `bottom: 0` were overriding the pill's
+`height: auto` and `bottom: 24px`, squeezing auto-sized content into a rigid box pinned to
+the screen edge. A leading `body ` levels the specificity and lets source order decide, as
+the comment always intended.
+
+**The lesson:** two elements created together must be destroyed together — make one the
+child of the other, or remove both on every path, never one. And a comment asserting a
+specificity outcome is not a proof of it: count the element selectors, not just the
+classes.
+
+## 62. The subscriber that survived its own UI
+
+DevTools ate memory the longer the application ran, and the obvious suspects were all
+innocent. Its four buffers (`logs`, `ipcCalls`, `patches`, `actions`) are each capped at
+`maxItems`; its three intervals are cleared in `destroy()`; the accessibility audit is an
+idempotent add/remove of one class; and the `addEventListener` monkeypatch stores what it
+learns in a `data-` attribute **on the element itself**, so it retains no outside
+reference and dies with the node.
+
+The leak was in the teardown's own contract. `destroy()` nulls the container and
+`toggle()` rebuilds through `init()` — "rebuilt next time it opens" is by design. But
+`init()` reaches `attachListeners()`, which called `debugHub.subscribe()` with a fresh
+inline arrow, and `unsubscribe()` appeared nowhere in the file. The hub keeps its
+subscribers in a `Set` that nothing else prunes, so every open→close→open cycle added one
+more permanent callback, and each closure pinned the destroyed UI's detached DOM. Worse,
+`emit()` fans every log line, IPC call and action out to the whole `Set`: after N cycles,
+each of those ran N times, into dead interfaces.
+
+There was a second-order effect that made it visible even with the panel shut. The hub
+gates state emission on `listeners.size > 0`; once the `Set` was permanently non-empty,
+state kept being emitted forever with DevTools closed.
+
+**The lesson:** a teardown whose object is rebuilt afterwards must undo every registration
+that object made, including the ones it made in **other** modules. Timers and observers it
+owns are the easy half; a callback handed to somebody else's collection is the half that
+gets forgotten, because nothing in the destroyed object points at it.
+
+## 63. The value written, and never read
+
+The theme chosen on the installer's picker never survived the first launch. Neither side
+was obviously broken: the manifest maps that page to `settings.active_theme`, and the
+handoff writer duly wrote it into the file. Nothing read it. `apply_settings` handled
+language, tutorial skip, telemetry, Discord RPC, smart I/O, sound, filesystem mode, the
+session recorder and the legal flags — `active_theme` was simply absent from the list, so
+every install landed on the default whatever the user picked, in silence.
+
+The same shape turned up the same week in a different codebase — the web platform, in
+JavaScript, in a feature that had nothing to do with themes — which is why it is recorded
+here rather than filed as a one-off. That code opened with
+
+```js
+const p = db();          // db() is async in this codebase
+```
+
+inside a `try`/`catch` written so that a GeoIP or database hiccup could never deny a
+login. `p` was therefore a pending promise, the very next property access threw, and the
+catch swallowed it. The feature would have shipped recording nothing at all while every
+surrounding check stayed green — dead, and looking alive.
+
+**The lesson:** a handoff has two ends, and each half can be perfectly correct while the
+pair does nothing. Test the round trip, not the halves. And a `try`/`catch` written to
+protect a critical path will hide your own mistakes inside it just as willingly as the
+failure it was meant for — which is exactly why the fix was verified by reading rows back
+out of the database rather than by watching the login succeed.
+
+
+---
+
+## 64. One engine, two kinds of tutorial
+
+The official tutorials are TypeScript objects whose every string is an i18n key. That is the
+right shape for content shipped with the app and the wrong shape for content a person makes:
+a user cannot add keys to `Lang/*.json`, and a tutorial whose text lives in a translation
+file only works on the machine that has it.
+
+The obvious answer — a second, simpler runner for custom tutorials — was the wrong one. Two
+runners is two behaviours, and the second one is always the one that lags: a spotlight fix
+lands in the official engine and the shared tutorials keep the old bug.
+
+So a `.bmmtut` document carries **literal text**, per language, and the loader materialises
+**runtime translation keys** (`ctut.<id>.<path>`) into an additive overlay before handing the
+engine a definition made of keys. The engine calls `t()` exactly as it always did and never
+learns the difference. The overlay is consulted only on a `t()` miss whose key starts with
+`ctut.` — `t()` runs hundreds of times per render, and a feature must not tax the calls that
+do not use it.
+
+The part that is not negotiable: the engine interpolates step text as **HTML**, because
+official steps use `<b>` and `<ul>` deliberately. A shared file is therefore an XSS vector,
+and the text is sanitised where the definition is built — a DOM rebuild that keeps a small
+whitelist of formatting tags, drops attributes wholesale, and swallows `<script>` and
+`<style>` **with their content**. The icon is a fixed glyph rather than the document's own
+SVG: sanitising arbitrary SVG safely is a project, and a wrong icon is a smaller cost than a
+right exploit.
+
+**The lesson:** when two kinds of content must behave identically, make them the same
+*data*, not two engines that promise to agree.
+
+---
+
+## 65. A gate that lives in a file, not in the build
+
+The servers BMM generates could be given an admin password, and one of the five could be
+given a download password. None could be locked to a key, and every credential was baked in
+at generation time — so authorising one more subscriber meant regenerating the server and
+re-uploading it.
+
+They now read an `access.json` from the folder they serve, at **request** time: a password,
+a list of authorised public keys, and the audience those keys sign for. Adding a key is
+editing one small file. In the Multi-Repo Hub that file lives **per repo folder**, because
+"per node" is what per-node access means and a single hub-wide list would have been a
+different feature wearing the same words.
+
+Three decisions are worth recording.
+
+**The verifier is copied, not ported.** It is byte-for-byte the file BetterCommunity runs,
+with a build check that fails when the two differ. Two implementations of "does this client
+hold the key" are two chances to disagree, and the way they disagree is that a key works
+against one server and not the other — which reads, to the person holding it, as "my key is
+broken".
+
+**The gate sits after bans and the whitelist, inside the non-local branch.** Putting it at
+the top of the handler would have been simpler and wrong: `/dashboard`, `/monitoring.json`
+and `/admin/*` are answered above that point, so listing your own key would have locked you
+out of your own server the moment you saved the file.
+
+**A static export enforces nothing, and says so.** There is no process; whatever web server
+you point at the folder decides who may read it. The export ships a README stating that,
+because the alternative is somebody assuming the access controls they configured came along
+with the files.
+
+---
+
+## 66. The sawtooth that was two machines
+
+The server-performance chart oscillated every tick between two coherent sets of values, and
+the tiles above it gave the game away: twenty-four CPU cores and a one-terabyte disk over
+history that matched a four-vCPU VPS.
+
+Every number in a metric sample is *the host as its writer sees it* — `os.cpus()`,
+`os.totalmem()`, the disk under the process. Nothing recorded **which** host, so two
+processes sharing one database (a development machine pointed at production, an old container
+beside a new one) interleaved into a single series. The chart was not glitching; it was
+faithfully drawing two real machines.
+
+Samples now carry `host`, and the other writers are **named** in the page rather than
+filtered out silently — a second writer is a fact an administrator needs, not a rendering
+problem to suppress.
+
+**And then replicas made the first half of that fix wrong.** "Chart the host that answered
+this request" is correct while there is one API container. The sampler runs from the sweeper,
+the sweeper is leader-elected with a 9.5-minute lock on a 10-minute tick — so the lock lapses
+before every tick and the WRITER rotates; Caddy round-robins, so the READER rotates too,
+independently. At three replicas the chart drew whichever third of the samples matched
+whoever answered, a different third on each refresh, and the "another instance is recording"
+banner fired permanently against the operator's own containers.
+
+Which host to chart is a **choice** now, defaulting to the old behaviour so a single-container
+install is unchanged. "All hosts" is offered and is deliberately not the default: averaging a
+four-vCPU server with a twenty-four-core development box is this same sawtooth wearing a
+different hat, and only the person looking at the screen knows whether the hosts are
+comparable.
+
+**The lesson:** a metric is meaningless without its subject. If a table records a measurement
+and not who measured it, the day a second measurer appears it produces data that is wrong in
+a way no validation can catch, because every individual row is correct.
+
+---
+
+## 67. Documents that are not items
+
+BetterCommunity can host a catalogue of plugins, themes, apps, automations, modpacks and now
+tutorials. Two things it could not host were a **list of Server-Repos** and a **catalogue
+index** — the documents BMM's repo browser and catalogue-index reader consume.
+
+The tempting move was to add them to `CatalogKind`. That enum drives the item machinery:
+moderation queues, per-item payload uploads, storage quotas, and a `feedField()` that answers
+"the plural of the kind". Neither document has items — each is one JSON file listing addresses
+somebody else serves — so the enum would have produced a moderation queue for a thing nobody
+can submit and a feed field called `repo_indexs`.
+
+They live in the `kinds String[]` column instead, which needed no migration at all, and their
+"raw mode only" invariant is enforced at the API boundary where every other catalogue rule
+already lives. Managed mode is refused **by name** rather than silently coerced: a caller who
+asked for hosted storage should learn they got none.
+
+**The lesson:** an enum is a promise about what the rest of the system may assume. Adding a
+value that breaks those assumptions is more expensive than adding a second, smaller vocabulary
+beside it.
+
+
+---
+
+## 68. A language with no vocabulary of its own
+
+BMMScript is a compiler, not an interpreter, and the distinction is the entire design.
+
+The obvious way to add "write your automation as text" is a second engine: a parser, a list of
+the actions it understands, and an executor. That engine is behind the block editor the day it
+ships, and stays behind it for ever — every action added to the app is one the language does
+not know until somebody remembers to add it twice.
+
+So the parser emits **the exact `Step` JSON the block editor produces**, and the existing
+runner executes it. `do <name>(k: v)` is not validated against a list of action names, because
+there is no list: the name is copied through, and an action added to BMM is writable in script
+the same day with no change to the compiler.
+
+Three properties fall out of that, none of them designed for separately:
+
+- **Round trip.** A task written in code opens as blocks and prints back as code, because both
+  are views of one tree rather than two representations kept in step.
+- **No second permission model.** A script cannot do more than a block, because it *is* blocks
+  by the time anything runs.
+- **A reference that cannot lie** — provided it is generated. Which brings the one part that
+  can go stale.
+
+The reference page is extracted from `ACTION_TYPES`, `COND_TYPES` and `VALUE_SOURCES`, and CI
+fails when it drifts. The parameter names were the trap: they look like they belong to the
+editor's forms, and `needs` is a form SHAPE shared by several actions — `list.push`, `list.set`
+and `list.clear` share one, so a form-derived table gave all three the union of all three, and
+`open.url` came out with forty-six parameters. They come from the RUNNER's switch, one case per
+action, where `p.<name>` reads are the parameters by definition. The form version agreed with
+the runner on 49 of the 59 actions that existed at the time: exactly the hit rate that
+survives spot-checking and fails
+diffing.
+
+**The lesson:** when a feature must never fall behind another, do not synchronise them —
+make one of them the other's output.
+
+---
+
+## 69. The permissions that arrived with the file
+
+A `.bmmpa` carries its own `enabled`, its own `perms` and its own trigger. Both import paths
+cleared exactly one field — `osSchedule` — and kept the rest.
+
+So a shared automation could arrive enabled, holding `command` and `script`, on a one-minute
+interval, and start running arbitrary programs a minute after import with nothing asked and
+nothing shown. Every check worked: `requirePerm` refused a step whose permission was missing,
+the review screen for `.bmmscript` blocked a run until the grants had been read. The file
+simply arrived already holding the permissions, so no check had anything to refuse.
+
+The reasoning was already in the file, applied to the wrong thing. The **duplicate** button
+says: *"Deliberately created DISABLED and without the OS mirror so saving the copy can't
+double-fire anything"* — about a copy of the user's own task. A file from a stranger got less
+care than a copy of your own work.
+
+One sanitiser now serves both paths, and it reports what it removed: silently stripping a
+permission and leaving somebody to work out why their imported task fails is a worse
+experience than the hole was.
+
+**The lesson:** a permission model protects the moment of USE. Ask separately how a subject
+acquires its permissions in the first place — that path may have no checks on it at all,
+precisely because the checks downstream look so thorough.
+
+---
+
+## 70. Two vocabularies in one column
+
+`AnalyticsEvent.region` held ISO 3166-2 subdivision codes in production and full names in
+development — `VD` on one machine, `Vaud` on the other — because the geo resolver's real path
+returns what geoip-lite gives it while the dev fallback used a hand-written sample table.
+
+Nothing failed. Both are strings, both group, both render. But `GROUP BY region` counts them as
+two places, and a dashboard built on a development database looks correct in a way that does
+not survive deployment.
+
+The sample table speaks the production vocabulary now. The display gained the other half of
+the fix: a bare `MN` is not a region anybody can read, and worse, it is ambiguous — Minnesota
+in that column, Mongolia's country code one tab over, with nothing on screen to say which. The
+code is shown as a code with the country named beside it.
+
+**The lesson:** a fallback is not just a value, it is a value in a FORMAT. A fallback that
+returns a different shape from the thing it stands in for produces data that is individually
+valid and collectively meaningless.
+---
+
+## 71. A dictionary can be complete and wrong
+
+`check-i18n-parity` compares key SETS: every key in `en.json` must exist in `fr.json`. It
+passed, and it had always passed, while the theme catalogue's drop-in bar rendered "Open
+folder" and "Rescan" in a French interface — because those keys exist in `fr.json` and their
+French value **is the English text**. A gate that compares sets cannot see inside a value.
+
+The second half of the same screen was wrong for an unrelated reason. Its header was the only
+markup in that file using `data-i18n`; everything else used `t()`. `applyTranslations()` runs
+once at boot and that modal is built long after, so the attributes were never read. Both
+mechanisms are correct; only one of them works on markup that does not exist yet.
+
+So the sweep was written as a query rather than a rule: over all 8150 keys, find French values
+identical to the English **and** English-shaped — English function words present, French ones
+absent. Two hits, both proper nouns ("Open Mod Manager"). The two real ones had already been
+found by reading the screen.
+
+**The lesson:** know which half of a fact your gate is checking. Parity checks the *presence*
+of a translation, never its *content*, and the two failures look identical from the outside —
+a key that is missing and a key that is present and English both render English. When a gate
+can only see one half, the other half needs a query you run deliberately, not a rule you hope
+will fire.
+
+---
+
+## 72. Finding nothing looks exactly like there being nothing
+
+Three faults from one week, all the same shape.
+
+BCWEB's mod-list inspector read `m.links` and `m.url`. Neither field has ever existed in a
+`.mm` — the entry carries `download_links` — so "Download hosts" said "—" and every entry note
+was empty, for every list ever inspected. No exception, no log line. A moderator was told the
+list pointed nowhere, and *pointing nowhere is the reassuring answer*.
+
+The `.mm` exporter wrote `install_notes: String::new()`. Written by the exporter, read by the
+importer, empty in between: placement instructions somebody wrote for their own install never
+reached the person they sent the list to, and the field was present in the file to prove it
+had been considered.
+
+Tasky carried `data-tauri-drag-region` from the moment dragging the window by him was asked
+for. His container is `pointer-events: none`, so neither he nor the attribute ever received a
+mousedown. The attribute was right there in the markup, and it had never once run.
+
+**The lesson:** an empty result and an empty source are indistinguishable at the point of
+reading. Every one of these was found by asking "what should this produce?" against a real
+document — never by looking at the code, which reads correctly in all three cases. Where a
+reader can return nothing, a test has to assert on a case that must return SOMETHING; where a
+capability is declared rather than exercised, something has to exercise it.
+---
+
+## 73. A lock has to lock something
+
+The passphrase on a shared mod list sealed the credentials block and left the list itself
+readable. It passed every test it had, it encrypted real bytes with a real cipher, and it
+protected nothing anybody would notice: the list opened, the mods installed, and the phrase
+was a formality on a door that was not shut.
+
+It was reported in four words — *"à quoi il sert"* — and there was no answer.
+
+The same shape, twice more in the same week. A data-export passphrase that only made the
+IMPORT screen refuse would have left a zip anybody could open in 7-Zip; that one was caught
+before it shipped, by asking what the file looks like to somebody who does not use BMM to
+open it. And a Discord Rich Presence dropdown, asked for in good faith — the honest answer
+was that the protocol has no such thing, and adding a config field for it would have been a
+lock on nothing of a different kind: a setting that stores your choice and cannot act on it.
+
+**The lesson:** a security feature is not tested by whether the cryptography is correct. It
+is tested by naming what an attacker holds and asking what it costs them. Here the attacker
+holds the file — so the question was never "is AES-GCM sound", it was "what can be read by
+opening this in a text editor". That question takes ten seconds and it is the one that would
+have caught all three.
+
+
+---
+
+## Delta — the late-August cycle, and the decisions behind it
+
+**Seal before sign.** A repository's sealed-credentials block is written into the manifest
+*before* the Ed25519 signature is computed. The other order produces a repo whose signature
+matches nothing — refused by every client, over a feature nobody would think to blame. The
+sealing itself lives in one module (`commands/creds.rs`), shared with the `.mm` export:
+two implementations of a rule about secrets is one implementation that will be a version
+behind.
+
+**Anything opened from a dialog must ask where the top is.** `.modal-overlay` is z-index
+5000; dialogs opened through `raiseAboveAll` land above 11000. The remote folder browser
+took the plain class and appeared *behind* the dialog that opened it — visible only as a
+dimming, buttons unreachable. It now calls `raiseAboveAll` itself, and captures Escape so
+closing it cannot close the dialog underneath.
+
+**`check-null-deref.mjs`, and why it is const-only.** The shipped bug was
+`const x = null; … x.length` in a `@ts-nocheck` file — unconditionally throwing, invisible
+to tsc, invisible to the undefined-names check (the name exists), and with two *working*
+sibling call sites to compare against. A `const` bound to a bare `null` can never hold
+anything else, so a later property access is a proof, not a heuristic. The first draft also
+accepted `let` and reported twenty-five module-level state variables, every one correct —
+a check right once in twenty-six is a check people learn to skim.
+
+**One entry point per behaviour.** The plugin compare, the tap path and the page-transition
+flourish each called `setFracture` directly; adding a second reaction beside it would have
+been applied by one caller and not the others. The same rule drove the SSH panel (one
+component, four mounts) and the credentials fold (one module, two publishers): where a rule
+is written twice, the copies diverge — this codebase has caught that pattern often enough
+that it is now a design constraint, not a preference.
+
+**Corrected in place:** the architecture table said Tauri v1; the app has been on **Tauri
+v2** since the June migration (`com.bettermm.desktop`, capability-scoped IPC, the v2 tray
+and updater APIs).
+
+## 74. Where a report goes, and why nothing is lost
+
+The feedback dialog posts to `links.json`'s `feedback_endpoint` — the BetterCommunity centre —
+carrying the Creator ID, app version, OS and locale as headers. A send that fails is not
+dropped: it is written to a **local queue and retried at the next launch**, and only there —
+the endpoint is the single place a report is ever sent. A client-side **proof-of-work** and a
+self-imposed **throttle** (a few per ten minutes, dozens a day) sit in front of it so a stuck
+loop cannot flood the centre. There is no fallback any more (BetaHub was removed on
+2026-09-25): an empty `feedback_endpoint` switches reports off, and the dialog says so. The crash zip's replay is masked by default; the DxDiag dump is pre-ticked only for a
+crash and is untickable, because it is broad (machine/OS ids, the Windows user name).
+
+## 75. Laya inside the binary (v1.0.0+)
+
+`commands/ai_embedded.rs` runs the Laya classifier (an mmBERT-base encoder plus Laya's decision
+heads, exported to ONNX and quantized) through ONNX Runtime, loaded from the model pack's own
+`onnxruntime.dll` by absolute path, never from PATH. The pack is pinned in
+`laya-model.lock.json` and checked against its SHA-256 before use (`check-laya-pins` in CI).
+Like `ai_core.rs`, the AI modules are mounted twice, by the app and by the CLI/MCP binary, so
+both answer with the same engine.
+
+| Module | Role |
+| :--- | :--- |
+| `ai_hybrid.rs` | Extraction, then Laya (classify, rank, abstain), then an optional generator, then rules and Laya again before anyone sees the text |
+| `ask_core.rs` + `ask_index.gen.json` | Ask Laya: BM25 over a generated index of docs, articles and commands, plus live settings, mods and files (`gen-ask-index --check`) |
+| `ai_tuning.rs` | Answer settings per feature, custom labels and classification tasks; untrusted label text bounded and scrubbed |
+| `ai_api_core.rs` / `ai_api.rs` | The local Laya API on `127.0.0.1`, off by default, drop-in for `laya-serve` |
+| `ai_core.rs` | Key bound to the origin it was saved for, private and mapped-IPv6 hosts refused, generated output with unsourced links, UNC paths or commands dropped |
+| Frontend `features/ai/` | `ai-suggest`, `ai-library`, `ai-ask`, `ai-settings`, `ai-tuning`, `ai-report` |
+
+## 76. Activation order (v1.0.0+)
+
+`mod_order.rs` holds the rule (last wins) and the one way to change it on disk (`commit`: save
+the order, re-copy only the files that change hands). `order_share.rs` builds on it: one
+`arrange` engine for every bulk enable (modpack, Enable all, `.mm`, task, BMMScript), and the
+share codec (code, `bmm://order` link, text, file) whose import is a preview that never toggles a
+mod. Frontend: `load-order*.ts`, `order-share*.ts`, `lib-order.ts`.
+
+## 77. Resource governor (v1.0.0+)
+
+`src-tauri/src/governor/` holds the queue (slots per category, pause, resume, cancel), the
+shared copy loop whose speed limit is per disk (`io.rs`), app mode as a pure state machine
+(`game_mode.rs`, the internal name stayed), process priorities (`procs.rs`, `win.rs`) and the
+one runtime instance every heavy call site asks (`runtime.rs`). `resources*.rs` expose it to
+the UI, the scheduler, the API and MCP; `check-governed` lists any heavy-work site outside it.
+
+## 78. Start-up deck and modal shell (v1.0.0+)
+
+`launch-deck.ts` replaces the chain of start-up dialogs with one window; `launch-steps.ts` and
+`launch-logic.ts` decide which steps a launch needs, `launch-announcements.ts` feeds the last
+step. `modal-shell.ts` and `focus-trap.ts` give every dialog the same close button, focus trap
+and Escape order (`check-modal-shell` in CI).
+
+## 79. Telemetry categories, live errors, no IP lookup (v1.0.0+)
+
+`telemetry-model.ts` holds the categories and the consent state. Since 1.0.2 an installer
+`privacy_choice` (`essential` / `all` / `custom`) is consent or refusal and is recorded with a
+receipt (`installer_handoff.rs`); an older installer's single box only pre-selects. `live-issues-core.ts`, `live-issues.ts` and `live_issues.rs` send errors within
+seconds: redacted twice, fingerprinted, deduplicated, capped per hour, queued on disk, HTTPS or
+loopback only. `laya-telemetry.ts` sends Laya usage counts, never text.
+`analytics_system_profile` no longer carries `private_ip` or `public_ip`, and nothing asks an
+IP-echo service: the repo server's public address comes from UPnP only, and the generated
+mini-servers no longer look it up. `tests/no-ip-lookup.test.mjs` fails if a shipped source names
+an IP-echo or geolocation host. The telemetry dashboard reads `public_ip` as optional; it still
+sees the connection address and truncates it server-side.
+
+## 80. Counts at this release
+
+692 commands registered, 97 endpoints in the local API, 95 MCP tools, 81 CLI subcommands, 137
+actions in the scheduler, 13 built-in themes, and 95 steps in `npm run ci`. `check-counts` and
+`check-theme-count` fail when a page quotes another number.
+
+## 81. 1.0.2: update pipeline, consent ledger, followed repos, activity, catalogue index
+
+### Update pipeline (`autoupdate.rs`, `update-notes.ts`)
+
+| Step | Detail |
+| :--- | :--- |
+| **Release list** | Stable channel = `/releases/latest`; pre-release channel = the highest non-draft release of the list. |
+| **Installer asset** | A release carries one installer, `BMM-Setup.exe`. The picker takes `BMM-Setup.exe`, else the only `.exe`, else the only `.msi` (releases before 1.0); two of a kind is refused. |
+| **1. `signed`** | `update-manifest.json`: Ed25519 signature checked against the key BMM pins, app id, `issued < expires`, at most 7 days valid and not expired, a version strictly newer; its `installers` entry gives the SHA-256 of `BMM-Setup.exe`. |
+| **2. `update-json`** | No manifest: the release is read again by tag and `BMM-Setup.exe` is compared with the SHA-256 that BetterInstaller's signed `update.json` declares inside its signed body (same pinned key, same 7-day rule). |
+| **3. `unverified`** | Neither can vouch: the dialog says why and asks (Cancel focused, or Install anyway). Only « Install anyway » sends `confirm_sha256`, and Rust runs exactly those bytes. A mismatch is shown in red. |
+| **Launch** | `proc::shell_launch` (`ShellExecuteExW`) from a fresh `%TEMP%\bmm_update_<uuid>\` folder, off the async runtime because it waits while a UAC prompt is open. The Windows error is mapped to a sentence. No PowerShell `Start-Process`. |
+| **BetterInstaller install** | `BMM-Setup.exe --update --wait-pid <pid> --launch`; exit code 3 (no existing install) restarts it interactively. A release that cannot be read falls back to `<install>/uninstall.exe --update`, also through `ShellExecuteExW`. |
+| **Later** | « Install on next launch » keeps a signed installer and verifies it again at start. |
+
+Publishing side: `scripts/gen-update-manifest.mjs --installer Release/BMM-Setup.exe
+--require-installer` builds the manifest, `sign-update-manifest.mjs` signs and verifies it, and
+`scripts/check-release-versions.mjs` gates the release. Source mode (in `npm run ci`): one version
+in `package.json`, `package-lock.json`, `tauri.conf.json`, `Cargo.toml`/`Cargo.lock` and
+`installer.toml`. `--artifacts` mode (before publishing): both manifests signed for this version
+at publish time, `update.json` naming this `bmm.bpkg`, the manifest naming this `BMM-Setup.exe`,
+and a single installer asset. `resign-manifests.yml` renews both signatures twice a week.
+
+### Consent ledger (`consent_ledger.rs`, `consent.ts`)
+
+One receipt per answer (Terms, Privacy Policy, telemetry, live error reports): document, version,
+SHA-256 of the exact text shown, language, choice and categories, time, source, app version, and a
+random install id (not derived from hardware or the Creator ID). Stored next to `data.json` as
+`consent-ledger.jsonl`, append-only: each line's `hash` covers the previous line's hash, `mac` is
+an HMAC with a local key, and `consent-ledger.head` records the newest line so a truncation is
+seen. `consent_verify` reports the first break. The installer's receipts count only when the text
+hash matches a text this BMM ships. Receipts leave the machine only with telemetry consent or the
+« Send to the server » button.
+
+### Followed repos and Atom feed (`repo_follow.rs`, `repo-follow.ts`)
+
+Follow settings live on `ConnectedServerRepo` in `data.json`. The schedule is the frontend runner:
+it asks `repo_follow_due` every few minutes, checks due repos one at a time, and for `download` /
+`apply` runs the plan the check returns through the ordinary sync and the activation job manager.
+A check is a conditional GET of `repo.json` (stored ETag / Last-Modified; SHA-256 of the body when
+the server sends neither), so an unchanged repo costs one 304. Nothing is installed while the
+governor's game mode is on. The built-in repo server serves `feed.xml` (Atom) next to `repo.json`.
+Mod ids stay stable through `mod_ids.rs`: the sync matches a record by origin before the folder,
+and `dedupe_mod_ids` repairs older duplicates once per start, after a backup of `data.json`.
+
+### Activity centre (`core/activity.ts`, `activity-sources.ts`, `ui/activity-center.ts`)
+
+One registry with no DOM: `startActivity({ kind, title, cancel })` returns a handle with
+`update({ progress, detail })`, `done()`, `fail(err)` and `cancelled()`; `trackPromise` drives
+one from a promise. A `key` makes a start idempotent, so a command and its progress events share
+one row. The last 30 finished entries are kept (in `localStorage` when it is available).
+`activity-sources.ts` adapts each subsystem (activation, downloads, sync, scans, installs,
+exports, scheduler, Laya, benchmark) to it.
+
+### Catalogue format and index (`catalog_format.rs`, `catalog_cache.rs`, `catalog-search.ts`)
+
+`catalog_format.rs` reads every older catalogue shape and the signed BetterCommunity v2 feeds
+into one `bmm-catalog` document (`format_version`), tested against the fixtures in
+`src-tauri/tests/catalog_format/`. `catalog_cache.rs` keeps one file per source in
+`catalog-cache/`, revalidates with `If-None-Match` / `If-Modified-Since`, and serves the last good
+copy marked `stale` when a source fails. `catalog-search.ts` builds one token index per change:
+case, accents and punctuation folded, prefix search, ranking by field, and entries with the same
+kind and id (or the same download SHA-256) merged into one with every source listed.

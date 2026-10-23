@@ -1,0 +1,30 @@
+{
+  "shots": {
+    "social": ["library", "automations-flow"],
+    "discord": "automations-flow",
+    "blog": ["library", "automations-flow"],
+    "square": ["library", "automations-flow"]
+  },
+  "en": {
+    "headline": "Your mods, finally under control.",
+    "subline": "Conflicts fixed in one click, visual automations and step-by-step help.",
+    "whatsNew": "What's new in {version}",
+    "meta": "Windows · Free and open source",
+    "highlights": [
+      { "icon": "workflow", "title": "Automate your routines", "desc": "Chain steps on a visual canvas.", "shot": "automations-flow", "crop": [470, 200, 900, 815] },
+      { "icon": "git-merge", "title": "Fix conflicts in one click", "desc": "Pick which mod wins, file by file.", "shot": "conflicts", "crop": [610, 200, 520, 473] },
+      { "icon": "sparkles", "title": "Draft with your local AI", "desc": "Laya runs offline: nothing leaves your PC.", "shot": "laya", "crop": [296, 250, 560, 507] }
+    ]
+  },
+  "fr": {
+    "headline": "Tes mods, enfin sous contrôle.",
+    "subline": "Conflits réglés en un clic, automatisations visuelles et aide pas à pas.",
+    "whatsNew": "Les nouveautés de la {version}",
+    "meta": "Windows · Gratuit et open source",
+    "highlights": [
+      { "icon": "workflow", "title": "Automatise tes routines", "desc": "Enchaîne les étapes sur un canevas visuel.", "shot": "automations-flow", "crop": [470, 200, 900, 815] },
+      { "icon": "git-merge", "title": "Conflits réglés en un clic", "desc": "Choisis quel mod gagne, fichier par fichier.", "shot": "conflicts", "crop": [610, 200, 520, 473] },
+      { "icon": "sparkles", "title": "Rédige avec ton IA locale", "desc": "Hors ligne : rien ne quitte ton PC.", "shot": "laya", "crop": [296, 250, 560, 507] }
+    ]
+  }
+}

@@ -1,0 +1,480 @@
+// @ts-nocheck
+import { invoke } from '../../core/api.js';
+import { toast } from '../../ui/app.js';
+import { t } from '../../core/i18n.js';
+import { copyToClipboard } from './repo.js';
+import { formatBytes } from '../../core/utils.js';
+import { uiIcon } from '../../ui/icons.js';
+import { setHostRunning, pushHostActivity } from './repo-host-flow.js';
+import { mountMiniServerOptions, readMiniServerExtras } from './mini-server-options.js';
+export function initRepoServer(elements) {
+    const { btnToggleServer, urlContainerServer, urlInputServer, btnCopyUrlServer, serverStatusDot, serverStatusLabel, publicSection, publicUrlInput, btnCopyPublicUrl, upnpBadgeStatus, publicHintBox, repoCreatorIdContainer, repoCreatorIdValue, tunnelSection, tunnelUrlInput, btnCopyTunnelUrl, inputServerPort, inputServerUploadLimit, serverTools, btnGenMiniServer, btnPickMiniRepo, btnPickMiniFolder, inputMiniRepoPath, cbAutoStart, cbDocker, dockerOptions, dockerHostSelect, inputMiniServerUploadLimit, inputExportPath, statsContainer, statDls, statBytes } = elements;
+    let isServerRunning = false;
+    let statsInterval = null;
+    /** Cleanup functions for Tauri event listeners */
+    let _unlistenConnected = null;
+    let _unlistenDlStarted = null;
+    let _unlistenDlFinished = null;
+    // Line icons, not emoji.
+    //
+    // A toast that opens with 🔌 renders as a different picture on every platform — a plug on
+    // one, a wall socket on another, a colour photograph on a third — and none of them match the
+    // rest of a window drawn in 2px strokes. `toast()` has taken an SVG since it was written; the
+    // server notifications were the last place still passing a character.
+    const ICON_PLUG = uiIcon('plug', 14);
+    const ICON_DOWN = uiIcon('download', 14);
+    const ICON_DONE = (uiIcon('check', 14));
+    // ── Subscribe to server-side events ──────────────────────────────────────
+    async function subscribeServerEvents() {
+        if (!window.__TAURI__)
+            return;
+        const { listen } = window.__TAURI__.event;
+        _unlistenConnected = await listen('bmm://server-client-connected', (event) => {
+            const { ip, creator_id, protocol } = event.payload;
+            const id = creator_id || t('repo.notifClientAnonymous');
+            pushHostActivity('connect', `${t('repo.notifClientConnected')} — ${protocol} [${ip}] · ${id}`);
+            toast(`${t('repo.notifClientConnected')} — ${protocol} [${ip}] · ID: ${id}`, 'info', 5000, ICON_PLUG);
+        });
+        _unlistenDlStarted = await listen('bmm://server-download-started', (event) => {
+            const { ip, creator_id, file, total_size, protocol } = event.payload;
+            const id = creator_id || t('repo.notifClientAnonymous');
+            const shortFile = (file || '').split('/').pop() || file;
+            pushHostActivity('start', `${t('repo.notifDownloadStarted')} — ${shortFile} (${formatBytes(total_size)}) · [${ip}] ${id}`);
+            toast(`${t('repo.notifDownloadStarted')} — ${protocol} [${ip}]\n${id} · ${shortFile} (${formatBytes(total_size)})`, 'info', 4000, ICON_DOWN);
+        });
+        _unlistenDlFinished = await listen('bmm://server-download-finished', (event) => {
+            const { ip, creator_id, file, total_size, protocol } = event.payload;
+            const id = creator_id || t('repo.notifClientAnonymous');
+            const shortFile = (file || '').split('/').pop() || file;
+            pushHostActivity('done', `${t('repo.notifDownloadFinished')} — ${shortFile} (${formatBytes(total_size)}) · [${ip}] ${id}`);
+            toast(`${t('repo.notifDownloadFinished')} — ${protocol} [${ip}]\n${id} · ${shortFile} (${formatBytes(total_size)})`, 'success', 5000, ICON_DONE);
+        });
+    }
+    function unsubscribeServerEvents() {
+        if (_unlistenConnected) {
+            _unlistenConnected();
+            _unlistenConnected = null;
+        }
+        if (_unlistenDlStarted) {
+            _unlistenDlStarted();
+            _unlistenDlStarted = null;
+        }
+        if (_unlistenDlFinished) {
+            _unlistenDlFinished();
+            _unlistenDlFinished = null;
+        }
+    }
+    function startStatsPolling(port) {
+        if (statsInterval)
+            clearInterval(statsInterval);
+        const updateStats = async () => {
+            if (!isServerRunning) {
+                if (statsInterval)
+                    clearInterval(statsInterval);
+                return;
+            }
+            try {
+                const res = await fetch(`http://127.0.0.1:${port}/monitoring.json`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (statsContainer) {
+                        statsContainer.style.display = 'flex';
+                        if (statDls)
+                            statDls.textContent = data.server.totalDls || 0;
+                        if (statBytes)
+                            statBytes.textContent = formatBytes(data.server.totalBytes || 0);
+                    }
+                }
+            }
+            catch (e) { }
+        };
+        updateStats();
+        statsInterval = setInterval(updateStats, 2000);
+    }
+    // The start/stop button and the status dot say the state through classes (repo-page.css,
+    // theme tokens), not through inline hex colours that ignored every theme. The inline
+    // style the markup ships with is cleared once, here, so the class is the only source.
+    const paintServerState = (running) => {
+        // The guided steps and the running panel follow the same state as the button.
+        setHostRunning(running, running && !!(urlInputServer && urlInputServer.value));
+        if (btnToggleServer) {
+            btnToggleServer.style.removeProperty('background');
+            btnToggleServer.style.removeProperty('color');
+            btnToggleServer.style.removeProperty('border-color');
+            btnToggleServer.classList.add('rp-srv-toggle');
+            btnToggleServer.classList.toggle('is-running', running);
+        }
+        if (serverStatusDot) {
+            serverStatusDot.style.removeProperty('background');
+            serverStatusDot.style.removeProperty('box-shadow');
+            serverStatusDot.classList.add('rp-srv-dot');
+            serverStatusDot.classList.toggle('is-running', running);
+        }
+    };
+    const paintUpnp = (ok) => {
+        if (!upnpBadgeStatus)
+            return;
+        upnpBadgeStatus.style.background = ok ? 'var(--bmm-success-dim)' : 'var(--bmm-danger-dim)';
+        upnpBadgeStatus.style.color = ok ? 'var(--bmm-success)' : 'var(--bmm-danger)';
+    };
+    paintServerState(false);
+    // The button text and the status line are STATE, written here, not static copy: with a
+    // data-i18n on them, the boot-time translation pass (and every language change) rewrote
+    // them to "Start" / "Server offline" over a server that was running, the header chip
+    // read that, and the page said the opposite of the truth. The attributes are dropped and
+    // a language change repaints from the state.
+    let runningPort = '';
+    const paintServerTexts = () => {
+        const txt = document.getElementById('repo-server-btn-text');
+        if (txt) {
+            txt.removeAttribute('data-i18n');
+            txt.textContent = t(isServerRunning ? 'repo.hostStop' : 'repo.hostStart');
+        }
+        if (serverStatusLabel) {
+            serverStatusLabel.removeAttribute('data-i18n');
+            serverStatusLabel.textContent = isServerRunning
+                ? t('repo.serverOnline', { port: runningPort || '8000' })
+                : t('repo.serverOffline');
+        }
+    };
+    paintServerTexts();
+    document.addEventListener('langChanged', paintServerTexts);
+    // --- Host Server toggle ---
+    if (btnToggleServer) {
+        btnToggleServer.addEventListener('click', async () => {
+            if (isServerRunning) {
+                try {
+                    await invoke('stop_repo_server');
+                    unsubscribeServerEvents();
+                    isServerRunning = false;
+                    btnToggleServer.innerHTML = '<span id="repo-server-btn-text"></span>';
+                    const txt = btnToggleServer.querySelector('#repo-server-btn-text');
+                    txt.textContent = t('repo.hostStart');
+                    paintServerState(false);
+                    urlContainerServer.style.display = "none";
+                    if (serverStatusLabel)
+                        serverStatusLabel.textContent = t('repo.serverOffline') || 'Serveur hors ligne';
+                    if (inputServerPort)
+                        inputServerPort.disabled = false;
+                    if (serverTools)
+                        serverTools.style.display = 'none';
+                    if (statsContainer)
+                        statsContainer.style.display = 'none';
+                    if (repoCreatorIdContainer)
+                        repoCreatorIdContainer.style.display = 'none';
+                    toast(t('repo.hostServerStopped'), "success");
+                }
+                catch (err) {
+                    toast(String(err), "error");
+                }
+            }
+            else {
+                const hostPathInput = document.getElementById('repo-host-path');
+                let path = hostPathInput ? hostPathInput.value.trim() : "";
+                if (!path && inputExportPath)
+                    path = inputExportPath.value.trim();
+                if (!path) {
+                    toast(t('repo.hostServerStartReq'), "warning");
+                    return;
+                }
+                try {
+                    const loadingBar = document.getElementById('repo-server-loading-bar');
+                    if (loadingBar)
+                        loadingBar.style.display = 'block';
+                    btnToggleServer.disabled = true;
+                    btnToggleServer.innerHTML = `${uiIcon('loader', 14, { style: 'animation:spin 1s linear infinite;margin-right:8px' })} <span>${t('repo.initServer') || 'Initialisation...'}</span>`;
+                    const port = parseInt(inputServerPort ? inputServerPort.value : "8000") || 8000;
+                    if (inputServerPort)
+                        inputServerPort.disabled = true;
+                    const uploadLimit = parseInt(inputServerUploadLimit ? inputServerUploadLimit.value : "0") || 0;
+                    // Persist the owner's "require BetterCommunity login to download" choice
+                    // into repo.json before the server reads it.
+                    const reqLoginCb = document.getElementById('repo-host-require-login');
+                    if (reqLoginCb) {
+                        try {
+                            await invoke('set_repo_require_login', { repoDir: path, require: !!reqLoginCb.checked });
+                        }
+                        catch (_) { }
+                    }
+                    // Empty = open repo. Sent on start, not stored in repo.json: a password
+                    // written into the manifest would ship to every subscriber inside the
+                    // very file it is meant to protect.
+                    const downloadPassword = document.getElementById('repo-server-download-password')?.value || '';
+                    // One key per line, blanks dropped. `undefined` rather than [] when the box
+                    // is empty: an EMPTY LIST and NO LIST mean the same thing to the gate, but
+                    // sending [] every time would make a future "did the owner set any?" read
+                    // as yes. Say nothing when there is nothing to say.
+                    const authorizedKeys = (document.getElementById('repo-server-authorized-keys')?.value || '')
+                        .split('\n').map((l) => l.trim()).filter(Boolean);
+                    const result = await invoke('start_repo_server', { path, port, uploadLimit, downloadPassword, authorizedKeys: authorizedKeys.length ? authorizedKeys : undefined });
+                    isServerRunning = true;
+                    // Subscribe to host-side notifications
+                    await subscribeServerEvents();
+                    btnToggleServer.innerHTML = '<span id="repo-server-btn-text"></span>';
+                    const newTextEl = btnToggleServer.querySelector('#repo-server-btn-text');
+                    newTextEl.textContent = t('repo.hostStop');
+                    paintServerState(true);
+                    runningPort = String(port);
+                    if (serverStatusLabel)
+                        serverStatusLabel.textContent = t('repo.serverOnline', { port }) || `Serveur en ligne — port ${port}`;
+                    urlInputServer.value = result.lan_url || '';
+                    if (result.seed && repoCreatorIdValue && repoCreatorIdContainer) {
+                        try {
+                            const saltedId = await invoke('get_salted_creator_id', { salt: result.seed });
+                            repoCreatorIdValue.textContent = saltedId;
+                            repoCreatorIdContainer.style.display = 'block';
+                            const label = repoCreatorIdContainer.querySelector('label');
+                            if (label)
+                                label.textContent = t('repo.yourServerId') || "Votre ID sur ce serveur";
+                        }
+                        catch (e) {
+                            console.error("Failed to get salted ID:", e);
+                        }
+                    }
+                    if (result.public_url) {
+                        publicUrlInput.value = result.public_url;
+                        publicSection.style.display = 'block';
+                        if (publicHintBox)
+                            publicHintBox.style.display = 'none';
+                        if (upnpBadgeStatus) {
+                            paintUpnp(!!result.upnp_success);
+                            upnpBadgeStatus.textContent = result.upnp_success ? (t('repo.upnpOk') || 'UPnP OK') : (t('repo.upnpFail') || 'UPnP FAIL');
+                        }
+                    }
+                    else {
+                        if (publicSection)
+                            publicSection.style.display = 'none';
+                        if (publicHintBox)
+                            publicHintBox.style.display = 'block';
+                    }
+                    if (tunnelSection) {
+                        tunnelUrlInput.value = result.tunnel_url;
+                        tunnelSection.style.display = 'block';
+                    }
+                    else {
+                        if (tunnelSection)
+                            tunnelSection.style.display = 'none';
+                    }
+                    urlContainerServer.style.display = "flex";
+                    if (serverTools)
+                        serverTools.style.display = 'flex';
+                    setHostRunning(true, !!urlInputServer.value);
+                    startStatsPolling(port);
+                    toast(t('repo.hostServerStarted'), "success");
+                }
+                catch (err) {
+                    const errMsg = String(err);
+                    toast(t(errMsg) || errMsg, "error");
+                    if (inputServerPort)
+                        inputServerPort.disabled = false;
+                    btnToggleServer.innerHTML = '<span id="repo-server-btn-text"></span>';
+                    const txt = btnToggleServer.querySelector('#repo-server-btn-text');
+                    txt.textContent = t('repo.hostStart');
+                }
+                finally {
+                    btnToggleServer.disabled = false;
+                    const loadingBar = document.getElementById('repo-server-loading-bar');
+                    if (loadingBar)
+                        loadingBar.style.display = 'none';
+                }
+            }
+        });
+    }
+    if (btnCopyUrlServer) {
+        btnCopyUrlServer.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(urlInputServer.value);
+                toast(t('repo.urlCopied'), "success");
+            }
+            catch (e) {
+                toast(t('repo.urlCopyError') || "Error during la copie", "error");
+            }
+        });
+    }
+    if (btnCopyPublicUrl) {
+        btnCopyPublicUrl.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(publicUrlInput.value);
+                toast(t('repo.urlCopied'), "success");
+            }
+            catch (e) {
+                toast(t('repo.urlCopyError') || "Error during la copie", "error");
+            }
+        });
+    }
+    if (btnCopyTunnelUrl) {
+        btnCopyTunnelUrl.addEventListener('click', () => copyToClipboard(tunnelUrlInput.value));
+    }
+    // --- Restore Server Status on page load ---
+    const restoreServerStatus = async () => {
+        try {
+            const status = await invoke('get_repo_server_status');
+            if (status) {
+                isServerRunning = true;
+                // Re-subscribe if server was already running (e.g. page reload)
+                await subscribeServerEvents();
+                const btnTxt = btnToggleServer.querySelector('#repo-server-btn-text');
+                if (btnTxt)
+                    btnTxt.textContent = t('repo.hostStop');
+                paintServerState(true);
+                runningPort = String(status.port || 8000);
+                if (serverStatusLabel)
+                    serverStatusLabel.textContent = t('repo.serverOnline', { port: String(status.port || 8000) }) || `Server online - port ${status.port || 8000}`;
+                urlInputServer.value = status.lan_url || '';
+                if (status.public_url) {
+                    publicUrlInput.value = status.public_url;
+                    publicSection.style.display = 'block';
+                    if (publicHintBox)
+                        publicHintBox.style.display = 'none';
+                    if (upnpBadgeStatus) {
+                        paintUpnp(!!status.upnp_success);
+                        upnpBadgeStatus.textContent = status.upnp_success ? (t('repo.upnpOk') || 'UPnP OK') : (t('repo.upnpFail') || 'UPnP FAIL');
+                    }
+                }
+                if (status.tunnel_url) {
+                    tunnelUrlInput.value = status.tunnel_url;
+                    if (tunnelSection)
+                        tunnelSection.style.display = 'block';
+                }
+                urlContainerServer.style.display = "flex";
+                if (serverTools)
+                    serverTools.style.display = 'flex';
+                setHostRunning(true, !!urlInputServer.value);
+                const port = parseInt(inputServerPort ? inputServerPort.value : "8000") || 8000;
+                startStatsPolling(port);
+            }
+        }
+        catch (err) {
+            console.error("[BMM] restoreServerStatus error:", err);
+        }
+    };
+    restoreServerStatus();
+    // The API can start the server without this screen doing it (POST /api/repo/host-now),
+    // and the button would sit there offering to start one that already is. Same refresher
+    // the page runs on load — there is no second version of "is it running" to drift.
+    document.addEventListener('bmm:repo-server-changed', () => { void restoreServerStatus(); });
+    // --- Mini-Server Generation ---
+    if (btnPickMiniRepo) {
+        btnPickMiniRepo.addEventListener('click', async () => {
+            const { pickFile } = await import('../../core/api.js');
+            const path = await pickFile(['json']);
+            if (path) {
+                inputMiniRepoPath.value = path;
+                localStorage.setItem('bmm_last_mini_repo_json', path);
+            }
+        });
+    }
+    if (btnPickMiniFolder) {
+        btnPickMiniFolder.addEventListener('click', async () => {
+            const { pickFolder } = await import('../../core/api.js');
+            const path = await pickFolder();
+            if (path) {
+                const fullPath = path.endsWith('\\') || path.endsWith('/') ? path + 'repo.json' : path + '/repo.json';
+                inputMiniRepoPath.value = fullPath;
+                localStorage.setItem('bmm_last_mini_repo_json', fullPath);
+            }
+        });
+    }
+    if (inputMiniRepoPath) {
+        const last = localStorage.getItem('bmm_last_mini_repo_json');
+        if (last)
+            inputMiniRepoPath.value = last;
+    }
+    // Docker toggle
+    if (cbDocker) {
+        cbDocker.addEventListener('change', () => {
+            if (dockerOptions) {
+                dockerOptions.style.display = cbDocker.checked ? 'block' : 'none';
+            }
+        });
+    }
+    const inputVersion = document.getElementById('repo-mini-server-version');
+    if (inputVersion) {
+        const lastVersion = localStorage.getItem('bmm_last_mini_server_version');
+        if (lastVersion)
+            inputVersion.value = lastVersion;
+    }
+    const serverTypeSelect = document.getElementById('repo-mini-server-type');
+    const cbCloudflare = document.getElementById('repo-mini-server-cloudflare');
+    const cbUpnp = document.getElementById('repo-mini-server-upnp');
+    if (serverTypeSelect) {
+        serverTypeSelect.addEventListener('change', () => {
+            if (serverTypeSelect.value === 'server') {
+                if (cbCloudflare) {
+                    cbCloudflare.checked = false;
+                    cbCloudflare.disabled = true;
+                }
+                if (cbUpnp) {
+                    cbUpnp.checked = false;
+                    cbUpnp.disabled = true;
+                }
+                if (cbAutoStart) {
+                    cbAutoStart.checked = false;
+                    cbAutoStart.disabled = true;
+                }
+            }
+            else {
+                if (cbCloudflare)
+                    cbCloudflare.disabled = false;
+                if (cbUpnp)
+                    cbUpnp.disabled = false;
+                if (cbAutoStart)
+                    cbAutoStart.disabled = false;
+            }
+        });
+        // Trigger once to set initial state
+        serverTypeSelect.dispatchEvent(new Event('change'));
+    }
+    mountMiniServerOptions();
+    if (btnGenMiniServer) {
+        btnGenMiniServer.addEventListener('click', async () => {
+            let jsonPath = inputMiniRepoPath ? inputMiniRepoPath.value.trim() : '';
+            if (!jsonPath) {
+                const hostPathInput = document.getElementById('repo-host-path');
+                const fallbackDir = ((hostPathInput ? hostPathInput.value : "") || inputExportPath.value).trim();
+                if (fallbackDir) {
+                    jsonPath = fallbackDir.endsWith('.json') ? fallbackDir : (fallbackDir.endsWith('\\') || fallbackDir.endsWith('/') ? fallbackDir + 'repo.json' : fallbackDir + '/repo.json');
+                }
+            }
+            if (!jsonPath)
+                return toast(t('repo.errNoOutDir'), 'warning');
+            const miniPortInput = document.getElementById('repo-mini-server-port');
+            const port = parseInt(miniPortInput ? miniPortInput.value : "8000") || 8000;
+            const autoStart = cbAutoStart ? cbAutoStart.checked : false;
+            const useCloudflare = document.getElementById('repo-mini-server-cloudflare').checked;
+            const useUpnp = document.getElementById('repo-mini-server-upnp').checked;
+            const serverVersion = parseInt(document.getElementById('repo-mini-server-version')?.value || "1");
+            const lang = localStorage.getItem('bmm-lang') || 'en';
+            const adminPassword = document.getElementById('repo-mini-server-password')?.value || "admin";
+            // Optional subscriber-facing download password. Empty = the repo stays open.
+            const downloadPassword = document.getElementById('repo-mini-server-download-password')?.value || "";
+            const enableDocker = cbDocker ? cbDocker.checked : false;
+            const dockerHostType = dockerHostSelect ? dockerHostSelect.value : "linux";
+            const serverType = document.getElementById('repo-mini-server-type')?.value || "user";
+            try {
+                btnGenMiniServer.disabled = true;
+                const uploadLimit = parseInt(inputMiniServerUploadLimit ? inputMiniServerUploadLimit.value : "0") || 0;
+                localStorage.setItem('bmm_last_mini_server_version', serverVersion.toString());
+                await invoke('generate_standalone_server', {
+                    payload: {
+                        repoPath: jsonPath, port, autoStart, useCloudflare, useUpnp, lang, uploadLimit, serverVersion, adminPassword, downloadPassword, enableDocker, dockerHostType, serverType,
+                        extras: readMiniServerExtras()
+                    }
+                });
+                toast(t('repo.miniServerSuccess'), "success");
+            }
+            catch (err) {
+                const errMsg = String(err);
+                toast(t(errMsg) || errMsg, "error");
+            }
+            finally {
+                btnGenMiniServer.disabled = false;
+                btnGenMiniServer.innerHTML = `${uiIcon('add', 12, { style: 'margin-right:6px' })} <span data-i18n="repo.miniServerGenerate">${t('repo.miniServerGenerate')}</span>`;
+            }
+        });
+    }
+    return {
+        getIsServerRunning: () => isServerRunning
+    };
+}
+//# sourceMappingURL=repo-server.js.map

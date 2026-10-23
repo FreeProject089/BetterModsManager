@@ -1,0 +1,296 @@
+/**
+ * Central link registry — all external URLs live in links.json.
+ *
+ * Load order (first success wins, rest skipped):
+ *   1. BCWEB_LINKS_URL   — links.json hosted on BetterCommunity (edit from the admin panel)
+ *   2. REMOTE_LINKS_URL  — the copy on GitHub (fallback if BCWEB is down)
+ *   3. assets/links.json — local bundled fallback (offline)
+ *   4. Built-in DEFAULTS — hardcoded last resort
+ *
+ * BCWEB is authoritative: edit links.json under Admin → Downloads & assets and every app
+ * picks it up with no recompile. GitHub + the local bundle only matter if BCWEB is
+ * unreachable. Set a URL to '' to skip that source.
+ */
+
+// ── BCWEB-hosted links.json (primary; served at /api/assets/links.json) ─────
+//
+// The production address, and the fallback for when app.cfg cannot be read. The URL actually
+// fetched comes from `bcwebLinksUrl()` below, which follows the CONFIGURED BetterCommunity —
+// see the note there for why a literal here was wrong.
+const BCWEB_LINKS_ORIGIN = 'https://bettercommunity.ch';
+const LINKS_PATH_ON_BCWEB = '/api/assets/links.json';
+
+// ── GitHub copy (fallback if BCWEB is unreachable) ─────────────────────────
+const REMOTE_LINKS_URL = 'https://raw.githubusercontent.com/FreeProject089/BetterModsManager/refs/heads/Tdev/frontend/assets/links.json';
+
+// ── Local fallback path (relative, served by Tauri) ────────────────────────
+const LOCAL_LINKS_PATH = 'assets/links.json';
+
+export interface BmmLinks {
+    // Data sources (fetched by backend/frontend)
+    plugin_catalog:   string;
+    plugin_github:    string;
+    server_browse:    string;
+    contributors:     string;
+    autoupdate_api:   string;
+    // Tried only when the primary is unreachable or rate-limited. BCWEB serves the same
+    // shape as the GitHub releases API, so nothing downstream knows which one answered.
+    autoupdate_api_fallback: string;
+    apps_catalog:     string;
+    // The official catalogue of scheduler automations, and the index that lists every
+    // official catalogue. Both were written into the scheduler as string literals, which
+    // made the official feed unreachable from anywhere but bettercommunity.ch — so a
+    // tunnelled BCWEB (cloudflared, ngrok) could be running perfectly and BMM would still
+    // talk to the domain that is down. Being in the registry is what makes them testable.
+    preset_catalog:   string;
+    catalog_index:    string;
+    // The remaining official catalogue kinds, in the registry like the others so a tunnelled or
+    // self-hosted BCWEB can serve them and none stays a hardcoded literal. Any of the *_catalog
+    // values (and catalog_index) may be a single URL OR an array of URLs — read them through
+    // `catalogSources()` to get the list. An empty string means "no default"; it degrades to the
+    // next source and is never fetched, so an unconfigured kind simply contributes nothing.
+    theme_catalog:      string | string[];
+    automation_catalog: string | string[];
+    tutorial_catalog:   string | string[];
+    // Telemetry (opt-in). HTTPS PostHog-compatible capture endpoint + PUBLIC key.
+    // `analytics_key` is a PUBLIC ingest key — it ships inside the app and only
+    // permits submitting telemetry. The PRIVATE admin key (deletion approvals,
+    // goal writes) lives ONLY on the telemetry server (ADMIN_KEY) and is never
+    // shipped here. Empty endpoint = events stay buffered locally (no network).
+    analytics_endpoint: string;
+    analytics_key:      string;   // public ingest key (bmm_pk_…)
+    // Community / social links (patched into HTML at runtime)
+    github_repo:      string;
+    discord:          string;
+    /** OAuth2 authorize URL that adds the bot to somebody else’s server. Empty until
+     *  the real client id is filled in — every button offering it is hidden while it is. */
+    discord_bot_invite: string;
+    reddit:           string;
+    kofi:             string;
+    kofi_community:   string;
+    ed_forum:         string;
+    bettercommunity:  string;
+    // BetterCommunity v2 remote switch (BMM 1.0.4). All optional and absent from the bundled
+    // file: absent = v1, today's behaviour. app.cfg (BCApiVersion / BCv2Base) wins over these.
+    //   bc_api           "v2" selects v2 for this session (after a health check; v1 on failure)
+    //   bc_v2_base       where v2 lives while it runs beside v1 ('' = the same root)
+    //   bc_v2_client_id  BMM's public OAuth client (device flow), from `app:provision-bmm`
+    //   bc_v2_app_key    BMM's publishable key bc_pk_… (safe to ship), same run
+    //   bc_v2_app_id     BMM's app id app_… (telemetry route /v2/apps/{app}/telemetry/batch)
+    bc_api?:          string;
+    bc_v2_base?:      string;
+    bc_v2_client_id?: string;
+    bc_v2_app_key?:   string;
+    bc_v2_app_id?:    string;
+    // NOT exhaustive: links.json also carries the Discord Rich Presence entries
+    // (WebSiteRPC1/2, github_RPC1/2, BoutonRPC1/2). Those are read on the Rust side in
+    // commands/discord.rs straight from the file, never through this interface, so adding
+    // them here would only invite the two to drift.
+}
+
+// Every value below is the LAST RESORT — used only when neither BetterCommunity nor GitHub
+// nor the bundled assets/links.json answered. Keep each one equal to what assets/links.json
+// ships, or the fallback quietly behaves differently from the app it is standing in for.
+const DEFAULTS: BmmLinks = {
+    plugin_catalog:   'https://raw.githubusercontent.com/BetterDCS/BetterModsManager_Plugins/main/catalog.json',
+    plugin_github:    'https://github.com/BetterDCS/BetterModsManager_Plugins',
+    server_browse:    'https://bettercommunity.ch/api/repos.json',
+    contributors:     'https://bettercommunity.ch/api/assets/contributors.json',
+    autoupdate_api:   'https://api.github.com/repos/FreeProject089/BetterModsManager/releases',
+    autoupdate_api_fallback: 'https://bettercommunity.ch/api/updates/bmm',
+    apps_catalog:     'https://raw.githubusercontent.com/BetterDCS/BMM_App_Catalogue/main/catalog.json',
+    preset_catalog:   'https://bettercommunity.ch/api/catalog.json?project=bmm&kind=PRESET',
+    catalog_index:    'https://bettercommunity.ch/api/catalogs.json',
+    // Same BCWEB feed as preset_catalog, one per remaining kind. These are the LAST-RESORT
+    // defaults — links.json / BCWEB override them, and may set any to an array of URLs.
+    theme_catalog:      'https://bettercommunity.ch/api/catalog.json?project=bmm&kind=THEME',
+    automation_catalog: 'https://bettercommunity.ch/api/catalog.json?project=bmm&kind=AUTOMATION',
+    tutorial_catalog:   'https://bettercommunity.ch/api/catalog.json?project=bmm&kind=TUTORIAL',
+    // Telemetry: production collector (MUST be HTTPS — BMM refuses plain HTTP, so the
+    // old localhost dev default only worked in test builds). For LOCAL testing, override
+    // via a hosted links.json or an HTTPS tunnel (ngrok/cloudflared) ending in "/batch/".
+    // Empty = buffer locally only.
+    // These two were the ONLY entries missing from assets/links.json, which meant the
+    // collector could not be moved and the ingest key could not be rotated without shipping
+    // a new BMM — the one thing the registry exists to avoid. They are in the file now, so
+    // these values are the fallback and no longer the only copy.
+    analytics_endpoint: 'https://telemetry.bettercommunity.ch/batch/',   // production collector — MUST end with /batch/
+    analytics_key:      'bmm_pk_a8bc7a0dba3faca94dd497aab3c4a5e8d56f13fb',   // PUBLIC ingest key — safe to ship
+    github_repo:      'https://github.com/FreeProject089/BetterModsManager',
+    discord:          'https://discord.com/invite/CTaaEF9R75',
+    discord_bot_invite: 'https://discord.com/oauth2/authorize?client_id=1521962060173283448&permissions=1099796925462&scope=bot%20applications.commands',
+    reddit:           'https://www.reddit.com/r/BetterModManager/',
+    kofi:             'https://ko-fi.com/I2I31ZIPPG',
+    kofi_community:   'https://ko-fi.com/bettercommunity',
+    ed_forum:         'https://forum.dcs.world/topic/385941-better-modmanager/',
+    bettercommunity:  'https://bettercommunity.ch/',
+};
+
+let _links: BmmLinks = { ...DEFAULTS };
+let _loaded = false;
+
+async function tryFetch(url: string): Promise<BmmLinks | null> {
+    try {
+        // Remote (http/https) sources go through the Rust backend: the webview enforces CORS
+        // and bettercommunity.ch/api/assets/* sends no Access-Control-Allow-Origin, so a direct
+        // browser fetch of the PRIMARY source is blocked. The backend (reqwest) has no CORS and
+        // reuses the pooled client + BC identity header. The local bundled path is same-origin,
+        // so it stays a plain webview fetch (works offline, before the backend bridge is ready).
+        if (/^https?:\/\//i.test(url)) {
+            const { invoke } = await import('./api.js');
+            // `anonymous`: no X-Creator-ID, no key proof. links.json is public, CORS-open
+            // and cached; identifying this PC to fetch it made every launch a ping carrying
+            // a stable identifier, before the user had consented to anything.
+            const text = await invoke('fetch_remote_json', { url, anonymous: true }, { quiet: true }) as string;
+            if (text) return { ...DEFAULTS, ...JSON.parse(text) };
+            return null;
+        }
+        const res = await fetch(url, { cache: 'no-cache' });
+        if (res.ok) {
+            const data = await res.json();
+            return { ...DEFAULTS, ...data };
+        }
+    } catch (_) {}
+    return null;
+}
+
+/**
+ * Where to ask BetterCommunity for the registry.
+ *
+ * Not a literal, which is what it used to be. BCTestMode in app.cfg exists so BMM can be
+ * pointed at a tunnelled or self-hosted BCWEB — and the registry, of all things, was exempt:
+ * the test instance could be running perfectly while BMM read its list of addresses from the
+ * production domain, and then used every address that copy named. Exactly the trap the
+ * catalogue keys were pulled out of, one layer lower down.
+ *
+ * `bcRoot()` needs `loadBcConfig()`, which reads app.cfg through a Tauri command and touches
+ * no network — so loadLinks awaits it first. With test mode off this resolves to the same
+ * domain that was hardcoded, so nothing changes for anybody not using it.
+ */
+function bcwebLinksUrl(): string {
+    const root = (_bcTestMode ? bcTestBase() : BCWEB_LINKS_ORIGIN).replace(/\/+$/, '');
+    return `${root}${LINKS_PATH_ON_BCWEB}`;
+}
+
+export async function loadLinks(): Promise<void> {
+    if (_loaded) return;
+
+    // Before choosing the first source, not after: it decides WHICH BetterCommunity that is.
+    // Local only, idempotent, and already guarded — an unreadable app.cfg leaves test mode
+    // off, which is the production address.
+    await loadBcConfig();
+
+    let source = 'built-in defaults';
+
+    // Try each source in priority order; first success wins. BetterCommunity is authoritative;
+    // GitHub covers it being down; the bundled copy covers having no network at all (and
+    // check-links keeps it complete, so it is a real step and not a hole); the built-in
+    // DEFAULTS are the last resort and also fill any key a reachable source omitted.
+    const bcweb = bcwebLinksUrl();
+    const sources: Array<[string, string]> = [
+        [bcweb,            `BCWEB (${bcweb})`],
+        [REMOTE_LINKS_URL, `GitHub (${REMOTE_LINKS_URL})`],
+        [LOCAL_LINKS_PATH, `local file (${LOCAL_LINKS_PATH})`],
+    ];
+    for (const [url, label] of sources) {
+        if (!url) continue;
+        const data = await tryFetch(url);
+        if (data) {
+            _links = data;
+            source = label;
+            break;
+        }
+    }
+
+    console.log(`[BMM] links.json source: ${source}`);
+    _loaded = true;
+}
+
+/** Returns the cached links (call loadLinks() first at app startup). */
+export function getLinks(): Readonly<BmmLinks> {
+    return _links;
+}
+
+/**
+ * The source URL(s) for one catalogue key, always as an array — a kind may be configured with a
+ * single URL (the common case) or a list of them (A3: "accepts a list per kind"). Empty strings
+ * are dropped, so a kind set to "" or [] contributes nothing and is never fetched. A loader that
+ * wants to merge several sources for a kind iterates this; the single-string readers elsewhere are
+ * unaffected, which is why the change is backward-compatible.
+ */
+export function catalogSources(key: keyof BmmLinks): string[] {
+    const v = (_links as unknown as Record<string, unknown>)[key];
+    if (Array.isArray(v)) return v.filter((s): s is string => typeof s === 'string' && s.trim() !== '');
+    return typeof v === 'string' && v.trim() !== '' ? [v] : [];
+}
+
+// ── BetterCommunity base resolution (blog / community / account link) ──────────
+// Test mode + base URL come from app.cfg (BCTestMode / BCTestBase), read once at
+// startup via the get_bc_config Tauri command. When test mode is OFF, everything uses
+// the production `bettercommunity` link above. The base URL may include a port or not.
+let _bcTestMode = false;
+let _bcTestBase = 'http://localhost:5176';
+let _bcLoaded = false;
+// The SESSION's mode, v1 until core/bc-v2.ts activateBcV2() got Rust's answer (switch, then a
+// passing health check). The raw app.cfg values are kept apart: they are inputs, not the mode.
+let _bcApiVersion: 'v1' | 'v2' = 'v1';
+let _bcV2Base = '';
+let _cfgApiVersion = '';
+let _cfgApiSet = false;
+let _cfgV2Base = '';
+
+export async function loadBcConfig(): Promise<void> {
+    if (_bcLoaded) return;
+    try {
+        const { invoke } = await import('./api.js');
+        const cfg = await invoke('get_bc_config') as { testMode?: boolean; test_mode?: boolean; baseUrl?: string; base_url?: string; api_version?: string; v2_base?: string; api_version_set?: boolean };
+        if (cfg) {
+            _bcTestMode = !!(cfg.testMode ?? cfg.test_mode);
+            const base = cfg.baseUrl ?? cfg.base_url;
+            if (base && base.trim()) _bcTestBase = base.trim();
+            // BetterCommunity v2 switch inputs (app.cfg BCApiVersion / BCv2Base). The mode itself is
+            // decided by activateBcV2 (core/bc-v2.ts), after links.json and a health check.
+            _cfgApiVersion = String(cfg.api_version || '').trim();
+            _cfgApiSet = !!cfg.api_version_set;
+            _cfgV2Base = String(cfg.v2_base || '').trim();
+        }
+        console.log(`[BMM] BC config: testMode=${_bcTestMode}, base=${_bcTestBase}, api line=${_cfgApiSet ? _cfgApiVersion : '(none)'}`);
+    } catch (_) { /* not in Tauri / cfg unreadable → production defaults */ }
+    // Mark loaded only AFTER the attempt — never before (a premature call that
+    // failed once must not lock the config to defaults forever).
+    _bcLoaded = true;
+}
+
+/** Whether the in-app BetterCommunity blog/community points at a test/staging base. */
+export function bcTestMode(): boolean { return _bcTestMode; }
+/** The session's mode (v1 until activated) and its v2 root ('' = the v1 root). core/bc-client.ts
+ *  turns them into URLs. */
+export function bcApiVersionCfg(): 'v1' | 'v2' { return _bcApiVersion; }
+export function bcV2BaseCfg(): string { return _bcV2Base; }
+/** The raw app.cfg inputs of the switch, for activateBcV2. */
+export function bcSwitchCfg(): { set: boolean; version: string; base: string } {
+    return { set: _cfgApiSet, version: _cfgApiVersion, base: _cfgV2Base };
+}
+/** Set by activateBcV2 only, from Rust's answer: the mode is never chosen in the webview alone. */
+export function setBcSession(version: 'v1' | 'v2', v2Root: string): void {
+    _bcApiVersion = version === 'v2' && v2Root ? 'v2' : 'v1';
+    _bcV2Base = _bcApiVersion === 'v2' ? v2Root.replace(/\/+$/, '') : '';
+}
+/** The configured test base URL (with or without a port), trailing slash trimmed. */
+export function bcTestBase(): string { return _bcTestBase.replace(/\/+$/, ''); }
+/** The effective BetterCommunity root: the test base when test mode is on, else the
+ *  production `bettercommunity` link from the loaded links. */
+export function bcRoot(): string {
+    return (_bcTestMode ? bcTestBase() : (_links.bettercommunity || 'https://bettercommunity.ch/')).replace(/\/+$/, '');
+}
+
+/**
+ * Where the BCWEB **API** lives — the site root plus `/api`.
+ *
+ * Written once because it was written twice and one of them was wrong: the notification
+ * poller passed the site ROOT as its base, so it asked for `<site>/v1/notifications`, which
+ * is a page, not an endpoint. The site answers 200 with the HTML shell, the client's
+ * JSON.parse fails, and the poller returns "nothing new" for ever — with a valid key, a
+ * working server, and no error anywhere.
+ */
+export function bcApi(): string { return `${bcRoot()}/api`; }

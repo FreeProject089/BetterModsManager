@@ -1,0 +1,1736 @@
+/* ═══════════════════════════════════════════════════
+   App Catalog — apps.css
+   ═══════════════════════════════════════════════════ */
+
+.apps-root {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+/* ── Head, tab rail, toolbar ──
+   The shapes come from page-head.css (.pg-head / .pg-tabbar / .pg-toolbar), shared with
+   Plugins & API so the two sidebar neighbours read as one app. What is here is only how they
+   sit in this page's fixed frame: the head and the strip stay put and .apps-content scrolls. */
+/* No gutter of its own: #view-apps is a .view and already has the 28 / 32 px every page
+   has. This header used to add 20 / 24 px on top of it, so the App Catalog sat further in
+   than Plugins & API next to it. */
+.apps-header {
+    padding: 0;
+    margin-bottom: 14px;
+    flex-shrink: 0;
+}
+.apps-tabbar {
+    padding: 0;
+    margin-bottom: 12px;
+    flex-shrink: 0;
+}
+.apps-toolbar {
+    padding: 0;
+    margin-bottom: 4px;
+    flex-shrink: 0;
+}
+/* The old underline-tab metrics, switched off: the strip is a .bms-tabs rail now. */
+.apps-tab { position: static; }
+.apps-filter {
+    height: 34px;
+    background: var(--bmm-s03);
+    border: 1px solid var(--bmm-border-hover);
+    border-radius: 9px;
+    padding: 0 10px;
+    color: var(--bmm-text-primary);
+    font-size: 12.5px;
+    cursor: pointer;
+    flex: none;
+    max-width: 200px;
+}
+
+/* ── Content area ── */
+.apps-content {
+    flex: 1;
+    overflow-y: auto;
+    /* A few pixels of room, cancelled by the margin, so a hovered card's lift and shadow are
+       not clipped by the scroll box. */
+    padding: 4px 6px 8px;
+    margin: 0 -6px;
+    min-width: 0;
+}
+
+/* ── Loading / Empty ── */
+.apps-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    height: 200px;
+    color: var(--bmm-text-secondary);
+    font-size: 13px;
+}
+/* The skeleton grid is a grid, not a centred column. main.css says so too, but this sheet
+   loads after it and the rule above (same weight) used to win: six skeleton cards stacked in
+   a narrow centred column instead of the shape of the grid they stand in for. */
+.apps-loading.apps-loading--skeleton { display: block; height: auto; }
+.apps-spinner {
+    width: 28px;
+    height: 28px;
+    border: 2px solid var(--bmm-border);
+    border-top-color: var(--bmm-accent);
+    border-radius: 50%;
+    animation: apps-spin 0.7s linear infinite;
+}
+@keyframes apps-spin { to { transform: rotate(360deg); } }
+
+/* Nothing here: a glyph in a tile, the fact, one line on what to do, the action. */
+.apps-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 48px 20px;
+    text-align: center;
+    color: var(--bmm-text-secondary);
+    font-size: 13px;
+}
+.apps-empty--compact { padding: 24px 16px; }
+.apps-empty-icon {
+    display: inline-grid;
+    place-items: center;
+    width: 56px;
+    height: 56px;
+    margin-bottom: 6px;
+    border-radius: 16px;
+    background: var(--bmm-s05);
+    border: 1px solid var(--bmm-border);
+    color: var(--bmm-text-secondary);
+}
+.apps-empty--compact .apps-empty-icon { width: 40px; height: 40px; border-radius: 12px; margin-bottom: 2px; }
+.apps-empty-title { margin: 0; font-size: 15px; font-weight: 700; color: var(--bmm-text-primary); }
+.apps-empty--compact .apps-empty-title { font-size: 13px; font-weight: 600; }
+.apps-empty-sub { margin: 0; max-width: 46ch; line-height: 1.5; color: var(--bmm-text-secondary); }
+.apps-empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 8px; }
+.apps-empty p { margin: 0; }
+
+/* ── App Grid ── */
+.apps-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 14px;
+}
+
+/* ── App Card ── */
+.apps-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+    display: flex;
+    flex-direction: column;
+}
+.apps-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    border-color: var(--accent);
+}
+.apps-card-installed { border-color: rgba(16,185,129,0.4); }
+.apps-card-thumb {
+    position: relative;
+    height: 130px;
+    background: var(--bg-tertiary);
+    overflow: hidden;
+}
+/* Image sits on top of the placeholder; hidden by onerror if it fails to load.
+   `contain` shows the whole logo/screenshot without cropping. */
+.apps-card-thumb-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    padding: 8px;
+}
+.apps-card-thumb-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    opacity: 0.4;
+}
+.apps-card-badges {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+.apps-card-fav-star {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    color: var(--accent);
+    font-size: 16px;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+}
+.apps-card-installed-chip {
+    position: absolute;
+    bottom: 6px;
+    right: 6px;
+    background: rgba(16,185,129,0.85);
+    color: var(--text-on-accent);
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 10px;
+}
+.apps-card-body { padding: 12px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+.apps-card-top { display: flex; flex-direction: column; gap: 3px; }
+.apps-card-title { font-size: 13px; font-weight: 700; color: var(--text-primary); line-height: 1.3; }
+.apps-card-meta { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.apps-card-desc {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin: 0;
+}
+.apps-card-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: auto; }
+
+/* ── Badges & tags (refreshed: rounded pills, color-matched borders, icons) ── */
+.apps-price-badge {
+    font-size: 9.5px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: var(--radius-badge, 5px);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border: 1px solid transparent;
+    line-height: 1.5;
+}
+.apps-price-free    { background: rgba(16,185,129,0.16);  color: var(--success); border-color: rgba(16,185,129,0.38); }
+.apps-price-freemium{ background: rgba(99,102,241,0.16);  color: var(--bmm-purple); border-color: rgba(99,102,241,0.38); }
+.apps-price-paid    { background: rgba(245,158,11,0.16);  color: var(--warning); border-color: rgba(245,158,11,0.38); }
+/* Open source is not a price, so it does not borrow the free/paid colours. Cyan is what BMM
+   uses for a fact about a thing rather than a judgement about it. */
+.apps-price-oss     { background: rgba(6,182,212,0.16);   color: var(--cyan); border-color: rgba(6,182,212,0.38); }
+/* A stated price and an ABSENT one must not look alike — an entry with no price used to be
+   labelled Free, which is the reassuring way to be wrong. */
+.apps-price-unknown { background: var(--bmm-s05); color: var(--text-muted); border-color: var(--border); }
+
+.apps-cat-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 2px 9px 2px 7px;
+    border-radius: var(--radius-badge, 5px);
+    text-transform: capitalize;
+    border: 1px solid transparent;
+    line-height: 1.6;
+}
+.apps-cat-badge svg { width: 12px; height: 12px; flex: none; }
+.apps-cat-game    { background: rgba(59,130,246,0.14);  color: var(--cyan); border-color: rgba(59,130,246,0.42); }
+.apps-cat-utility { background: rgba(139,92,246,0.14);  color: var(--bmm-purple); border-color: rgba(139,92,246,0.42); }
+.apps-cat-other   { background: rgba(148,163,184,0.12); color: var(--text-muted); border-color: rgba(148,163,184,0.34); }
+
+.apps-official-badge {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-size: 9.5px;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: var(--radius-badge, 5px);
+    background: linear-gradient(135deg, rgba(245,158,11,0.26), rgba(245,158,11,0.10));
+    color: var(--warning);
+    border: 1px solid rgba(245,158,11,0.45);
+}
+.apps-partner-badge {
+    font-size: 9.5px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: var(--radius-badge, 5px);
+    background: rgba(99,102,241,0.14);
+    color: var(--bmm-purple);
+    border: 1px solid rgba(99,102,241,0.42);
+}
+/* Community — the neutral tier. Deliberately quiet and deliberately PRESENT: the absence of
+   a badge is not a warning, it is a blank a reader fills in with whatever they assume. */
+.apps-community-badge {
+    font-size: 9.5px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: var(--radius-badge, 5px);
+    background: var(--bmm-s08);
+    color: var(--text-muted);
+    border: 1px solid var(--bmm-s10);
+}
+/* A tier the source CLAIMED and was not granted. Never the official or partner colours —
+   this chip must not be mistakable for the badge it is reporting on. */
+.apps-claim-badge {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-size: 9.5px;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: var(--radius-badge, 5px);
+    background: var(--bmm-danger-dim, rgba(239, 68, 68, 0.12));
+    color: var(--danger);
+    border: 1px solid rgba(239, 68, 68, 0.42);
+    cursor: help;
+}
+.apps-tag {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(var(--accent-rgb), 0.07);
+    color: var(--text-secondary);
+    border: 1px solid transparent;
+    transition: background .14s, color .14s;
+}
+.apps-tag::before { content: "#"; opacity: 0.4; margin-right: 1px; font-weight: 700; }
+.apps-tag-more::before { content: ""; margin: 0; }
+.apps-tag-more { font-weight: 700; color: var(--text-muted); background: transparent; }
+.apps-card:hover .apps-tag { background: rgba(var(--accent-rgb), 0.13); color: var(--text-primary); }
+.apps-version { font-size: 11px; color: var(--text-muted); }
+
+/* Price on browse cards: quiet meta text (not a loud overlay pill). A leading
+   dot separates it from the category/version to its left. */
+.apps-card-price {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+}
+.apps-card-price::before { content: "·"; margin-right: 5px; opacity: 0.6; }
+.apps-card-price-paid     { color: var(--warning); }
+.apps-card-price-freemium { color: var(--bmm-purple); }
+.apps-card-price-oss      { color: var(--cyan); }
+.apps-card-price-unknown  { color: var(--text-muted); font-style: italic; }
+
+/* ── Installed List ── */
+.apps-installed-list { display: flex; flex-direction: column; gap: 8px; }
+.apps-installed-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    transition: border-color 0.15s;
+}
+.apps-installed-row:hover { border-color: var(--accent); }
+.apps-installed-thumb {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--bg-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: var(--text-muted);
+}
+.apps-installed-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.apps-installed-info { flex: 1; min-width: 0; }
+.apps-installed-title { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.apps-installed-path { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.apps-installed-meta { display: flex; gap: 10px; font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+.apps-installed-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+/* ── History — old classes (kept for fallback) ── */
+.apps-history-header { display: none; }
+.apps-history-list   { display: none; }
+
+/* ── History (new design) ── */
+.apps-hist-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+}
+.apps-hist-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.apps-hist-chip {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    border-radius: var(--radius-badge, 5px);
+    font-size: 12px;
+    font-weight: 500;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.apps-hist-chip:hover { border-color: var(--accent); color: var(--text-primary); }
+.apps-hist-chip.active { background: rgba(var(--accent-rgb), 0.12); border-color: var(--accent); color: var(--accent); }
+.apps-hist-chip-n {
+    font-size: 10px;
+    background: var(--bmm-s08);
+    padding: 1px 5px;
+    border-radius: 8px;
+    font-weight: 700;
+}
+.apps-hist-chip.active .apps-hist-chip-n { background: rgba(var(--accent-rgb), 0.2); }
+
+/* Day group */
+.apps-hist-day { margin-bottom: 20px; }
+.apps-hist-day-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    padding: 0 4px 8px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--bmm-s06);
+}
+.apps-hist-day-rows { display: flex; flex-direction: column; gap: 2px; }
+
+/* Entry row */
+.apps-hist-entry {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 10px;
+    border-radius: 9px;
+    transition: background 0.12s;
+    cursor: default;
+}
+.apps-hist-entry:hover { background: var(--bmm-s04); }
+
+/* Icon badge */
+.apps-hist-icon {
+    width: 32px; height: 32px;
+    border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+}
+.apps-action-install   { background: rgba(16,185,129,0.14); color: var(--success); }
+.apps-action-launch    { background: rgba(96,165,250,0.14); color: var(--cyan); }
+.apps-action-uninstall { background: rgba(248,113,113,0.14); color: var(--danger); }
+
+/* Text */
+.apps-hist-body { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.apps-hist-action-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+    opacity: 0.65;
+    color: var(--text-secondary);
+}
+.apps-hist-app-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.apps-hist-clock {
+    font-size: 11px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Keep old selectors for anything still using them */
+.apps-hist-group { display: none; }
+.apps-hist-date  { display: none; }
+.apps-hist-row   { display: none; }
+
+/* ── Favorites (search + filter toolbar) ── */
+.apps-fav-toolbar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+.apps-fav-search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 11px;
+    flex: 1;
+    min-width: 140px;
+    color: var(--text-muted);
+}
+.apps-fav-search { border: none; background: none; outline: none; color: var(--text-primary); font-size: 12px; flex: 1; min-width: 0; }
+
+/* Collections */
+.apps-collections { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.apps-collection-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+}
+.apps-collection-row:hover, .apps-collection-row.active { border-color: var(--accent); }
+.apps-collection-row.active { background: rgba(var(--accent-rgb), 0.06); }
+.apps-collection-name { flex: 1; font-weight: 600; color: var(--text-primary); }
+.apps-collection-count { font-size: 10px; color: var(--text-muted); background: var(--bmm-s06); padding: 1px 6px; border-radius: 8px; }
+.apps-coll-add-row { display: flex; gap: 6px; margin-bottom: 10px; }
+
+/* Browse tag chips */
+.apps-tags-row {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+    padding: 0 1px;
+}
+.apps-tag-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 12px;
+    border-radius: var(--radius-badge, 5px);
+    font-size: 11px;
+    font-weight: 600;
+    border: 1px solid var(--border);
+    background: var(--bg-secondary);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+}
+.apps-tag-chip:hover { border-color: var(--accent); color: var(--text-primary); transform: translateY(-1px); }
+.apps-tag-chip.active {
+    background: rgba(var(--accent-rgb), 0.14);
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.25), 0 2px 6px rgba(var(--accent-rgb), 0.18);
+}
+
+/* Installed: fav button */
+.apps-inst-fav-btn {
+    background: none; border: none; cursor: pointer; padding: 4px;
+    color: var(--text-muted); border-radius: 6px;
+    transition: color 0.15s;
+    flex-shrink: 0;
+}
+.apps-inst-fav-btn:hover, .apps-inst-fav-btn.active { color: var(--accent); }
+
+/* ── Sources ── */
+/* The Sources tab as one section card, the same surface as Plugins & API's cards — it was a
+   680-px column floating at the left of an empty page. */
+.apps-sources-wrap {
+    background: var(--bmm-bg-elevated);
+    border: 1px solid var(--bmm-border);
+    border-radius: var(--bmm-radius-card, 12px);
+    padding: 18px;
+}
+.apps-sources-header { margin-bottom: 16px; }
+.apps-sources-header h3 { font-size: 14px; font-weight: 750; color: var(--bmm-text-primary); margin: 0 0 6px; }
+.apps-sources-desc { font-size: 12px; color: var(--bmm-text-secondary); margin: 0; line-height: 1.55; max-width: 90ch; }
+.apps-sources-add { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.apps-sources-add .apps-source-input { min-width: 220px; }
+.apps-source-input {
+    flex: 1;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 12px;
+    color: var(--text-primary);
+    font-size: 12px;
+}
+.apps-source-input:focus { outline: none; border-color: var(--accent); }
+.apps-sources-list { display: flex; flex-direction: column; gap: 6px; }
+.apps-source-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+.apps-source-official { border-color: rgba(245,158,11,0.3); color: var(--warning); }
+.apps-source-url { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: monospace; font-size: 11px; }
+.apps-source-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+.apps-source-info { font-size: 11px; color: var(--text-muted); margin-top: 8px; display: flex; align-items: center; gap: 5px; }
+
+/* ── Modals ── */
+.apps-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(8px);
+    z-index: 9500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.2s, visibility 0.2s;
+}
+.apps-modal-overlay.open {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+.apps-modal {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.6);
+    max-width: 820px;
+    width: 92%;
+    max-height: 88vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    animation: apps-modal-in 0.25s cubic-bezier(0.34,1.56,0.64,1);
+}
+.apps-modal-sm { max-width: 480px; }
+@keyframes apps-modal-in {
+    from { transform: scale(0.92) translateY(20px); opacity: 0; }
+    to   { transform: scale(1) translateY(0); opacity: 1; }
+}
+.apps-modal-close {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    background: var(--bmm-s06);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--text-muted);
+    z-index: 10;
+    transition: background 0.15s, color 0.15s;
+}
+.apps-modal-close:hover { background: var(--bmm-s12); color: var(--text-primary); }
+.apps-modal-body { overflow-y: auto; padding: 24px; flex: 1; }
+
+/* Detail modal: edge-to-edge (gallery/top-bar flush), narrower card feel */
+#apps-detail-modal .apps-modal { max-width: 600px; }
+#apps-detail-modal .apps-modal-body { padding: 0; display: flex; flex-direction: column; }
+#apps-detail-modal .apps-modal-close { background: rgba(0,0,0,0.4); }
+
+/* ══════════════════════════════════════════════════
+   App Detail Modal (ADM) v2
+   ══════════════════════════════════════════════════ */
+
+.adm-root { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+
+/* ── Gallery ── */
+.adm-gallery { flex-shrink: 0; background: var(--bmm-bg-base); border-radius: 14px 14px 0 0; overflow: hidden; }
+/* `contain` keeps logos at a sane size and never crops screenshots */
+.adm-hero {
+    width: 100%;
+    height: 170px;
+    object-fit: contain;
+    display: block;
+    background: var(--bmm-bg-base);
+}
+.adm-thumbs { display: flex; gap: 6px; padding: 8px 10px; background: rgba(0,0,0,0.35); overflow-x: auto; }
+.adm-thumb {
+    width: 60px; height: 40px; object-fit: cover; border-radius: 5px;
+    cursor: pointer; border: 2px solid transparent; opacity: 0.5; flex-shrink: 0;
+    transition: border-color 0.15s, opacity 0.15s;
+}
+.adm-thumb.active, .adm-thumb:hover { border-color: var(--accent); opacity: 1; }
+
+/* ── Body ── */
+.adm-body {
+    flex: 1; overflow-y: auto;
+    padding: 18px 22px;
+    display: flex; flex-direction: column; gap: 12px;
+}
+/* Stop flex children from being crushed when the README expands — each keeps
+   its natural height and the body scrolls instead. */
+.adm-body > * { flex-shrink: 0; }
+
+/* ── Header ── */
+.adm-header { display: flex; align-items: flex-start; gap: 14px; }
+.adm-initials-badge {
+    width: 46px; height: 46px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px; font-weight: 800; flex-shrink: 0;
+    letter-spacing: -0.5px;
+}
+.adm-title-block { flex: 1; min-width: 0; }
+.adm-title-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+.adm-title { font-size: 19px; font-weight: 800; color: var(--text-primary); margin: 0; line-height: 1.2; }
+.adm-installed-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: rgba(16,185,129,0.15); color: var(--success);
+    font-size: 10px; font-weight: 700; padding: 2px 8px;
+    border-radius: 20px; border: 1px solid rgba(16,185,129,0.3);
+    flex-shrink: 0; white-space: nowrap;
+}
+.adm-badges { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
+
+/* Header actions (favorite + primary button) */
+.adm-header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.adm-fav-btn {
+    background: none; border: 1px solid var(--border); cursor: pointer;
+    width: 36px; height: 36px; color: var(--text-muted); border-radius: 9px;
+    transition: color 0.15s, background 0.15s, border-color 0.15s;
+    display: flex; align-items: center; justify-content: center;
+}
+.adm-fav-btn:hover { background: var(--bmm-s06); color: var(--accent); border-color: rgba(245,158,11,0.4); }
+.adm-fav-active { color: var(--accent) !important; border-color: rgba(245,158,11,0.4) !important; }
+.adm-action-btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 9px 18px; border-radius: 10px;
+    font-size: 13px; font-weight: 700; color: var(--text-on-accent);
+    cursor: pointer; border: none; flex-shrink: 0; white-space: nowrap;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+    transition: filter 0.15s, transform 0.1s;
+}
+.adm-action-btn:hover { filter: brightness(1.12); transform: translateY(-1px); }
+.adm-pick-btn { background: var(--bg-tertiary) !important; color: var(--text-primary) !important; border: 1px solid var(--border) !important; box-shadow: none; }
+
+/* ── Desc + tags ── */
+.adm-desc { font-size: 13px; color: var(--text-secondary); line-height: 1.65; margin: 0; }
+.adm-tags { display: flex; gap: 5px; flex-wrap: wrap; }
+
+/* ── Info table ── */
+.adm-info-table {
+    border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+    background: rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.015);
+}
+.adm-info-row {
+    display: grid;
+    grid-template-columns: 20px 110px 1fr;
+    align-items: center; gap: 10px;
+    padding: 9px 14px; font-size: 12px;
+    border-bottom: 1px solid var(--border);
+}
+.adm-info-row:last-child { border-bottom: none; }
+.adm-info-icon { display: flex; align-items: center; opacity: 0.5; }
+.adm-info-label { font-weight: 600; color: var(--text-secondary); }
+.adm-info-value { color: var(--text-muted); text-align: right; }
+.adm-info-source { font-family: monospace; font-size: 11px; }
+.adm-info-installed { background: rgba(16,185,129,0.04); }
+.adm-info-installed .adm-info-icon { opacity: 1; color: var(--success); }
+.adm-info-installed .adm-info-label,
+.adm-info-installed .adm-info-value { color: var(--success); }
+
+/* ── README ── */
+.adm-readme { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.adm-readme-toggle {
+    display: flex; align-items: center; gap: 8px; width: 100%;
+    padding: 10px 14px; background: var(--bmm-s02); border: none;
+    color: var(--text-secondary); font-size: 12px; font-weight: 600;
+    cursor: pointer; text-align: left; transition: background 0.15s;
+}
+.adm-readme-toggle:hover { background: var(--bmm-s05); }
+.adm-readme-toggle span { flex: 1; }
+.adm-readme-chevron { transition: transform 0.2s; opacity: 0.5; }
+.adm-readme-toggle.open .adm-readme-chevron { transform: rotate(180deg); }
+.adm-readme-content {
+    max-height: 0; overflow-y: auto;
+    transition: max-height 0.3s cubic-bezier(0.4,0,0.2,1);
+    border-top: 0px solid var(--border);
+}
+.adm-readme-toggle.open + .adm-readme-content { border-top: 1px solid var(--border); }
+
+/* ── Markdown ── */
+.adm-md { padding: 14px 16px; font-size: 12.5px; line-height: 1.72; color: var(--text-secondary); }
+/* The README and the description are B.MD now: their element styles are .adm-md-body below. */
+.adm-md-error { color: var(--text-muted); font-size: 12px; padding: 10px 14px; }
+
+/* ── Uninstall (in-body, no footer) ── */
+.adm-uninstall-area {
+    margin-top: 4px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+}
+.adm-uninstall-link {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: none; border: none; cursor: pointer;
+    color: var(--text-muted); font-size: 12px; font-weight: 500;
+    padding: 4px 6px; border-radius: 6px;
+    transition: color 0.15s;
+}
+.adm-uninstall-link:hover { color: var(--danger); }
+.adm-uninstall-choice {
+    display: flex; flex-direction: column; gap: 10px;
+    padding: 12px 14px;
+    background: rgba(239,68,68,0.05);
+    border: 1px solid rgba(239,68,68,0.2);
+    border-radius: 10px;
+    animation: adm-slide-in 0.18s ease;
+}
+@keyframes adm-slide-in { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:none; } }
+.adm-uninstall-label { font-size: 12.5px; color: var(--text-secondary); font-weight: 600; }
+.adm-uninstall-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+.adm-uc-btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 7px 14px; border-radius: 8px;
+    font-size: 12px; font-weight: 600; cursor: pointer;
+    background: var(--bg-tertiary); color: var(--text-primary);
+    border: 1px solid var(--border);
+    transition: filter 0.15s, background 0.15s;
+}
+.adm-uc-btn:hover { filter: brightness(1.15); }
+.adm-uc-danger { background: rgba(239,68,68,0.15); color: var(--danger); border-color: rgba(239,68,68,0.35); }
+.adm-uc-ghost { background: none; color: var(--text-muted); }
+
+/* ── Install modal ── */
+.apps-install-form { display: flex; flex-direction: column; gap: 16px; padding-top: 8px; }
+.apps-install-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+}
+.apps-install-info { display: flex; gap: 8px; align-items: center; }
+.apps-install-req {
+    font-size: 12px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: var(--bmm-s03);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+.apps-install-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.apps-path-row { display: flex; gap: 8px; }
+.apps-path-input {
+    flex: 1;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 12px;
+    color: var(--text-primary);
+    font-size: 12px;
+    font-family: monospace;
+}
+.apps-path-input:focus { outline: none; border-color: var(--accent); }
+.apps-install-path-hint { font-size: 11px; color: var(--text-muted); margin: -8px 0 0; }
+.apps-install-progress-bar {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+}
+.apps-install-progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.4s ease;
+    width: 0;
+}
+.apps-install-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+.apps-exe-list { display: flex; flex-direction: column; gap: 6px; }
+.apps-exe-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 14px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 12px;
+    color: var(--text-primary);
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s, background 0.15s;
+}
+.apps-exe-btn:hover { border-color: var(--accent); background: rgba(var(--accent-rgb),0.05); }
+.btn-danger-ghost:hover { color: var(--danger) !important; border-color: var(--danger) !important; }
+
+/* ── Setup note ── */
+.apps-install-setup-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+    background: rgba(245,158,11,0.08);
+    border: 1px solid rgba(245,158,11,0.2);
+    border-radius: 8px;
+    padding: 10px 12px;
+    line-height: 1.5;
+}
+.apps-install-setup-note svg { flex-shrink: 0; color: var(--accent); margin-top: 1px; }
+
+/* ── Pending exe chip ── */
+.apps-pending-exe {
+    color: var(--accent);
+    font-size: 10px;
+    font-weight: 600;
+    background: rgba(245,158,11,0.12);
+    padding: 2px 6px;
+    border-radius: 6px;
+}
+
+/* ── Detail modal MD section ── */
+.apps-detail-md-section {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+}
+.apps-detail-md-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: var(--bmm-s03);
+    font-size: 12px;
+    color: var(--text-muted);
+    gap: 8px;
+}
+.apps-detail-md-header span { display: flex; align-items: center; gap: 6px; }
+.apps-detail-md-content { padding: 0 14px 14px; }
+.apps-md-pre {
+    font-family: monospace;
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0;
+    background: rgba(0,0,0,0.15);
+    padding: 12px;
+    border-radius: 8px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+/* ── Catalog creator ── */
+/* Full width like every other tab; the form's own sections keep their reading width. */
+.apps-create-wrap { max-width: none; margin: 0; }
+.apps-create-header { margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid var(--bmm-s07); }
+.apps-create-header h3 {
+    font-size: 18px; font-weight: 800; color: var(--text-primary); margin: 0 0 6px;
+    display: flex; align-items: center; gap: 9px; letter-spacing: -0.3px;
+}
+.apps-create-section {
+    position: relative;
+    background: var(--bmm-s02);
+    border: 1px solid var(--bmm-s08);
+    border-radius: 13px;
+    padding: 16px 18px;
+    margin-bottom: 14px;
+    transition: border-color .15s;
+}
+.apps-create-section:hover { border-color: rgba(var(--bmm-surface-r),var(--bmm-surface-g),var(--bmm-surface-b),0.14); }
+.apps-create-app-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 13px;
+    background: rgba(0,0,0,0.22);
+    border: 1px solid var(--bmm-s07);
+    border-radius: 9px;
+    margin-bottom: 7px;
+    font-size: 12px;
+    transition: border-color .15s, transform .12s;
+}
+.apps-create-app-row:hover { border-color: var(--accent); transform: translateX(2px); }
+.apps-create-app-id { font-weight: 600; color: var(--accent); font-size: 12px; flex-shrink: 0; }
+.apps-create-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+}
+.apps-create-json {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    font-family: monospace;
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: pre;
+    overflow-x: auto;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+/* ── The card, tightened ─────────────────────────────────────────────────────
+   Tags and facts were one wrapping row, so "unverified" — the thing most worth reading —
+   sat under the publisher's hashtags looking like one of them. Two rows now: what the
+   publisher called it, then what the entry actually is. */
+.apps-card-title {
+    /* A long title used to push the meta row down and eat the description's two lines. */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.apps-card-tags {
+    margin-top: auto;          /* tags settle at the bottom of the text block… */
+    row-gap: 4px;
+}
+.apps-card-facts {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding-top: 8px;
+    margin-top: 6px;
+    border-top: 1px solid var(--border);   /* …and the facts sit below the line, always */
+}
+.apps-card-tags:empty + .apps-card-facts { margin-top: auto; }
+/* A fact with no colour of its own: size and type are neutral information. */
+.apps-fact {
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: .3px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    color: var(--text-muted);
+    background: var(--bmm-s04);
+}
+
+/* An address OR a file — one row, so it reads as a choice rather than a field you skipped. */
+.apps-cr-src {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 8px;
+    margin: 2px 0 8px;
+}
+.apps-cr-src-say {
+    flex: 1 1 180px;
+    min-width: 0;
+    font-size: 10.5px;
+    line-height: 1.4;
+    color: var(--text-muted);
+    overflow-wrap: anywhere;
+}
+
+/* ── Badges, by ROLE rather than by hue ──────────────────────────────────────
+   The card wore eight pills of identical shape — trust tier, category, price, three tags,
+   integrity, transport — differing only in colour. Colour alone does not rank anything, and
+   for anybody who does not know the colour system it ranked nothing at all.
+
+   Four shapes now, for four kinds of statement:
+     · the TRUST TIER is a stamp — square-cornered, uppercase, letter-spaced;
+     · the CATEGORY is a quiet label with its icon and no border;
+     · a TAG is a word the publisher chose, and keeps its # and its pill;
+     · a FACT is something BMM worked out, and is monospace with no # at all. */
+
+/* A stamp, not a pill. It is the one badge that says who vouches for this. */
+.apps-official-badge,
+.apps-partner-badge,
+.apps-community-badge {
+    border-radius: 4px;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    line-height: 1.5;
+}
+
+/* The category is context, not a claim: no border, so it stops competing with the stamp.
+   And a soft-cornered rectangle rather than a pill — the pill shape belongs to the tags,
+   which are the things somebody typed. */
+.apps-cat-badge {
+    border-color: transparent !important;
+    border-radius: 6px;
+    font-weight: 600;
+    padding-left: 5px;
+    padding-right: 7px;
+}
+/* Price sits beside it in the same row and reads as the same kind of statement. */
+.apps-price-badge { border-radius: 6px; }
+
+/* A fact is measured, not chosen. Monospace says so, and there is no leading # — these were
+   inheriting `.apps-tag`, which adds one, so "unverified" arrived reading as #unverified:
+   a hashtag the publisher never wrote. */
+.apps-fact-chip {
+    display: inline-flex;
+    align-items: center;
+    font-family: var(--font-mono, ui-monospace, Consolas, monospace);
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: .01em;
+    padding: 2px 7px;
+    border-radius: 5px;
+    border: 1px solid transparent;
+    color: var(--text-muted);
+    background: var(--bmm-s04);
+}
+.apps-fact-sha {
+    color: var(--success);
+    border-color: color-mix(in srgb, var(--success) 40%, transparent);
+    background: color-mix(in srgb, var(--success) 10%, transparent);
+}
+.apps-fact-nosha { border-style: dashed; border-color: var(--bmm-s10); }
+.apps-fact-http {
+    color: var(--warning);
+    border-color: color-mix(in srgb, var(--warning) 45%, transparent);
+    background: color-mix(in srgb, var(--warning) 10%, transparent);
+}
+.apps-fact-bad {
+    color: var(--warning);
+    border-color: color-mix(in srgb, var(--warning) 45%, transparent);
+    background: color-mix(in srgb, var(--warning) 10%, transparent);
+}
+
+/* ── Creating a catalogue: an order, said out loud ──────────────────────────
+   The page drew four identical panels and four equal buttons, and the editor drew
+   fifteen identical fields. Neither said what came first or what mattered. */
+.apps-cr-step-h {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 10px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-bright);
+}
+.apps-cr-step-h > span:first-child {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    background: var(--accent-dim);
+    color: var(--accent);
+    font-size: 10px;
+    font-weight: 800;
+}
+.apps-cr-step-h em {
+    font-style: normal;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+.apps-cr-step-n {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+.apps-cr-step-btn { margin-left: auto; }
+.apps-cr-gap { margin-top: 10px; }
+
+/* Reopening one is how a SECOND session starts. It was above the first step, competing
+   with it for somebody who had never been here. */
+.apps-create-reopen > summary {
+    cursor: pointer;
+    font-size: 11px;
+    color: var(--text-muted);
+    padding: 6px 0;
+}
+.apps-create-reopen > summary:hover { color: var(--text-primary); }
+
+/* Two ways out, and they are not peers: one needs no hosting, the other needs a host and
+   an address that stays alive. Four equal buttons said nothing about that. */
+.apps-create-ways {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+@media (max-width: 900px) {
+    .apps-create-ways { grid-template-columns: 1fr; }
+}
+.apps-create-way {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    background: var(--bg-card);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+/* The recommendation is a WORD now, not a colour.
+   This card carried `border-color: var(--accent)` permanently, and its button was the only
+   accent button of the four. Two cards side by side, one outlined in blue and never
+   un-outlined by anything, do not read as "start with this one" — they read as "this one is
+   selected", which is a state the screen has no way to leave. The badge says the same thing
+   and cannot be mistaken for a selection. */
+.apps-create-way-tag {
+    align-self: flex-start;
+    font-size: 10px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+}
+.apps-create-way > b { font-size: 12px; color: var(--text-bright); }
+.apps-create-way > p {
+    margin: 0;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--text-muted);
+    flex: 1;
+}
+.apps-create-way .apps-create-actions { margin: 0; flex-wrap: wrap; }
+
+/* ── The editor ─────────────────────────────────────────────────────────── */
+/* Every field is a block: label on its own line, input under it, full width.
+   `.apps-install-label` is inline and `.apps-path-input` carries `flex: 1` — both correct
+   inside `.apps-path-row`, which is a flex row. Outside one they flow as inline boxes, so
+   "ID" sat above its input and "Titre" beside its input, and a long label pushed the field
+   after it onto the next line. That is the whole of "the layout is really bad". */
+.apps-cr-form .apps-install-label {
+    display: block;
+    margin: 0 0 5px;
+    font-size: 11px;
+    letter-spacing: .01em;
+}
+.apps-cr-form .apps-path-input,
+.apps-cr-form .apps-filter,
+.apps-cr-form select.apps-cr-sel {
+    display: block;
+    width: 100%;
+    flex: none;
+    box-sizing: border-box;
+}
+.apps-cr-form .apps-path-input { margin-bottom: 12px; }
+/* The last field in a grid cell must not add a gap the grid already provides. */
+.apps-cr-form .apps-cr-grid2 > div > .apps-path-input:last-child,
+.apps-cr-form .apps-cr-grid3 > div > .apps-path-input:last-child { margin-bottom: 0; }
+.apps-cr-form .apps-cr-grid2,
+.apps-cr-form .apps-cr-grid3 { margin-bottom: 12px; align-items: end; }
+.apps-cr-form .apps-cr-ta { margin-bottom: 12px; min-height: 58px; }
+
+.apps-cr-form .apps-cr-step {
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+    margin-top: 14px;
+}
+.apps-cr-form .apps-cr-step:first-of-type { border-top: none; padding-top: 0; margin-top: 8px; }
+.apps-cr-form .apps-path-input { margin-bottom: 8px; }
+.apps-cr-ta { resize: vertical; }
+.apps-cr-sel { width: 100%; }
+.apps-cr-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.apps-cr-grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+@media (max-width: 620px) {
+    .apps-cr-grid2, .apps-cr-grid3 { grid-template-columns: 1fr; }
+}
+/* Three fields matter and twelve are taste. Saying which is which is most of the fix. */
+.apps-install-label.is-need::after {
+    content: '*';
+    color: var(--accent);
+    margin-left: 3px;
+    font-weight: 800;
+}
+
+/* One decision, asked as a question with two answers rather than as a button above a
+   field that contradicts it. */
+.apps-cr-choice {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+@media (max-width: 620px) {
+    .apps-cr-choice { grid-template-columns: 1fr; }
+}
+.apps-cr-opt {
+    text-align: left;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    background: var(--bg-card);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    color: inherit;
+}
+.apps-cr-opt:hover { border-color: var(--border-hover); }
+.apps-cr-opt.is-on {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+}
+.apps-cr-opt > b { font-size: 12px; color: var(--text-bright); }
+.apps-cr-opt > span { font-size: 10px; line-height: 1.45; color: var(--text-muted); }
+
+/* Sticky, and it says what is still missing. Finding that out used to mean saving the
+   entry, closing the editor, and reading a list at the bottom of the page. */
+/* Wide enough for the three sections it holds. `apps-modal-sm` caps at 480px, which
+   turned every two-column row into a pair of ~200px boxes and the three-column one into
+   ~130px boxes — the form was legible only because the labels are short. */
+.apps-cr-modal { max-width: 720px; }
+
+/* Sticky, and OPAQUE.
+   It sat on `--bg-primary` while the modal is `--bg-secondary`, so section 3's fields
+   scrolled visibly underneath it and the warning read as overlapping the form. It also
+   stopped at the body's padding, leaving a 24px gutter each side for content to show
+   through — hence the negative margins. */
+.apps-cr-foot {
+    position: sticky;
+    bottom: -24px;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 12px 24px;
+    margin: 14px -24px -24px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-secondary);
+}
+.apps-cr-missing {
+    flex: 1 1 180px;
+    min-width: 0;
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--text-muted);
+}
+/* Wrapped, not clipped: the whole point of this line is naming what is missing, and an
+   ellipsis in the middle of that list hides the field somebody still has to fill. */
+.apps-cr-missing.is-bad { color: var(--warning, #f59e0b); font-weight: 600; }
+.apps-cr-missing.is-ok { color: var(--success, #10b981); }
+
+/* Create › step 1: label | field, two rows, the fields taking the width. They were two
+   160-px boxes in a wrapping row, so the name of a catalogue was cut after a dozen letters. */
+.apps-create-section--fields {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    align-items: center;
+    gap: 10px 12px;
+}
+.apps-create-section--fields > .apps-cr-step-h { grid-column: 1 / -1; }
+.apps-create-section--fields > .apps-install-label { margin: 0; }
+.apps-create-section--fields > .apps-path-input { width: 100%; min-width: 0; }
+
+/* Create › reopen: "Start again" throws the draft away, so it stands apart at the end of the
+   row instead of touching "From a URL". */
+.apps-create-open .apps-create-clear { margin-left: auto; }
+
+/* ── Card footer: state + the one next action ────────────────────────────────
+   Install / Update / Launch live on the card, and so does a running job (a moving bar,
+   the words, the button disabled) and a failed one (the message and Retry). The accent is
+   only ever a FILL here: the update state's text goes through --bms-accent-ink. */
+.apps-card-open {
+    /* The title is the card's keyboard way in: a real button that looks like the title. */
+    appearance: none;
+    background: none;
+    border: 0;
+    padding: 0;
+    margin: 0;
+    text-align: left;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    cursor: pointer;
+    border-radius: 4px;
+}
+.apps-card-open:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: 2px; }
+.apps-card:focus-within { border-color: var(--bmm-border-accent); }
+.apps-card-source {
+    margin-top: -3px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.apps-card-update { border-color: var(--bmm-border-accent); }
+.apps-card.is-busy { cursor: progress; }
+
+.apps-card-foot {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 44px;
+    padding: 8px 12px;
+    border-top: 1px solid var(--border);
+    background: var(--bmm-s02);
+}
+.apps-card-foot .btn { flex: none; }
+.apps-card-state {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.apps-card-state--muted { font-weight: 500; color: var(--text-muted); }
+.apps-card-foot.is-installed .apps-card-state { color: var(--success); }
+.apps-card-foot.is-update { background: var(--bmm-accent-dim); }
+.apps-card-foot.is-update .apps-card-state { color: var(--bms-accent-ink); }
+.apps-card-state-ver { font-family: var(--font-mono); font-size: 11px; overflow: hidden; text-overflow: ellipsis; }
+
+/* Running: an indeterminate bar along the footer's top edge. install_app reports no
+   percentage, so the bar moves instead of inventing one. */
+.apps-card-progress {
+    position: absolute;
+    left: 0; right: 0; top: -1px;
+    height: 2px;
+    overflow: hidden;
+    background: var(--border);
+}
+.apps-card-progress > span,
+.apps-install-progress-bar.is-indeterminate .apps-install-progress-fill {
+    display: block;
+    width: 35%;
+    height: 100%;
+    background: var(--bmm-accent);
+    animation: apps-indeterminate 1.1s ease-in-out infinite;
+}
+@keyframes apps-indeterminate {
+    from { transform: translateX(-100%); }
+    to   { transform: translateX(290%); }
+}
+.apps-install-progress-bar.is-error .apps-install-progress-fill { background: var(--danger); }
+.apps-install-status { margin: 6px 0 0; font-size: 12px; color: var(--text-secondary); overflow-wrap: anywhere; }
+.apps-install-progress-bar.is-error + .apps-install-status { color: var(--danger); }
+.apps-install-ver { font-family: var(--font-mono); }
+
+.apps-spinner.apps-spinner--xs { width: 12px; height: 12px; border-width: 2px; flex: none; }
+
+/* Failed: what failed, the backend's message (two lines, the rest in the tooltip), Retry. */
+.apps-card-foot.is-error {
+    /* Two rows: the message gets the card's full width, the actions sit under it on the right. */
+    flex-wrap: wrap;
+    row-gap: 6px;
+    background: color-mix(in srgb, var(--danger) 8%, transparent);
+}
+.apps-card-error { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 100%; }
+.apps-card-foot.is-error .apps-card-foot-actions { margin-left: auto; }
+.apps-card-error-title {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11.5px; font-weight: 700; color: var(--danger);
+}
+.apps-card-error-msg {
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--text-secondary);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+}
+.apps-card-foot-actions { display: flex; align-items: center; gap: 4px; flex: none; }
+
+@media (prefers-reduced-motion: reduce) {
+    .apps-card-progress > span,
+    .apps-install-progress-bar.is-indeterminate .apps-install-progress-fill { animation: none; width: 100%; opacity: 0.6; }
+}
+
+/* Some sources failed: one quiet line above the grid, with Retry. */
+.apps-notice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 12px;
+    padding: 8px 10px 8px 12px;
+    border: 1px solid color-mix(in srgb, var(--warning) 45%, var(--border));
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--warning) 8%, transparent);
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.apps-notice > svg { color: var(--warning); flex: none; }
+.apps-notice-text { flex: 1; min-width: 0; }
+
+/* The failed sources, named one per line with their own actions (Retry / Disable / Remove /
+   Details). Under the full-page "unavailable" state too, so that state says WHICH source. */
+.apps-notice--sources { flex-direction: column; align-items: stretch; gap: 6px; }
+.apps-notice--sources.is-full { margin: 4px auto 0; max-width: 760px; width: 100%; }
+.apps-notice-head { display: flex; align-items: center; gap: 8px; }
+.apps-notice-head > svg { color: var(--warning); flex: none; }
+.apps-failed-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.apps-failed-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    background: var(--bg-secondary);
+}
+.apps-failed-main { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 2px; }
+.apps-failed-name { font-weight: 600; color: var(--text-primary); }
+.apps-failed-tier { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-secondary); }
+.apps-failed-url {
+    flex-basis: 100%;
+    min-width: 0;
+    font-family: var(--font-mono, monospace);
+    font-size: 11px;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    background: none;
+    padding: 0;
+}
+.apps-failed-why { flex-basis: 100%; font-size: 11px; color: color-mix(in srgb, var(--danger) 60%, var(--text-primary)); overflow-wrap: anywhere; }
+.apps-failed-actions { display: flex; flex-wrap: wrap; gap: 2px; flex: none; }
+
+/* Detail: a failed job, the version row when an update is waiting, the README states. */
+.adm-job-error {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--border));
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--danger) 8%, transparent);
+    color: var(--danger);
+}
+.adm-job-error-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+.adm-job-error-text span { color: var(--text-secondary); overflow-wrap: anywhere; }
+.adm-info-update .adm-info-value { color: var(--bms-accent-ink); font-weight: 600; }
+.adm-readme-state {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 14px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.adm-readme-state.adm-md-error { justify-content: space-between; }
+
+/* B.MD output (md-lite, untrusted) inside the detail: the description and the README. */
+.adm-md-body { min-width: 0; overflow-wrap: break-word; }
+.adm-md-body > :first-child { margin-top: 0; }
+.adm-md-body > :last-child { margin-bottom: 0; }
+.adm-md-body p { margin: 0 0 8px; }
+.adm-md-body h1, .adm-md-body h2, .adm-md-body h3, .adm-md-body h4 {
+    color: var(--text-primary);
+    line-height: 1.3;
+    margin: 14px 0 6px;
+}
+.adm-md-body h1 { font-size: 16px; padding-bottom: 5px; border-bottom: 1px solid var(--border); }
+.adm-md-body h2 { font-size: 14px; }
+.adm-md-body h3, .adm-md-body h4 { font-size: 13px; }
+.adm-md-body ul, .adm-md-body ol { padding-left: 20px; margin: 4px 0 8px; }
+.adm-md-body li { margin-bottom: 3px; }
+.adm-md-body a { color: var(--bms-accent-ink); text-decoration: underline; text-underline-offset: 2px; }
+.adm-md-body :not(pre) > code {
+    background: var(--bmm-s06);
+    border: 1px solid var(--bmm-s08);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    overflow-wrap: anywhere;
+}
+.adm-md-body pre {
+    background: var(--bmm-bg-base);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 10px 12px;
+    overflow-x: auto;
+    font-size: 11px;
+    line-height: 1.5;
+    margin: 6px 0 10px;
+}
+.adm-md-body blockquote {
+    margin: 6px 0;
+    padding: 4px 12px;
+    border: 1px solid var(--bmm-border);
+    background: var(--bmm-s02);
+    border-radius: 6px;
+    color: var(--text-secondary);
+}
+.adm-md-body img { max-width: 100%; height: auto; border-radius: 6px; }
+.adm-md-body hr { border: 0; border-top: 1px solid var(--border); margin: 10px 0; }
+.adm-md-body table { border-collapse: collapse; display: block; max-width: 100%; overflow-x: auto; font-size: 12px; }
+.adm-md-body th, .adm-md-body td { border: 1px solid var(--border); padding: 4px 8px; }
+
+/* Narrow window: the filters share rows two by two, and the grid goes down to one column. */
+@media (max-width: 640px) {
+    .apps-toolbar .apps-filter { flex: 1 1 calc(50% - 8px); max-width: none; }
+    .apps-grid { grid-template-columns: 1fr; }
+}
+
+/* ══════════════════════════════════════════════════
+   1.0.4 — catalogue builder as a guided flow, a cleaner browse bar, the details as a drawer.
+   Theme tokens only; the accent is a fill or a border, never the colour of body text.
+   ══════════════════════════════════════════════════ */
+
+/* ── Browse toolbar: sources one click away ── */
+.apps-sources-btn { white-space: nowrap; }
+.apps-sources-btn.is-warn { border-color: var(--warning); }
+.apps-sources-btn.is-warn .ic { color: var(--warning); }
+
+/* ── Create: the step rail ── */
+.apps-wiz { display: flex; flex-direction: column; gap: 16px; }
+.apps-wiz .apps-create-header { margin-bottom: 0; padding-bottom: 0; border-bottom: 0; }
+.apps-wiz-steps {
+    list-style: none; margin: 0; padding: 0;
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px;
+}
+.apps-wiz-step-btn {
+    width: 100%; min-width: 0;
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px;
+    background: var(--bmm-s02);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text-secondary);
+    text-align: left; cursor: pointer;
+    transition: border-color .15s, background .15s;
+}
+.apps-wiz-step-btn:hover { border-color: var(--border-hover); background: var(--bmm-s04); }
+.apps-wiz-step.is-on .apps-wiz-step-btn { border-color: var(--accent); background: var(--bmm-s04); color: var(--text-primary); }
+.apps-wiz-step-n {
+    flex-shrink: 0;
+    width: 24px; height: 24px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 800;
+    background: var(--bmm-s06); color: var(--text-secondary);
+    border: 1px solid var(--border);
+}
+.apps-wiz-step.is-on .apps-wiz-step-n { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
+.apps-wiz-step.is-done:not(.is-on) .apps-wiz-step-n { background: var(--success); border-color: var(--success); color: var(--text-on-accent); }
+.apps-wiz-step.is-warn:not(.is-on) .apps-wiz-step-n { border-color: var(--warning); color: var(--text-primary); }
+.apps-wiz-step-txt { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+.apps-wiz-step-txt > b { font-size: 12px; font-weight: 700; color: var(--text-primary); }
+.apps-wiz-step-txt > span { font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 900px) {
+    .apps-wiz-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* ── Create: the one pane on screen ── */
+/* Unframed: the rows, the cards and the publishing choices inside carry their own frames, and
+   a frame around frames is the nested-panel look the rest of the app moved away from. */
+.apps-wiz-pane {
+    border-top: 1px solid var(--bmm-s07);
+    padding-top: 16px;
+    display: flex; flex-direction: column; gap: 14px;
+    min-width: 0;
+}
+.apps-wiz-pane-h h4 { margin: 0 0 4px; font-size: 15px; font-weight: 800; color: var(--text-primary); display: flex; align-items: center; gap: 8px; }
+.apps-wiz-pane-h p { margin: 0; font-size: 12px; line-height: 1.5; color: var(--text-muted); max-width: 70ch; }
+.apps-wiz-pane-h--row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.apps-wiz-field { display: flex; flex-direction: column; gap: 5px; max-width: 640px; }
+.apps-wiz-field .apps-install-label { margin: 0; }
+.apps-wiz-field .apps-path-input { width: 100%; margin: 0; }
+.apps-wiz-say { font-size: 11px; line-height: 1.45; color: var(--text-muted); margin: 0; }
+.apps-wiz-say.is-bad { color: var(--text-primary); font-weight: 600; }
+.apps-wiz-say.is-bad::before { content: '! '; color: var(--warning); font-weight: 800; }
+.apps-path-input.is-invalid,
+.apps-cr-form .apps-path-input.is-invalid { border-color: var(--warning); }
+.apps-wiz-sub { margin: 4px 0 0; font-size: 13px; font-weight: 700; color: var(--text-primary); }
+.apps-wiz-ok {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; font-weight: 600; color: var(--text-primary);
+    padding: 10px 12px; border-radius: 9px;
+    border: 1px solid var(--success);
+}
+.apps-wiz-ok .ic { color: var(--success); }
+.apps-wiz-note {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    font-size: 12px; color: var(--text-primary);
+    padding: 8px 12px; border-radius: 9px; border: 1px solid var(--warning);
+}
+.apps-wiz-note .ic { color: var(--warning); }
+.apps-wiz .apps-create-problems ul { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.apps-wiz .apps-create-problems li { display: flex; align-items: center; gap: 10px; justify-content: space-between; font-size: 12px; }
+.apps-wiz .apps-create-problems-h { display: inline-flex; align-items: center; gap: 6px; }
+/* Previews are pictures of cards: no hover lift, nothing to press. */
+.apps-wiz-preview .apps-card, .apps-cr-card .apps-card { pointer-events: none; }
+.apps-card.is-preview { transform: none !important; }
+
+/* ── Create: the entry list ── */
+.apps-wiz-list { display: flex; flex-direction: column; gap: 6px; }
+.apps-wiz .apps-create-app-row {
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1.2fr) minmax(0, 1fr) auto;
+    align-items: center; gap: 10px;
+    margin: 0;
+    background: var(--bg-secondary);
+    border-color: var(--border);
+}
+.apps-wiz .apps-create-app-row:hover { transform: none; border-color: var(--border-hover); }
+.apps-wiz-row-state { display: inline-flex; color: var(--success); }
+.apps-create-app-row.has-faults .apps-wiz-row-state { color: var(--warning); }
+.apps-wiz-row-main { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
+.apps-wiz-row-main > b { font-size: 12px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.apps-wiz .apps-create-app-id { font-family: var(--font-mono); font-size: 11px; font-weight: 500; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.apps-wiz-row-acts { display: flex; gap: 4px; justify-content: flex-end; }
+.apps-wiz-row-why { grid-column: 2 / -1; font-size: 11px; color: var(--text-secondary); }
+@media (max-width: 760px) {
+    .apps-wiz .apps-create-app-row { grid-template-columns: 20px minmax(0, 1fr) auto; }
+    .apps-wiz .apps-create-app-facts { grid-column: 2 / -1; grid-row: 2; }
+}
+
+/* ── Create: Back / Next ── */
+.apps-wiz-nav { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.apps-wiz-nav-at { font-size: 11px; color: var(--text-muted); }
+
+/* ── Entry editor: form | live card ── */
+.apps-cr-modal { max-width: 1000px; }
+.apps-cr-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 22px; align-items: start; }
+.apps-cr-aside { position: sticky; top: 0; display: flex; flex-direction: column; gap: 8px; }
+.apps-cr-aside-h { font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); }
+.apps-cr-card .apps-card { width: 100%; }
+.apps-cr-field-say { display: block; margin: -4px 0 10px; font-size: 11px; color: var(--text-primary); }
+.apps-cr-field-say::before { content: '! '; color: var(--warning); font-weight: 800; }
+@media (max-width: 860px) {
+    .apps-cr-layout { grid-template-columns: minmax(0, 1fr); }
+    .apps-cr-aside { position: static; }
+}
+
+/* ── Details: a drawer on the right, not a box in the middle ──
+   The grid stays visible beside it, so going from one entry to the next does not mean
+   closing a dialog to find your place again. */
+#apps-detail-modal { justify-content: flex-end; align-items: stretch; }
+#apps-detail-modal .apps-modal {
+    width: min(560px, 100%);
+    max-width: 560px;
+    height: 100%;
+    max-height: none;
+    border-radius: 0;
+    border-width: 0 0 0 1px;
+    animation: apps-drawer-in .22s ease-out;
+}
+@keyframes apps-drawer-in { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { #apps-detail-modal .apps-modal { animation: none; } }
+#apps-detail-modal .apps-modal-close { background: var(--bg-secondary); }
+#apps-detail-modal .adm-gallery { border-radius: 0; }
+#apps-detail-modal .adm-body { padding-top: 22px; }
+.adm-initials-badge { background: var(--bmm-s06); border: 1px solid var(--border); color: var(--text-secondary); }
+.adm-action-primary { background: var(--bmm-btn-primary-bg, var(--accent)); color: var(--bmm-btn-primary-text, var(--text-on-accent)); }
+/* In a drawer the actions get their own row under the title: beside it they pushed the title
+   onto three lines and ran under the close button. The backdrop is lighter, so the grid it
+   came from stays readable beside it. */
+#apps-detail-modal { background: rgba(0,0,0,0.35); backdrop-filter: none; }
+#apps-detail-modal .adm-header { flex-wrap: wrap; padding-right: 40px; }
+#apps-detail-modal .adm-header-actions { order: 3; flex-basis: 100%; flex-wrap: wrap; }

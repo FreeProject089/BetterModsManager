@@ -1,0 +1,109 @@
+/* The server modal — monitoring, whitelist and bans in one place.
+   See src/features/repo/server-modal.ts and #modal-server in index.html.
+
+   Written with tokens only. This panel is read while something is happening on a real server,
+   often at a glance, so it has to be legible in every theme rather than in the one it was
+   designed in. */
+
+/* The card, header and close are the house shell (.modal--xl.modal--tall, css/modal-shell.css). */
+
+/* The rail. Scrolls rather than wraps: three tabs that reflow onto two lines move the panel
+   under them, which is exactly what you do not want while watching a live table. */
+.srv-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 8px 12px 0;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.srv-tabs::-webkit-scrollbar { display: none; }
+
+.srv-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 14px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    border-radius: 10px 10px 0 0;
+    /* The selected tab is marked by a line that meets the panel, not by a fill: a filled tab
+       and a filled panel next to each other read as two separate surfaces. */
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: color .15s ease, border-color .15s ease;
+}
+.srv-tab:hover { color: var(--text-primary); }
+/* Driven by aria-selected, so what a screen reader is told and what you can see are the same
+   fact rather than two that have to be kept in step. */
+.srv-tab[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+
+.srv-tab-count {
+    min-width: 18px;
+    padding: 1px 6px;
+    border-radius: var(--radius-badge, 5px);
+    background: var(--bmm-s10);
+    color: var(--text-secondary);
+    font-size: 10px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+}
+.srv-tab[aria-selected="true"] .srv-tab-count { background: var(--accent); color: var(--bmm-bg-base); }
+
+/* A panel fills what is left and scrolls inside itself, so the tab rail never scrolls away
+   from a long ban list. `hidden` is honoured explicitly — display:flex would otherwise win
+   over the attribute and show every panel at once. */
+.srv-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+.srv-panel[hidden] { display: none; }
+
+/* The row that carries what used to be in a header: the master switch, a note, an export. */
+.srv-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+}
+.srv-actions-note { font-size: 11px; color: var(--text-muted); flex: 1; min-width: 120px; }
+.srv-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: var(--bmm-s05);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: border-color .15s ease;
+}
+.srv-switch:hover { border-color: var(--accent); }
+.srv-export { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; }
+
+/* ── Readable at a glance (design pass) ────────────────────────────────────────────────────
+   The rail's idle tabs, the stat labels, the table headers and the empty-state line were
+   --text-muted: 2.2-2.5:1 on this card in the dark themes. Anything read goes to
+   --text-secondary; the selected tab's ink is the accent walked toward the theme ink, so it
+   stays legible on BMM White too. */
+#modal-server .srv-tab { color: var(--bmm-text-secondary); }
+#modal-server .srv-tab:hover { color: var(--bmm-text-primary); background: var(--bmm-s04); }
+#modal-server .srv-tab[aria-selected="true"] { color: color-mix(in srgb, var(--bmm-accent) 62%, var(--bmm-text-primary)); }
+#modal-server .srv-tab:focus-visible { outline: 2px solid var(--bmm-accent); outline-offset: -2px; }
+#modal-server .srv-tab-count:empty { display: none; }
+#modal-server .srv-actions-note,
+#modal-server .monitoring-stat-label,
+#modal-server .monitoring-table thead th,
+#modal-server [style*="color:var(--text-muted)"],
+#modal-server [style*="color: var(--text-muted)"] { color: var(--bmm-text-secondary) !important; }
+/* The live numbers were the cyan/accent themselves as text: 3.3:1 on BMM White. The numbers
+   are read, so they take the ink; the label beside each says what it is. */
+#modal-server .monitoring-stat-value { color: var(--bmm-text-primary) !important; }

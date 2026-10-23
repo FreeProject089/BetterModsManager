@@ -1,0 +1,2461 @@
+﻿// @ts-nocheck
+/**
+ * settings.js — Settings UI (PAT, Discord, Shortcuts, Storage, Language, Tags)
+ */
+
+import { invoke, getSettings, updateSettings, pickFile, saveFile } from '../../core/api.js';
+import { calibrationDue, withCalibrated, readCalibMap, writeCalibMap } from './disk-calib.js';
+import { initStorageModal, refreshIfOpen, openStorageManager } from './storage-modal.js';
+import { initGraphicsSettings } from './graphics-settings.js';
+import { mountOldInstallsCard } from './old-installs.js';
+import { actAttrs } from '../../core/inline-actions.js';
+import { t } from '../../core/i18n.js';
+import { confirmAction } from '../../ui/verify.js';
+import { getLinks, bcRoot, bcTestMode, bcTestBase } from '../../core/links-config.js';
+import { bcLinkState, openAccountLinkFlow, forgetBcLinkState } from '../../core/bc-link.js';
+import type { KeyPinProblem } from '../../core/key-pin.js';
+import { initI18nSandbox } from './i18n-sandbox.js';
+import { renderShortcutsManager } from '../../core/commands.js';
+import {
+    parseCatalogIndex, planImport, STORE_KEY, rememberOrigin, addSource,
+    originLabel, readHistory, recordHistory, clearHistory,
+    forgetHistoryAt, INDEX_TYPES,
+} from '../catalogs/catalog-index.js';
+import type { CatalogIndex, IndexEntry } from '../catalogs/catalog-index.js';
+import { writeSources } from '../catalogs/catalog-sources.js';
+import { toast } from '../../ui/app.js';
+import { getProfiles, getActiveProfileId } from '../profiles/profiles.js';
+import { formatBytes, escHtml, escAttr } from '../../core/utils.js';
+import { initReportHistory } from '../feedback/report-history.js';
+import { initFeedback } from '../feedback/bc-feedback.js';
+import { openFeedback, initFeedbackCard } from '../feedback/feedback-modal.js';
+import { initLaunchPackSettings } from './launch_packs.js';
+import { initScheduler } from './scheduler.js';
+import { initCardReorder } from './card-order.js';
+import { renderCspEditor, bindCspEditor } from './csp-editor.js';
+import { uiIcon, uiIconEl } from '../../ui/icons.js';
+
+
+// ── GitHub PAT helper ─────────────────────────────────────
+export async function getGithubPat() {
+    try {
+        const settings = await getSettings();
+        return settings.github_token || '';
+    } catch {
+        return '';
+    }
+}
+
+async function initGithubPatSettings() {
+    const input = document.getElementById('setting-github-pat');
+    const saveBtn = document.getElementById('btn-save-github-pat');
+    const clearBtn = document.getElementById('btn-clear-github-pat');
+    const toggleBtn = document.getElementById('btn-toggle-pat-visibility');
+    const statusMsg = document.getElementById('pat-status-msg');
+    if (!input) return;
+
+    try {
+        const settings = await getSettings();
+        const stored = settings.github_token || '';
+        if (stored) {
+            input.value = stored;
+            if (statusMsg) statusMsg.innerHTML = `<span class="stg-status is-ok">${uiIcon('success', 14)} Token saved (${stored.length} chars)</span>`;
+        }
+    } catch (e) { console.error('Failed to load PAT:', e); }
+
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', () => {
+            const isPassword = input.type === 'password';
+            input.type = isPassword ? 'text' : 'password';
+            document.getElementById('pat-eye-icon')?.replaceWith(uiIconEl(isPassword ? 'eye-off' : 'eye', 16, { id: 'pat-eye-icon' }));
+        });
+    }
+
+    if (saveBtn) {
+        saveBtn.addEventListener('click', async () => {
+            const val = input.value.trim();
+            if (!val) {
+                if (statusMsg) statusMsg.innerHTML = `<span class="stg-status is-warn">${uiIcon('warning', 14)} ${escHtml(t('settings.tokenNoneEntered'))}</span>`;
+                return;
+            }
+            try {
+                const settings = await getSettings();
+                settings.github_token = val;
+                await updateSettings(settings);
+                if (statusMsg) statusMsg.innerHTML = `<span class="stg-status is-ok">${uiIcon('success', 14)} Token saved (${val.length} chars)</span>`;
+                toast(t('settings.githubPatSaved'), 'success');
+            } catch (e) {
+                toast(t('common.error') + ' : ' + e, 'error');
+            }
+        });
+    }
+
+    if (clearBtn) {
+        clearBtn.addEventListener('click', async () => {
+            try {
+                const settings = await getSettings();
+                settings.github_token = '';
+                await updateSettings(settings);
+                input.value = '';
+                input.type = 'password';
+                document.getElementById('pat-eye-icon')?.replaceWith(uiIconEl('eye', 16, { id: 'pat-eye-icon' }));
+                if (statusMsg) statusMsg.innerHTML = `<span style="color:var(--text-muted)">Token cleared.</span>`;
+                toast(t('settings.githubPatCleared'), 'info');
+            } catch (e) {
+                toast(t('common.error') + ' : ' + e, 'error');
+            }
+        });
+    }
+
+    const helpBtn = document.getElementById('btn-pat-need-help');
+    if (helpBtn) {
+        helpBtn.addEventListener('click', () => {
+            const docsNav = document.querySelector('.nav-item[data-view="docs"]');
+            if (docsNav) docsNav.click();
+            setTimeout(() => {
+                const faqEl = document.getElementById('faq-github-pat');
+                if (faqEl) {
+                    faqEl.open = true;
+                    faqEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    faqEl.classList.add('faq-highlight');
+                    setTimeout(() => faqEl.classList.remove('faq-highlight'), 2000);
+                }
+            }, 200);
+        });
+    }
+}
+
+// ── Discord RPC ───────────────────────────────────────────
+async function initDiscordRpcSettings() {
+    const chk = document.getElementById('chk-discord-rpc');
+    if (!chk) return;
+
+    try {
+        const settings = await getSettings();
+        chk.checked = settings.discord_rpc_enabled || false;
+    } catch (e) { console.error('Failed to load Discord RPC setting:', e); }
+
+    chk.addEventListener('change', async (e) => {
+        try {
+            const settings = await getSettings();
+            settings.discord_rpc_enabled = e.target.checked;
+            await updateSettings(settings);
+            
+            if (e.target.checked) {
+                await invoke('init_discord_rpc');
+                toast(t('settings.discordRpcEnabled'), 'success');
+                await updateDiscordStatus();
+            } else {
+                await invoke('init_discord_rpc'); 
+                toast(t('settings.discordRpcDisabled'), 'info');
+            }
+        } catch (err) {
+            toast(t('common.error') + ' : ' + err, 'error');
+        }
+    });
+
+}
+
+/** Enable/disable Discord Rich Presence (used by the API + deep links). */
+export async function setDiscordRpc(enabled: boolean): Promise<void> {
+    const settings = await getSettings();
+    settings.discord_rpc_enabled = enabled;
+    await updateSettings(settings);
+    await invoke('init_discord_rpc');
+    if (enabled) { try { await updateDiscordStatus(); } catch { /* ignore */ } }
+    const chk = document.getElementById('chk-discord-rpc') as HTMLInputElement | null;
+    if (chk) chk.checked = enabled;
+}
+
+// ── Sound / Animation Settings ───────────────────────────
+async function initSoundSettings() {
+    const chkSound = document.getElementById('chk-sound-effects') as HTMLInputElement;
+    const volSlider = document.getElementById('setting-sound-volume') as HTMLInputElement;
+    const volDisplay = document.getElementById('setting-sound-volume-display') as HTMLElement;
+    if (!chkSound || !volSlider) return;
+
+    try {
+        const settings = await getSettings();
+        chkSound.checked = settings.sound_effects_enabled !== false;
+        volSlider.value = String(settings.sound_volume ?? 70);
+        volSlider.style.setProperty('--p', `${settings.sound_volume ?? 70}%`);
+        if (volDisplay) volDisplay.textContent = String(settings.sound_volume ?? 70) + '%';
+    } catch (e) { console.error('Failed to load sound settings:', e); }
+
+    // The track fills up to the thumb: the slider shows its level without reading the number.
+    volSlider.addEventListener('input', () => volSlider.style.setProperty('--p', `${volSlider.value}%`));
+
+    const applySound = async () => {
+        try {
+            const settings = await getSettings();
+            settings.sound_effects_enabled = chkSound.checked;
+            settings.sound_volume = parseInt(volSlider.value) || 70;
+            await updateSettings(settings);
+            // Apply immediately via the exported functions from app.ts
+            const app = await import('../../ui/app.js');
+            app.setSoundEnabled(settings.sound_effects_enabled);
+            app.setSoundVolume(settings.sound_volume / 100);
+        } catch (err) { console.error(err); }
+    };
+
+    chkSound.addEventListener('change', applySound);
+    volSlider.addEventListener('input', () => {
+        if (volDisplay) volDisplay.textContent = volSlider.value + '%';
+    });
+    volSlider.addEventListener('change', applySound);
+}
+
+// ── SHA Settings ──────────────────────────────────────────
+async function initShaSettings() {
+    const chkStrict = document.getElementById('chk-sha-strict-mode') as HTMLInputElement;
+    const chkLazy = document.getElementById('chk-sha-lazy-calc') as HTMLInputElement;
+    if (!chkStrict || !chkLazy) return;
+    // The card's look (css/integrity.css, shared with the Integrity dialog), linked once.
+    if (!document.getElementById('integrity-css')) {
+        const link = document.createElement('link');
+        link.id = 'integrity-css';
+        link.rel = 'stylesheet';
+        link.href = 'css/integrity.css';
+        document.head.appendChild(link);
+    }
+
+    try {
+        const settings = await getSettings();
+        chkStrict.checked = settings.require_valid_sha || false;
+        chkLazy.checked = settings.enable_lazy_sha_calculation ?? true;
+    } catch (e) { console.error('Failed to load SHA settings:', e); }
+
+    chkStrict.addEventListener('change', async (e) => {
+        try {
+            const settings = await getSettings();
+            settings.require_valid_sha = (e.target as HTMLInputElement).checked;
+            await updateSettings(settings);
+            toast(t('settings.shaStrictModeUpdated'), 'success');
+        } catch (err) { toast(t('common.error') + ' : ' + err, 'error'); }
+    });
+
+    chkLazy.addEventListener('change', async (e) => {
+        try {
+            const settings = await getSettings();
+            settings.enable_lazy_sha_calculation = (e.target as HTMLInputElement).checked;
+            await updateSettings(settings);
+            toast(t('common.success'), 'success');
+            
+            // Sync modal toggle if open
+            const modalToggle = document.getElementById('modal-chk-sha-lazy') as HTMLInputElement;
+            if (modalToggle) modalToggle.checked = (e.target as HTMLInputElement).checked;
+        } catch (err) { toast(t('common.error') + ' : ' + err, 'error'); }
+    });
+
+    // The state chips are drawn when the card first scrolls into view (one read of every mod).
+    const card = document.getElementById('settings-sha-card');
+    if (card && 'IntersectionObserver' in window) {
+        const io = new IntersectionObserver((entries) => {
+            if (!entries.some((en) => en.isIntersecting)) return;
+            io.disconnect();
+            void refreshShaSummary();
+        });
+        io.observe(card);
+    } else void refreshShaSummary();
+}
+
+export async function updateDiscordStatus() {
+    try {
+        const settings = await getSettings();
+        if (!settings.discord_rpc_enabled) return;
+
+        const profiles = await getProfiles();
+        const activeId = await getActiveProfileId();
+        const activeProfile = profiles.find(p => p.id === activeId);
+
+        if (activeProfile) {
+            const details = t('settings.discordRpcDetails', { name: activeProfile.name });
+            const status = t('settings.discordRpcStatus', { count: activeProfile.active_mods.length });
+            
+            await invoke('set_discord_presence', {
+                details,
+                status
+            });
+        }
+    } catch (e) {
+        console.error('Failed to update Discord status:', e);
+    }
+}
+
+// ── Settings keyboard shortcuts ────────────────────────────
+export async function getShortcuts() {
+    try {
+        const settings = await getSettings();
+        return settings.shortcuts && Object.keys(settings.shortcuts).length > 0 ? settings.shortcuts : {
+            "newProfile": "n",
+            "addMod": "m",
+            "exportModlist": "e",
+            "importModlist": "i"
+        };
+    } catch {
+        return {
+            "newProfile": "n",
+            "addMod": "m",
+            "exportModlist": "e",
+            "importModlist": "i"
+        };
+    }
+}
+
+async function initShortcuts() {
+    document.addEventListener('keydown', async e => {
+        if (e.ctrlKey) {
+            const sc = await getShortcuts();
+            const key = e.key.toLowerCase();
+
+            if (key === sc.newProfile) {
+                e.preventDefault();
+                document.getElementById('nav-profiles').click();
+                setTimeout(() => document.getElementById('btn-new-profile')?.click(), 50);
+            } else if (key === sc.addMod) {
+                e.preventDefault();
+                document.getElementById('nav-library').click();
+                setTimeout(() => document.getElementById('btn-add-mod')?.click(), 50);
+            } else if (key === sc.exportModlist) {
+                e.preventDefault();
+                document.getElementById('nav-modlist').click();
+                setTimeout(() => document.getElementById('btn-export-mm')?.click(), 100);
+            } else if (key === sc.importModlist) {
+                e.preventDefault();
+                document.getElementById('nav-modlist').click();
+                setTimeout(() => document.getElementById('btn-import-mm')?.click(), 100);
+            }
+        }
+    });
+}
+
+async function renderSettingsShortcuts() {
+    const sc = await getShortcuts();
+
+    const updateShortcut = (id, keyName) => {
+        const input = document.getElementById(id);
+        if (input) {
+            input.value = sc[keyName];
+            input.addEventListener('keydown', async e => {
+                e.preventDefault();
+                const newKey = e.key.toLowerCase();
+                if (newKey !== 'control' && newKey !== 'shift' && newKey !== 'alt') {
+                    sc[keyName] = newKey;
+                    try {
+                        const settings = await getSettings();
+                        settings.shortcuts = sc;
+                        await updateSettings(settings);
+                        input.value = newKey;
+                        toast(t('settings.shortcutUpdated', { key: newKey }), 'success');
+                    } catch (err) {
+                        toast(t('settings.shortcutError', { err: String(err) }), 'error');
+                    }
+                }
+            });
+        }
+    };
+    updateShortcut('sc-new-profile', 'newProfile');
+    updateShortcut('sc-add-mod', 'addMod');
+    updateShortcut('sc-export-mm', 'exportModlist');
+    updateShortcut('sc-import-mm', 'importModlist');
+}
+
+// ── Storage Performance Settings ──
+
+/** Reset all disk limits to null (Unlimited) */
+export async function resetStorageLimits() {
+    try {
+        const disks = await invoke('get_system_disks');
+        for (const disk of disks) {
+            await invoke('set_disk_limit', { mountPoint: disk.mount_point, limitMbS: null });
+        }
+        toast(t('storage.limitsReset'), 'success');
+        _renderStorageModal();
+    } catch (e) {
+        toast((window.t ? window.t('common.error') : 'Failed') + ': ' + e, 'error');
+    }
+}
+
+/** Run benchmarks for all disks currently in use by profiles */
+export async function runAutoBenchmarks(disksList, isBoot = false) {
+    // At start-up, only the disks never measured or measured more than 30 days ago
+    // (disk-calib.ts); the button measures every disk whenever it is pressed.
+    const calib = readCalibMap();
+    const inUseDisks = disksList.filter(d => d.profiles_using && d.profiles_using.length > 0)
+        .filter(d => !isBoot || calibrationDue(calib, d.mount_point));
+    if (inUseDisks.length === 0) return;
+
+    if (!isBoot) toast(t('storage.optimizing'), 'info');
+
+    let successCount = 0;
+    for (const disk of inUseDisks) {
+        try {
+            const result = await invoke('benchmark_disk', { mountPoint: disk.mount_point });
+            await invoke('set_disk_limit', { mountPoint: disk.mount_point, limitMbS: result.suggested_limit });
+            writeCalibMap(withCalibrated(readCalibMap(), disk.mount_point));
+            successCount++;
+        } catch (e) {
+            console.error(`Failed auto-bench for ${disk.mount_point}:`, e);
+        }
+    }
+
+    if (!isBoot) {
+        if (successCount > 0) {
+            toast(t('storage.calibrationSuccess'), 'success');
+        } else {
+            toast(t('storage.calibrationError'), 'error');
+        }
+    }
+
+    // Refresh modal UI if it's open
+    _renderStorageModal();
+}
+
+// The Storage Manager lives in storage-modal.ts (tabs: disks & space, work intensity, game
+// mode, live activity, rules per disk). This name stays: the calibration above and
+// the command palette call it. It redraws the modal only when it is open.
+const _renderStorageModal = () => refreshIfOpen();
+
+async function initStorageSettings() {
+    initStorageModal({ runAutoBenchmarks, resetStorageLimits });
+    // Graphics & display, an app-wide card (graphics-settings.ts), built before the cards are
+    // ordered so card-order.ts places it with the others.
+    try { initGraphicsSettings({ toast }); } catch (e) { console.warn('[graphics] card:', e); }
+    // Old installations (old-installs.ts): an Application card, scanned when first seen.
+    try { mountOldInstallsCard(); } catch (e) { console.warn('[old-installs] card:', e); }
+    const openBtn = document.getElementById('btn-open-storage');
+    if (openBtn) {
+        openBtn.addEventListener('click', () => openStorageManager());
+    }
+    const faqBtn = document.getElementById('btn-storage-faq');
+    if (faqBtn) {
+        faqBtn.addEventListener('click', () => {
+            document.getElementById('nav-docs')?.click();
+            setTimeout(() => {
+                const ioFaq = document.querySelector('[data-i18n="faq.qIo"]');
+                if (ioFaq) {
+                    const details = ioFaq.closest('details');
+                    if (details) { details.open = true; details.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+                }
+            }, 200);
+        });
+    }
+}
+
+// ── Language Settings ──
+async function initLanguageSettings() {
+    const langContainer = document.getElementById('settings-lang-container');
+    if (!langContainer) return;
+
+    const { getLanguages, setLang } = await import('../../core/i18n.js');
+    const { initNavbarLangDropdown } = await import('../../ui/app.js'); 
+
+    const getFlag = (l) => {
+        if (!l || !l.flag) return '⚪';
+        const f = l.flag.trim();
+        if (f.length > 2) return f;
+        if (f.length === 2) {
+            const code = f.toLowerCase();
+            return `<img src="https://flagcdn.com/w20/${code}.png" 
+                         width="20" height="14" alt="${f.toUpperCase()}"
+                         style="vertical-align: middle; border-radius: 2px; object-fit: cover;"
+                         data-onerror="text" data-onerror-text="${f.toUpperCase()}">`;
+        }
+        return f;
+    };
+
+    const renderLangs = () => {
+        const languages = getLanguages();
+        const current = languages.find(l => l.active) || languages[0];
+
+        langContainer.innerHTML = `
+            <button class="nav-lang-btn" id="settings-lang-toggle" style="width: 240px; background: rgba(0,0,0,0.3);">
+                <span class="nav-lang-flag" style="margin-right:8px">${getFlag(current)}</span>
+                <span class="nav-lang-name">${current.name}</span>
+                ${uiIcon('chevron-up', 12, { cls: 'nav-lang-chevron' })}
+            </button>
+            <div class="settings-lang-menu" id="settings-lang-menu">
+                ${languages.map(l => {
+                    const protectedLang = ['en', 'fr', 'template'].includes((l.code || '').toLowerCase());
+                    return `
+                    <div class="nav-lang-row${l.active ? ' active' : ''}">
+                        <button class="nav-lang-option" data-lang="${l.code}" style="flex:1;">
+                            <span class="nav-lang-flag" style="margin-right:10px">${getFlag(l)}</span>
+                            <span>${l.name}</span>
+                            ${l.active ? (uiIcon('check', 14, { style: 'color:var(--accent);margin-left:auto' })) : ''}
+                        </button>
+                        ${protectedLang ? '' : `
+                            <button class="nav-lang-dl" data-lang-dl="${l.code}" data-tooltip="${t('settings.langDownload') || 'Download .json'}">
+                                ${uiIcon('download', 12)}
+                            </button>
+                            <button class="nav-lang-del" data-lang-del="${l.code}" data-lang-name="${escHtml(l.name)}" data-tooltip="${t('settings.langRemove') || 'Remove language'}">
+                                ${uiIcon('delete', 12)}
+                            </button>`}
+                    </div>`;
+                }).join('')}
+            </div>
+        `;
+
+        const toggle = document.getElementById('settings-lang-toggle');
+        const menu = document.getElementById('settings-lang-menu');
+
+        if (toggle && menu) {
+            toggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isOpen = menu.classList.contains('open');
+                document.querySelectorAll('.settings-lang-menu, .nav-lang-menu').forEach(m => m.classList.remove('open'));
+                document.querySelectorAll('.nav-lang-btn').forEach(b => b.classList.remove('open'));
+                if (!isOpen) { menu.classList.add('open'); toggle.classList.add('open'); }
+            });
+
+            menu.querySelectorAll('.nav-lang-option').forEach(opt => {
+                opt.addEventListener('click', () => {
+                    setLang(opt.dataset.lang);
+                    menu.classList.remove('open');
+                    toggle.classList.remove('open');
+                    renderLangs();
+                    if (typeof initNavbarLangDropdown === 'function') initNavbarLangDropdown();
+                });
+            });
+
+            // Download a custom language's .json
+            menu.querySelectorAll('.nav-lang-dl').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const code = (btn as HTMLElement).dataset.langDl || '';
+                    try {
+                        const content: string = await invoke('get_language_content', { lang: code });
+                        const url = URL.createObjectURL(new Blob([content], { type: 'application/json' }));
+                        const a = document.createElement('a');
+                        a.href = url; a.download = `${code}.json`; a.click();
+                        URL.revokeObjectURL(url);
+                    } catch (err) { toast(String(err), 'error'); }
+                });
+            });
+
+            // Remove a custom language (with confirm). Offers a download first if wanted.
+            menu.querySelectorAll('.nav-lang-del').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const code = (btn as HTMLElement).dataset.langDel || '';
+                    const name = (btn as HTMLElement).dataset.langName || code;
+                    const ok = await confirmAction({ title: t('vfy.t.langRemove'), message: (t('settings.langRemoveConfirm') || 'Remove language "{name}" ({code})? This deletes its .json file.')
+                        .replace('{name}', name).replace('{code}', code.toUpperCase()), confirmLabel: t('common.remove'), tone: 'danger' });
+                    if (!ok) return;
+                    try {
+                        // if the removed language is active, fall back to English first
+                        const langs = getLanguages();
+                        if (langs.find(l => l.code === code && l.active)) setLang('en');
+                        await invoke('delete_language_file', { code });
+                        toast((t('settings.langRemoved') || 'Removed {name}').replace('{name}', name), 'success');
+                        // reload language files in-memory, then re-render
+                        const { reloadLanguages } = await import('../../core/i18n.js');
+                        if (typeof reloadLanguages === 'function') await reloadLanguages();
+                        renderLangs();
+                        if (typeof initNavbarLangDropdown === 'function') initNavbarLangDropdown();
+                    } catch (err) { toast(String(err), 'error'); }
+                });
+            });
+        }
+    };
+
+    document.addEventListener('click', () => {
+        const menu = document.getElementById('settings-lang-menu');
+        const toggle = document.getElementById('settings-lang-toggle');
+        if (menu && toggle) { menu.classList.remove('open'); toggle.classList.remove('open'); }
+    });
+
+    renderLangs();
+
+    document.getElementById('btn-show-lang-guide')?.addEventListener('click', () => {
+        if (typeof window.checkPtbMode === 'function') window.checkPtbMode(true, "TranslationGuide");
+    });
+
+    document.getElementById('btn-download-lang-template')?.addEventListener('click', async () => {
+        try {
+            const resp = await fetch('Lang/template.json');
+            const text = await resp.text();
+            const blob = new Blob([text], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'template.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            toast(t('common.success'), 'success');
+        } catch (e) { toast(t('settings.langDownloadError', { err: String(e) }), 'error'); }
+    });
+
+    document.getElementById('btn-import-lang')?.addEventListener('click', async () => {
+        try {
+            const res = await invoke('import_language');
+            if (res) {
+                toast(t('settings.langImportSuccess'), 'success');
+                const { refreshLanguages } = await import('../../core/i18n.js');
+                await refreshLanguages();
+                renderLangs();
+            }
+        } catch (e) { if (e !== 'Canceled') toast(t('settings.langImportError', { err: e }), 'error'); }
+    });
+}
+
+// ── Tags Settings ──
+// The form's transient state. Module-scoped, NOT on window: as globals these
+// outlived the form. Click the pencil on a tag, change your mind, type a NEW name
+// and press the button — it still meant "update", so the old tag was renamed and
+// no new tag was created. Nothing cleared the edit id but a successful save.
+// Every render of the panel now resets it, and there is a visible way out.
+let _tagIconRef = '';
+let _tagEditId: string | null = null;
+
+function _tagFormReset(): void {
+    _tagIconRef = '';
+    _tagEditId = null;
+    const nameInput = document.getElementById('setting-tag-name') as HTMLInputElement | null;
+    if (nameInput) nameInput.value = '';
+    const prev = document.getElementById('setting-tag-icon-preview');
+    if (prev) prev.innerHTML = uiIcon('add', 16);
+    const span = document.getElementById('btn-create-tag')?.querySelector('span');
+    if (span) span.textContent = t('settings.tagCreate') || 'Creer';
+    const cancel = document.getElementById('btn-cancel-tag-edit') as HTMLElement | null;
+    if (cancel) cancel.style.display = 'none';
+}
+
+export async function renderSettingsTags() {
+    const list = document.getElementById('settings-tags-list');
+    if (!list) return;
+    _tagFormReset();
+    try {
+        const tags = await invoke('get_tags');
+        list.innerHTML = '';
+        if (tags.length === 0) {
+            list.innerHTML = `<p class="stg-empty-line">${t('settings.tagNoneYet')}</p>`;
+            return;
+        }
+        // One renderer for every tag chip in the app (ui/icon-pack.ts) — five
+        // hand-rolled copies had already drifted apart.
+        const iconMod = await import('../../ui/icon-pack.js');
+        await iconMod.ensurePacksFor(tags.map((tg: any) => tg.icon));
+        tags.forEach(tag => {
+            const wrap = document.createElement('div');
+            wrap.style.cssText = 'display:flex;align-items:center;gap:4px';
+            wrap.innerHTML = iconMod.renderTagChip(tag, { fontSize: 12, pad: '4px 10px' })
+                + `<button type="button" data-id="${tag.id}" class="btn-edit-tag stg-tag-btn" title="${escHtml(t('common.edit') || 'Edit')}" aria-label="${escHtml(t('common.edit') || 'Edit')}">${uiIcon('edit', 14)}</button>`
+                + `<button type="button" data-id="${tag.id}" class="btn-del-tag stg-tag-btn" data-tasky="settings.tagDeleteTip" data-tasky-icon="trash" aria-label="${escHtml(t('common.delete') || 'Delete')}">${uiIcon('delete', 14)}</button>`;
+            list.appendChild(wrap);
+        });
+
+        // Edit: prefill the form, flip the create button to save (same handler).
+        list.querySelectorAll('.btn-edit-tag').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const tag = tags.find(tg => tg.id === (btn as HTMLElement).dataset.id);
+                if (!tag) return;
+                (document.getElementById('setting-tag-name') as HTMLInputElement).value = tag.name;
+                (document.getElementById('setting-tag-color') as HTMLInputElement).value = tag.color;
+                const grad = document.getElementById('setting-tag-grad') as HTMLInputElement | null;
+                const c2 = document.getElementById('setting-tag-color2') as HTMLInputElement | null;
+                if (grad && c2) {
+                    grad.checked = !!tag.color2;
+                    c2.classList.toggle('tag-color2-hidden', !tag.color2);
+                    if (tag.color2) c2.value = tag.color2;
+                }
+                _tagIconRef = tag.icon || '';
+                const prev = document.getElementById('setting-tag-icon-preview');
+                if (prev) prev.innerHTML = (iconMod.isPackIcon(tag.icon) && iconMod.renderPackIcon(tag.icon, 18)) || uiIcon('add', 16);
+                _tagEditId = tag.id;
+                const cbtn = document.getElementById('btn-create-tag');
+                const span = cbtn?.querySelector('span');
+                if (span) span.textContent = t('common.save') || 'Enregistrer';
+                const cancel = document.getElementById('btn-cancel-tag-edit') as HTMLElement | null;
+                if (cancel) cancel.style.display = '';
+            });
+        });
+
+        list.querySelectorAll('.btn-del-tag').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const ok = await window.confirmCustom(
+                    t('common.delete') || 'Delete Tag',
+                    t('settings.tagDeleteConfirm'),
+                    'danger',
+                    { yesLabel: t('common.delete') || 'Delete' }
+                );
+                if (ok) {
+                    try {
+                        await invoke('delete_tag', { tagId: (btn as HTMLElement).dataset.id });
+                        toast(t('settings.tagDeleted'), 'success');
+                        renderSettingsTags();
+                        if (window._refreshModsFn) window._refreshModsFn();
+                    } catch (err) { toast(t('settings.tagDeleteError', { err: String(err) }), 'error'); }
+                }
+            });
+        });
+    } catch (err) { console.error("Tags error", err); }
+}
+window.renderSettingsTags = renderSettingsTags;
+
+
+// ── Security Settings ──────────────────────────────────────
+async function initSecuritySettings() {
+    const cardFull = document.getElementById('settings-sec-full');
+    const cardLimited = document.getElementById('settings-sec-limited');
+    const btnApply = document.getElementById('btn-settings-apply-security');
+    const applyMsg = document.getElementById('security-apply-msg');
+    if (!cardFull || !cardLimited || !btnApply) return;
+
+    let initialMode = 'full';
+    let currentSelected = 'full';
+
+    try {
+        const settings = await getSettings();
+        initialMode = settings.fs_security_mode || 'full';
+        currentSelected = initialMode;
+        updateUI(initialMode);
+    } catch (e) {
+        console.error('Failed to load security settings:', e);
+    }
+
+    function updateUI(mode) {
+        currentSelected = mode;
+        const full = mode === 'full';
+        const ciFull = cardFull.querySelector('.check-indicator') as HTMLElement | null;
+        const ciLim  = cardLimited.querySelector('.check-indicator') as HTMLElement | null;
+        cardFull.classList.toggle('active', full);
+        cardLimited.classList.toggle('active', !full);
+        cardFull.setAttribute('aria-checked', String(full));
+        cardLimited.setAttribute('aria-checked', String(!full));
+        if (ciFull) ciFull.style.display = full ? 'flex' : 'none';
+        if (ciLim)  ciLim.style.display  = full ? 'none' : 'flex';
+        // The icon tiles are styled by the row's `.active` class now — no inline colours.
+        const pill = document.getElementById('settings-sec-current');
+        if (pill) {
+            pill.textContent = t(full ? 'security.modal.full' : 'security.modal.limited');
+            pill.classList.toggle('is-limited', !full);
+        }
+
+    }
+
+    const addGlowEffect = (card) => {
+        card.addEventListener('mousemove', (e) => {
+            const rect = card.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            card.style.setProperty('--x', `${x}px`);
+            card.style.setProperty('--y', `${y}px`);
+        });
+    };
+
+    addGlowEffect(cardFull);
+    addGlowEffect(cardLimited);
+
+    cardFull.onclick = () => updateUI('full');
+    cardLimited.onclick = () => updateUI('limited');
+
+    btnApply.onclick = async () => {
+        btnApply.disabled = true;
+        btnApply.innerHTML = `<span>${t('common.loading') || '...'}</span>`;
+        
+        try {
+            const settings = await getSettings();
+            settings.fs_security_mode = currentSelected;
+            await updateSettings(settings);
+            await invoke('apply_fs_security_mode_command');
+            
+            initialMode = currentSelected;
+            btnApply.innerHTML = `<span>${t('security.modal.apply')}</span>`;
+            
+            if (applyMsg) {
+                applyMsg.style.opacity = '1';
+                setTimeout(() => { if (applyMsg) applyMsg.style.opacity = '0'; }, 3000);
+            }
+            toast(t('common.success'), 'success');
+        } catch (err) {
+            console.error('Failed to apply security mode:', err);
+            toast(t('common.error'), 'error');
+            btnApply.disabled = false;
+            btnApply.innerHTML = `<span>${t('security.modal.apply')}</span>`;
+        }
+    };
+}
+
+
+
+
+window.recalculateModSha = async (modId) => {
+    try {
+        toast(t('mods.sha.calculating') || 'Calculating hashes...', 'info');
+        await invoke('recalculate_mod_sha', { modId });
+        if (window._refreshModsFn) window._refreshModsFn();
+    } catch (err) {
+        toast(t('common.error') + ' : ' + err, 'error');
+    }
+};
+
+window.deleteModHashes = async (modId) => {
+    const ok = await window.confirmCustom(
+        t('mods.sha.deleteConfirmTitle') || 'Delete Hashes',
+        t('mods.sha.deleteConfirm') || 'Are you sure you want to delete the hashes for this mod?',
+        'danger',
+        { yesLabel: t('common.delete') }
+    );
+    if (ok) {
+        try {
+            await invoke('delete_mod_hashes', { modId });
+            toast(t('mods.sha.deleted') || 'Hashes deleted', 'success');
+            if (window._refreshModsFn) window._refreshModsFn();
+            
+            // Refresh detail panel if open
+            const detailModId = (document.getElementById('mod-detail-container') as any)?._currentModId;
+            if (detailModId === modId) {
+                import('../mods/mods-details.js').then(m => m.renderModDetail(detailModId));
+            }
+        } catch (err) {
+            toast(t('common.error') + ' : ' + err, 'error');
+        }
+    }
+};
+
+// The Integrity dialog (integrity-center.ts): the states, the list, verify / re-hash / export.
+// Loaded on first use. The names stay: the command palette and the navbar call them.
+window.showHashingStats = async () => {
+    try { (await import('./integrity-center.js')).openIntegrityCenter(toast); }
+    catch (err) { toast(t('common.error') + ' : ' + err, 'error'); }
+};
+
+window.recalculateAllHashesPrompt = async () => {
+    try { (await import('./integrity-center.js')).openRehashPrompt(toast, null, () => { void refreshShaSummary(); }); }
+    catch (err) { toast(t('common.error') + ' : ' + err, 'error'); }
+};
+
+/** The SHA card's state chips (every mod), redrawn after a change made from the card. */
+async function refreshShaSummary(): Promise<void> {
+    const host = document.getElementById('sha-card-summary');
+    if (!host) return;
+    try { await (await import('./integrity-center.js')).mountIntegritySummary(host); } catch { /* the card keeps its buttons */ }
+}
+
+// ── Link this creator id to a BetterCommunity account ──────────────
+// Local-first: BMM works fully offline. This only reaches the server when the user
+// explicitly links; the server returns a short code to enter on the website.
+// TEST MODE is now driven by app.cfg (BCTestMode / BCTestBase), resolved once at
+// startup in links-config.ts. `bcTestMode()` / `bcTestBase()` / `bcRoot()` are imported
+// from there — Settings only DISPLAYS the state (read-only); to change it, edit app.cfg.
+
+// The flow itself lives in core/bc-link.ts. It was private here, so the feedback dialog —
+// which needs exactly this button — could not call it and invented its own (wrong) answer to
+// "is this install linked" instead. One copy, two callers.
+// (BetterCommunity discover modal removed — linking + Discord actions live in the identity card below.)
+
+function bcBase(): string {
+    return bcRoot();
+}
+
+// Poll the account-link status and reflect it in the identity card. Detects an unlink
+// (the account was linked and no longer is) and notifies the user.
+async function refreshBcLinkStatus(): Promise<void> {
+    const statusEl  = document.getElementById('bc-link-status');
+    const linkBtn   = document.getElementById('btn-bc-link') as HTMLButtonElement | null;
+    const discordBtn = document.getElementById('btn-bc-discord') as HTMLButtonElement | null;
+    let creatorId = '';
+    try { creatorId = (await invoke('get_creator_id')) as string; } catch (_) {}
+    if (!creatorId || creatorId === '—') {
+        if (statusEl) statusEl.textContent = t('settings.link.noCreator') || 'No creator id yet.';
+        if (discordBtn) discordBtn.style.display = 'none';
+        return;
+    }
+    // The SAME read the feedback dialog does — one question, one cache, so the two screens
+    // cannot disagree about the same account.
+    const wasLinked = localStorage.getItem('bc_linked') === '1';
+    const st = await bcLinkState(true);
+    renderKeyPinProblem(st.pinProblem);
+    if (st.state === 'unknown') { if (statusEl) statusEl.textContent = t('settings.link.offline2') || 'BetterCommunity unreachable (offline?).'; return; }
+    const data: any = { linked: st.state === 'linked', displayName: st.displayName, discord: st.discord };
+    if (data.linked) {
+        const dtxt = data.discord?.linked
+            ? ` · Discord: ${escHtml(data.discord.username || 'linked')}`
+            : ` · ${escHtml(t('settings.link.noDiscord') || 'Discord not linked')}`;
+        if (statusEl) statusEl.innerHTML = `<span style="width:8px;height:8px;border-radius:50%;background:#34d399;display:inline-block;flex-shrink:0"></span> ${escHtml(t('settings.link.linkedAs') || 'Linked as')} <b style="color:var(--text)">${escHtml(data.displayName || '')}</b>${dtxt}`;
+        if (linkBtn) linkBtn.textContent = t('settings.link.relink') || 'Re-link account';
+        if (discordBtn) { discordBtn.style.display = ''; discordBtn.textContent = data.discord?.linked ? (t('settings.link.relinkDiscord') || 'Re-link Discord') : (t('settings.link.discord') || 'Link Discord'); }
+    } else {
+        if (wasLinked) { try { toast(t('settings.link.unlinked') || 'Your BetterCommunity account was unlinked.', 'warning'); } catch (_) {} }
+        if (statusEl) statusEl.innerHTML = `<span style="width:8px;height:8px;border-radius:50%;background:var(--text-muted);display:inline-block;flex-shrink:0"></span> ${escHtml(t('settings.link.notLinked') || 'Not linked to a BetterCommunity account.')}`;
+        if (linkBtn) linkBtn.textContent = t('settings.link.button') || 'Link to BetterCommunity account';
+        if (discordBtn) discordBtn.style.display = 'none'; // must link the account before Discord
+    }
+}
+
+// BetterCommunity refused this install's key against the chain it pinned for the Creator ID
+// (C8-C, see core/key-pin.ts). A static map, not t('…' + value): check-i18n-keys can only see
+// literal keys.
+const KEY_PIN_TEXT: Record<KeyPinProblem, () => string> = {
+    key_fork: () => t('settings.link.pin.key_fork'),
+    key_retired: () => t('settings.link.pin.key_retired'),
+    upgraded_key_required: () => t('settings.link.pin.upgraded_key_required'),
+};
+
+/** Show (or clear) the pin refusal under the link status, with the way out: the owner of
+ *  the linked account resets the pin on BetterCommunity, and the next proof pins this key. */
+function renderKeyPinProblem(problem: KeyPinProblem | undefined): void {
+    const statusEl = document.getElementById('bc-link-status');
+    let box = document.getElementById('bc-key-pin');
+    if (!problem || !KEY_PIN_TEXT[problem]) { box?.remove(); return; }
+    if (!statusEl) return;
+    if (!box) {
+        box = document.createElement('div');
+        box.id = 'bc-key-pin';
+        box.setAttribute('role', 'alert');
+        box.style.cssText = 'margin-top:8px;font-size:12px;display:flex;flex-direction:column;gap:6px';
+        statusEl.insertAdjacentElement('afterend', box);
+    }
+    box.textContent = '';
+    const why = document.createElement('div');
+    why.style.color = 'var(--warning)';
+    why.textContent = KEY_PIN_TEXT[problem]();
+    box.appendChild(why);
+    const btn = document.createElement('button');
+    btn.id = 'btn-bc-key-pin-reset';
+    btn.className = 'btn btn-sm';
+    btn.style.alignSelf = 'flex-start';
+    btn.textContent = t('settings.link.pin.reset');
+    btn.title = t('settings.link.pin.resetHint');
+    // On the website and not from here: resetting the pin decides which key may speak for
+    // the id, so it takes the account owner's session, not this install's word.
+    btn.addEventListener('click', () => {
+        const url = `${bcBase()}/profile`;
+        invoke('open_external_url', { url }).catch(() => window.open(url, '_blank'));
+    });
+    box.appendChild(btn);
+}
+
+// Link a Discord account from BMM: enter the code from the Discord /link command.
+async function openDiscordLinkFlow(): Promise<void> {
+    let creatorId = '';
+    try { creatorId = (await invoke('get_creator_id')) as string; } catch (_) {}
+    if (!creatorId || creatorId === '—') { toast(t('settings.link.noCreator') || 'No creator id yet.', 'warning'); return; }
+    document.getElementById('bc-discord-modal')?.remove();
+    const modal = document.createElement('div');
+    modal.id = 'bc-discord-modal';
+    modal.style.cssText = 'position:absolute;inset:0;z-index:10500;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,0.7);backdrop-filter:blur(6px)';
+    modal.innerHTML = `
+      <div style="width:100%;max-width:420px;background:var(--bmm-bg-elevated,#15171e);border:1px solid rgba(249,115,22,0.3);border-radius:18px;padding:24px;box-shadow:0 24px 70px rgba(0,0,0,0.55)">
+        <div style="font-size:16px;font-weight:800;margin-bottom:6px">${escHtml(t('settings.link.discordTitle') || 'Link your Discord')}</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.5">${escHtml(t('settings.link.discordDesc') || 'In the BetterCommunity Discord, run /link to get a code, then enter it here.')}</div>
+        <input id="bc-discord-code" placeholder="XXXX-XXXX" maxlength="9" style="width:100%;box-sizing:border-box;font-family:var(--font-mono,monospace);font-size:18px;font-weight:800;letter-spacing:3px;text-align:center;text-transform:uppercase;padding:12px;border-radius:10px;background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.25);color:var(--text);outline:none;margin-bottom:14px">
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button id="bc-discord-cancel" class="btn btn-sm btn-ghost">${escHtml(t('common.close') || 'Cancel')}</button>
+          <button id="bc-discord-submit" class="btn btn-sm btn-accent">${escHtml(t('settings.link.discordBtn') || 'Link Discord')}</button>
+        </div>
+      </div>`;
+    (document.getElementById('app-window-outer') || document.body).appendChild(modal);
+    const input = document.getElementById('bc-discord-code') as HTMLInputElement;
+    input.addEventListener('input', () => { const s = input.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 8); input.value = s.length > 4 ? `${s.slice(0, 4)}-${s.slice(4)}` : s; });
+    setTimeout(() => input.focus(), 50);
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+    document.getElementById('bc-discord-cancel')?.addEventListener('click', () => modal.remove());
+    const submit = async () => {
+        const code = input.value.trim();
+        if (code.replace(/[^a-zA-Z0-9]/g, '').length < 8) { toast(t('settings.link.badCode') || 'Enter the full code.', 'warning'); return; }
+        try {
+            let data: any = {}; let ok = true;
+            // Native-process POST (bc_api_post) to dodge webview CORS. bc_api_post
+            // rejects on a non-2xx with an `http_<code>` message; a 4xx here still
+            // carries a JSON error body, so fall back to a direct parse on failure.
+            try {
+                data = JSON.parse(await invoke('bc_api_post', { url: `${bcBase()}/api/link/discord`, body: JSON.stringify({ creatorId, code }) }, { quiet: true }) as string);
+            } catch (e) {
+                ok = false;
+                try { data = JSON.parse(String((e as any)?.message || e || '').replace(/^http_\d+\s*/, '') || '{}'); } catch (_) { data = {}; }
+            }
+            if (!ok) {
+                const err = data?.error;
+                toast(err === 'account_not_linked' ? (t('settings.link.needAccount') || 'Link your BetterCommunity account first.')
+                    : err === 'already_linked' ? (t('settings.link.discordTaken') || 'That Discord account is already linked.')
+                    : err === 'invalid_or_expired' ? (t('settings.link.discordBad') || 'Invalid or expired code.')
+                    : (t('common.error') || 'Failed.'), 'error');
+                return;
+            }
+            toast(t('settings.link.discordOk') || 'Discord linked!', 'success');
+            modal.remove();
+            refreshBcLinkStatus();
+        } catch (_) {
+            toast(t('settings.link.offline') || 'Could not reach BetterCommunity (offline?).', 'warning');
+        }
+    };
+    document.getElementById('bc-discord-submit')?.addEventListener('click', submit);
+    input.addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key === 'Enter') submit(); });
+}
+
+// ── Creator key v5.1: how the key is protected, and the one way out of a refusal ──
+// `protection` values come from creator_v5.rs (`Seal::protection`). A static map, not
+// t('…' + value): check-i18n-keys can only see literal keys.
+const CREATOR_KEY_PROTECTION: Record<string, () => string> = {
+    'dpapi': () => t('settings.creatorKey.prot.dpapi'),
+    'keychain': () => t('settings.creatorKey.prot.keychain'),
+    'secret-service': () => t('settings.creatorKey.prot.secretService'),
+    'file-0600': () => t('settings.creatorKey.prot.file'),
+};
+const CREATOR_KEY_REFUSED = 'bmm.creator.refused|';
+const CREATOR_KEY_RESET_CONFIRM = 'RESET-CREATOR-IDENTITY';
+
+async function renderCreatorKeyState(elCreatorId: HTMLElement | null) {
+    const card = elCreatorId?.parentElement?.parentElement || elCreatorId?.parentElement;
+    if (!card) return;
+    let box = document.getElementById('sic-creator-key');
+    if (!box) {
+        box = document.createElement('div');
+        box.id = 'sic-creator-key';
+        box.style.cssText = 'margin-top:10px;font-size:12px;color:var(--text-muted);display:flex;flex-direction:column;gap:6px';
+        card.appendChild(box);
+    }
+    box.textContent = '';
+    try {
+        const info = await invoke('creator_key_info', {}, { quiet: true }) as { protection?: string; seq?: number; pinned?: boolean };
+        const what = (CREATOR_KEY_PROTECTION[info.protection || ''] || (() => info.protection || '?'))();
+        const line = document.createElement('div');
+        line.textContent = t('settings.creatorKey.protection', { what });
+        if (info.protection === 'file-0600') line.style.color = 'var(--warning)';
+        box.appendChild(line);
+        if (info.pinned) {
+            const pin = document.createElement('div');
+            pin.textContent = t('settings.creatorKey.state', { seq: String(info.seq ?? 0) });
+            box.appendChild(pin);
+        }
+    } catch (e) {
+        const msg = String(e);
+        // Only a refusal gets the reset: any other failure (no app-data folder, a lock error)
+        // is not fixed by replacing the identity.
+        if (!msg.startsWith(CREATOR_KEY_REFUSED)) return;
+        const why = document.createElement('div');
+        why.style.color = 'var(--error)';
+        why.textContent = t('settings.creatorKey.refused', { why: msg.slice(CREATOR_KEY_REFUSED.length) });
+        box.appendChild(why);
+        const btn = document.createElement('button');
+        btn.id = 'btn-creator-key-reset';
+        btn.className = 'btn btn-sm btn-danger';
+        btn.style.alignSelf = 'flex-start';
+        btn.textContent = t('settings.creatorKey.resetBtn');
+        btn.addEventListener('click', async () => {
+            const ok = await confirmAction({ title: t('settings.creatorKey.resetTitle'), message: t('settings.creatorKey.resetBody'), confirmLabel: t('common.reset'), tone: 'danger' });
+            if (!ok) return;
+            try {
+                const info = await invoke('creator_identity_reset', { confirm: CREATOR_KEY_RESET_CONFIRM }) as { cid?: string };
+                toast(t('settings.creatorKey.resetDone', { cid: String(info.cid || '').slice(0, 16) + '…' }), 'success');
+                if (elCreatorId) elCreatorId.textContent = String(info.cid || '—');
+                await renderCreatorKeyState(elCreatorId);
+            } catch (err) {
+                toast(t('settings.creatorKey.resetFailed', { why: String(err) }), 'error');
+            }
+        });
+        box.appendChild(btn);
+    }
+}
+
+// ── Identity & API card ────────────────────────────────────
+async function initSecurityInfoCard() {
+    const elCreatorId  = document.getElementById('sic-creator-id');
+
+    // The CSP editor rides on the security card rather than a screen of its own: the
+    // policy is a security fact about this install, like the ids above it.
+    // Into the Security card's own host element. Twice now this has been anchored by
+    // guessing at surrounding markup — first `closest('.settings-card')`, which matched
+    // nothing because the card is a `.glass-card`, so the panel was never inserted at all.
+    // `#csp-editor-host` exists in index.html for exactly this and for nothing else.
+    if (!document.getElementById('csp-extra')) {
+        const host = document.getElementById('csp-editor-host');
+        if (host) {
+            const box = document.createElement('div');
+            box.innerHTML = renderCspEditor();
+            host.appendChild(box);
+            bindCspEditor(box);
+        }
+    }
+    // Cross-origin access is configured on the Plugins & API screen, where the server it
+    // governs lives. This jumps there rather than showing a second copy of the allow-list.
+    const gotoCors = document.getElementById('btn-goto-cors');
+    if (gotoCors && !gotoCors.dataset.bound) {
+        gotoCors.dataset.bound = '1';
+        gotoCors.addEventListener('click', () => {
+            document.querySelector<HTMLElement>('.nav-item[data-view="plugins"]')?.click();
+            // The CORS controls live in the Permissions TAB of that screen, not on its
+            // landing tab — arriving on Plugins & API and leaving the reader to find them
+            // is barely better than not linking at all. The tab button only exists once the
+            // screen has rendered, so clicking it is part of the retry below.
+            let tries = 0;
+            const go = () => {
+                document.querySelector<HTMLElement>('.plug-tab[data-tab="perms"]:not(.active)')?.click();
+                const el = document.getElementById('plug-cors-any')?.closest('.plug-section-card') as HTMLElement | null;
+                if (el) {
+                    el.scrollIntoView({ block: 'center' });
+                    const r = el.getBoundingClientRect();
+                    if (el.isConnected && r.height > 0 && r.top > -50 && r.top < window.innerHeight) return;
+                }
+                if (++tries < 40) setTimeout(go, 100);
+            };
+            go();
+        });
+    }
+
+    const elApiToken   = document.getElementById('sic-api-token');
+    const elVersion    = document.getElementById('sic-bmm-version');
+
+    // Load values
+    try {
+        const [creatorId, apiToken] = await Promise.all([
+            invoke('get_creator_id').catch(() => '—'),
+            invoke('get_api_token').catch(() => '—'),
+        ]);
+        if (elCreatorId) elCreatorId.textContent = creatorId as string;
+        if (elApiToken)  elApiToken.textContent  = apiToken as string;
+    } catch (_) {}
+    await renderCreatorKeyState(elCreatorId);
+
+    // BetterCommunity account: live link status (detects unlink), link, link Discord.
+    if (elCreatorId && !document.getElementById('btn-bc-link')) {
+        // The `.settings-card` branch that used to lead this chain never matched anything —
+        // the card is a `.glass-card` — so what has always run is the fallback below. Kept
+        // as the fallback rather than "corrected" to the card element, because that is where
+        // these controls actually sit today and moving them is not a fix.
+        const card = elCreatorId.parentElement?.parentElement || elCreatorId.parentElement;
+
+        const status = document.createElement('div');
+        status.id = 'bc-link-status';
+        status.style.cssText = 'margin-top:12px;font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:7px';
+        status.textContent = t('settings.link.checking') || 'Checking BetterCommunity link…';
+        card?.appendChild(status);
+
+        const row = document.createElement('div');
+        row.style.cssText = 'margin-top:8px;display:flex;gap:8px;flex-wrap:wrap';
+        const btn = document.createElement('button');
+        btn.id = 'btn-bc-link';
+        btn.className = 'btn btn-sm btn-accent';
+        btn.textContent = t('settings.link.button') || 'Link to BetterCommunity account';
+        btn.addEventListener('click', async () => {
+            // The flow reports what happened; saying it is this screen's job (see the note in
+            // core/bc-link.ts). The modal polls, so the card is redrawn when the code is
+            // actually accepted rather than on a timer's guess.
+            const r = await openAccountLinkFlow(() => { forgetBcLinkState(); refreshBcLinkStatus(); });
+            if (r.result === 'no-creator') toast(t('settings.link.noCreator') || 'No creator id yet.', 'warning');
+            else if (r.result === 'offline') toast(t('settings.link.offline') || 'Could not reach BetterCommunity (offline?). BMM keeps working locally.', 'warning');
+            else if (r.result === 'already') toast(t('settings.link.already') || 'This creator id is already linked to an account.', 'info');
+            else if (r.result === 'pin') toast(KEY_PIN_TEXT[r.problem](), 'warning', 12000);
+            else if (r.result === 'error') toast(t('common.error') || 'Failed to get a link code.', 'error');
+            forgetBcLinkState();
+            setTimeout(refreshBcLinkStatus, 400);
+        });
+        row.appendChild(btn);
+
+        const dbtn = document.createElement('button');
+        dbtn.id = 'btn-bc-discord';
+        dbtn.className = 'btn btn-sm';
+        dbtn.style.display = 'none'; // shown once the account is linked
+        dbtn.textContent = t('settings.link.discord') || 'Link Discord';
+        dbtn.addEventListener('click', openDiscordLinkFlow);
+        row.appendChild(dbtn);
+        card?.appendChild(row);
+
+        // ── BetterCommunity API key ──────────────────────────────────────────
+        // Beside the account link because they answer adjacent questions, but they
+        // are NOT the same thing and the copy says so: linking proves which account
+        // is yours, a key lets BMM read something on your behalf. Conflating them is
+        // how a user ends up expecting notifications from a link that never carried
+        // a credential.
+        const keyBox = document.createElement('details');
+        keyBox.style.cssText = 'margin-top:12px;font-size:12px';
+        // Built as a function, not a one-shot string. applyTranslations() only reaches
+        // elements carrying data-i18n attributes; anything with t() baked into a
+        // template literal keeps whatever language it was built in. This panel is all
+        // template literal, so it re-renders on the langChanged event instead — the
+        // same idiom the shortcuts manager below already uses.
+        const keyBoxHtml = () => `
+            <summary style="cursor:pointer;color:var(--text-secondary)">${escHtml(t('settings.bcKey.title') || 'BetterCommunity notifications')}</summary>
+            <div style="margin-top:8px;color:var(--text-muted);line-height:1.5">${escHtml(t('settings.bcKey.desc') || 'Paste an API key with the notifications:read scope and BMM will show your BetterCommunity notifications in its notification centre. Create one on the website under Profile \u2192 API keys.')}</div>
+            <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                <input type="password" id="bc-api-key" class="input" style="flex:1;min-width:200px" placeholder="${escAttr(t('settings.bcKey.ph') || 'Paste your key')}" autocomplete="off" spellcheck="false">
+                <button id="btn-bc-key-save" class="btn btn-sm btn-accent">${escHtml(t('common.save') || 'Save')}</button>
+                <button id="btn-bc-key-clear" class="btn btn-sm">${escHtml(t('common.remove') || 'Remove')}</button>
+            </div>
+            <div id="bc-key-state" style="margin-top:7px;color:var(--text-muted)"></div>`;
+        // Render AND bind together. Re-rendering the markup alone would leave three
+        // dead buttons behind, which is the failure mode of every "just refresh the
+        // HTML" language fix.
+        const paintKeyBox = () => {
+            keyBox.innerHTML = keyBoxHtml();
+
+            const keyState = keyBox.querySelector('#bc-key-state') as HTMLElement;
+            const keyInput = keyBox.querySelector('#bc-api-key') as HTMLInputElement;
+            // The field is never PREFILLED. The backend does not hand the key back — that
+            // is the point of storing it there — so the only honest thing to show is
+            // whether one exists.
+            const paintKeyState = async () => {
+                let has = false;
+                try { has = await invoke('has_bcweb_api_key') as boolean; } catch { /* offline-safe */ }
+                keyState.textContent = has
+                    ? (t('settings.bcKey.set') || 'A key is stored. Paste a new one to replace it.')
+                    : (t('settings.bcKey.none') || 'No key stored — BetterCommunity notifications are off.');
+            };
+            void paintKeyState();
+
+            keyBox.querySelector('#btn-bc-key-save')?.addEventListener('click', async () => {
+                const v = keyInput.value.trim();
+                if (!v) return;
+                try {
+                    await invoke('set_bcweb_api_key', { key: v });
+                    keyInput.value = '';           // never leave a credential sitting in the DOM
+                    const m = await import('../../core/bcweb-notifications.js');
+                    m.stopBcwebNotifications();
+                    await m.startBcwebNotifications();
+                    // Pull once immediately: a key you just pasted that shows nothing for
+                    // ten minutes is indistinguishable from a key that does not work.
+                    const n = await m.pullBcwebNotifications();
+                    toast(n > 0
+                        ? (t('settings.bcKey.okN') || '{n} notification(s) fetched.').replace('{n}', String(n))
+                        : (t('settings.bcKey.ok') || 'Key saved.'), 'success');
+                } catch (e) {
+                    toast((t('common.error') || 'Error') + ': ' + e, 'error');
+                }
+                void paintKeyState();
+            });
+
+            keyBox.querySelector('#btn-bc-key-clear')?.addEventListener('click', async () => {
+                try {
+                    await invoke('set_bcweb_api_key', { key: '' });
+                    keyInput.value = '';
+                    (await import('../../core/bcweb-notifications.js')).stopBcwebNotifications();
+                    toast(t('settings.bcKey.removed') || 'Key removed.', 'info');
+                } catch (e) {
+                    toast((t('common.error') || 'Error') + ': ' + e, 'error');
+                }
+                void paintKeyState();
+            });
+
+        };
+        paintKeyBox();
+        card?.appendChild(keyBox);
+        // setLang dispatches langChanged. Same wired-once idiom as the shortcuts
+        // manager further down this file.
+        if (!(keyBox as any)._bcKeyLangWired) {
+            (keyBox as any)._bcKeyLangWired = true;
+            document.addEventListener('langChanged', () => { if (keyBox.isConnected) paintKeyBox(); });
+        }
+
+        // Dev/test config is now driven by app.cfg (BCTestMode / BCTestBase). Shown here
+        // read-only so it's clear WHERE the blog/account link points and how to change it.
+        const cfg = document.createElement('details');
+        cfg.style.cssText = 'margin-top:10px;font-size:12px;color:var(--text-muted)';
+        const on = bcTestMode();
+        cfg.innerHTML = `
+          <summary style="cursor:pointer;user-select:none">${escHtml(t('settings.link.advanced') || 'Server / test mode')}</summary>
+          <div style="margin-top:8px;display:flex;align-items:center;gap:7px">
+            <span style="width:8px;height:8px;border-radius:50%;background:${on ? 'var(--bmm-warning,#f59e0b)' : 'var(--bmm-success,#22c55e)'}"></span>
+            ${on ? escHtml(t('settings.link.testmodeOn') || 'Test mode ON (staging server)') : escHtml(t('settings.link.testmodeOff') || 'Production')}
+          </div>
+          <div style="margin-top:6px;font-family:var(--font-mono,monospace);word-break:break-all">${escHtml(bcRoot())}</div>`;
+        card?.appendChild(cfg);
+        // BetterCommunity v2 session: the device-flow account card (hidden in v1 mode).
+        void import('./bc-v2-account.js').then((m) => m.mountBcV2AccountCard(card)).catch(() => {});
+
+        refreshBcLinkStatus();
+        // Keep checking so an unlink done on the website is detected while settings are open.
+        const iv = setInterval(() => { if (document.getElementById('bc-link-status')) refreshBcLinkStatus(); else clearInterval(iv); }, 30000);
+    }
+
+    try {
+        const tauri = (window as any).__TAURI__;
+        const version = tauri?.app?.getVersion ? await tauri.app.getVersion() : '—';
+        if (elVersion) elVersion.textContent = `v${version}`;
+    } catch (_) {
+        if (elVersion) elVersion.textContent = '—';
+    }
+
+    // Reveal / hide toggles
+    const _setupReveal = (btnId: string, targetId: string, eyeId: string) => {
+        const btn    = document.getElementById(btnId);
+        const target = document.getElementById(targetId) as HTMLElement | null;
+        const eye    = document.getElementById(eyeId);
+        if (!btn || !target) return;
+
+        let revealed = false;
+        btn.addEventListener('click', () => {
+            revealed = !revealed;
+            target.classList.toggle('revealed', revealed);
+            btn.classList.toggle('is-revealed', revealed);
+            if (eye) {
+                eye.innerHTML = revealed
+                    ? '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/>'
+                    : '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+            }
+        });
+    };
+    _setupReveal('btn-sic-reveal-creator', 'sic-creator-id', 'sic-eye-creator');
+    _setupReveal('btn-sic-reveal-token',   'sic-api-token',  'sic-eye-token');
+
+    // Copy helpers
+    const _setupCopy = (btnId: string, sourceId: string) => {
+        document.getElementById(btnId)?.addEventListener('click', async () => {
+            const val = document.getElementById(sourceId)?.textContent || '';
+            try {
+                await navigator.clipboard.writeText(val);
+                toast(t('common.copied') || 'Copié !', 'success');
+            } catch (_) {}
+        });
+    };
+    _setupCopy('btn-sic-copy-creator', 'sic-creator-id');
+    _setupCopy('btn-sic-copy-token',   'sic-api-token');
+    // The same moment the Plugins page announces from its own Copy: the "Plugins and the API"
+    // lesson sends the reader HERE and waits for it, and only the other button ever said it.
+    document.getElementById('btn-sic-copy-token')?.addEventListener('click', () => {
+        void import('../../ui/tutorial-events.js').then((m) => m.dispatchBmmAction(m.BMM_ACTIONS.API_TOKEN_COPIED));
+    });
+    _setupCopy('btn-sic-copy-url',     'sic-api-url');
+
+    // ── Configurable API port ──
+    // The displayed URL + port field reflect settings.api_port; changing the
+    // port updates settings (server rebinds on next launch — restart needed).
+    try {
+        const { getSettings, apiBase, setApiPort } = await import('../../core/api.js');
+        const { applyTranslations } = await import('../../core/i18n.js');
+        const cfg = await getSettings();
+        const urlEl  = document.getElementById('sic-api-url');
+        const portEl = document.getElementById('sic-api-port') as HTMLInputElement | null;
+        if (urlEl) urlEl.textContent = apiBase();
+        if (portEl) portEl.value = String(cfg.api_port || 51274);
+
+        // Save settings, rebind the API server LIVE on the new port, then refresh
+        // the displayed URL + docs examples from the port it actually bound.
+        const applyPort = async (p: number) => {
+            const fresh = await getSettings();
+            fresh.api_port = p;
+            await invoke('update_settings', { settings: fresh });
+            try {
+                const bound = await invoke('restart_api_server') as number;
+                setApiPort(bound);
+                if (urlEl) urlEl.textContent = apiBase();
+                if (portEl) portEl.value = String(bound);
+                applyTranslations();   // re-substitute the port in the docs curl examples
+                toast(t('settings.identity.apiPortApplied') || `API port applied — now on :${bound}`, 'success', 3500);
+            } catch (e) {
+                // Couldn't rebind live → fall back to "restart to apply".
+                toast(t('settings.identity.apiPortSaved') || 'API port saved — restart BMM to apply', 'warning', 3500);
+            }
+        };
+
+        document.getElementById('btn-sic-save-port')?.addEventListener('click', async () => {
+            const p = parseInt(portEl?.value || '', 10);
+            if (!p || p < 1 || p > 65535) { toast(t('settings.identity.apiPortInvalid') || 'Invalid port (1–65535)', 'warning'); return; }
+            await applyPort(p);
+        });
+        document.getElementById('btn-sic-reset-port')?.addEventListener('click', async () => {
+            await applyPort(51274);
+        });
+    } catch (_) {}
+
+    // ── Identity keys: the ed25519 keys BMM proves with ─────────────────────
+    //
+    // PATHS are stored, never key material. The manager itself lives in core/identity-key.ts
+    // because three screens mount it: here, the repo sync panel, and the catalogue access
+    // fold. One ring, three doors.
+    try {
+        const kr = await import('../../core/identity-key.js');
+        await kr.renderKeyManager('sic-keyring-list', 'sic-key-name', 'btn-sic-key-add',
+            (k, kind) => toast(t(k), kind, kind === 'warning' ? 6000 : 3000), t);
+
+        // ── Making one, here, where the ring is ───────────────────────────────
+        document.getElementById('btn-sic-make-go')?.addEventListener('click', async () => {
+            const kind = (document.getElementById('sic-make-type') as HTMLSelectElement | null)?.value || 'ed25519';
+            const typed = (document.getElementById('sic-make-name') as HTMLInputElement | null)?.value?.trim() || '';
+            // A name is offered rather than demanded: nobody making their first key has one
+            // in mind, and the ring refuses a duplicate, so an unnamed one has to be given a
+            // name that is free rather than a name that fails.
+            const view = await kr.listKeyring().catch(() => null);
+            const taken = new Set((view?.keys || []).map((k) => k.name));
+            let name = typed;
+            if (!name) {
+                name = 'BMM';
+                for (let n = 2; taken.has(name) && n < 999; n += 1) name = `BMM ${n}`;
+            }
+            if (taken.has(name)) { toast(t('repo.keyauth.errNameTaken'), 'warning'); return; }
+
+            // RSA 4096 is seconds of prime search even off the main thread. A button that
+            // looks unpressed for that long gets pressed again, and the second press fails on
+            // a name the first one has already taken.
+            const goBtn = document.getElementById('btn-sic-make-go') as HTMLButtonElement | null;
+            const goText = goBtn?.textContent || '';
+            if (goBtn) { goBtn.disabled = true; goBtn.textContent = t('settings.identity.authKeyMaking'); }
+            try {
+                const res: any = await invoke('key_auth_generate', { name, kind });
+                const out = document.getElementById('sic-make-out');
+                const pub = document.getElementById('sic-make-pub') as HTMLTextAreaElement | null;
+                const where = document.getElementById('sic-make-where');
+                if (pub) pub.value = String(res?.public || '');
+                // The path is shown rather than the key: the private half is on disk and
+                // knowing WHERE is the useful half of that fact. Printing it would put it in
+                // the DOM, in screenshots, and in the replay recorder.
+                if (where) where.textContent = String(res?.path || '');
+                if (out) out.hidden = false;
+                await kr.renderKeyManager('sic-keyring-list', 'sic-key-name', 'btn-sic-key-add',
+                    (k, kk) => toast(t(k), kk, kk === 'warning' ? 6000 : 3000), t);
+                toast(t('settings.identity.authKeyMade'), 'success', 6000);
+            } catch (e) {
+                toast(t(String(e).split('|')[0]) || String(e), 'warning', 7000);
+            } finally {
+                if (goBtn) { goBtn.disabled = false; goBtn.textContent = goText; }
+            }
+        });
+
+        document.getElementById('btn-sic-save-pub')?.addEventListener('click', async () => {
+            const pub = (document.getElementById('sic-make-pub') as HTMLTextAreaElement | null)?.value || '';
+            if (!pub) return;
+            const { saveFile } = await import('../../core/api.js');
+            // Named after the key, with .pub — the extension every tool that consumes one
+            // expects, and the reason it is offered as a file rather than only a clipboard.
+            const stem = ((document.getElementById('sic-make-name') as HTMLInputElement | null)?.value || 'bmm')
+                .replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'bmm';
+            const dest = await saveFile({
+                defaultPath: `${stem}.pub`,
+                filters: [{ name: 'Public key', extensions: ['pub'] }],
+            }).catch(() => null);
+            if (!dest) return;
+            try {
+                await invoke('write_text_file', { path: dest, content: pub });
+                toast(t('settings.identity.authKeySaved'), 'success');
+            } catch (e) { toast(String(e).slice(0, 160), 'error'); }
+        });
+
+        document.getElementById('btn-sic-copy-pub')?.addEventListener('click', async () => {
+            const pub = (document.getElementById('sic-make-pub') as HTMLTextAreaElement | null)?.value || '';
+            if (!pub) return;
+            try { await navigator.clipboard.writeText(pub); toast(t('common.copied'), 'success'); }
+            catch { toast(t('common.copyFailed'), 'warning'); }
+        });
+    } catch (_) {}
+
+    // Reset API token
+    document.getElementById('btn-sic-reset-token')?.addEventListener('click', async () => {
+        const ok = await (window as any).confirmCustom(
+            t('settings.identity.resetTokenTitle') || 'Régénérer le token ?',
+            t('settings.identity.resetTokenDesc')  || 'L\'ancien token sera immédiatement révoqué. Tous les plugins utilisant ce token devront être mis à jour.',
+            'danger'
+        ).catch(() => false);
+        if (!ok) return;
+        try {
+            const newToken = await invoke('reset_api_token') as string;
+            if (elApiToken) {
+                elApiToken.textContent = newToken;
+                // Re-hide after reset
+                elApiToken.classList.remove('revealed');
+                const btn = document.getElementById('btn-sic-reveal-token');
+                if (btn) btn.classList.remove('is-revealed');
+                const eye = document.getElementById('sic-eye-token');
+                if (eye) eye.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+            }
+            toast(t('settings.identity.tokenReset') || 'Token régénéré avec succès.', 'success');
+        } catch (err) {
+            toast(t('common.error') + ' : ' + err, 'error');
+        }
+    });
+}
+
+// ── Settings Initializer ──────────────────────────────────
+
+/** The community-source list for a type, from wherever that type keeps it. */
+function readSources(type: string): string[] {
+    const key = STORE_KEY[type];
+    if (!key) return [];   // apps live in the Rust backend, handled separately below
+    try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch { return []; }
+}
+
+/**
+ * What every type already follows, for the preview to compare against.
+ *
+ * Built from STORE_KEY rather than listed, because a hand-written list was wrong: it named
+ * plugin and theme, so preset and repo catalogs you already followed were reported as "will
+ * add" every time and the import then claimed to have added them. Nothing was corrupted — the
+ * writer deduplicates — but a preview that overstates what it will do is a preview nobody reads
+ * twice.
+ *
+ * Apps are asked of the Rust backend, which is the only place their list exists.
+ */
+async function readAllSources(): Promise<Record<string, string[]>> {
+    const out: Record<string, string[]> = {};
+    for (const type of Object.keys(STORE_KEY)) out[type] = readSources(type);
+    try {
+        const state = await invoke('get_apps_state') as { community_sources?: string[] };
+        out.app = state?.community_sources || [];
+    } catch {
+        // An unreachable backend means the app list is unknown, not empty. Empty is the safe
+        // reading here: the preview over-reports, and add_community_source deduplicates anyway.
+        out.app = [];
+    }
+    return out;
+}
+
+/**
+ * Import a catalog index: one URL that names catalogs of several types.
+ *
+ * Preview first, always. This adds sources that BMM will fetch on every startup, from a
+ * document on somebody else's server — showing what would change, and requiring a second
+ * click, is the difference between a convenience and a thing that silently grew your
+ * startup fetch list.
+ */
+async function initCatalogIndexSettings() {
+    const input = document.getElementById('cat-index-url') as HTMLInputElement | null;
+    const previewBtn = document.getElementById('cat-index-preview') as HTMLButtonElement | null;
+    const importBtn = document.getElementById('cat-index-import') as HTMLButtonElement | null;
+    const out = document.getElementById('cat-index-result');
+    if (!input || !previewBtn || !importBtn || !out) return;
+
+    // A LIST, not a single address. Somebody following two communities had to choose which
+    // one to keep, and the old single value was overwritten by whatever they previewed last
+    // — including a URL they were only checking.
+    //
+    // The old key is read once and folded in, so an address already saved is not lost by
+    // this change.
+    // ── Publish an index ───────────────────────────────────────
+    //
+    // This card could read an index and never write one, so publishing a list of your
+    // catalogues meant hand-writing JSON against a format guide. The list is already here:
+    // "catalogues you follow" is exactly what an index holds, types attached.
+    const makeFold = document.getElementById('cat-index-make-fold') as HTMLDetailsElement | null;
+    if (makeFold) {
+        const listEl = document.getElementById('cat-index-make-list') as HTMLElement | null;
+        const paint = async () => {
+            if (!listEl) return;
+            const all = await readAllSources();
+            const rows: string[] = [];
+            for (const type of Object.keys(all)) {
+                for (const u of all[type]) {
+                    rows.push(`
+                      <label style="display:flex;align-items:center;gap:8px;min-width:0;cursor:pointer">
+                        <input type="checkbox" class="cix-pick" data-t="${escAttr(type)}" data-u="${escAttr(u)}" checked style="flex:0 0 auto">
+                        <span class="cat-index-type" style="flex:0 0 auto">${escHtml(t(`settings.catIndex.type.${type}`))}</span>
+                        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--text-muted)">${escHtml(u)}</span>
+                      </label>`);
+                }
+            }
+            listEl.innerHTML = rows.length ? rows.join('')
+                : `<span style="font-size:11px;color:var(--text-muted)">${escHtml(t('settings.catIndex.makeEmpty'))}</span>`;
+        };
+        // Painted on OPEN: the followed list changes while this page is up, and a snapshot
+        // taken when the card was built would offer catalogues you have since removed.
+        makeFold.addEventListener('toggle', () => { if (makeFold.open) void paint(); });
+
+        // ── Catalogues you do NOT follow ────────────────────────────────────
+        //
+        // An index is a list of addresses, and nothing says you have to follow one to name
+        // it. Recommending somebody else's catalogue was the obvious thing to want and the
+        // one thing this card could not do — so publishing a reading list meant hand-writing
+        // the JSON after all, which is what the card exists to avoid.
+        const extra: Array<{ type: string; url: string }> = [];
+        const typeSel = document.getElementById('cat-index-add-type') as HTMLSelectElement | null;
+        const addedEl = document.getElementById('cat-index-added') as HTMLElement | null;
+        if (typeSel && !typeSel.options.length) {
+            typeSel.innerHTML = INDEX_TYPES
+                .map((ty) => `<option value="${escAttr(ty)}">${escHtml(t(`settings.catIndex.type.${ty}`))}</option>`).join('');
+        }
+        const paintExtra = () => {
+            if (!addedEl) return;
+            addedEl.innerHTML = extra.map((e, i) => `
+                <div class="cix-added-row">
+                    <span class="cat-index-type">${escHtml(t(`settings.catIndex.type.${e.type}`))}</span>
+                    <span class="cix-added-url">${escHtml(e.url)}</span>
+                    <button type="button" class="btn btn-xs btn-ghost cix-drop" data-i="${i}" aria-label="${t('common.close')}">${uiIcon('close', 14)}</button>
+                </div>`).join('');
+            addedEl.querySelectorAll<HTMLElement>('.cix-drop').forEach((b) => b.addEventListener('click', () => {
+                extra.splice(Number(b.dataset.i), 1);
+                paintExtra();
+            }));
+        };
+        document.getElementById('cat-index-add-btn')?.addEventListener('click', () => {
+            const urlEl = document.getElementById('cat-index-add-url') as HTMLInputElement | null;
+            const url = (urlEl?.value || '').trim();
+            // http(s) only, and said here rather than at export: the address is checked where
+            // it is typed, so the mistake is fixed while the box is still in front of you.
+            if (!/^https?:\/\//i.test(url)) { toast(t('settings.catIndex.addBadUrl'), 'warning'); return; }
+            const type = typeSel?.value || 'app';
+            if (extra.some((e) => e.url === url && e.type === type)) { toast(t('settings.catIndex.addDup'), 'warning'); return; }
+            extra.push({ type, url });
+            if (urlEl) urlEl.value = '';
+            paintExtra();
+        });
+
+        document.getElementById('cat-index-make-export')?.addEventListener('click', async () => {
+            const name = (document.getElementById('cat-index-make-name') as HTMLInputElement | null)?.value?.trim()
+                || t('settings.catIndex.makeDefName');
+            const picks = [...document.querySelectorAll<HTMLInputElement>('.cix-pick')].filter((b) => b.checked);
+            if (!picks.length && !extra.length) { toast(t('settings.catIndex.makeNone'), 'warning'); return; }
+            // `app: 'bmm'` on every entry, said rather than left out. An absent app means
+            // "nobody said" and is kept by every reader — which is right for old documents
+            // and wrong for one being written now, where silence would put BMM catalogues in
+            // front of BSM users.
+            const doc = {
+                version: '1.0',
+                name,
+                catalogs: [
+                    ...picks.map((b) => ({ type: b.dataset.t, url: b.dataset.u, app: 'bmm' })),
+                    ...extra.map((e) => ({ type: e.type, url: e.url, app: 'bmm' })),
+                ],
+            };
+            const { saveFile } = await import('../../core/api.js');
+            const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'catalogs';
+            const path = await saveFile({ defaultPath: `${slug}.json`, filters: [{ name: 'JSON', extensions: ['json'] }] });
+            if (!path) return;
+            try {
+                await invoke('write_text_file', { path, content: JSON.stringify(doc, null, 2) });
+                toast(t('settings.catIndex.makeDone').replace('{n}', String(picks.length + extra.length)), 'success', 7000);
+            } catch (e) { toast(String(e), 'error'); }
+        });
+    }
+
+    // ── Access: what a protected catalogue can ask for ──────────────────────
+    //
+    // On this card rather than repeated on the app / plugin / theme / preset screens, because
+    // this is where all five kinds already meet — the same reason the "catalogs you follow"
+    // list lives here.
+    void (async () => {
+        const kr = await import('../../core/identity-key.js');
+        const urlOf = () => (document.getElementById('cat-index-key-url') as HTMLInputElement | null)?.value?.trim() || '';
+        await kr.renderKeySelect('cat-index-key-sel', urlOf, (k, kind) => toast(t(k), kind, kind === 'warning' ? 6000 : 3000), t);
+        // Repaint when the address changes: the chooser shows what is stored FOR THAT SERVER,
+        // so leaving a stale answer under a new address would be a confident wrong reading.
+        document.getElementById('cat-index-key-url')?.addEventListener('change', () => {
+            void kr.refreshKeySelect('cat-index-key-sel', urlOf, t);
+        });
+    })();
+
+    // The password is remembered FOR THIS RUN ONLY — the rule already in force everywhere
+    // here, and the reason no field for it existed. What was missing was a way to give it
+    // BEFORE the fetch fails, rather than fetching, failing, and only then being asked.
+    document.getElementById('cat-index-pw-set')?.addEventListener('click', async () => {
+        const urlEl = document.getElementById('cat-index-pw-url') as HTMLInputElement | null;
+        const pwEl = document.getElementById('cat-index-pw') as HTMLInputElement | null;
+        const url = (urlEl?.value || '').trim();
+        const pw = pwEl?.value || '';
+        if (!/^https?:\/\//i.test(url)) { toast(t('settings.catIndex.pwBadUrl'), 'warning'); return; }
+        if (!pw) { toast(t('settings.catIndex.pwEmpty'), 'warning'); return; }
+        const { rememberSourcePassword } = await import('../../core/source-fetch.js');
+        rememberSourcePassword(url, pw);
+        // Cleared immediately: leaving a password sitting in a visible field is how it ends up
+        // in a screenshot, and it has already been handed to the fetcher by this point.
+        if (pwEl) pwEl.value = '';
+        toast(t('settings.catIndex.pwOk'), 'success');
+    });
+
+    const LIST = 'bmm_catalog_index_urls';
+    const LAST = 'bmm_catalog_index_url';
+    const readList = (): string[] => {
+      let out: string[] = [];
+      try { out = JSON.parse(localStorage.getItem(LIST) || '[]'); } catch { out = []; }
+      if (!Array.isArray(out)) out = [];
+      try {
+        const legacy = localStorage.getItem(LAST);
+        if (legacy && !out.includes(legacy)) out.push(legacy);
+      } catch { /* ignore */ }
+      return out.filter((x) => typeof x === 'string' && x.trim());
+    };
+    const writeList = (v: string[]) => { try { localStorage.setItem(LIST, JSON.stringify(v)); } catch { /* ignore */ } };
+
+    const listHost = document.getElementById('cat-index-list');
+    const renderList = () => {
+      if (!listHost) return;
+      const urls = readList();
+      if (!urls.length) { listHost.innerHTML = ''; return; }
+      listHost.innerHTML = `<div class="cat-index-list-title">${escHtml(t('settings.catIndex.saved') || 'Sources you keep')}</div>`
+        + urls.map((u) => `<div class="cat-index-row">
+              <span class="cat-index-url" title="${escAttr(u)}">${escHtml(u)}</span>
+              <button class="btn btn-ghost btn-sm cat-index-use" data-u="${escAttr(u)}">${escHtml(t('settings.catIndex.reuse') || 'Use')}</button>
+              <button class="btn btn-ghost btn-sm cat-index-del" data-u="${escAttr(u)}">${escHtml(t('common.remove') || 'Remove')}</button>
+           </div>`).join('');
+      listHost.querySelectorAll('.cat-index-use').forEach((b) => b.addEventListener('click', () => {
+        input.value = (b as HTMLElement).dataset.u || '';
+        previewBtn.click();
+      }));
+      listHost.querySelectorAll('.cat-index-del').forEach((b) => b.addEventListener('click', () => {
+        writeList(readList().filter((x) => x !== (b as HTMLElement).dataset.u));
+        renderList();
+      }));
+    };
+    renderList();
+
+    const contentsHost = document.getElementById('cat-index-contents');
+    const followHost = document.getElementById('cat-index-following');
+    const histHost = document.getElementById('cat-index-history');
+    const histQ = document.getElementById('cat-index-history-q') as HTMLInputElement | null;
+
+    // ── Following: every source BMM actually fetches, whatever put it there ──────
+    //
+    // Not just what an index added. A deep link, another settings panel and this one all
+    // write the same stores, and until now nothing showed them together — so a catalog you
+    // did not remember following could only be removed by finding whichever screen owned it.
+
+    // The shared source list (features/catalogs/source-list.ts): the same rows as the App
+    // catalogue's Sources tab, for every kind. Official sources first and read-only; yours
+    // with on/off, order, edit (with Test), details, remove; import and export of the lot.
+    let followList: { render(): Promise<void>; refresh(force?: boolean): Promise<void> } | null = null;
+    const followFold = document.getElementById('cat-index-following-fold') as HTMLDetailsElement | null;
+    const renderFollowing = async () => {
+        if (!followHost) return;
+        if (followList) { await followList.render(); return; }
+        const m = await import('../catalogs/source-list.js');
+        followList = m.mountSourceList(followHost, {
+            // Checked when the fold is opened, not at start: Settings is built at boot.
+            autoRefresh: !!followFold?.open,
+            onChanged: async () => { await renderHistory(); await renderContents(); },
+        });
+    };
+    followFold?.addEventListener('toggle', () => { if (followFold.open) void followList?.refresh(false); });
+
+    // ── History ─────────────────────────────────────────────────────────────────
+
+    const renderHistory = async () => {
+        if (!histHost) return;
+        // Named `lines`, not `all`: `all` already means "every source that is followed" twelve
+        // lines below, and re-using it here shadowed nothing — it collided, and the whole
+        // settings module stopped parsing. A crash on load, from a name.
+        const lines = readHistory();
+        // Matches the address, the kind and the action word — the three things a line says.
+        // The action is matched in the CURRENT language as well as its stored value, because
+        // somebody reading a French list types "ajouté", not "add".
+        const q = (histQ?.value || '').trim().toLowerCase();
+        // The ORIGINAL position travels with the line. `forgetHistoryAt` deletes by index into
+        // the whole history, so once a filter is applied the row's position in what you can see
+        // is not the position of the thing it deletes — and "drop this line" would drop a
+        // different one. The kind of bug a filter quietly introduces into a list with a delete
+        // button.
+        const h = q ? lines.map((e, i) => ({ e, i })).filter(({ e }) => {
+            const words = [
+                e.url, e.type, e.action, e.via || '',
+                t(`settings.catIndex.type.${e.type}`) || '',
+                (e.action === 'add' ? t('settings.catIndex.hAdded') : t('settings.catIndex.hRemoved')) || '',
+            ];
+            return words.some((w) => String(w).toLowerCase().includes(q));
+        }) : lines.map((e, i) => ({ e, i }));
+        // What is followed right now, so a "removed" row knows whether it can be put back —
+        // a Bring-back button beside something you already follow again is a dead control.
+        const all = await readAllSources();
+        const followed = new Set(Object.values(all).flat().map((u) => u.toLowerCase()));
+
+        histHost.innerHTML = h.length
+            ? h.map(({ e, i }) => {
+                const gone = e.action === 'remove' && !followed.has(e.url.toLowerCase());
+                return `<div class="cat-index-row cat-index-hist-${escAttr(e.action)}">
+                  <span class="cat-index-when">${escHtml(new Date(e.at).toLocaleString())}</span>
+                  <span class="cat-index-act">${escHtml(e.action === 'add'
+                      ? (t('settings.catIndex.hAdded') || 'added')
+                      : (t('settings.catIndex.hRemoved') || 'removed'))}</span>
+                  <span class="cat-index-type">${escHtml(t(`settings.catIndex.type.${e.type}`) || e.type)}</span>
+                  <span class="cat-index-url" title="${escAttr(e.url)}">${escHtml(e.url)}</span>
+                  ${e.via ? `<span class="cat-index-from" title="${escAttr(e.via)}">${escHtml(originLabel(e.via))}</span>` : ''}
+                  ${gone ? `<button class="btn btn-ghost btn-sm cat-index-readd" data-t="${escAttr(e.type)}" data-u="${escAttr(e.url)}" data-v="${escAttr(e.via || '')}">${escHtml(t('settings.catIndex.readd') || 'Bring back')}</button>` : ''}
+                  <button class="btn btn-ghost btn-sm cat-index-forget" data-i="${i}" title="${escAttr(t('settings.catIndex.forget.h') || 'Drop this line from the history')}" aria-label="${escAttr(t('settings.catIndex.forget.h') || 'Drop this line from the history')}">${uiIcon('close', 14)}</button>
+               </div>`;
+            }).join('')
+            // Two different empty states. "Nothing yet" over a history that has 90 lines and a
+            // search term in the box is a lie about the data.
+            : `<div class="cat-index-empty">${escHtml(q
+                ? (t('settings.catIndex.histNoMatch') || 'No line matches that.')
+                : (t('settings.catIndex.noHistory') || 'Nothing yet.'))}</div>`;
+
+        // The point of keeping a history at all: undoing a removal without going and finding
+        // the address again. It re-follows through the same `follow()` the index import uses,
+        // so it lands in the same store with the same provenance and records its own line.
+        histHost.querySelectorAll('.cat-index-readd').forEach((b) => b.addEventListener('click', async () => {
+            const el = b as HTMLElement;
+            const n = await follow([{ type: el.dataset.t || '', url: el.dataset.u || '' } as IndexEntry], el.dataset.v || '');
+            if (n) toast(added(n), 'success');
+            await refreshAll();
+        }));
+
+        histHost.querySelectorAll('.cat-index-forget').forEach((b) => b.addEventListener('click', async () => {
+            // By INDEX into the list this render was built from, not by URL: the same URL can
+            // appear many times, and dropping every line about a catalog is not what "drop
+            // this line" says.
+            forgetHistoryAt(Number((b as HTMLElement).dataset.i));
+            await renderHistory();
+        }));
+    };
+
+    // Typed-into rather than submitted: a history search is a filter, and waiting for Enter to
+    // filter a list already on screen is a step for nothing.
+    histQ?.addEventListener('input', () => { void renderHistory(); });
+
+    document.getElementById('cat-index-history-clear')?.addEventListener('click', () => {
+        clearHistory(); void renderHistory();
+    });
+
+    // ── The index itself ────────────────────────────────────────────────────────
+
+    /** Fetch and parse, or null with the reason already on screen. */
+    const load = async (url: string): Promise<{ index: CatalogIndex; dropped: unknown[] } | null> => {
+        if (!/^https?:\/\//i.test(url)) { toast(t('settings.catIndex.badUrl') || 'Enter an http(s) address.', 'error'); return null; }
+        out.textContent = t('settings.catIndex.loading') || 'Fetching…';
+        try {
+            // Through fetchSourceText, so an index gets exactly what every other source gets:
+            // the backend's TLS + identity handling, the key proof, AND the password prompt on
+            // a 401. Calling fetch_remote_json directly — as this did — skipped only the last
+            // one, so a password-protected index failed with "could not be read" and never
+            // asked for the password that would have opened it.
+            const { fetchSourceText } = await import('../../core/source-fetch.js');
+            const text = await fetchSourceText(url);
+            // Through the universal format: a v1 index is read as it is; a BetterCommunity v2
+            // signed index (`/v2/feeds/catalog`) is verified by the backend and read as one.
+            const { asLegacy } = await import('../../core/catalog-read.js');
+            const parsed = parseCatalogIndex(await asLegacy(JSON.parse(text), 'index', url));
+            // Kept only once it has actually answered. Saving on every keystroke would fill
+            // the list with half-typed addresses, and saving a URL that failed would keep a
+            // dead one around forever.
+            const urls = readList();
+            if (!urls.includes(url)) { writeList([...urls, url]); renderList(); }
+            return parsed;
+        } catch (e) {
+            // The URL is shown back deliberately: a typo in a long address is the usual
+            // cause and "failed" alone leaves you re-reading the field character by character.
+            out.textContent = `${t('settings.catIndex.failed') || 'Could not read that index'} — ${String(e).slice(0, 120)}`;
+            return null;
+        }
+    };
+
+    /** The last index looked at, and what following it would change. Held so the per-entry
+     *  buttons can act without re-fetching, and re-planned after every add. */
+    let shown: CatalogIndex | null = null;
+    let shownFrom = '';
+
+    // v2 mode only: offer the BetterCommunity v2 signed index of public catalogues. An empty
+    // field only — never over an address the user typed. v1 mode: unchanged.
+    try {
+        const bc = await import('../../core/bc-client.js');
+        if (bc.bcUsesV2() && !input.value.trim()) input.value = bc.bcSignedFeeds().index;
+    } catch { /* no switch: v1 */ }
+
+    const renderContents = async () => {
+        if (!contentsHost) return;
+        if (!shown) { contentsHost.innerHTML = ''; return; }
+        const plan = planImport(shown, await readAllSources());
+        const already = new Set(plan.already.map((e) => e.url.toLowerCase()));
+        contentsHost.innerHTML = shown.catalogs.map((e) => {
+            const have = already.has(e.url.toLowerCase());
+            return `<div class="cat-index-row${have ? ' is-followed' : ''}">
+                <span class="cat-index-type">${escHtml(t(`settings.catIndex.type.${e.type}`) || e.type)}</span>
+                <span class="cat-index-name">${escHtml(e.name || e.url)}</span>
+                ${e.items ? `<span class="cat-index-items">${escHtml(String(e.items))}</span>` : ''}
+                ${e.owner ? `<span class="cat-index-owner">${escHtml(e.owner)}</span>` : ''}
+                <span class="cat-index-url" title="${escAttr(e.url)}">${escHtml(e.url)}</span>
+                ${have
+                    ? `<span class="cat-index-have">${escHtml(t('settings.catIndex.followed') || 'Following')}</span>`
+                    : `<button class="btn btn-ghost btn-sm cat-index-add1" data-u="${escAttr(e.url)}">${escHtml(t('settings.catIndex.addOne') || 'Add')}</button>`}
+              </div>`;
+        }).join('');
+
+        contentsHost.querySelectorAll('.cat-index-add1').forEach((b) => b.addEventListener('click', async () => {
+            const u = (b as HTMLElement).dataset.u || '';
+            const entry = shown?.catalogs.find((c) => c.url === u);
+            if (!entry) return;
+            const n = await follow([entry], shownFrom);
+            out.textContent = added(n);
+            await refreshAll();
+        }));
+    };
+
+    const added = (n: number) => (t('settings.catIndex.added') || 'Added {n} catalog source(s).').replace('{n}', String(n));
+
+    const refreshAll = async () => { await renderFollowing(); await renderHistory(); await renderContents(); };
+
+    /**
+     * Follow these entries. Returns how many actually landed — not how many were asked for,
+     * because an entry already followed adds nothing and saying otherwise is the count bug
+     * this panel already had once.
+     */
+    const follow = async (entries: IndexEntry[], via: string): Promise<number> => {
+        let ok = 0;
+        for (const e of entries) {
+            try {
+                if (e.type === 'app') {
+                    await invoke('add_community_source', { url: e.url });
+                } else {
+                    const key = STORE_KEY[e.type];
+                    if (!key) continue;
+                    const list = readSources(e.type);
+                    // addSource, not a second dedupe written here. The preview and this writer
+                    // must agree on what "already followed" means, and when they were written
+                    // separately they did not.
+                    if (!addSource(list, e.url)) continue;
+                    writeSources(key, list);
+                }
+                // Recorded only after the add succeeded, so a source that failed to be
+                // added does not get an origin pointing at an index it never came from.
+                rememberOrigin(e.url, via);
+                recordHistory({ action: 'add', type: e.type, url: e.url, via });
+                ok += 1;
+            } catch { /* one bad entry must not abandon the rest of the index */ }
+        }
+        return ok;
+    };
+
+    // Look inside: READ ONLY. It shows what the index holds and changes nothing — which is
+    // what the button now says, rather than being a required first step towards a second one.
+    previewBtn.addEventListener('click', async () => {
+        const url = input.value.trim();
+        previewBtn.disabled = true;
+        try {
+            const parsed = await load(url);
+            if (!parsed) { shown = null; await renderContents(); return; }
+            shown = parsed.index; shownFrom = url;
+            const n = parsed.index.catalogs.length;
+            out.textContent = (t('settings.catIndex.holds') || 'This index lists {n} catalog(s).').replace('{n}', String(n))
+                + (parsed.dropped.length ? ` ${(t('settings.catIndex.skipped') || '{n} skipped.').replace('{n}', String(parsed.dropped.length))}` : '');
+            await renderContents();
+        } finally { previewBtn.disabled = false; }
+    });
+
+    // Add everything: fetches for itself. It no longer waits to be enabled by a preview
+    // click — the person who typed an address and pressed Add meant Add.
+    importBtn.addEventListener('click', async () => {
+        const url = input.value.trim();
+        importBtn.disabled = true;
+        try {
+            const parsed = await load(url);
+            if (!parsed) return;
+            shown = parsed.index; shownFrom = url;
+            const n = await follow(parsed.index.catalogs, url);
+            out.textContent = added(n);
+            toast(added(n), n ? 'success' : 'info');
+            await refreshAll();
+        } finally { importBtn.disabled = false; }
+    });
+
+    await refreshAll();
+}
+
+export async function initSettings() {
+    await initGithubPatSettings();
+    await initShaSettings();
+    await initDiscordRpcSettings();
+    await initSoundSettings();
+    await initCatalogIndexSettings();
+    // Keyboard shortcuts are now a central, rebindable command registry (core/commands.ts) —
+    // the global dispatcher is started once in app.ts. Here we just mount the manager UI.
+    const skHost = document.getElementById('shortcuts-manager');
+    if (skHost) {
+        renderShortcutsManager(skHost);
+        // The manager's strings are resolved at render time (tr()), not via data-i18n,
+        // so a language switch left it in the old language until an app restart.
+        // setLang dispatches 'langChanged' — re-render on it, once (guard the flag).
+        if (!(skHost as any)._skLangWired) {
+            (skHost as any)._skLangWired = true;
+            document.addEventListener('langChanged', () => {
+                if (skHost.isConnected) renderShortcutsManager(skHost);
+            });
+        }
+    }
+    await initStorageSettings();
+    await initLanguageSettings();
+    initI18nSandbox();
+    await initSecuritySettings();
+    await initLaunchPackSettings();
+    initScheduler().catch(() => {});
+    // The one « Laya » card (features/ai/laya-hub.ts) — slotted in after Privacy, BEFORE the
+    // reorder pass so it gets its handle and its saved place like every other card. Its
+    // « Gérer Laya » dialog holds the AI card, « Réponses de Laya » and « API Laya locale » as tabs.
+    try { await (await import('../ai/laya-hub.js')).mountLayaHub(); } catch (e) {}
+    try { initCardReorder(); } catch (e) {}
+    // The index and search beside the cards (ui/settings-nav.ts), once the cards are in order.
+    try { (await import('../../ui/settings-nav.js')).initSettingsNav(); } catch (e) {}
+    try { (await import('../../core/analytics.js')).initPrivacySettings(); } catch (e) {}
+    initSecurityInfoCard().catch(() => {});
+    
+    // Tags Settings — icon (lucide/simple-icons/upload), flat or gradient colour,
+    // create AND edit through the same form (the button flips to "save").
+    const btnCreateTag = document.getElementById('btn-create-tag');
+    if (btnCreateTag) {
+        const gradToggle = document.getElementById('setting-tag-grad') as HTMLInputElement | null;
+        const color2Input = document.getElementById('setting-tag-color2') as HTMLInputElement | null;
+        // Toggling only reveals the swatch — it never removes it from the flow, or
+        // the whole row jumped sideways on every click (field report: "le bouton
+        // pour activer le gradient change le style").
+        gradToggle?.addEventListener('change', () => {
+            color2Input?.classList.toggle('tag-color2-hidden', !gradToggle.checked);
+        });
+        document.getElementById('btn-tag-icon')?.addEventListener('click', async () => {
+            const { openIconPicker, renderPackIcon } = await import('../../ui/icon-pack.js');
+            const ref = await openIconPicker({ current: _tagIconRef });
+            if (ref === null) return;
+            _tagIconRef = ref;
+            const prev = document.getElementById('setting-tag-icon-preview');
+            if (prev) prev.innerHTML = renderPackIcon(ref, 18) || uiIcon('add', 16);
+        });
+        document.getElementById('btn-cancel-tag-edit')?.addEventListener('click', () => _tagFormReset());
+        btnCreateTag.addEventListener('click', async () => {
+            const nameInput = document.getElementById('setting-tag-name');
+            const colorInput = document.getElementById('setting-tag-color');
+            const name = nameInput.value.trim();
+            const color = colorInput.value;
+            if (!name) return toast(t('settings.tagNameRequired'), 'error');
+            const icon = _tagIconRef;
+            const color2 = gradToggle?.checked ? (color2Input?.value || null) : null;
+            const editingId = _tagEditId;
+            try {
+                if (editingId) {
+                    await invoke('update_tag', { tagId: editingId, name, color, icon, color2 });
+                    toast(t('settings.tagUpdated') || 'Tag updated', 'success');
+                } else {
+                    await invoke('create_tag', { name, color, icon, color2 });
+                    toast(t('settings.tagCreated'), 'success');
+                }
+                renderSettingsTags();          // also resets the form state
+                if (window._refreshModsFn) window._refreshModsFn();
+            } catch (err) { toast(t('settings.tagCreateError', { err: String(err) }), 'error'); }
+        });
+        renderSettingsTags();
+    }
+
+    // Export/Import App Data
+    const exportBtn = document.getElementById('btn-export-data');
+    if (exportBtn) {
+        exportBtn.addEventListener('click', async () => {
+            const overlay = document.createElement('div');
+            overlay.className = 'modal-overlay open';
+            overlay.style.zIndex = '100002';
+
+            const close = () => {
+                overlay.style.opacity = '0';
+                setTimeout(() => overlay.remove(), 250);
+            };
+
+            const content = document.createElement('div');
+            content.className = 'modal modal--sm';
+
+            content.innerHTML = `
+                <div class="modal-header">
+                    <div class="bms-icon">${uiIcon('export', 18)}</div>
+                    <h3 class="modal-title">${t('settings.exportTitle')}</h3>
+                    <button type="button" class="modal-close" aria-label="${escAttr(t('common.close'))}" data-remove-closest=".modal-overlay">
+                        ${uiIcon('close', 18)}
+                    </button>
+                </div>
+                
+                <div class="modal-body">
+                    <div class="exp-opt-list">
+                        <label class="exp-opt">
+                            <span class="exp-opt-ic">${uiIcon('profile', 16)}</span>
+                            <span class="exp-opt-txt">
+                                <span class="exp-opt-title">${t('settings.exportProfiles')}</span>
+                                <span class="exp-opt-desc">${t('settings.exportProfilesDesc') || 'Game profiles, paths and active mod lists'}</span>
+                            </span>
+                            <label class="bmm-switch">
+                                <input type="checkbox" id="exp-profiles" checked>
+                                <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
+                            </label>
+                        </label>
+                        <label class="exp-opt">
+                            <span class="exp-opt-ic">${uiIcon('mod', 16)}</span>
+                            <span class="exp-opt-txt">
+                                <span class="exp-opt-title">${t('settings.exportMods')}</span>
+                                <span class="exp-opt-desc">${t('settings.exportModsDesc') || 'Scanned mod entries and metadata'}</span>
+                            </span>
+                            <label class="bmm-switch">
+                                <input type="checkbox" id="exp-mods" checked>
+                                <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
+                            </label>
+                        </label>
+                        <label class="exp-opt">
+                            <span class="exp-opt-ic">${uiIcon('tag', 16)}</span>
+                            <span class="exp-opt-txt">
+                                <span class="exp-opt-title">${t('settings.exportTags')}</span>
+                                <span class="exp-opt-desc">${t('settings.exportTagsDesc') || 'Your custom tags assigned to mods'}</span>
+                            </span>
+                            <label class="bmm-switch">
+                                <input type="checkbox" id="exp-tags" checked>
+                                <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
+                            </label>
+                        </label>
+                        <label class="exp-opt">
+                            <span class="exp-opt-ic">${uiIcon('settings', 16)}</span>
+                            <span class="exp-opt-txt">
+                                <span class="exp-opt-title">${t('settings.exportSettings')}</span>
+                                <span class="exp-opt-desc">${t('settings.exportSettingsDesc') || 'App preferences and configuration'}</span>
+                            </span>
+                            <label class="bmm-switch">
+                                <input type="checkbox" id="exp-settings" checked>
+                                <span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span>
+                            </label>
+                        </label>
+                        <label class="exp-opt">
+                            <span class="exp-opt-ic">${uiIcon('box', 16)}</span>
+                            <span class="exp-opt-txt">
+                                <span class="exp-opt-title">${t('settings.exportPlugins') || 'Plugins'}</span>
+                                <span class="exp-opt-desc">${t('settings.exportPluginsDesc') || 'Installed plugins and their permissions'}</span>
+                            </span>
+                            <label class="bmm-switch"><input type="checkbox" id="exp-plugins" checked><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
+                        </label>
+                        <label class="exp-opt">
+                            <span class="exp-opt-ic">${uiIcon('package', 16)}</span>
+                            <span class="exp-opt-txt">
+                                <span class="exp-opt-title">${t('settings.exportModpacks') || 'Modpacks & Launch Packs'}</span>
+                                <span class="exp-opt-desc">${t('settings.exportModpacksDesc') || 'Your .BMP modpacks and application launch packs'}</span>
+                            </span>
+                            <label class="bmm-switch"><input type="checkbox" id="exp-modpacks" checked><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
+                        </label>
+                        <label class="exp-opt">
+                            <span class="exp-opt-ic">${uiIcon('palette', 16)}</span>
+                            <span class="exp-opt-txt">
+                                <span class="exp-opt-title">${t('settings.exportThemes') || 'Themes'}</span>
+                                <span class="exp-opt-desc">${t('settings.exportThemesDesc') || 'Your installed custom themes'}</span>
+                            </span>
+                            <label class="bmm-switch"><input type="checkbox" id="exp-themes" checked><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
+                        </label>
+                        <label class="exp-opt">
+                            <span class="exp-opt-ic">${uiIcon('languages', 16)}</span>
+                            <span class="exp-opt-txt">
+                                <span class="exp-opt-title">${t('settings.exportTranslations') || 'Translations'}</span>
+                                <span class="exp-opt-desc">${t('settings.exportTranslationsDesc') || 'Custom & imported language files'}</span>
+                            </span>
+                            <label class="bmm-switch"><input type="checkbox" id="exp-translations" checked><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
+                        </label>
+                        <label class="exp-opt">
+                            <span class="exp-opt-ic">${uiIcon('store', 16)}</span>
+                            <span class="exp-opt-txt">
+                                <span class="exp-opt-title">${t('settings.exportApps') || 'App Catalog & favourites'}</span>
+                                <span class="exp-opt-desc">${t('settings.exportAppsDesc') || 'Community catalog sources, favourites, installed apps & server-repo favourites'}</span>
+                            </span>
+                            <label class="bmm-switch"><input type="checkbox" id="exp-apps" checked><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
+                        </label>
+                        <!-- The sections that are FILES rather than fields in data.json. They exist only
+                             in the archive: a JSON export can carry them only by inlining, which turns a
+                             40 MB recording into a 55 MB string inside a document nothing can stream. -->
+                        <label class="exp-opt">
+                            <span class="exp-opt-ic">${uiIcon('clock', 16)}</span>
+                            <span class="exp-opt-txt">
+                                <span class="exp-opt-title">${t('settings.exportAutomations') || 'Automations'}</span>
+                                <span class="exp-opt-desc">${t('settings.exportAutomationsDesc') || 'Your scheduled tasks, exactly as the scheduler saved them'}</span>
+                            </span>
+                            <label class="bmm-switch"><input type="checkbox" id="exp-automations" checked><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
+                        </label>
+                        <label class="exp-opt">
+                            <span class="exp-opt-ic">${uiIcon('record', 16)}</span>
+                            <span class="exp-opt-txt">
+                                <span class="exp-opt-title">${t('settings.exportReplays') || 'Session recordings'}</span>
+                                <span class="exp-opt-desc">${t('settings.exportReplaysDesc') || 'Everything the recorder kept (.bmmreplay) — often the largest part'}</span>
+                            </span>
+                            <label class="bmm-switch"><input type="checkbox" id="exp-replays"><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
+                        </label>
+                        <label class="exp-opt">
+                            <span class="exp-opt-ic">${uiIcon('menu', 16)}</span>
+                            <span class="exp-opt-txt">
+                                <span class="exp-opt-title">${t('settings.exportNavigation') || 'Navigation & custom pages'}</span>
+                                <span class="exp-opt-desc">${t('settings.exportNavigationDesc') || 'Your navbar layout plus every custom page — source, permissions and stored data'}</span>
+                            </span>
+                            <label class="bmm-switch"><input type="checkbox" id="exp-navigation" checked><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
+                        </label>
+                        <label class="exp-opt">
+                            <span class="exp-opt-ic">${uiIcon('warning', 16)}</span>
+                            <span class="exp-opt-txt">
+                                <span class="exp-opt-title">${t('settings.exportCrashes') || 'Crash reports'}</span>
+                                <span class="exp-opt-desc">${t('settings.exportCrashesDesc') || 'Reports and their archive — what a maintainer asks for after a crash'}</span>
+                            </span>
+                            <label class="bmm-switch"><input type="checkbox" id="exp-crashes"><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
+                        </label>
+                        <label class="exp-opt">
+                            <span class="exp-opt-ic">${uiIcon('file-text', 16)}</span>
+                            <span class="exp-opt-txt">
+                                <span class="exp-opt-title">${t('settings.exportDiagnostics') || 'Diagnostics'}</span>
+                                <span class="exp-opt-desc">${t('settings.exportDiagnosticsDesc') || 'The diagnostic files BMM writes when something goes wrong'}</span>
+                            </span>
+                            <label class="bmm-switch"><input type="checkbox" id="exp-diagnostics"><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
+                        </label>
+
+                        <!-- Below the line, and off. Everything above this loses you an
+                             afternoon of setup; this one loses you the thing that proves you
+                             are you. -->
+                        <label class="exp-opt exp-opt-danger">
+                            <span class="exp-opt-ic">${uiIcon('key', 16)}</span>
+                            <span class="exp-opt-txt">
+                                <span class="exp-opt-title">${escHtml(t('settings.exportKeys'))}</span>
+                                <span class="exp-opt-desc">${escHtml(t('settings.exportKeysDesc'))}</span>
+                            </span>
+                            <label class="bmm-switch"><input type="checkbox" id="exp-identity-keys"><span class="bmm-switch-track"><span class="bmm-switch-thumb"></span></span></label>
+                        </label>
+                    </div>
+
+                    <!-- The lock. A passphrase here ENCRYPTS the archive, so an empty box is
+                         not "no protection asked for" but "anybody who finds this file reads
+                         it" — which is the sentence people need before they tick the line
+                         above, not after. -->
+                    <div class="exp-pass">
+                        <label class="exp-opt-title" for="exp-passphrase">${escHtml(t('settings.exportPass'))}</label>
+                        <input type="password" class="input input-sm" id="exp-passphrase"
+                               autocomplete="new-password" placeholder="${escAttr(t('settings.exportPassPh'))}">
+                        <p class="exp-opt-desc" id="exp-pass-hint">${escHtml(t('settings.exportPassHint'))}</p>
+                    </div>
+
+                    <div class="exp-note">
+                        ${uiIcon('info', 16)}
+                        <span>${t('settings.exportNote2') || 'Writes one .DATABMM file — an archive holding everything you ticked, with a manifest saying what went in.'}</span>
+                    </div>
+                </div>
+                
+                <div class="modal-footer">
+                    <button class="btn btn-secondary btn-cancel-exp">${t('common.cancel')}</button>
+                    <button class="btn btn-primary btn-confirm-exp">${t('common.export') || 'Export'}</button>
+                </div>
+            `;
+
+            overlay.appendChild(content);
+            (document.getElementById('app-window-outer') || document.body).appendChild(overlay);
+
+            content.querySelector('.btn-cancel-exp').onclick = close;
+            content.querySelector('.btn-close').onclick = close;
+            
+            content.querySelector('.btn-confirm-exp').onclick = async () => {
+                const exportApps = content.querySelector('#exp-apps').checked;
+                const options = {
+                    profiles: content.querySelector('#exp-profiles').checked,
+                    mods: content.querySelector('#exp-mods').checked,
+                    settings: content.querySelector('#exp-settings').checked,
+                    custom_tags: content.querySelector('#exp-tags').checked,
+                    disk_limits: true,
+                    plugins: content.querySelector('#exp-plugins').checked,
+                    modpacks: content.querySelector('#exp-modpacks').checked,
+                    launch_packs: content.querySelector('#exp-modpacks').checked,
+                    themes: content.querySelector('#exp-themes').checked,
+                    translations: content.querySelector('#exp-translations').checked,
+                    apps: exportApps,
+                };
+
+                // Frontend-only data (localStorage) — bundled into the backup so a
+                // restore is complete. Currently: server-repo favourites.
+                let extras: any = null;
+                if (exportApps) {
+                    extras = {};
+                    try {
+                        const repoFav = localStorage.getItem('bmm_repo_favorites');
+                        if (repoFav) extras['bmm_repo_favorites'] = repoFav;
+                    } catch {}
+                }
+
+                close();
+
+                // The archive carries the SAME filtered app data the JSON export builds, so the
+                // two can never disagree about what "profiles" or "plugins" means — the rule for
+                // that lives in one place and this is a second wrapper around it, not a copy.
+                const bundle = {
+                    app_data: true,
+                    themes: content.querySelector('#exp-themes').checked,
+                    theme_presets: content.querySelector('#exp-themes').checked,
+                    translations: content.querySelector('#exp-translations').checked,
+                    launch_packs: content.querySelector('#exp-modpacks').checked,
+                    automations: content.querySelector('#exp-automations').checked,
+                    navigation: content.querySelector('#exp-navigation').checked,
+                    apps: exportApps,
+                    replays: content.querySelector('#exp-replays').checked,
+                    crashes: content.querySelector('#exp-crashes').checked,
+                    diagnostics: content.querySelector('#exp-diagnostics').checked,
+                    identityKeys: content.querySelector('#exp-identity-keys').checked,
+                };
+                const passphrase = (content.querySelector('#exp-passphrase') as HTMLInputElement | null)?.value || '';
+
+                // Refused rather than written. An archive carrying the private half of your
+                // identity, unlocked, is the one export that cannot be undone by deleting the
+                // file afterwards — by then it has been copied to wherever backups go.
+                if (bundle.identityKeys && !passphrase) {
+                    toast(t('settings.exportKeysNeedPass'), 'warning', 8000);
+                    return;
+                }
+
+                const destPath = await saveFile({
+                    defaultPath: 'bmm-backup.DATABMM',
+                    filters: [
+                        { name: 'BMM data bundle', extensions: ['DATABMM'] },
+                        // Still offered: a JSON backup is smaller, diffable and is what every
+                        // older BMM can read. Removing it would strand the backups people have.
+                        { name: 'App data (JSON)', extensions: ['json'] },
+                    ],
+                });
+                if (destPath) {
+                    const asJson = /\.json$/i.test(destPath);
+                    try {
+                        if (asJson) {
+                            await invoke('export_app_data', { destPath, options, extras });
+                            toast(t('settings.dataExported') || 'Data exported successfully', 'success');
+                        } else {
+                            // Through the shared writer, which the scheduler's backup action
+                            // also uses. It used to be written out here and the scheduler
+                            // wrote a `.json` through a different command — so a nightly
+                            // automation produced a smaller, different thing than this
+                            // button, with no choice of contents and no lock.
+                            const { writeBackup } = await import('./data-backup.js');
+                            const r = await writeBackup(
+                                destPath,
+                                {
+                                    appData: bundle.app_data, themes: bundle.themes,
+                                    themePresets: bundle.theme_presets, translations: bundle.translations,
+                                    launchPacks: bundle.launch_packs, automations: bundle.automations,
+                                    navigation: bundle.navigation, apps: bundle.apps,
+                                    replays: bundle.replays, crashes: bundle.crashes,
+                                    diagnostics: bundle.diagnostics, identityKeys: bundle.identity_keys,
+                                },
+                                passphrase || null,
+                                options,
+                                extras,
+                            );
+                            // What it actually took, not what was asked for. A section that was
+                            // ticked and turned out empty is the thing worth knowing.
+                            const took = r.sections.filter((x) => x.files > 0).length;
+                            const empty = r.sections.filter((x) => x.files === 0).map((x) => x.section);
+                            toast((t('settings.bundleExported') || 'Wrote {mb} MB — {n} section(s).')
+                                .replace('{mb}', (r.bytes / 1048576).toFixed(1)).replace('{n}', String(took))
+                                + (empty.length ? ` ${(t('settings.bundleEmpty') || 'Nothing to take for: {x}.').replace('{x}', empty.join(', '))}` : ''),
+                                'success');
+                        }
+                    } catch (e) { toast(t('settings.dataExportError', { err: String(e) }), 'error'); }
+                }
+            };
+        });
+    }
+
+    // ── Library toolbar density (body class drives the CSS modes; auto = responsive) ──
+    const applyToolbarDensity = (mode: string) => {
+        const m = ['full', 'compact', 'stacked', 'stacked-labels'].includes(mode) ? mode : 'auto';
+        // Remove EVERY mode class (the old list forgot `stacked-labels`, which left
+        // it stuck when switching back to auto).
+        document.body.classList.remove(
+            'bmm-toolbar-auto', 'bmm-toolbar-full', 'bmm-toolbar-compact',
+            'bmm-toolbar-stacked', 'bmm-toolbar-stacked-labels'
+        );
+        document.body.classList.add('bmm-toolbar-' + m);
+        // Force any width-based layout (and the responsive `auto` rules) to
+        // re-evaluate immediately, so the change applies without an app refresh.
+        try { window.dispatchEvent(new Event('resize')); } catch {}
+    };
+    {
+        let mode = 'auto';
+        try { mode = localStorage.getItem('bmm_toolbar_mode') || 'auto'; } catch {}
+        applyToolbarDensity(mode);
+        const densityEl = document.getElementById('setting-toolbar-density') as HTMLSelectElement | null;
+        if (densityEl) {
+            densityEl.value = mode;
+            densityEl.addEventListener('change', () => {
+                const m = densityEl.value || 'auto';
+                try { localStorage.setItem('bmm_toolbar_mode', m); } catch {}
+                applyToolbarDensity(m);
+            });
+        }
+    }
+
+    // ── Library action-bar transparency (body class drives the CSS; default on) ──
+    {
+        const applyToolbarTransparency = (transparent: boolean) => {
+            // `bmm-toolbar-opaque` makes the floating pill + filter shell solid.
+            document.body.classList.toggle('bmm-toolbar-opaque', !transparent);
+        };
+        let transparent = true;
+        try { transparent = localStorage.getItem('bmm_toolbar_transparent') !== 'false'; } catch {}
+        applyToolbarTransparency(transparent);
+        const transpEl = document.getElementById('setting-toolbar-transparent') as HTMLInputElement | null;
+        if (transpEl) {
+            transpEl.checked = transparent;
+            transpEl.addEventListener('change', () => {
+                try { localStorage.setItem('bmm_toolbar_transparent', String(transpEl.checked)); } catch {}
+                applyToolbarTransparency(transpEl.checked);
+            });
+        }
+    }
+
+    // ── Mod auto-scan interval (sec/min unit; stored as seconds in
+    //    bmm_scan_interval_sec. 0 = use the default gap, handled in mods.ts) ──
+    const scanValueEl = document.getElementById('scan-interval-value') as HTMLInputElement | null;
+    const scanUnitEl  = document.getElementById('scan-interval-unit') as HTMLSelectElement | null;
+    if (scanValueEl && scanUnitEl) {
+        // Restore: prefer the user's chosen display unit, else show seconds.
+        let storedSec = 0;
+        try { storedSec = Math.max(0, parseInt(localStorage.getItem('bmm_scan_interval_sec') || '0', 10) || 0); } catch {}
+        let unit = 'sec';
+        try { unit = localStorage.getItem('bmm_scan_interval_unit') || 'sec'; } catch {}
+        scanUnitEl.value = (unit === 'min') ? 'min' : 'sec';
+        scanValueEl.value = String(scanUnitEl.value === 'min' ? Math.round(storedSec / 60) : storedSec);
+
+        const persist = () => {
+            const unitNow = scanUnitEl.value === 'min' ? 'min' : 'sec';
+            let v = Math.max(0, parseInt(scanValueEl.value || '0', 10) || 0);
+            const maxForUnit = unitNow === 'min' ? 60 : 3600;
+            v = Math.min(v, maxForUnit);
+            scanValueEl.value = String(v);
+            const secs = unitNow === 'min' ? v * 60 : v;
+            try {
+                localStorage.setItem('bmm_scan_interval_sec', String(secs));
+                localStorage.setItem('bmm_scan_interval_unit', unitNow);
+            } catch {}
+        };
+        scanValueEl.addEventListener('change', persist);
+        scanUnitEl.addEventListener('change', () => {
+            // Re-display the same stored seconds in the newly selected unit.
+            let s = 0; try { s = Math.max(0, parseInt(localStorage.getItem('bmm_scan_interval_sec') || '0', 10) || 0); } catch {}
+            scanValueEl.value = String(scanUnitEl.value === 'min' ? Math.round(s / 60) : s);
+            persist();
+        });
+    }
+
+    // ── Mod update check interval (minutes) + global update repos ──
+    const updIntervalEl = document.getElementById('update-check-min') as HTMLInputElement | null;
+    if (updIntervalEl) {
+        try { updIntervalEl.value = String(parseInt(localStorage.getItem('bmm_update_check_min') || '0', 10) || 0); } catch { updIntervalEl.value = '0'; }
+        updIntervalEl.addEventListener('change', async () => {
+            const v = Math.max(0, Math.min(1440, parseInt(updIntervalEl.value || '0', 10) || 0));
+            updIntervalEl.value = String(v);
+            try { localStorage.setItem('bmm_update_check_min', String(v)); } catch {}
+            try { (await import('../repo/mod-updates.js')).startAutoUpdateChecks(); } catch {}
+        });
+    }
+    const globalReposEl = document.getElementById('global-update-repos') as HTMLTextAreaElement | null;
+    if (globalReposEl) {
+        try {
+            const repos = JSON.parse(localStorage.getItem('bmm_update_repos') || '[]');
+            globalReposEl.value = Array.isArray(repos) ? repos.join('\n') : '';
+        } catch { globalReposEl.value = ''; }
+        globalReposEl.addEventListener('change', () => {
+            const list = globalReposEl.value.split('\n').map(s => s.trim()).filter(Boolean);
+            try { localStorage.setItem('bmm_update_repos', JSON.stringify(list)); } catch {}
+        });
+    }
+
+    const importBtn = document.getElementById('btn-import-data');
+    if (importBtn) {
+        importBtn.addEventListener('click', async () => {
+            const srcPath = await pickFile([{ name: 'App Data Backup', extensions: ['json'] }]);
+            if (srcPath) {
+                if (await confirmAction({ title: t('vfy.t.importData'), message: t('settings.dataImportConfirm'), confirmLabel: t('vfy.b.importData'), tone: 'danger' })) {
+                    try {
+                        const extras: any = await invoke('import_app_data', { srcPath });
+                        // Restore frontend-only data (localStorage) bundled in the backup.
+                        if (extras && typeof extras === 'object') {
+                            for (const [k, v] of Object.entries(extras)) {
+                                try { if (typeof v === 'string') localStorage.setItem(k, v); } catch {}
+                            }
+                        }
+                        toast(t('settings.dataImported'), 'success');
+                        setTimeout(() => window.location.reload(), 2000);
+                    } catch (e) { toast(t('settings.dataImportError', { err: String(e) }), 'error'); }
+                }
+            }
+        });
+    }
+
+    // Restoring a .DATABMM. Loaded on demand: the screen is a modal nobody opens on a normal
+    // visit to Settings, and it pulls in the confirm dialog with it.
+    document.getElementById('btn-restore-bundle')?.addEventListener('click', () => {
+        void import('./restore-bundle.js')
+            .then((m) => m.openRestoreBundle())
+            .catch((e) => toast(String(e), 'error'));
+    });
+
+    // ── Feedback & bug reports (BetterCommunity feedback centre, the only transport) ──
+    initReportHistory();
+    initFeedback();
+    initFeedbackCard();
+
+    // The buttons keep their historical ids (btn-settings-betahub-*): the markup is in
+    // index.html. There is no fallback form any more — a failure to open says why.
+    document.getElementById('btn-settings-betahub-bugreport')
+        ?.addEventListener('click', () => { openFeedback('bug').catch((e) => toast(String((e as Error)?.message || e), 'error')); });
+
+    document.getElementById('btn-settings-betahub-feedback')
+        ?.addEventListener('click', () => { openFeedback('feedback').catch((e) => toast(String((e as Error)?.message || e), 'error')); });
+}

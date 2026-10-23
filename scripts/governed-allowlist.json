@@ -1,0 +1,432 @@
+{
+  "src/api/mod.rs": {
+    "thread::spawn": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    },
+    "spawn_blocking": {
+      "count": 3,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt. Third: POST /api/repo/validate, off the async runtime only; its hashing runs on the governor Hash pool behind its own ticket (repo_validate::validate). Second: POST /api/repo/convert, one repo.json format convert/version bump: reads one manifest, optionally re-hashes the repo files once, writes one manifest; user-requested, off the async runtime"
+    },
+    "fs::copy": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/archive.rs": {
+    "par_iter": {
+      "count": 1,
+      "why": "governed (G3c): the zip parallel pass runs inside ExtractControl::run_parallel = the Extract pool (commands/mod_archive.rs TicketExtract), each entry behind the ticket checkpoint"
+    },
+    "io::copy": {
+      "count": 2,
+      "why": "governed (G3c): one zip entry into its file (parallel and >8000-entry serial paths), between two checkpoints of the Extract ticket, bytes counted"
+    }
+  },
+  "src/commands/analytics.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "one-shot: read_replay_file reads one replay the person opens (capped at 768 MB, gzip inflated) off the async runtime; user-requested, no copy loop"
+    }
+  },
+  "src/commands/apps.rs": {
+    "thread::spawn": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    },
+    "spawn_blocking": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/commands/autoupdate.rs": {
+    "fs::copy": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    },
+    "spawn_blocking": {
+      "count": 4,
+      "why": "not heavy work: waiting on uninstall.exe --check-update (time-boxed) and on ShellExecuteExW while a Windows permission prompt is open, including the interactive relaunch when BetterInstaller answers « no existing install »; kept off the async runtime and the main thread"
+    }
+  },
+  "src/commands/autoupdate_flow_tests.rs": {
+    "thread::spawn": {
+      "count": 1,
+      "why": "test-only (included under cfg(test) by autoupdate.rs): the loopback HTTP server the update-flow tests download the manifest and the installer from; never compiled into the app"
+    }
+  },
+  "src/commands/benchmark.rs": {
+    "thread::spawn": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    },
+    "spawn_blocking": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    },
+    "fs::copy": {
+      "count": 2,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/commands/catalog_bundle.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "governed (G3c): catalog_bundle_pack off the async runtime; pack_blocking holds a Compress ticket, checkpoint per file"
+    }
+  },
+  "src/commands/crash.rs": {
+    "thread::spawn": {
+      "count": 2,
+      "why": "G3b: redact_existing_reports (startup) holds a Maintenance ticket, checkpoint per zip; exempt 1: finalize_and_close_app's shutdown report, the window closes only when it ends, and a background ticket would wait behind a deploy or a game session: the app would refuse to quit"
+    },
+    "fs::copy": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/commands/custom_pages.rs": {
+    "fs::copy": {
+      "count": 3,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/commands/disk.rs": {
+    "spawn_blocking": {
+      "count": 3,
+      "why": "governed (G3b): benchmark_disk holds a Maintenance ticket (background: waits for deploys and game mode; checkpoints only BETWEEN the timed phases); get_folder_size, a sync command on the main thread before, walks under a Scan ticket with a checkpoint per directory; exempt: get_system_disks enumerates volumes (size and free space per volume, no bulk I/O) off the main thread, where a spinning-up disk or a dead network drive froze the window"
+    }
+  },
+  "src/commands/elevation.rs": {
+    "thread::spawn": {
+      "count": 1,
+      "why": "one-shot: closes this instance 300 ms after the elevated BMM started (restart_elevated); no I/O"
+    },
+    "spawn_blocking": {
+      "count": 1,
+      "why": "one-shot: ShellExecuteExW runas waits while the Windows UAC prompt is open; off the async runtime, no file work"
+    }
+  },
+  "src/commands/format_check.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "exempt (G3b): bmm_validate reads ONE text document (a mod list / plugin JSON) to validate it; kept off the async runtime, no bulk I/O"
+    }
+  },
+  "src/commands/hardware.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "exempt: one-shot hardware detection (driver queries, no bulk I/O), kept off the main thread"
+    }
+  },
+  "src/commands/installer_handoff.rs": {
+    "fs::copy": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/commands/mapper.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "governed (G3b): get_directory_tree walks under a Scan ticket (checkpoint before and after the jwalk pass; fan-out follows the preset, fs_utils::scan_parallelism)"
+    }
+  },
+  "src/commands/mod_archive.rs": {
+    "spawn_blocking": {
+      "count": 2,
+      "why": "governed (G3c): unarchive (extract_to takes its Extract ticket inside) and rearchive (Compress ticket) moved off the async runtime"
+    },
+    "io::copy": {
+      "count": 1,
+      "why": "governed (G3c): one file into the rearchive zip, between two checkpoints of the Compress ticket, bytes counted"
+    }
+  },
+  "src/commands/mod_order.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "governed (G3b): the load-order copy writes the game folder under a Deploy ticket through fs_utils::copy_file_governed (fs::copy as before under Balanced with no disk rule), checkpoint per file"
+    }
+  },
+  "src/commands/modlist.rs": {
+    "spawn_blocking": {
+      "count": 2,
+      "why": "G3b: export_modlist's file walk holds a Hash ticket (Scan without hashes), checkpoint per file, a cancelled ticket cancels the export; exempt 1: the final write of the list itself, one small zip"
+    }
+  },
+  "src/commands/modpack.rs": {
+    "io::copy": {
+      "count": 1,
+      "why": "governed (G3a): repair_modpack_mod archive entries, under the repair's Install ticket (is_cancelled per entry, bytes counted); inside an async command, so no blocking checkpoint"
+    }
+  },
+  "src/commands/mods.rs": {
+    "thread::spawn": {
+      "count": 3,
+      "why": "G3b: recalculate_mod_sha is governed (process_single_mod_hashing takes one Hash ticket per mod, checkpoints between files); populate_sha_queue is exempt: it only reads the in-memory state and fills the queue, no disk I/O. (The SHA and content-id background loops use thread::Builder: one Hash / Maintenance ticket per mod, never one for the loop's life); exempt 1: run_mod_io_worker_with_mode drains the mod worker's stdout progress pipe (reads lines, stores a counter; no disk I/O, ends when the worker exits)"
+    },
+    "spawn_blocking": {
+      "count": 12,
+      "why": "G3a governed 7 (enable_mod / disable_mod hold a Deploy ticket around the worker, disable_mods_for_profiles a Deploy ticket in unapply_mod_stacked, add_mod an Install ticket, download_mod a Download ticket, install_from_modlist Install + Download): they only move blocking work off the async runtime. G3b governed 4: scan_mods_folder (Scan ticket, checkpoint per entry), verify_integrity, get_mod_integrity and update_mod_hashes (Hash ticket, checkpoint per file; the last two hashed on the async runtime's worker before). Exempt 1: remove_mod's delete, a user click the UI awaits; Maintenance is background and would wait behind every deploy and a whole game session (one remove_dir_all, no copy loop)"
+    }
+  },
+  "src/commands/old_installs.rs": {
+    "spawn_blocking": {
+      "count": 5,
+      "why": "off the UI thread, person-initiated and one at a time: the read-only scan (registry + a few known folders), waiting on an uninstaller, the one-off backup .zip of the old data folder and its delete; not background work to govern"
+    },
+    "io::copy": {
+      "count": 1,
+      "why": "the backup .zip of the old 0.9.x data folder, once, after an explicit click, before a delete the person confirmed"
+    }
+  },
+  "src/commands/plugin_assets.rs": {
+    "fs::copy": {
+      "count": 2,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/commands/plugins.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    },
+    "fs::copy": {
+      "count": 5,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    },
+    "io::copy": {
+      "count": 1,
+      "why": "governed (G3a): extract_plugin_zip entries, under install_plugin's Download / install_plugin_from_file's Install ticket (is_cancelled per entry, bytes counted); install_plugin_bytes runs under its repo sync's ticket"
+    }
+  },
+  "src/commands/proc.rs": {
+    "thread::spawn": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/commands/repo.rs": {
+    "par_iter": {
+      "count": 2,
+      "why": "governed (G3c): export copy+hash pass on the Compress pool and manifest hashing on the Hash pool, both behind their ticket checkpoints"
+    },
+    "spawn_blocking": {
+      "count": 4,
+      "why": "governed (G3c): update_server_repo (Compress ticket), apply_direct_update (Install ticket), generate_repo_manifest (Hash ticket taken in generate_repo_manifest_sync), export_server_repo (Compress ticket taken in export_server_repo_blocking; pentest R13 owner card 4), moved off the async runtime"
+    },
+    "fs::copy": {
+      "count": 4,
+      "why": "exempt: the bans.json / whitelist.json config files copied beside an exported repo or a generated mini-server; a few KB, one-shot"
+    },
+    "io::copy": {
+      "count": 1,
+      "why": "governed (G3c): apply_direct_update writes one archive entry, between two checkpoints of its Install ticket, bytes counted"
+    }
+  },
+  "src/commands/repo_keyauth.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/commands/resources.rs": {
+    "thread::spawn": {
+      "count": 1,
+      "why": "the task-preset TTL timer: sleeps, then clears a preset; no I/O, not work to govern"
+    }
+  },
+  "src/commands/restore_bundle.rs": {
+    "fs::copy": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/commands/settings.rs": {
+    "fs::copy": {
+      "count": 2,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/commands/sched_net.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "task_feed_append: one small Atom file (at most 500 entries) read and rewritten per call; the same shape as task_output's write, off the UI thread and not heavy work"
+    }
+  },
+  "src/commands/task_output.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/commands/themes.rs": {
+    "io::copy": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/commands/tools.rs": {
+    "spawn_blocking": {
+      "count": 6,
+      "why": "governed: tools_find_duplicates holds a Hash ticket (checkpoint per mod during the walk and per file before each BLAKE3, bytes reported); tools_disk_usage, tools_large_files and tools_cache_preview hold a Scan ticket with a checkpoint every 512 entries; tools_check_deployed holds a Scan ticket (checkpoint per profile and every 64 folders); tools_cache_clean holds a Maintenance ticket with a checkpoint per entry; all but the clean also stop on tools_cancel"
+    }
+  },
+  "src/commands/verify.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "governed (G3b): hash_file holds a Hash ticket; checkpoint per 64 KiB chunk (SHA-256) or before the file (BLAKE3)"
+    }
+  },
+  "src/fs_utils.rs": {
+    "par_iter": {
+      "count": 3,
+      "why": "governed: G3a 2 (apply / unapply in the governor Deploy pool, or serially when the game or backup folder is on the system drive; the global pool only for Smart I/O off under Balanced, as before); G3b 1 (hash_bulk_in on the governor Hash pool, the old hash_pool() size under Balanced; per-file non-blocking must_yield, the caller checkpoints between passes)"
+    },
+    "fs::copy": {
+      "count": 1,
+      "why": "exempt (G3a): Smart I/O OFF under Balanced with no MB/s rule keeps today's full-speed CopyFileEx, still checkpointed on the deploy ticket; any other preset or a disk limit goes through the governed copy"
+    },
+    "update_mmap": {
+      "count": 1,
+      "why": "governed (G3b): the BLAKE3 primitive itself (compute_file_hash, one file, one pass); bulk callers run it inside pool(Hash) under a Hash ticket, single-file callers (verify.rs hash_file, modpack) hold their own ticket"
+    },
+    "thread::spawn": {
+      "count": 1,
+      "why": "exempt: run_mod_worker's progress reporter, inside the worker process: reads the governor queue snapshot every 100 ms and prints the byte count for the parent; no disk I/O, stops when the op ends"
+    }
+  },
+  "src/main.rs": {
+    "thread::spawn": {
+      "count": 1,
+      "why": "TODO(G1): the global rayon pool"
+    },
+    "fs::copy": {
+      "count": 1,
+      "why": "TODO(G1): the global rayon pool"
+    },
+    "ThreadPoolBuilder": {
+      "count": 1,
+      "why": "TODO(G1): the global rayon pool"
+    }
+  },
+  "src/mcp/state_bridge.rs": {
+    "fs::copy": {
+      "count": 5,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    },
+    "update_mmap": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    },
+    "io::copy": {
+      "count": 1,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/state.rs": {
+    "fs::copy": {
+      "count": 4,
+      "why": "TODO(G7): triage; small or one-shot, confirm exempt"
+    }
+  },
+  "src/commands/game_watch.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "governed (G3b): game_find_logs, a sync command on the main thread before, walks under a Scan ticket with a checkpoint per entry"
+    }
+  },
+  "src/commands/ai_assist.rs": {
+    "spawn_blocking": {
+      "count": 6,
+      "why": "one-shot, user-clicked Laya request each: the feedback dialog's report assist (one inference over a 1500-character excerpt), the crash manager's digests (reads at most 60 managed report zips, 64 KB log tail + 16 KB stack each) and labels (at most 12 inferences, cached), « Expliquer » (one bounded generator request), and the debug panel's tester (one inference); off the async runtime, not bulk IO; the debug panel's « Vérifier l'intégrité » is governed: it hashes the model folder (~350 MB) under one Hash ticket, checkpoint before it starts"
+    }
+  },
+  "src/commands/ai.rs": {
+    "spawn_blocking": {
+      "count": 12,
+      "why": "one-shot, user-clicked AI request: bounded HTTP (timeout, 1 MiB cap), a depth-2/4000-entry metadata read, or one « Laya intégré » inference (ONNX Runtime capped at 2 intra-op threads, inputs capped), « Test Laya » (one fixed-sample inference) or one « Ask Laya » question (a BM25 pass over ~1700 short entries + at most one inference) — plus the explicit model-pack install (one streamed 327 MB download, cancellable) and removal; off the async runtime, not bulk IO; « Analyser la bibliothèque » (ai_analyze_library) runs its per-mod loop under a governor Scan ticket (checkpoint per mod: waits in game mode, pausable, cancellable), and « classify » / the written Ask answer are one bounded request each; « Réponses de Laya »: « Tester » (ai_laya_test) is one bounded request, and a custom task run on the library (ai_laya_run_task) loops per mod under the same governor Scan ticket and cancel flag as the analysis"
+    }
+  },
+  "src/commands/ai_gen.rs": {
+    "spawn_blocking": {
+      "count": 2,
+      "why": "one-shot, user-clicked « Rédaction » request each, waiting on the network, not bulk IO: « Find models » / « Test connection » (at most four bounded GETs and one 16-token chat, 1 MiB body cap, loopback or the user's https API) and one streamed draft (4 MiB stream cap, 12 000-character draft cap, cancellable with « Stop »); off the async runtime"
+    }
+  },
+  "src/extra_tools/mcp_server.rs": {
+    "spawn_blocking": {
+      "count": 7,
+      "why": "one-shot, user- or agent-requested AI call: bounded HTTP (timeout, 1 MiB cap), a depth-2/4000-entry metadata read, one « Ask Laya » question (BM25 + at most one capped inference), the fixed-sample model test, or the explicit model-pack install / removal (one streamed, SHA-256-checked download); off the async runtime, not bulk IO; `ai-analyze` (the extraction of at most --limit mods, files capped per mod) and `ai-classify` (one capped inference)"
+    },
+    "fs::copy": {
+      "count": 1,
+      "why": "one backup copy of repo.json (a single small file) before bmm_repo_convert rewrites it"
+    }
+  },
+  "src/mcp/server.rs": {
+    "spawn_blocking": {
+      "count": 10,
+      "why": "one-shot, user- or agent-requested AI call: bounded HTTP (timeout, 1 MiB cap), a depth-2/4000-entry metadata read, one « Ask Laya » question (BM25 + at most one capped inference), the fixed-sample model test, or the explicit model-pack install / removal (one streamed, SHA-256-checked download); off the async runtime, not bulk IO; `bmm_ai_analyze_library` (the extraction of at most `limit` mods, files capped per mod) and `bmm_ai_classify` (one capped inference); `bmm_ai_api_status|start|stop` (read or write the small ai-api.json, and one /health probe with a 1.5 s timeout)"
+    }
+  },
+  "src/commands/ai_embedded.rs": {
+    "io::copy": {
+      "count": 1,
+      "why": "one file of the verified model pack into the staging folder, once per explicit « Installer le modèle » click (≤ 353 MB, size-capped per entry)"
+    }
+  },
+  "src/commands/ai_api.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "one-shot, user-clicked « Tester » of the local Laya API: two loopback requests with a 3 s timeout each"
+    }
+  },
+  "src/commands/ai_api_core.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "one local-API classification = one « Laya intégré » inference (inputs capped, ONNX capped at 2 intra-op threads), behind a 1-2 slot semaphore, a 4-deep queue, a 30 s timeout and the AI guard (refused in game mode)"
+    }
+  },
+  "src/commands/ai_ops.rs": {
+    "spawn_blocking": {
+      "count": 3,
+      "why": "scheduled-task Laya steps, each behind the AI guard (master switch, kill switch, refused in game mode), the per-minute budget for all tasks (30), a single global engine slot and a 30 s timeout: one capped classification of a text (ai.classify), one mod classified from its own files (ai.classify_mod: one capped inference), and the library check suggestions (ai.library_check: at most 10 untagged mods, one capped inference each, stopped inside the same 30 s run timeout); crash labels, triage and explain reuse ai_assist.rs jobs"
+    }
+  },
+  "src/commands/mod_op_progress_tests.rs": {
+    "thread::spawn": {
+      "count": 1,
+      "why": "test only: concurrent data.json saves"
+    },
+    "fs::copy": {
+      "count": 2,
+      "why": "test only: the save benchmark reproduces the old and new .bak roll"
+    }
+  },
+  "src/commands/storage_presets.rs": {
+    "spawn_blocking": {
+      "count": 2,
+      "why": "exempt: the Storage Manager presets read the drive list (one sysinfo enumeration, one read-only IOCTL per drive letter for the bus and the seek penalty) and the profiles, then build the plans in memory; apply writes data.json once. No bulk I/O; off the main thread because a spinning-up disk or a dead network drive answers in seconds"
+    }
+  },
+  "src/commands/repo_convert.rs": {
+    "spawn_blocking": {
+      "count": 1,
+      "why": "one repo.json format convert/version bump: reads one manifest, optionally re-hashes the repo files once, writes one manifest; user-requested, off the async runtime"
+    },
+    "fs::copy": {
+      "count": 1,
+      "why": "one backup copy of repo.json (a single small file) before it is rewritten"
+    }
+  },
+  "src/commands/repo_validate.rs": {
+    "par_iter": {
+      "count": 1,
+      "why": "governed: governed_hasher runs the files on the governor's Hash pool (gov.pool(OpKind::Hash).install), each file behind the Hash ticket's checkpoint (pause / cancel / step aside), bytes counted on the ticket"
+    },
+    "spawn_blocking": {
+      "count": 1,
+      "why": "governed: repo_validate off the async runtime; validate() holds a Hash ticket and hashes on the Hash pool through governed_hasher"
+    }
+  }
+}
