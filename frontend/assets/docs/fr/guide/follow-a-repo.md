@@ -45,5 +45,3 @@ Une synchro ne télécharge que les fichiers qui ont changé : mettre à jour un
 ## Ensuite
 
 [Mettre BMM à jour](doc-page:guide/update-bmm) garde l'application elle-même à jour. Détails : [Dépôt Serveur](doc-page:features/repo), [Comment fonctionne la synchro](doc-page:how-it-works/sync-repos).
-
-<div class="bmm-replay" data-src="assets/docs/media/replays/share-setup.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/share-setup.bmmreplay" data-page="guide/follow-a-repo" data-title="Regarde : rejoindre, synchroniser et suivre, puis la mise à jour suivante arrive"></div>

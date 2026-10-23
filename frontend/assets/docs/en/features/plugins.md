@@ -16,7 +16,6 @@ for a release.
     its own token, and only does what you've granted it. Review those grants in
     **Plugins → Permissions**.
 
-<div class="bmm-replay" data-src="assets/docs/media/replays/plugins.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/plugins.bmmreplay" data-page="features/plugins" data-title="Granting a permission and using a plugin"></div>
 
 
 
@@ -25,7 +24,6 @@ for a release.
 
 *Build a plugin with a mod list. Plugins & API → Create: a plugin that ships a list of mods, its permissions, the live preview, and the plugin saved on this PC.*
 
-<div class="bmm-replay" data-src="assets/docs/media/replays/build-plugin.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/build-plugin.bmmreplay" data-page="features/plugins" data-title="Build a plugin with a mod list"></div>
 <!-- /story:build-plugin -->
 
 ## The tabs

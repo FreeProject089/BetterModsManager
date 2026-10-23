@@ -10,6 +10,13 @@ import { runNavBundleImport, reviewAnswer } from './nav-bundle-import.js';
 import { openGrantReview } from './nav-grant-review.js';
 import { showConfirm } from './confirm.js';
 import { uiIcon, isIconName, ICON_NAMES, type IconName } from './icons.js';
+import {
+    buttonsForPage, copyName, deletePage, duplicatePage, renameFollowers, resolveOrigin, revertToStarter, writeOrigin,
+    type KeyValueStore,
+} from './custom-page-model.js';
+
+/** Where a page's starter is remembered (custom-page-model.ts). Null when storage is blocked. */
+function originStore(): KeyValueStore | null { try { return window.localStorage; } catch { return null; } }
 
 const LS_KEY = 'bmm_navbar_config';
 
@@ -1040,6 +1047,17 @@ export function openNavbarEditor(select?: string): void {
     /** Set while the guided flow holds a page it created and has not attached to a button yet. */
     let draftPageId: string | null = null;
     let codePageId: string | null = null;
+    /** The page editor holds edits that are not saved yet. */
+    let codeDirty = false;
+    /** Set by the page editor: redraws its icon block when the page's buttons change. */
+    let refreshCodeIcon: (() => void) | null = null;
+    /** Leave the page editor, asking first when it holds unsaved edits. */
+    const leaveCodeOk = async (): Promise<boolean> => {
+        if (view !== 'code' || !codeDirty) return true;
+        if (!(await showConfirm(t('nbx.unsavedT'), t('nbx.unsavedD')))) return false;
+        codeDirty = false;
+        return true;
+    };
 
     const toast = (m: string, kind = 'info') => (window as any).toast?.(m, kind);
     const commit = (cfg: NavbarConfig) => { save(cfg); applyNavbarConfig(); };
@@ -1065,6 +1083,7 @@ export function openNavbarEditor(select?: string): void {
             <span class="nbx-ic" aria-hidden="true">${icon}</span>
             <span class="nbx-name">${escAttr(itemName(id, cfg))}</span>
             ${badge ? `<span class="nbx-badge">${escAttr(badge)}</span>` : ''}
+            ${item?.kind === 'page' && item.target ? `<button type="button" class="nbx-eye nbx-row-edit" data-editrow="${escAttr(item.target)}" aria-label="${escAttr(t('nbx.editCode'))}" data-tooltip="${escAttr(t('nbx.editCode'))}">${uiIcon('edit', 14)}</button>` : ''}
             <button type="button" class="nbx-eye" data-eye="${escAttr(id)}" aria-pressed="${!hidden}" aria-label="${escAttr(eyeLabel)}" data-tooltip="${escAttr(eyeLabel)}" ${prot ? 'disabled' : ''}>${uiIcon(hidden ? 'eye-off' : 'eye', 16)}</button>
         </div>`;
     };
@@ -1073,42 +1092,89 @@ export function openNavbarEditor(select?: string): void {
         list.innerHTML = orderedIds().map((id) => rowHtml(id, cfg)).join('');
         void renderOrphans();
     };
-    /** Pages that exist but no button opens: offered back, or deleted. */
+    /** Every page you made, with or without a button: edit it, give it a button, delete it.
+     *  A page made from a starter is listed like any other — it is a normal page. */
     const renderOrphans = async () => {
         await loadPages();
-        const used = new Set(load().custom.filter((c) => c.kind === 'page').map((c) => c.target));
-        const lone = _pagesCache.filter((p) => !used.has(p.id) && p.id !== draftPageId);
-        orphansEl.hidden = !lone.length;
-        orphansEl.innerHTML = lone.length ? `
+        const cfg = load();
+        const pages = _pagesCache.filter((p) => p.id !== draftPageId);
+        orphansEl.hidden = !pages.length;
+        orphansEl.innerHTML = pages.length ? `
             <div class="nbx-orphans-head">${escAttr(t('nbx.orphans'))}</div>
-            ${lone.map((p) => `<div class="nbx-orphan">
-                <span class="nbx-ic" aria-hidden="true">${uiIcon('file-text', 16)}</span>
+            ${pages.map((p) => {
+                const owner = buttonsForPage(cfg, p.id)[0] as CustomNavItem | undefined;
+                const editing = view === 'code' && codePageId === p.id;
+                return `<div class="nbx-orphan${editing ? ' is-sel' : ''}">
+                <span class="nbx-ic" aria-hidden="true">${owner ? customIcon(owner) : uiIcon('file-text', 16)}</span>
                 <span class="nbx-name">${escAttr(p.name)}</span>
-                <button type="button" class="btn btn-ghost btn-xs" data-attach="${escAttr(p.id)}">${escAttr(t('nbx.attach'))}</button>
+                ${owner ? '' : `<span class="nbx-badge">${escAttr(t('nbx.noButton'))}</span>`}
+                <button type="button" class="nbx-icon-btn" data-editpage="${escAttr(p.id)}" aria-label="${escAttr(t('nbx.editCode'))}" data-tooltip="${escAttr(t('nbx.editCode'))}">${uiIcon('edit', 14)}</button>
+                ${owner ? '' : `<button type="button" class="nbx-icon-btn" data-attach="${escAttr(p.id)}" aria-label="${escAttr(t('nbx.attach'))}" data-tooltip="${escAttr(t('nbx.attach'))}">${uiIcon('add', 14)}</button>`}
                 <button type="button" class="nbx-icon-btn nbx-danger" data-delpage="${escAttr(p.id)}" aria-label="${escAttr(t('nbx.deletePage'))}" data-tooltip="${escAttr(t('nbx.deletePage'))}">${uiIcon('delete', 14)}</button>
-            </div>`).join('')}` : '';
+            </div>`;
+            }).join('')}` : '';
+    };
+    /** Give a page a button at the end of the sidebar. Returns the new button's id. */
+    const attachPage = (pageId: string): string | null => {
+        const p = _pagesCache.find((x) => x.id === pageId);
+        if (!p) return null;
+        const cfg = load();
+        const id = 'custom:' + Math.random().toString(36).slice(2, 9);
+        cfg.custom.push({ id, label: p.name, kind: 'page', target: p.id, icon: 'ui:file-text' });
+        commit(cfg);
+        return id;
+    };
+    /** Open the page editor on a page, from wherever it was asked. */
+    const openPageEditor = async (pageId: string) => {
+        if (view === 'code' && codePageId === pageId) return;
+        if (!(await leaveCodeOk())) return;
+        codePageId = pageId; view = 'code';
+        list.querySelectorAll('.nbx-row.is-sel').forEach((r) => { r.classList.remove('is-sel'); r.setAttribute('aria-selected', 'false'); });
+        renderPane();
+        void renderOrphans();
+    };
+    /** Delete a page after a BMM confirm that says which buttons go with it. */
+    const confirmDeletePage = async (pageId: string): Promise<boolean> => {
+        const p = _pagesCache.find((x) => x.id === pageId);
+        if (!p) return false;
+        const n = buttonsForPage(load(), pageId).length;
+        const body = t('nbx.deletePageD').replace('{name}', p.name) + (n ? ' ' + t('nbx.deletePageButtons').replace('{n}', String(n)) : '');
+        if (!(await showConfirm(t('nbx.deletePageT'), body))) return false;
+        try {
+            const cfg = load();
+            await deletePage({ invoke, store: originStore() }, cfg, pageId);
+            commit(cfg);
+        } catch (err) { toast(String(err), 'error'); return false; }
+        document.querySelectorAll(`.custom-page-frame[data-page-id="${cssEsc(pageId)}"]`).forEach((f) => (f.closest('.view') as HTMLElement | null)?.remove());
+        if (codePageId === pageId) { codePageId = null; codeDirty = false; view = 'details'; }
+        if (sel && !orderedIds().includes(sel)) sel = null;
+        renderSide();
+        // Another page's editor stays as it is: redrawing it would reload it and drop its edits.
+        if (view === 'code') refreshCodeIcon?.(); else renderPane();
+        toast(t('nbx.pageDeleted').replace('{name}', p.name), 'success');
+        return true;
     };
     orphansEl.addEventListener('click', async (e) => {
         const attach = (e.target as HTMLElement).closest('[data-attach]') as HTMLElement | null;
         const del = (e.target as HTMLElement).closest('[data-delpage]') as HTMLElement | null;
-        if (attach) {
-            const p = _pagesCache.find((x) => x.id === attach.dataset.attach);
-            if (!p) return;
-            const cfg = load();
-            const id = 'custom:' + Math.random().toString(36).slice(2, 9);
-            cfg.custom.push({ id, label: p.name, kind: 'page', target: p.id, icon: 'ui:file-text' });
-            commit(cfg);
+        const edit = (e.target as HTMLElement).closest('[data-editpage]') as HTMLElement | null;
+        if (edit) {
+            await openPageEditor(edit.dataset.editpage!);
+        } else if (attach) {
+            const id = attachPage(attach.dataset.attach!);
+            if (!id) return;
+            // From the open editor of that page: stay in it, the button just appears.
+            if (view === 'code') { renderSide(); refreshCodeIcon?.(); return; }
             sel = id; view = 'details';
             renderSide(); renderPane();
         } else if (del) {
-            const p = _pagesCache.find((x) => x.id === del.dataset.delpage);
-            if (!p || !(await showConfirm(t('nbx.deletePageT'), t('nbx.deletePageD').replace('{name}', p.name)))) return;
-            try { await invoke('delete_custom_page', { id: p.id }); } catch (err) { toast(String(err), 'error'); }
-            renderSide();
+            await confirmDeletePage(del.dataset.delpage!);
         }
     });
 
-    const select_ = (id: string | null) => {
+    const select_ = async (id: string | null) => {
+        if (!(await leaveCodeOk())) return;
+        if (view === 'code') { codePageId = null; void renderOrphans(); }
         sel = id; view = 'details';
         list.querySelectorAll('.nbx-row').forEach((r) => {
             const on = (r as HTMLElement).dataset.id === id;
@@ -1178,7 +1244,22 @@ export function openNavbarEditor(select?: string): void {
     });
     list.addEventListener('click', (e) => {
         if (suppressClick) return;
-        const eye = (e.target as HTMLElement).closest('[data-eye]') as HTMLButtonElement | null;
+        const editRow = (e.target as HTMLElement).closest('[data-editrow]') as HTMLElement | null;
+        if (editRow) {
+            e.stopPropagation();
+            const row = editRow.closest('.nbx-row') as HTMLElement | null;
+            void (async () => {
+                if (!(await leaveCodeOk())) return;
+                // The button stays selected, so « Back » from the editor returns to its settings.
+                sel = row?.dataset.id || sel;
+                renderSide();
+                codeDirty = false;
+                codePageId = null;
+                await openPageEditor(editRow.dataset.editrow!);
+            })();
+            return;
+        }
+        const eye =(e.target as HTMLElement).closest('[data-eye]') as HTMLButtonElement | null;
         if (eye) { e.stopPropagation(); if (!eye.disabled) toggleHidden(eye.dataset.eye!); return; }
         const row = (e.target as HTMLElement).closest('.nbx-row') as HTMLElement | null;
         if (row) select_(row.dataset.id || null);
@@ -1193,7 +1274,9 @@ export function openNavbarEditor(select?: string): void {
         else if (e.key === 'ArrowDown') { e.preventDefault(); (row.nextElementSibling as HTMLElement | null)?.focus(); }
     });
 
-    overlay.querySelector('#nbe-add-section')?.addEventListener('click', () => {
+    overlay.querySelector('#nbe-add-section')?.addEventListener('click', async () => {
+        if (!(await leaveCodeOk())) return;
+        codePageId = null;
         const cfg = load();
         const ids = orderedIds();
         const gid = 'group:' + Math.random().toString(36).slice(2, 9);
@@ -1207,7 +1290,7 @@ export function openNavbarEditor(select?: string): void {
         renderSide(); renderPane();
         (pane.querySelector('#nbx-sect-name') as HTMLInputElement | null)?.select();
     });
-    overlay.querySelector('#nbx-add-btn')?.addEventListener('click', () => startWizard());
+    overlay.querySelector('#nbx-add-btn')?.addEventListener('click', async () => { if (await leaveCodeOk()) startWizard(); });
 
     // ── Right: the selected row ────────────────────────────────────────────────
     const paneHead = (icon: string, title: string, chip: string, sub: string) => `
@@ -1413,6 +1496,14 @@ export function openNavbarEditor(select?: string): void {
             });
         };
         wireTarget();
+        // The page list may not be loaded yet (first open of the editor, or a page the guided
+        // flow has just made): the select then said « No page yet » under a page that exists.
+        if (item.kind === 'page' && !_pagesCache.some((p) => p.id === item.target)) {
+            void loadPages().then(() => {
+                const s = pane.querySelector('#nbx-target') as HTMLSelectElement | null;
+                if (s && s.isConnected && item.kind === 'page') s.innerHTML = pageOptions(item.target);
+            });
+        }
         pane.querySelectorAll<HTMLInputElement>('input[name="nbx-kind"]').forEach((r) => r.addEventListener('change', () => {
             const kind = r.value as CustomNavItem['kind'];
             pane.querySelectorAll('.nbx-kind').forEach((l) => l.classList.toggle('is-on', (l.querySelector('input') as HTMLInputElement).checked));
@@ -1444,14 +1535,14 @@ export function openNavbarEditor(select?: string): void {
             const actions = document.createElement('div');
             actions.className = 'nbx-inline nbx-page-actions';
             actions.innerHTML = `
-                <button type="button" class="btn btn-secondary btn-sm" id="nbx-edit-code">${uiIcon('code', 14)}<span>${escAttr(t('nbx.editCode'))}</span></button>
+                <button type="button" class="btn btn-primary btn-sm" id="nbx-edit-code">${uiIcon('edit', 14)}<span>${escAttr(t('nbx.editCode'))}</span></button>
                 <button type="button" class="btn btn-ghost btn-sm" id="nbx-preview-btn">${uiIcon('eye', 14)}<span>${escAttr(t('nbx.preview'))}</span></button>`;
             host.prepend(actions);
             const prevHost = document.createElement('div');
             prevHost.className = 'nbx-preview-host';
             prevHost.hidden = true;
             actions.after(prevHost);
-            actions.querySelector('#nbx-edit-code')?.addEventListener('click', () => { codePageId = item.target; view = 'code'; renderPane(); });
+            actions.querySelector('#nbx-edit-code')?.addEventListener('click', () => void openPageEditor(item.target));
             actions.querySelector('#nbx-preview-btn')?.addEventListener('click', () => {
                 prevHost.hidden = !prevHost.hidden;
                 if (prevHost.hidden) prevHost.innerHTML = '';
@@ -1573,6 +1664,7 @@ export function openNavbarEditor(select?: string): void {
         const id = draftPageId;
         draftPageId = null;
         try { await invoke('delete_custom_page', { id }); } catch { /* already gone */ }
+        writeOrigin(originStore(), id, null);
     };
     const leaveWizard = async () => {
         await dropDraft();
@@ -1746,6 +1838,9 @@ export function openNavbarEditor(select?: string): void {
                 const meta = await invoke('create_custom_page', { name: wiz.name.trim(), html: tpl.html, css: tpl.css, js: tpl.js }) as PageMeta;
                 draftPageId = meta.id;
             }
+            // The starter's code is COPIED into the page, which is the user's own from here on.
+            // Only which starter it was is remembered, for « Revert to the starter ».
+            writeOrigin(originStore(), draftPageId!, tpl.labelKey);
             for (const { cap } of CAPS) await invoke('page_set_grant', { id: draftPageId, cap, granted: wiz.caps.has(cap) });
             await refreshGrants(draftPageId!);
             if (host && host.isConnected) mountPreview(host, draftPageId!);
@@ -1781,17 +1876,38 @@ export function openNavbarEditor(select?: string): void {
         try { src = await invoke('get_custom_page_source', { id: pageId }) as typeof src; }
         catch (err) { toast(String(err), 'error'); view = 'details'; renderPane(); return; }
         let editingDoc: string | null = null;
-        const owner = load().custom.find((c) => c.kind === 'page' && c.target === pageId);
+        codeDirty = false;
+        // A page made from a starter is a normal page: its code was copied in and is edited
+        // here like any other. Which starter it was is only remembered (or recognised, for a
+        // page made before that was recorded) to preselect « Revert to the starter ».
+        let origin = resolveOrigin(pageId, src, PAGE_TEMPLATES, originStore());
+        const starterName = (key: string | null) => {
+            const tpl = PAGE_TEMPLATES.find((x) => x.labelKey === key);
+            return tpl ? (t(tpl.labelKey) || tpl.label) : '';
+        };
+        const originText = () => origin.labelKey
+            ? t('nbx.fromStarter').replace('{name}', starterName(origin.labelKey)) + (origin.modified ? ' · ' + t('nbx.edited') : '')
+            : t('nbx.ownPage');
+        const backOwner = (sel ? load().custom.find((c) => c.id === sel && c.kind === 'page' && c.target === pageId) : undefined)
+            || buttonsForPage(load(), pageId)[0];
         pane.innerHTML = `
             <div class="nbx-code">
                 <div class="nbx-code-top">
-                    <button type="button" class="btn btn-ghost btn-sm" id="nbx-code-back">${uiIcon('chevron-left', 14)}<span>${escAttr(owner ? owner.label : t('nbx.back'))}</span></button>
+                    <button type="button" class="btn btn-ghost btn-sm" id="nbx-code-back">${uiIcon('chevron-left', 14)}<span>${escAttr(backOwner ? backOwner.label : t('nbx.back'))}</span></button>
+                    <span class="nbx-code-title">
+                        <b id="nbx-code-name">${escAttr(src.name)}</b>
+                        <span class="nbx-badge" id="nbx-code-origin">${escAttr(originText())}</span>
+                        <span class="nbx-badge nbx-badge--warn" id="nbx-code-dirty" hidden>${escAttr(t('nbx.unsaved'))}</span>
+                    </span>
                     <span class="nbx-grow"></span>
+                    <label class="nbx-live" data-tooltip="${escAttr(t('nbx.liveHint'))}">${switchHtml('id="nbx-code-live"', false)}<span>${escAttr(t('nbx.live'))}</span></label>
                     <button type="button" class="btn btn-ghost btn-sm" id="nbx-code-preview">${uiIcon('eye', 14)}<span>${escAttr(t('nbx.saveAndPreview'))}</span></button>
-                    <button type="button" class="btn btn-primary btn-sm" id="nbe-page-create">${uiIcon('save', 14)}<span>${escAttr(t('navedit.save'))}</span></button>
+                    <button type="button" class="btn btn-primary btn-sm" id="nbe-page-create" data-tooltip="Ctrl+S">${uiIcon('save', 14)}<span>${escAttr(t('navedit.save'))}</span></button>
                 </div>
+                <div class="nbx-preview-host" id="nbx-code-prev" hidden></div>
                 <label class="nbx-field"><span class="nbx-label">${escAttr(t('navedit.pageName'))}</span>
                     <input class="input" id="nbe-page-name" maxlength="60" value="${escAttr(src.name)}"></label>
+                <div class="nbx-field" id="nbx-code-icon"></div>
                 <div class="nbx-field">
                     <span class="nbx-label">${escAttr(t('navedit.subpages'))}</span>
                     <p class="nbx-hint">${escAttr(t('navedit.subpagesHint'))}</p>
@@ -1818,9 +1934,28 @@ export function openNavbarEditor(select?: string): void {
                         <button type="button" class="btn btn-xs" id="nbe-pagedir-add">${escAttr(t('navedit.addFolder'))}</button>
                     </div>
                 </div>
-                <div class="nbx-preview-host" id="nbx-code-prev" hidden></div>
+                <div id="nbx-code-perms"></div>
+                <div class="nbx-field nbx-code-manage">
+                    <span class="nbx-label">${escAttr(t('nbx.managePage'))}</span>
+                    <div class="nbx-inline">
+                        <button type="button" class="btn btn-ghost btn-sm" id="nbx-code-dup">${uiIcon('copy', 14)}<span>${escAttr(t('nbx.duplicate'))}</span></button>
+                        <span class="nbx-hint">${escAttr(t('nbx.duplicateHint'))}</span>
+                    </div>
+                    <div class="nbx-inline">
+                        <select class="input nbx-revert-select" id="nbx-code-tpl" aria-label="${escAttr(t('nbx.revertTo'))}">
+                            ${PAGE_TEMPLATES.map((tpl) => `<option value="${escAttr(tpl.labelKey)}" ${tpl.labelKey === origin.labelKey ? 'selected' : ''}>${escAttr(t(tpl.labelKey) || tpl.label)}</option>`).join('')}
+                        </select>
+                        <button type="button" class="btn btn-ghost btn-sm" id="nbx-code-revert">${uiIcon('undo', 14)}<span>${escAttr(t('nbx.revert'))}</span></button>
+                        <span class="nbx-hint">${escAttr(t('nbx.revertHint'))}</span>
+                    </div>
+                </div>
+                <div class="nbx-danger-zone">
+                    <button type="button" class="btn btn-ghost btn-sm nbx-danger" id="nbx-code-del">${uiIcon('delete', 14)}<span>${escAttr(t('nbx.deletePage'))}</span></button>
+                    <span class="nbx-hint">${escAttr(t('nbx.deletePageHint'))}</span>
+                </div>
             </div>`;
-        const field = (sel2: string) => pane.querySelector(sel2) as HTMLInputElement & HTMLTextAreaElement;
+        pane.scrollTop = 0;          // the editor starts at its header, not where the last pane was scrolled
+        const field =(sel2: string) => pane.querySelector(sel2) as HTMLInputElement & HTMLTextAreaElement;
         field('#nbe-page-html').value = src.html;
         field('#nbe-page-css').value = src.css;
         field('#nbe-page-js').value = src.js;
@@ -1951,9 +2086,9 @@ export function openNavbarEditor(select?: string): void {
             } catch (err) { toast(String(err), 'error'); }
         });
 
-        const savePage = async (): Promise<boolean> => {
+        const savePage = async (opts: { quiet?: boolean } = {}): Promise<boolean> => {
             const name = field('#nbe-page-name').value.trim();
-            if (!name) { toast(t('navedit.pageName'), 'warning'); return false; }
+            if (!name) { if (!opts.quiet) toast(t('navedit.pageName'), 'warning'); return false; }
             try {
                 const css = field('#nbe-page-css').value;
                 const js = field('#nbe-page-js').value;
@@ -1968,20 +2103,166 @@ export function openNavbarEditor(select?: string): void {
                 }
                 // An open view caches the old bundle: drop it so the next visit reloads.
                 document.querySelectorAll(`.custom-page-frame[data-page-id="${cssEsc(pageId)}"]`).forEach((f) => (f.closest('.view') as HTMLElement | null)?.remove());
+                // A renamed page takes along the buttons still called by its old name.
+                if (name !== src.name) {
+                    const cfg = load();
+                    if (renameFollowers(cfg, pageId, src.name, name)) { commit(cfg); renderSide(); }
+                    src.name = name;
+                    const nm = pane.querySelector('#nbx-code-name'); if (nm) nm.textContent = name;
+                }
+                src.html = editingDoc ? src.html : field('#nbe-page-html').value;
+                src.css = css; src.js = js;
+                origin = resolveOrigin(pageId, src, PAGE_TEMPLATES, originStore());
+                const chip = pane.querySelector('#nbx-code-origin'); if (chip) chip.textContent = originText();
+                setDirty(false);
                 await loadPages();
-                toast(t('navedit.pageSaved'), 'success');
+                void renderOrphans();
+                if (!opts.quiet) toast(t('navedit.pageSaved'), 'success');
                 return true;
             } catch (err) { toast(String(err), 'error'); return false; }
         };
-        pane.querySelector('#nbe-page-create')?.addEventListener('click', () => void savePage());
+
+        // ── Unsaved edits, Ctrl+S, live preview ───────────────────────────────────
+        const dirtyChip = pane.querySelector('#nbx-code-dirty') as HTMLElement;
+        const setDirty = (on: boolean) => { codeDirty = on; dirtyChip.hidden = !on; };
+        const prevHost = pane.querySelector('#nbx-code-prev') as HTMLElement;
+        const live = pane.querySelector('#nbx-code-live') as HTMLInputElement;
+        /** Show the preview, or reload it when it is already showing. */
+        const showPreview = () => {
+            const f = prevHost.querySelector('iframe') as HTMLIFrameElement | null;
+            if (!prevHost.hidden && f) {
+                f.setAttribute('src', 'about:blank');
+                setTimeout(() => f.setAttribute('src', pageBundleUrl(pageId)), 30);
+                return;
+            }
+            prevHost.hidden = false;
+            mountPreview(prevHost, pageId);
+        };
+        let liveTimer: ReturnType<typeof setTimeout> | null = null;
+        const onEdit = () => {
+            setDirty(true);
+            if (!live.checked) return;
+            if (liveTimer) clearTimeout(liveTimer);
+            liveTimer = setTimeout(async () => {
+                liveTimer = null;
+                if (!pane.isConnected || codePageId !== pageId) return;
+                if (await savePage({ quiet: true })) showPreview();
+            }, 900);
+        };
+        ['#nbe-page-name', '#nbe-page-html', '#nbe-page-css', '#nbe-page-js'].forEach((s) => pane.querySelector(s)?.addEventListener('input', onEdit));
+        live.addEventListener('change', async () => {
+            if (!live.checked) return;
+            if (codeDirty) { if (await savePage({ quiet: true })) showPreview(); }
+            else showPreview();
+        });
+        (pane.querySelector('.nbx-code') as HTMLElement).addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 's') {
+                e.preventDefault();
+                void savePage().then((ok) => { if (ok && !prevHost.hidden) showPreview(); });
+            }
+        });
+        pane.querySelector('#nbe-page-create')?.addEventListener('click', () => void savePage().then((ok) => { if (ok && !prevHost.hidden) showPreview(); }));
         pane.querySelector('#nbx-code-preview')?.addEventListener('click', async () => {
             if (!(await savePage())) return;
-            const host = pane.querySelector('#nbx-code-prev') as HTMLElement;
-            host.hidden = false;
-            mountPreview(host, pageId);
-            host.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            showPreview();
+            prevHost.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         });
-        pane.querySelector('#nbx-code-back')?.addEventListener('click', () => { view = 'details'; codePageId = null; renderPane(); });
+        pane.querySelector('#nbx-code-back')?.addEventListener('click', async () => {
+            if (!(await leaveCodeOk())) return;
+            view = 'details'; codePageId = null; refreshCodeIcon = null;
+            if (backOwner && orderedIds().includes(backOwner.id)) sel = backOwner.id;
+            renderSide(); renderPane();
+        });
+
+        // ── The button's icon (the page itself has none) ──────────────────────────
+        const iconBlock = pane.querySelector('#nbx-code-icon') as HTMLElement;
+        const renderIconBlock = () => {
+            if (!iconBlock.isConnected) { refreshCodeIcon = null; return; }
+            const owner = buttonsForPage(load(), pageId)[0] as CustomNavItem | undefined;
+            if (!owner) {
+                iconBlock.innerHTML = `<span class="nbx-label">${escAttr(t('navedit.icon'))}</span>
+                    <div class="nbx-icon-row">
+                        <span class="nbx-hint">${escAttr(t('nbx.pageNoButton'))}</span>
+                        <button type="button" class="btn btn-ghost btn-sm" id="nbx-code-attach">${uiIcon('add', 14)}<span>${escAttr(t('nbx.attach'))}</span></button>
+                    </div>`;
+                iconBlock.querySelector('#nbx-code-attach')?.addEventListener('click', () => {
+                    if (attachPage(pageId)) { renderSide(); renderIconBlock(); }
+                });
+                return;
+            }
+            iconBlock.innerHTML = `<span class="nbx-label">${escAttr(t('navedit.icon'))}</span>
+                <div class="nbx-icon-row">
+                    <span class="nbx-icon-now" id="nbx-code-icon-now" aria-hidden="true">${customIcon(owner)}</span>
+                    <button type="button" class="btn btn-ghost btn-sm" id="nbx-code-icon-toggle" aria-expanded="false">${escAttr(t('nbx.iconChange'))}</button>
+                </div>
+                <div id="nbx-code-icon-host" hidden></div>`;
+            const host = iconBlock.querySelector('#nbx-code-icon-host') as HTMLElement;
+            const btn = iconBlock.querySelector('#nbx-code-icon-toggle') as HTMLButtonElement;
+            btn.addEventListener('click', () => {
+                const open = host.hidden;
+                host.hidden = !open;
+                btn.setAttribute('aria-expanded', String(open));
+                if (open && !host.firstChild) mountIconPicker(host, owner.icon || '', (ref) => {
+                    const c = load();
+                    const it = c.custom.find((x) => x.id === owner.id);
+                    if (!it) return;
+                    it.icon = ref;
+                    commit(c);
+                    rememberIcon(ref);
+                    const now = iconBlock.querySelector('#nbx-code-icon-now'); if (now) now.innerHTML = customIcon(it);
+                    renderSide();
+                });
+            });
+        };
+        refreshCodeIcon = renderIconBlock;
+        renderIconBlock();
+
+        // ── Permissions: the same switches and review rules as the button's settings ──
+        void mountPermissions(pane.querySelector('#nbx-code-perms') as HTMLElement, pageId, { intro: true });
+
+        // ── Duplicate, revert, delete ─────────────────────────────────────────────
+        pane.querySelector('#nbx-code-dup')?.addEventListener('click', async () => {
+            if (codeDirty && !(await savePage({ quiet: true }))) return;
+            try {
+                const copy = await duplicatePage({ invoke, store: originStore() }, pageId,
+                    copyName(src.name, _pagesCache.map((p) => p.name), t('nbx.copyWord')));
+                await loadPages();
+                toast(t('nbx.duplicated').replace('{name}', copy.name)
+                    + (copy.skipped.length ? ' ' + t('nbx.duplicateSkipped').replace('{n}', String(copy.skipped.length)) : ''),
+                    copy.skipped.length ? 'warning' : 'success');
+                codeDirty = false;
+                codePageId = null;
+                await openPageEditor(copy.id);
+            } catch (err) { toast(String(err), 'error'); }
+        });
+        pane.querySelector('#nbx-code-revert')?.addEventListener('click', async () => {
+            const key = (pane.querySelector('#nbx-code-tpl') as HTMLSelectElement).value;
+            const tpl = PAGE_TEMPLATES.find((x) => x.labelKey === key);
+            if (!tpl) return;
+            if (!(await showConfirm(t('nbx.revertT'), t('nbx.revertD').replace('{name}', starterName(key))))) return;
+            try {
+                const name = field('#nbe-page-name').value.trim() || src.name;
+                await revertToStarter({ invoke, store: originStore() }, pageId, name, tpl);
+                field('#nbe-page-html').value = tpl.html;
+                field('#nbe-page-css').value = tpl.css;
+                field('#nbe-page-js').value = tpl.js;
+                editingDoc = null;
+                repaintCode();
+                await renderSubpages();
+                Object.assign(src, { name, html: tpl.html, css: tpl.css, js: tpl.js });
+                origin = { labelKey: tpl.labelKey, migrated: false, modified: false };
+                const chip = pane.querySelector('#nbx-code-origin'); if (chip) chip.textContent = originText();
+                setDirty(false);
+                document.querySelectorAll(`.custom-page-frame[data-page-id="${cssEsc(pageId)}"]`).forEach((f) => (f.closest('.view') as HTMLElement | null)?.remove());
+                if (!prevHost.hidden) showPreview();
+                toast(t('nbx.reverted').replace('{name}', starterName(key)), 'success');
+            } catch (err) { toast(String(err), 'error'); }
+        });
+        pane.querySelector('#nbx-code-del')?.addEventListener('click', async () => {
+            const wasDirty = codeDirty;
+            codeDirty = false;               // the confirm below already says it is gone for good
+            if (!(await confirmDeletePage(pageId))) codeDirty = wasDirty;
+        });
         void renderSubpages();
         void renderPageFiles();
     };
@@ -2015,6 +2296,7 @@ export function openNavbarEditor(select?: string): void {
     }
 
     const close = async () => {
+        if (!(await leaveCodeOk())) return;   // the page editor holds unsaved edits
         await dropDraft();          // a page the guided flow made and nobody attached
         overlay.remove();
     };

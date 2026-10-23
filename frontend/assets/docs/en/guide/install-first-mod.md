@@ -43,5 +43,3 @@ so a large library does not cost disk space you are not using.
 
 [Activate and order mods](doc-page:guide/activate-and-order), then [Fix a conflict](doc-page:guide/fix-a-conflict) when two mods meet.
 Details of the screen: [Library](doc-page:features/library).
-
-<div class="bmm-replay" data-src="assets/docs/media/replays/new-game.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/new-game.bmmreplay" data-page="guide/install-first-mod" data-title="Watch the whole story: a new game from the first mod to the game folder"></div>

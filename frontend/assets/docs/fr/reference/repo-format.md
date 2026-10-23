@@ -334,7 +334,7 @@ d'identifiant d'auteur — le plan le dit avant que vous confirmiez. Les abonné
 épinglé l'ancien identifiant voient le changement. Convertir un manifeste déjà à jour ne fait
 rien : aucune écriture, la signature est conservée.
 
-```text
+```bash
 bmm repo-convert "D:/Repos/MonDepot" --dry-run   # le plan ; fonctionne BMM fermé
 bmm repo-convert "D:/Repos/MonDepot"             # convertir + signer (BMM ouvert)
 bmm repo-convert "D:/Repos/MonDepot" --no-sign   # convertir sans l'application, NON SIGNÉ

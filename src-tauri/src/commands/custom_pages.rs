@@ -897,6 +897,47 @@ pub fn delete_custom_page<R: Runtime>(app: AppHandle<R>, id: String) -> Result<(
     Ok(())
 }
 
+#[derive(Serialize)]
+pub struct DuplicatedPage {
+    pub page: PageMeta,
+    /// Files of the original that the copy did not take (over the bundle limits, or a type a
+    /// bundle cannot hold). The SDK, the entry document and the manifest are rebuilt, not
+    /// copied, and are never listed.
+    pub skipped: Vec<String>,
+}
+
+/// Copy a page into a NEW page: its HTML, CSS and JS, its sub-documents and its files.
+///
+/// What is NOT copied is the page's runtime data (`custom_pages_data/<id>`): its storage and
+/// its permissions. The copy is a new page and starts like one, holding nothing, so
+/// duplicating can never be a way to obtain a grant without switching it on. The files go
+/// through `import_page_dir`, the same bounded, path-confined copy as importing a folder.
+#[tauri::command]
+pub fn duplicate_custom_page<R: Runtime>(
+    app: AppHandle<R>,
+    id: String,
+    name: String,
+) -> Result<DuplicatedPage, String> {
+    let id = sanitize_id(&id).ok_or("invalid id")?;
+    let src_dir = pages_root(&app).join(&id);
+    if !src_dir.is_dir() {
+        return Err("page not found".into());
+    }
+    let src = get_custom_page_source(app.clone(), id)?;
+    let name = if name.trim().is_empty() { src.name.clone() } else { name.trim().to_string() };
+    let meta = create_custom_page(app.clone(), name, src.html, src.css, Some(src.js))?;
+    match import_page_dir(app.clone(), meta.id.clone(), src_dir.to_string_lossy().into_owned(), String::new()) {
+        Ok(rep) => Ok(DuplicatedPage {
+            page: meta,
+            skipped: rep.skipped.into_iter().filter(|s| !page_reserved(s)).collect(),
+        }),
+        Err(e) => {
+            let _ = delete_custom_page(app, meta.id);
+            Err(e)
+        }
+    }
+}
+
 /// The tiny page-side SDK written into every page bundle as `bmm.js`. It is the
 /// *only* way a page talks to BMM: it wraps `postMessage` to the parent broker
 /// in promises. The page must still have been granted each capability, or calls

@@ -12,7 +12,6 @@ toutes les actions. Tape quelques lettres, déplace-toi avec <kbd>↑</kbd> / <k
 
 *Les raccourcis du quotidien. La palette de commandes trouve un mod et lance une commande, BMM Tools mesure le disque, un launch pack démarre le jeu avec ses outils, et la doc répond sans quitter l’app.*
 
-<div class="bmm-replay" data-src="assets/docs/media/replays/everyday.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/everyday.bmmreplay" data-page="features/command-palette" data-title="Les raccourcis du quotidien"></div>
 <!-- /story:everyday -->
 
 ## Ce qu'elle atteint

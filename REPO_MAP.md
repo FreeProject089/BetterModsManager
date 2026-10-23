@@ -119,7 +119,7 @@ Not in git (ignored): `node_modules/`, `dist/`, `src-tauri/target/`, `src-tauri/
 | Add a Tauri command | Function in a module of `src-tauri/src/commands/`, registered in `generate_handler!` in `src-tauri/src/main.rs`, called from `frontend/src/core/api.ts` or the feature. Spawn processes only via `commands::proc`. |
 | Add an API route | `src-tauri/src/api/mod.rs` (with `require_permission`), then the API reference pages (`check-api-docs`, `check-api-perms`). |
 | Add an MCP tool or CLI command | `src-tauri/src/mcp/tools/` or the `Commands` enum in `src-tauri/src/extra_tools/mcp_server.rs`, then `BMM Docs/docs/reference/mcp.md` / `cli.md` (`check-mcp-tools`, `check-cli-reference`). |
-| Add a translation | Keys in `frontend/Lang/en.json`, `fr.json` and `template.json`; see `Update/Documentation/TranslationGuide_EN.md`. |
+| Add a translation | Keys in `frontend/Lang/en.json` and `fr.json`, then `node scripts/gen-lang-template.mjs` for `template.json`; see `Update/Documentation/TranslationGuide_EN.md`. |
 | Add a doc page | `BMM Docs/docs/<section>/<page>.md` + `.fr.md`, nav in `BMM Docs/mkdocs.yml`, then `node scripts/sync-docs.mjs`. |
 | Add a CI gate | `scripts/check-<name>.mjs`, append it to `ci` in `package.json` (see [CONTRIBUTING.md](CONTRIBUTING.md)). |
 | Add a scheduler action | `ACTION_TYPES` in `frontend/src/features/settings/scheduler.ts`, then `npm run gen`. |
@@ -138,6 +138,7 @@ Do not edit these by hand; run the generator.
 | `src-tauri/src/mcp/actions.gen.json` | `node scripts/gen-mcp-actions.mjs` |
 | `frontend/src/docs/bmms-reference.gen.ts`, `dist-assets/bmms-vocabulary.json`, BMMScript reference pages | `node scripts/gen-bmms-reference.mjs` |
 | `frontend/assets/credits-*.gen.json` | `node scripts/gen-credits.mjs` |
+| `frontend/Lang/template.json` (the `lang-template.json` release asset is a copy of it) | `node scripts/gen-lang-template.mjs` |
 | `frontend/deeplinks.json` | `node scripts/deeplink-map.mjs --json` |
 | `BMM Docs/docs/reference/translation-variables*.md` | `node scripts/gen-i18n-vars-reference.mjs` |
 | `frontend/assets/icons/` | `node scripts/gen-icon-pack.mjs` |
@@ -145,4 +146,4 @@ Do not edit these by hand; run the generator.
 | `scripts/dep-graph.baseline.json` | `node scripts/dep-graph.mjs --update` (only to lower it) |
 | `dist/release-assets-v*/update-manifest.json` | `node scripts/gen-update-manifest.mjs` |
 
-`npm run gen` runs the BMMScript, MCP actions, deep-link and credits generators together.
+`npm run gen` runs the BMMScript, translation template, MCP actions, deep-link and credits generators together.

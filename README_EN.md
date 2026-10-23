@@ -1,12 +1,12 @@
 <div align="center">
 
-  <img src=".github/screenshots/hero.png" alt="Better Mod Manager 1.0.3" width="100%" />
+  <img src=".github/screenshots/hero.png" alt="Better Mod Manager 1.0.4" width="100%" />
 
   # Better Mod Manager
 
   **A universal mod manager for Windows: profiles, a mod library, modpacks and Server Repo sync.**
 
-  ![Version](https://img.shields.io/badge/version-1.0.3-blue.svg?style=flat-square)
+  ![Version](https://img.shields.io/badge/version-1.0.4-blue.svg?style=flat-square)
   ![License](https://img.shields.io/badge/license-GPL--3.0-green.svg?style=flat-square)
   ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-important?style=flat-square)
   ![Rust](https://img.shields.io/badge/built%20with-Rust-orange?style=flat-square&logo=rust)
@@ -62,9 +62,9 @@ More pictures, area by area: [VISUALS.md](VISUALS.md).
 - **CLI and MCP**: `bmm-mcp-server.exe` drives BMM from scripts or from an AI agent over MCP.
 - **Help built in**: bilingual articles, interactive tutorials and a command palette (Ctrl+K).
 
-## What's new in 1.0.3
+## What's new in 1.0.4
 
-The full list is in the [1.0.3 changelog](Update/changelog_v1.0.3_EN.md). The highlights:
+The full list is in the [1.0.4 changelog](Update/changelog_v1.0.4_EN.md). The highlights:
 
 - **One-click updates that work again**: download, check against the release's signed manifest, install. Stable or pre-release channel, optional background check.
 - **Activity centre**: a title-bar button listing every running task (activation, downloads, sync, scans, exports, Laya jobs…) with progress and Cancel, plus the last 30 finished ones.

@@ -31,6 +31,7 @@ import { readFileSync, writeFileSync, mkdirSync,
          copyFileSync, statSync, existsSync, readdirSync }    from 'fs';
 import { join, dirname, basename, resolve }                   from 'path';
 import { fileURLToPath }                                      from 'url';
+import { templateState } from './gen-lang-template.mjs';
 
 // ── Paths ────────────────────────────────────────────────────────────────────
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -54,6 +55,15 @@ if (!VERSION) {
     process.exit(1);
 }
 const TAG        = `v${VERSION}`;
+
+// ── Translation template ─────────────────────────────────────────────────────
+// lang-template.json is a copy of frontend/Lang/template.json, which is generated from en.json
+// (scripts/gen-lang-template.mjs). A stale template would ship a translator file with missing
+// keys, so refuse instead of copying it: regenerate it, then run this again.
+if (!templateState().fresh) {
+    console.error('[gen-update-manifest] frontend/Lang/template.json is out of date with en.json. Run `node scripts/gen-lang-template.mjs` (or `npm run gen`) first.');
+    process.exit(1);
+}
 
 // ── GitHub config ─────────────────────────────────────────────────────────────
 const GITHUB_REPO = 'FreeProject089/BetterModsManager';

@@ -40,8 +40,9 @@ expected on a dirty tree.
 
 - Every user-visible string goes through `t('key', 'fallback')` or a `data-i18n` attribute. No
   hard-coded UI text (`check-hardcoded-text`).
-- A new key goes into `frontend/Lang/en.json`, `frontend/Lang/fr.json` (parity is checked) and
-  `frontend/Lang/template.json`.
+- A new key goes into `frontend/Lang/en.json` and `frontend/Lang/fr.json` (parity is checked).
+  `frontend/Lang/template.json` is generated from en.json: run `node scripts/gen-lang-template.mjs`
+  (its `--check` fails CI when the template is stale).
 - Insert keys textually, next to their neighbours. Never load and re-serialise the JSON files: that
   reorders keys, rewrites escapes and turns a one-line change into a diff of the whole file.
 - Error strings returned by Rust commands that are translation keys must exist in both languages

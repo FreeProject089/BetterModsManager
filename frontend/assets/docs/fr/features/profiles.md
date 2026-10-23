@@ -14,7 +14,7 @@ Son vrai rôle est écrit sur l'écran vide :
 > Un profil, c'est votre filet de sécurité : activez, désactivez et réordonnez vos mods
 > librement, et une mise à jour ou réinstallation du jeu n'efface plus jamais votre setup.
 
-<div class="bmm-replay" data-src="assets/docs/media/replays/profiles.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/profiles.bmmreplay" data-page="features/profiles" data-title="Créer un profil et basculer dessus"></div>
+![Créer un profil et basculer dessus](assets/docs/media/gifs/guide-create-profile.gif)
 
 
 ## Pourquoi plusieurs profils pour un même jeu

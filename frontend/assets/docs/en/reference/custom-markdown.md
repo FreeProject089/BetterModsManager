@@ -144,8 +144,9 @@ Hidden until clicked.
 :::
 ```
 
-Plays a `.bmmreplay` recording inline. Prefer a file hosted alongside the page — a replay that
-404s leaves a dead frame in the middle of it.
+Plays a `.bmmreplay` recording inline. **BMM Docs does not use it any more:** this site shows GIFs, and
+the interactive player is not loaded here. The app's B.MD still supports the directive in blogs and
+in-app documents.
 
 ### Roadmap
 

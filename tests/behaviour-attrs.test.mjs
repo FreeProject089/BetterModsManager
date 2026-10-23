@@ -166,6 +166,9 @@ const HARMLESS = {
     // listener bound to the editor's own list (not document-wide); the probe reaches it through
     // the 3000-char window after the row drag's named `onMove`. It only hides an app nav item.
     'data-eye': 'navigation editor row eye, own list; hides an app nav item',
+    // Same listener, same reach: the « Edit page » pencil of a custom page's row. It only opens
+    // the page editor on a page id the editor itself listed.
+    'data-editrow': 'navigation editor row « Edit page », own list; opens the page editor',
 };
 
 function documentListenerAttrs() {

@@ -220,6 +220,39 @@ Admin → Downloads & assets → CI publish key, and is skipped without it). Run
 hand from *Actions → Re-sign update manifests → Run workflow*. If it stops, installed copies stop
 being offered updates after at most 7 days.
 
+The release tool re-signs at publish time too: `node tools/release/release.mjs --version <v> --steps publish`
+re-signs both when fewer than 14 days are left (with 7-day signatures: every time), runs the
+verify step again, refreshes `SHA256SUMS.txt` and the SHA-256 table of `github-release.md` /
+`github-release.body.md`, refuses an upload that carries `extras/`, a second installer or a `.zip`,
+and prints `git tag`, `git push origin v<v>` and `gh release create`. It runs them only with
+`--yes-publish`, and never as part of `--all`.
+
+### Manifest validity: 7 days signed, 90 days accepted
+
+Owner decision (October 2026): the signatures should last **90 days** instead of 7. The installed
+clients do not allow it yet, so the change happens in two stages.
+
+| Client | Longest `expires - issued` it accepts |
+|---|---|
+| BMM 0.9.12 (bridge) and 1.0.2 (`MANIFEST_MAX_VALIDITY_DAYS` in `autoupdate.rs`, for `update-manifest.json` and for the release's `update.json`) | 7 days |
+| BetterInstaller engine shipped with BMM 1.0.2 (`bpkg-core/src/update.rs`) | 7 days |
+| BMM 1.0.4 and later, the BetterInstaller engine after it | 90 days |
+
+A manifest signed for longer than a client accepts is **refused** by it: on 1.0.2 and 0.9.12 a
+refused `update-manifest.json` stops the update, a refused `update.json` turns into the
+« unverified installer » warning. Expiry, signature and pinned key are enforced the same way in
+both stages; only the accepted window changes.
+
+1. **Now.** Clients (1.0.4, BetterInstaller) accept up to 90 days. The signers keep **7 days** by
+   default (`bpkg update-manifest` / `resign-manifest`, `scripts/sign-update-manifest.mjs sign`,
+   `release.ps1`); `--valid-days` accepts 1 to 90 and warns above 7. `resign-manifests.yml` keeps
+   renewing twice a week.
+2. **Once 1.0.2, 0.9.12 and their BetterInstaller engine are no longer in use** (telemetry or the
+   download counts of later releases show nobody updating from them), sign with `--valid-days 90`
+   (or change `MANIFEST_DEFAULT_VALIDITY_DAYS` in both signers), then update this section, the
+   maintainer notes of `tools/release/lib/notes.mjs` and the docs that say « 7 days ».
+   `resign-manifests.yml` can then run less often, but must still run well inside 90 days.
+
 `src-tauri/src/commands/autoupdate.rs` picks between them by looking for the maintenance binary, so
 there is nothing to configure per install.
 
@@ -278,8 +311,8 @@ file, in this order (`UpdateInfo.verification`, shown in the dialog):
    from `https://github.com/FreeProject089/BetterModsManager/releases/download/`, and compares
    its SHA-256 with the one the release's **`update.json`** declares for that file. update.json is
    read the way BetterInstaller reads it with a pinned key: signature with the same publisher key
-   (context `BetterInstaller update manifest v1`), app `com.bettermm.desktop`, at most 7 days
-   valid and not expired, a version newer than the running one. The entry is
+   (context `BetterInstaller update manifest v1`), app `com.bettermm.desktop`, at most 90 days
+   valid (7 in 1.0.2) and not expired, a version newer than the running one. The entry is
    `installers: [{ "path": "BMM-Setup.exe", "sha256": "<64 hex>" }]` **inside the signed body**.
 3. **`unverified`**: no update.json, an invalid one, no entry for the installer, or bytes that do
    not match. BMM downloads the file, says in plain words what failed (GitHub's own `digest` for
@@ -430,5 +463,5 @@ uninstalled or deleted build left the scheme pointing at nothing.
 - Every asset: `BMM-Setup.exe`, `bmm.bpkg`, `update.json`, signed `update-manifest.json`,
   `lang-*.json`, `links.json`. `check-release-versions --artifacts` passes on exactly these.
 - Re-sign `update.json` and `update-manifest.json` at publish time (both expire 7 days after
-  signing); `resign-manifests.yml` renews them twice a week afterwards.
+  signing; `--steps publish` does it); `resign-manifests.yml` renews them twice a week afterwards.
 - Changelog: `Update/changelog_v1.0.2_EN.md` / `_FR.md`. Release comms drafts: `Release/1.0.2/`.

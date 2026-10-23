@@ -4,7 +4,6 @@ Settings is a long page, but most of it you set once and forget. This tour start
 handful that change how BMM *feels*, then walks the rest section by section so nothing is a
 mystery.
 
-<div class="bmm-replay" data-src="assets/docs/media/replays/settings.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/settings.bmmreplay" data-page="features/settings" data-title="A tour of Settings"></div>
 
 
 ## Finding a setting
