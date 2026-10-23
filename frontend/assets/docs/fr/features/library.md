@@ -10,7 +10,7 @@ sa provenance. Si tu ne devais apprendre qu'un seul écran de BMM, prends celui-
 reste (profils, modpacks, listes) n'est qu'une façon différente d'organiser ce qu'elle
 contient.
 
-<div class="bmm-replay" data-src="assets/docs/media/replays/library.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/library.bmmreplay" data-page="features/library" data-title="Ajouter un mod et l'activer"></div>
+![Ajouter un mod et l'activer](assets/docs/media/gifs/guide-add-mods.gif)
 
 
 ## Ajouter ton premier mod

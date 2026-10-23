@@ -321,7 +321,7 @@ Re-signing with your key means a repo first signed by **someone else** changes a
 the plan says so before you confirm. Subscribers that pinned the old id see the change.
 Converting an up-to-date manifest is a no-op: nothing is written and the signature is kept.
 
-```text
+```bash
 bmm repo-convert "D:/Repos/MyRepo" --dry-run   # the plan; works with BMM closed
 bmm repo-convert "D:/Repos/MyRepo"             # convert + re-sign (BMM running)
 bmm repo-convert "D:/Repos/MyRepo" --no-sign   # convert without the app, UNSIGNED

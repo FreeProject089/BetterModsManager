@@ -73,7 +73,7 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 
 ## Every key with variables
 
-1284 keys, grouped by their first segment. The text is the English one, shortened.
+1291 keys, grouped by their first segment. The text is the English one, shortened.
 
 ### activity
 
@@ -783,7 +783,14 @@ These keys contain braces that are shown to the reader as they are. Nothing is f
 |---|---|---|
 | `nbx.added` | `{name}` | “{name}” added to the sidebar. |
 | `nbx.deleteButtonD` | `{name}` | “{name}” leaves the sidebar. |
+| `nbx.deletePageButtons` | `{n}` | Its {n} button(s) leave the sidebar too. |
 | `nbx.deletePageD` | `{name}` | “{name}” and its saved data are removed for good. |
+| `nbx.duplicated` | `{name}` | “{name}” created. Its permissions are all off. |
+| `nbx.duplicateSkipped` | `{n}` | {n} file(s) could not be copied. |
+| `nbx.fromStarter` | `{name}` | From the “{name}” starter |
+| `nbx.pageDeleted` | `{name}` | “{name}” deleted. |
+| `nbx.revertD` | `{name}` | The HTML, CSS and JS of this page are replaced by the “{name}” starter. Its documents, files, saved data and… |
+| `nbx.reverted` | `{name}` | Back to the “{name}” starter. |
 | `nbx.tplUses` | `{perms}` | This starter uses: {perms}. |
 
 ### notif

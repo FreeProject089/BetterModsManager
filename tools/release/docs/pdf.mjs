@@ -7,7 +7,7 @@
 //   3. headless Chrome (puppeteer-core) opens each print_page/, waits for Mermaid, and this module
 //      dresses it as a book (print-style.mjs): a cover (logo, title, version, date), a table of
 //      contents with page links AND page numbers, animated GIFs replaced by one still frame,
-//      interactive replays replaced by a link, running header (BMM name, version) and footer
+//      captions under the images, callouts with their type, external links followed by their address, running header (BMM name, version) and footer
 //      (page x / y), PDF bookmarks;
 //   4. the page numbers of the table of contents come from the PDF's own bookmarks of a first
 //      print, then the page is printed again with the numbers in (same layout, so they hold).
@@ -99,7 +99,7 @@ async function gifFrames(paths, framesDir, log) {
   return out;
 }
 
-/** Runs in the page: cover, table of contents, still frames, replay links. Returns the TOC entries. */
+/** Runs in the page: cover, table of contents, still frames, captions, callout labels, link addresses. Returns the TOC entries. */
 export function dress(a) {
   const doc = document;
   const root = doc.getElementById('print-site-page');
@@ -107,7 +107,23 @@ export function dress(a) {
   const titleOf = (h) => { const c = h.cloneNode(true); c.querySelectorAll('.headerlink').forEach((x) => x.remove()); return c.textContent.replace(/\s+/g, ' ').trim(); };
   // Every image loads now (no lazy loading in print).
   doc.querySelectorAll('img').forEach((i) => { i.removeAttribute('loading'); });
-  // GIFs: one still frame and a line saying so.
+  // "Show me" / "Practise" chips only mean something inside BMM: drop them, and the paragraph they leave empty.
+  doc.querySelectorAll('.bmm-show').forEach((el) => { const p = el.parentElement; el.remove(); if (p && p.tagName === 'P' && !p.textContent.trim() && !p.children.length) p.remove(); });
+  // Captions: an image alone in its paragraph, followed by a paragraph that is only emphasis, gets that
+  // paragraph as its caption; an image without one gets its alt text.
+  const onlyChild = (p, sel) => p.children.length === 1 && p.firstElementChild.matches(sel) && !p.textContent.trim();
+  const caps = new Map();
+  doc.querySelectorAll('.md-typeset p').forEach((p) => {
+    const img = p.firstElementChild;
+    if (!img || !onlyChild(p, 'img') || p.closest('.bmm-cover,.bmm-hero')) return;
+    if (/\.svg(\?|#|$)/i.test(img.getAttribute('src') || '')) return;
+    p.classList.add('fig');
+    const nx = p.nextElementSibling;
+    if (nx && nx.tagName === 'P' && nx.children.length === 1 && nx.firstElementChild.tagName === 'EM' && nx.textContent.trim() === nx.firstElementChild.textContent.trim()) { nx.classList.add('cap'); caps.set(img, nx); return; }
+    const alt = (img.getAttribute('alt') || '').trim();
+    if (alt.length > 3) { const c = doc.createElement('p'); c.className = 'cap'; c.textContent = alt; p.insertAdjacentElement('afterend', c); caps.set(img, c); }
+  });
+  // GIFs: one still frame and a line saying so (after the caption).
   doc.querySelectorAll('img').forEach((img) => {
     const src = img.getAttribute('src') || '';
     if (!/\.gif(\?|#|$)/i.test(src)) return;
@@ -116,17 +132,31 @@ export function dress(a) {
     const p = doc.createElement('p');
     p.className = 'bmm-anim';
     p.innerHTML = `${esc(a.t.anim)}: <a href="${esc(a.siteUrl)}">${esc(a.siteUrl.replace(/^https?:\/\//, ''))}</a>`;
-    (img.closest('p') || img).insertAdjacentElement('afterend', p);
+    (caps.get(img) || img.closest('p') || img).insertAdjacentElement('afterend', p);
   });
-  // Replays: a link in place of the player.
-  doc.querySelectorAll('.bmm-replay').forEach((el) => {
-    const page = el.closest('section.print-page[id]');
-    const url = (page && a.pages[page.id]) || a.siteUrl;
-    const box = doc.createElement('div');
-    box.className = 'bmm-replaylink';
-    box.innerHTML = `<b>${esc(a.t.replay)}${el.dataset.title ? `: ${esc(el.dataset.title)}` : ''}</b><br>${esc(a.t.replayHint)}: <a href="${esc(url)}">${esc(url.replace(/^https?:\/\//, ''))}</a>`;
-    el.insertAdjacentElement('afterend', box);
-    el.remove();
+  // Callouts: write the type before the title ("TIP  It loads on demand"), so it survives a custom title.
+  doc.querySelectorAll('.md-typeset .admonition').forEach((el) => {
+    const title = el.querySelector(':scope > .admonition-title');
+    const kind = [...el.classList].find((c) => c !== 'admonition' && a.t.adm[c]);
+    if (!title || !kind) return;
+    const label = a.t.adm[kind];
+    const span = doc.createElement('span');
+    span.className = 'adm-type';
+    span.textContent = label;
+    if (title.textContent.trim().toLowerCase() === label.toLowerCase()) { title.textContent = ''; span.style.marginRight = '0'; }
+    title.insertBefore(span, title.firstChild);
+  });
+  // External links: the address follows the text (it is the only thing a reader of paper can use).
+  doc.querySelectorAll('.md-typeset a[href]').forEach((link) => {
+    const href = link.getAttribute('href') || '';
+    if (!/^https?:\/\//i.test(href) || link.closest('.bmm-cover,.bmm-toc,.bmm-anim,.admonition-title,h1,h2,h3,h4,h5,h6,pre,.highlight,.md-button')) return;
+    const shown = href.replace(/^https?:\/\//i, '').replace(/\/$/, '');
+    const text = link.textContent.replace(/\s+/g, ' ').trim().replace(/^https?:\/\//i, '').replace(/\/$/, '');
+    if (!text || text === shown || text.startsWith(shown) || shown.startsWith(text)) return;
+    const u = doc.createElement('span');
+    u.className = 'ext-url';
+    u.textContent = ` (${shown})`;
+    link.insertAdjacentElement('afterend', u);
   });
   // Cover (the title is a div: the book's headings are its table of contents and its bookmarks).
   const cover = doc.createElement('section');

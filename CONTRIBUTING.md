@@ -53,8 +53,9 @@ The release process is described in [RELEASE.md](RELEASE.md).
 - **`npm run ci` passes.** Each gate explains its failure. Fix the cause rather than loosening the
   gate; baselines only go down.
 - **Translations**: every visible string uses a translation key. Add each key to
-  `frontend/Lang/en.json`, `fr.json` and `template.json`, inserted next to its neighbours (do not
-  re-serialise the files). See `Update/Documentation/TranslationGuide_EN.md`.
+  `frontend/Lang/en.json` and `fr.json`, inserted next to its neighbours (do not re-serialise the
+  files), then regenerate `template.json` with `node scripts/gen-lang-template.mjs`. See
+  `Update/Documentation/TranslationGuide_EN.md`.
 - **Docs**: a user-visible change updates its page in `BMM Docs/docs` (EN `page.md` and FR
   `page.fr.md`), then `node scripts/sync-docs.mjs`. Markdown is rendered with B.MD; do not add another renderer.
 - **Changelog**: user-visible changes go in `Update/changelog_v<version>_EN.md` and `_FR.md`.

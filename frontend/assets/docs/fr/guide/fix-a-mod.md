@@ -42,5 +42,3 @@ Le Mapper modifie la copie que BMM garde, pas le dossier du jeu. Si le mod est m
 ## Ensuite
 
 Remplis les détails du mod (nom, version, auteur) pour le retrouver plus tard. Détails : [Mapper](doc-page:features/mapper), [Comment fonctionne le Mapper](doc-page:how-it-works/mapper).
-
-<div class="bmm-replay" data-src="assets/docs/media/replays/fix-a-mod.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/fix-a-mod.bmmreplay" data-page="guide/fix-a-mod" data-title="Regarde : un mod un dossier trop profond, réparé dans le Mapper"></div>

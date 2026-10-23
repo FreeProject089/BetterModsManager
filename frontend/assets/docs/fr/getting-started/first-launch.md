@@ -14,7 +14,6 @@ La section **Pas à pas** a une page par tâche, chacune avec une image et un bo
 
 *Installer un nouveau jeu. Un profil pour Northwind Saga, trois mods ajoutés depuis leurs archives, activés, le conflit qu’ils créent réglé, et les fichiers dans le dossier du jeu.*
 
-<div class="bmm-replay" data-src="assets/docs/media/replays/new-game.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/new-game.bmmreplay" data-page="getting-started/first-launch" data-title="Installer un nouveau jeu"></div>
 <!-- /story:new-game -->
 
 ## 1. Créer un profil

@@ -73,7 +73,7 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 
 ## Toutes les clés avec variables
 
-1284 clés, regroupées par leur premier segment. Le texte est le texte français, raccourci.
+1291 clés, regroupées par leur premier segment. Le texte est le texte français, raccourci.
 
 ### activity
 
@@ -783,7 +783,14 @@ Ces clés contiennent des accolades montrées telles quelles au lecteur. Rien n�
 |---|---|---|
 | `nbx.added` | `{name}` | « {name} » ajouté à la barre latérale. |
 | `nbx.deleteButtonD` | `{name}` | « {name} » quitte la barre latérale. |
+| `nbx.deletePageButtons` | `{n}` | Ses {n} bouton(s) quittent aussi la barre. |
 | `nbx.deletePageD` | `{name}` | « {name} » et ses données enregistrées sont supprimées définitivement. |
+| `nbx.duplicated` | `{name}` | « {name} » créée. Toutes ses permissions sont désactivées. |
+| `nbx.duplicateSkipped` | `{n}` | {n} fichier(s) n’ont pas pu être copiés. |
+| `nbx.fromStarter` | `{name}` | Depuis le modèle « {name} » |
+| `nbx.pageDeleted` | `{name}` | « {name} » supprimée. |
+| `nbx.revertD` | `{name}` | Le HTML, le CSS et le JS de cette page sont remplacés par le modèle « {name} ». Ses documents, fichiers, donn… |
+| `nbx.reverted` | `{name}` | Revenu au modèle « {name} ». |
 | `nbx.tplUses` | `{perms}` | Ce modèle utilise : {perms}. |
 
 ### notif

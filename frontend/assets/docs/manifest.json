@@ -128,7 +128,7 @@
         "en": "Three steps. Do them in order — the second one is the one people skip, and it's the one that matters.",
         "fr": "Trois étapes. Dans l'ordre — la deuxième est celle qu'on saute, et c'est celle qui compte."
       },
-      "words": 568,
+      "words": 538,
       "diagrams": 0,
       "fr": true
     },
@@ -173,7 +173,7 @@
         "en": "You will add one mod to BMM, switch it on for a profile, and check that it reached the game folder.",
         "fr": "Tu vas ajouter un mod à BMM, l'activer pour un profil, et vérifier qu'il est arrivé dans le dossier du jeu."
       },
-      "words": 458,
+      "words": 418,
       "diagrams": 0,
       "fr": true
     },
@@ -203,7 +203,7 @@
         "en": "You will turn mods on and off, then decide which mod wins when two of them contain the same file.",
         "fr": "Tu vas activer et désactiver des mods, puis décider quel mod gagne quand deux d'entre eux contiennent le même fichier."
       },
-      "words": 453,
+      "words": 416,
       "diagrams": 0,
       "fr": true
     },
@@ -233,7 +233,7 @@
         "en": "The mod is on, BMM says it is installed, and the game behaves as if it were not there. Nine times in ten the mod's files are one folder too deep.",
         "fr": "Le mod est activé, BMM dit qu'il est installé, et le jeu se comporte comme s'il n'était pas là. Neuf fois sur dix, les fichiers du mod sont un dossier trop profond."
       },
-      "words": 490,
+      "words": 453,
       "diagrams": 0,
       "fr": true
     },
@@ -248,7 +248,7 @@
         "en": "You will turn your mods into one pack, and give friends the same setup: either a file they import, or a repo they follow.",
         "fr": "Tu vas transformer tes mods en un seul pack, et donner la même configuration à des amis : soit un fichier qu'ils importent, soit un dépôt qu'ils suivent."
       },
-      "words": 463,
+      "words": 425,
       "diagrams": 0,
       "fr": true
     },
@@ -263,7 +263,7 @@
         "en": "A friend or a community runs a repo. You will sync it once into a profile, then follow it so BMM tells you, or updates for you, when it changes.",
         "fr": "Un ami ou une communauté héberge un dépôt. Tu vas le synchroniser une fois dans un profil, puis le suivre pour que BMM te prévienne, ou mette à jour pour toi,…"
       },
-      "words": 505,
+      "words": 469,
       "diagrams": 0,
       "fr": true
     },
@@ -293,7 +293,7 @@
         "en": ":::tip[Prefer it step by step?] The task version of this page is Install your first mod: short steps, what you should see, a picture and a Show me button. :::",
         "fr": ":::tip[Tu préfères pas à pas ?] La version « tâche » de cette page est Installer ton premier mod : de courtes étapes, ce que tu dois voir, une image et un…"
       },
-      "words": 1098,
+      "words": 1079,
       "diagrams": 0,
       "fr": true
     },
@@ -308,7 +308,7 @@
         "en": "A .MM file is your complete setup, written down — and unlike a modpack, it carries the download links, so the person receiving it doesn't need to own the mods…",
         "fr": "Un fichier .MM, c'est ta configuration complète, écrite — et contrairement à un modpack, il embarque les liens de téléchargement : la personne qui le reçoit…"
       },
-      "words": 607,
+      "words": 544,
       "diagrams": 0,
       "fr": true
     },
@@ -323,7 +323,7 @@
         "en": ":::tip[Prefer it step by step?] The task version of this page is Create a profile: short steps, what you should see, a picture and a Show me button. :::",
         "fr": ":::tip[Tu préfères pas à pas ?] La version « tâche » de cette page est Créer un profil : de courtes étapes, ce que tu dois voir, une image et un bouton Montre-moi."
       },
-      "words": 869,
+      "words": 850,
       "diagrams": 0,
       "fr": true
     },
@@ -338,7 +338,7 @@
         "en": ":::tip[Prefer it step by step?] The task version of this page is Share a modpack: short steps, what you should see, a picture and a Show me button. :::",
         "fr": ":::tip[Tu préfères pas à pas ?] La version « tâche » de cette page est Partager un modpack : de courtes étapes, ce que tu dois voir, une image et un bouton…"
       },
-      "words": 950,
+      "words": 890,
       "diagrams": 0,
       "fr": true
     },
@@ -353,7 +353,7 @@
         "en": ":::tip[Prefer it step by step?] The task version of this page is Follow a repo: short steps, what you should see, a picture and a Show me button. :::",
         "fr": ":::tip[Tu préfères pas à pas ?] La version « tâche » de cette page est Suivre un dépôt : de courtes étapes, ce que tu dois voir, une image et un bouton Montre-moi."
       },
-      "words": 7282,
+      "words": 7263,
       "diagrams": 1,
       "fr": true
     },
@@ -368,7 +368,7 @@
         "en": "Extend BMM with community plugins and automate actions.",
         "fr": "Étends BMM avec des plugins communautaires et automatise des actions."
       },
-      "words": 3829,
+      "words": 3765,
       "diagrams": 0,
       "fr": true
     },
@@ -383,7 +383,7 @@
         "en": "Schedule BMM actions (one-time or recurring) — activate a mod, modpack, profile… with conditions (if/else), your own scripts and external programs.",
         "fr": "Planifiez des actions BMM (ponctuelles ou récurrentes) — activer un mod, un modpack, un profil… avec conditions (si/sinon), tes propres scripts et des…"
       },
-      "words": 13114,
+      "words": 13057,
       "diagrams": 0,
       "fr": true
     },
@@ -428,7 +428,7 @@
         "en": "Browse & install apps in one click.",
         "fr": "Parcours et installe des apps en un clic."
       },
-      "words": 2572,
+      "words": 2509,
       "diagrams": 0,
       "fr": true
     },
@@ -443,7 +443,7 @@
         "en": ":::tip[Prefer it step by step?] The task version of this page is Fix a mod the game ignores: short steps, what you should see, a picture and a Show me button.",
         "fr": ":::tip[Tu préfères pas à pas ?] La version « tâche » de cette page est Réparer un mod que le jeu ignore : de courtes étapes, ce que tu dois voir, une image et…"
       },
-      "words": 722,
+      "words": 663,
       "diagrams": 0,
       "fr": true
     },
@@ -458,7 +458,7 @@
         "en": "News & posts from the BetterCommunity blogs, read without leaving BMM.",
         "fr": "Actus et articles des blogs BetterCommunity, lus sans quitter BMM."
       },
-      "words": 1478,
+      "words": 1449,
       "diagrams": 0,
       "fr": true
     },
@@ -488,7 +488,7 @@
         "en": "Settings is a long page, but most of it you set once and forget. This tour starts with the handful that change how BMM feels, then walks the rest section by…",
         "fr": "Les Paramètres forment une longue page, mais la plupart se règlent une fois pour toutes."
       },
-      "words": 3221,
+      "words": 3192,
       "diagrams": 0,
       "fr": true
     },
@@ -578,7 +578,7 @@
         "en": "Press Ctrl+K (Cmd+K on macOS) anywhere in BMM to open the command palette — a single search box laid over every page and every action. Type a few letters,",
         "fr": "Appuie sur Ctrl+K (Cmd+K sur macOS) n'importe où dans BMM pour ouvrir la palette de commandes — une seule barre de recherche par-dessus toutes les pages et"
       },
-      "words": 1199,
+      "words": 1172,
       "diagrams": 1,
       "fr": true
     },
@@ -638,7 +638,7 @@
         "en": "Until you explicitly accept the consent dialog, nothing is collected at all — the tracker is a no-op.",
         "fr": "Tant que tu n'acceptes pas explicitement la boîte de consentement, rien n'est collecté du tout — le traqueur ne fait rien."
       },
-      "words": 1339,
+      "words": 1253,
       "diagrams": 3,
       "fr": true
     },
@@ -683,7 +683,7 @@
         "en": "Customise every colour, font and element of BMM. Share themes in one click. Building your own? The full token-by-token reference is Make your own theme.",
         "fr": "Personnalise chaque couleur, police et élément de BMM. Partage tes thèmes en un clic."
       },
-      "words": 1600,
+      "words": 1541,
       "diagrams": 0,
       "fr": true
     },
@@ -1103,7 +1103,7 @@
         "en": "B.MD (better.markdown) is the block vocabulary shared by BMM and BetterCommunity.",
         "fr": "Partout où du texte est affiché — la documentation d'un plugin, une page personnalisée, un article de la communauté sur BetterCommunity — vous avez le…"
       },
-      "words": 1758,
+      "words": 1771,
       "diagrams": 0,
       "fr": true
     },
@@ -1163,7 +1163,7 @@
         "en": "The features have their own pages. This one is about the interactions — the clicks, keys and small conveniences that aren't obvious until someone points at them.",
         "fr": "Les fonctionnalités ont leur propre page. Celle-ci parle des interactions — les clics, touches et petites commodités qu'on ne devine pas tant que quelqu'un ne…"
       },
-      "words": 589,
+      "words": 531,
       "diagrams": 0,
       "fr": true
     },

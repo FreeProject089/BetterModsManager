@@ -1393,8 +1393,8 @@ sees the connection address and truncates it server-side.
 
 ## 80. Counts at this release
 
-691 commands registered, 97 endpoints in the local API, 95 MCP tools, 81 CLI subcommands, 137
-actions in the scheduler, 13 built-in themes, and 94 steps in `npm run ci`. `check-counts` and
+692 commands registered, 97 endpoints in the local API, 95 MCP tools, 81 CLI subcommands, 137
+actions in the scheduler, 13 built-in themes, and 95 steps in `npm run ci`. `check-counts` and
 `check-theme-count` fail when a page quotes another number.
 
 ## 81. 1.0.2: update pipeline, consent ledger, followed repos, activity, catalogue index

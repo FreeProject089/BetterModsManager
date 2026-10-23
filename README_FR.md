@@ -1,12 +1,12 @@
 <div align="center">
 
-  <img src=".github/screenshots/hero.png" alt="Better Mod Manager 1.0.2" width="100%" />
+  <img src=".github/screenshots/hero.png" alt="Better Mod Manager 1.0.4" width="100%" />
 
   # Better Mod Manager
 
   **Un gestionnaire de mods universel pour Windows : profils, bibliothèque de mods, modpacks et synchronisation Serveur Repo.**
 
-  ![Version](https://img.shields.io/badge/version-1.0.2-blue.svg?style=flat-square)
+  ![Version](https://img.shields.io/badge/version-1.0.4-blue.svg?style=flat-square)
   ![Licence](https://img.shields.io/badge/licence-GPL--3.0-green.svg?style=flat-square)
   ![Plateforme](https://img.shields.io/badge/plateforme-Windows%2010%2F11-important?style=flat-square)
   ![Rust](https://img.shields.io/badge/cr%C3%A9%C3%A9%20avec-Rust-orange?style=flat-square&logo=rust)
@@ -63,9 +63,9 @@ Plus d'images, domaine par domaine : [VISUALS_FR.md](VISUALS_FR.md).
 - **CLI et MCP** : `bmm-mcp-server.exe` pilote BMM depuis un script ou depuis un agent IA via MCP.
 - **Aide intégrée** : articles bilingues, tutoriels interactifs et palette de commandes (Ctrl+K).
 
-## Nouveautés de la 1.0.2
+## Nouveautés de la 1.0.4
 
-La liste complète est dans le [journal des modifications 1.0.2](Update/changelog_v1.0.2_FR.md). L'essentiel :
+La liste complète est dans le [journal des modifications 1.0.4](Update/changelog_v1.0.4_FR.md). L'essentiel :
 
 - **Des mises à jour en un clic qui fonctionnent à nouveau** : téléchargement, vérification par le manifeste signé de la version, installation. Canal stable ou préversion, vérification en arrière-plan facultative.
 - **Centre d'activité** : un bouton dans la barre de titre liste chaque tâche en cours (activation, téléchargements, synchronisation, analyses, exports, travaux de Laya…) avec sa progression et Annuler, ainsi que les 30 dernières terminées.

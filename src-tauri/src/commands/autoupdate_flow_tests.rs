@@ -495,9 +495,14 @@ fn each_launch_gets_a_fresh_folder_and_the_signed_name() {
 /// BetterInstaller's update.json (its context string), signed with the test key, listing
 /// `installers` in the signed body.
 fn bi_update_json(version: &str, issued: DateTime<Utc>, installers: serde_json::Value) -> String {
+    bi_update_json_valid(version, issued, Duration::days(7), installers)
+}
+
+/// [`bi_update_json`], valid for `validity` instead of the 7 days the publisher signs today.
+fn bi_update_json_valid(version: &str, issued: DateTime<Utc>, validity: Duration, installers: serde_json::Value) -> String {
     let body = serde_json::json!({
         "app_id": MANIFEST_APP_ID, "version": version, "url": "https://h/bmm.bpkg", "sha256": "ab".repeat(32),
-        "installers": installers, "issued": rfc(issued), "expires": rfc(issued + Duration::days(7)),
+        "installers": installers, "issued": rfc(issued), "expires": rfc(issued + validity),
     })
     .to_string();
     let mut msg = BI_MANIFEST_SIG_CONTEXT.to_vec();
@@ -699,6 +704,24 @@ fn the_published_v1_0_1_update_json_verifies_but_names_no_installer() {
     let now = Utc.with_ymd_and_hms(2026, 10, 13, 12, 0, 0).unwrap();
     let r = update_json_checksum(doc, &publisher_key().unwrap(), "0.9.12", now, "BMM-Setup.exe");
     assert_eq!(r.unwrap_err().0, "no-entry", "signature, app, dates and version pass; only the entry is missing");
+}
+
+/// The release's update.json is read with the same 90-day window as update-manifest.json:
+/// 90 days verifies, 91 is refused, and a 90-day one still expires.
+#[test]
+fn the_release_update_json_is_accepted_for_up_to_ninety_days() {
+    let key = test_key().verifying_key();
+    let sha = sha_hex(b"setup");
+    let entry = serde_json::json!([{ "path": "BMM-Setup.exe", "sha256": sha }]);
+    let at = |d: i64| t0() + Duration::days(d);
+    let ninety = bi_update_json_valid("1.0.1", t0(), Duration::days(90), entry.clone());
+    assert_eq!(update_json_checksum(&ninety, &key, "1.0.0", at(1), "BMM-Setup.exe").unwrap(), sha);
+    assert_eq!(update_json_checksum(&ninety, &key, "1.0.0", at(89), "BMM-Setup.exe").unwrap(), sha);
+    let expired = update_json_checksum(&ninety, &key, "1.0.0", at(90), "BMM-Setup.exe").unwrap_err();
+    assert!(expired.0 == "invalid" && expired.1.contains("expired"), "{expired:?}");
+    let d91 = bi_update_json_valid("1.0.1", t0(), Duration::days(91), entry);
+    let long = update_json_checksum(&d91, &key, "1.0.0", at(1), "BMM-Setup.exe").unwrap_err();
+    assert!(long.0 == "invalid" && long.1.contains("longer than 90 days"), "{long:?}");
 }
 
 #[test]

@@ -7,7 +7,6 @@ Les outils *autour* du modding — ceux qu'il faudrait sinon dénicher sur cinq 
 L'App Catalog liste les apps compagnons et utilitaires, les installe pour toi, garde en tête
 la version que tu as, et les lance — sans que tu gères les téléchargements à la main.
 
-<div class="bmm-replay" data-src="assets/docs/media/replays/apps.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/apps.bmmreplay" data-page="features/apps" data-title="Installer une application depuis le catalogue"></div>
 
 
 
@@ -16,7 +15,6 @@ la version que tu as, et les lance — sans que tu gères les téléchargements 
 
 *Trouver des applis et du contenu dans les catalogues. L’App Catalog : parcourir et chercher, les détails d’une appli, d’où vient la liste, et son propre catalogue construit dans l’onglet Créer.*
 
-<div class="bmm-replay" data-src="assets/docs/media/replays/catalogues.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/catalogues.bmmreplay" data-page="features/apps" data-title="Trouver des applis et du contenu dans les catalogues"></div>
 <!-- /story:catalogues -->
 
 ## Lire une carte

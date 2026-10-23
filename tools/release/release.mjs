@@ -5,8 +5,9 @@
 //   release.bat --all --version 1.0.4 --yes       every step, no questions
 //   release.bat --version 1.0.2 --steps preflight,changelog,verify,media --yes
 //
-// See tools/release/README.md for every option. Nothing here commits, tags, pushes or publishes:
-// the last step prints the `gh release create` command for a human to run.
+// See tools/release/README.md for every option. Nothing here commits. Tagging, pushing and
+// publishing happen only in the publish step (`--steps publish`, never in --all) and only with
+// --yes-publish; without it that step prints the commands for a human to run.
 
 import { createInterface } from 'node:readline/promises';
 import { join } from 'node:path';
@@ -21,7 +22,7 @@ const HELP = `BMM release tool
   release.bat [options]
 
   --version X.Y.Z      version to release (default: package.json, or asked)
-  --all                every step
+  --all                every step except publish
   --steps a,b,c        only these steps (ids below, or numbers)
   --yes                no questions: defaults everywhere, stop at the first failure
   --continue           keep going after a failed step
@@ -48,10 +49,12 @@ const HELP = `BMM release tool
   --force              run heavy steps even when the machine is busy
   --max-cpu N          bench: other programs may use at most N % CPU (default 10; a game is « busy »)
   --wait-minutes N     how long to wait for an idle machine (default 120)
+  --yes-publish        publish: really run git tag, git push origin v<v> and gh release create
+                       (without it the step re-signs, re-checks and only prints them; --yes does not imply it)
   -h, --help
 
 Steps:
-${STEPS.map((s, i) => `  ${String(i + 1).padStart(2)}. ${s.id.padEnd(10)} ${s.desc}`).join('\n')}
+${STEPS.map((s, i) => `  ${String(i + 1).padStart(2)}. ${s.id.padEnd(10)} ${s.desc}${s.manual ? ' [only by name]' : ''}`).join('\n')}
   ${String(STEPS.length + 1).padStart(2)}. summary    RELEASE-SUMMARY.md (always runs last)
 `;
 
@@ -88,6 +91,7 @@ function parseArgs(argv) {
       case '--force': o.force = true; break;
       case '--max-cpu': o.maxCpu = +next(); break;
       case '--wait-minutes': o.waitMinutes = +next(); break;
+      case '--yes-publish': o.yesPublish = true; break;
       default: throw new Error(`unknown option ${a} (see --help)`);
     }
   }
@@ -126,16 +130,18 @@ async function main() {
     opts.versionGiven = true;
   }
 
+  // publish is never part of « all »: it runs only when asked for by name or number.
+  const ALL = STEPS.filter((s) => !s.manual);
   let steps;
-  if (opts.all) steps = STEPS;
+  if (opts.all) steps = ALL;
   else if (opts.steps) steps = resolveSteps(opts.steps);
   else if (interactive) {
     console.log(`\n  Steps for ${c.cyan(version)}:`);
-    STEPS.forEach((s, i) => console.log(`   ${c.bold(String(i + 1).padStart(2))}  ${s.title.padEnd(24)} ${c.dim(s.desc)}${s.heavy ? c.yellow('  [heavy]') : ''}`));
+    STEPS.forEach((s, i) => console.log(`   ${c.bold(String(i + 1).padStart(2))}  ${s.title.padEnd(24)} ${c.dim(s.desc)}${s.heavy ? c.yellow('  [heavy]') : ''}${s.manual ? c.yellow('  [not in « a »]') : ''}`));
     console.log(`   ${c.dim(' a  all     q  quit       (the summary always runs last)')}`);
     const a = await ask('Steps to run (e.g. 1,3,5-7 or a)', 'a');
     if (/^q/i.test(a)) { rl?.close(); return 0; }
-    if (/^a/i.test(a)) steps = STEPS;
+    if (/^a/i.test(a)) steps = ALL;
     else steps = resolveSteps(a.split(',').flatMap((x) => { const m = /^(\d+)-(\d+)$/.exec(x.trim()); return m ? Array.from({ length: +m[2] - +m[1] + 1 }, (_, k) => String(+m[1] + k)) : [x.trim()]; }));
   } else { console.log(HELP); return 2; }
 
@@ -192,8 +198,8 @@ async function summary(ctx, results) {
     ...results.map((r) => `| ${r.title} | ${status(r)} | ${fmtDuration(r.ms)} | ${r.outputs.map((o) => `\`${o}\``).join('<br>') || '-'} | ${r.notes.join('<br>') || '-'} |`), '',
     '## Reminders', '',
     '- The GitHub release carries **BMM-Setup.exe as its only installer** (plus bmm.bpkg, update.json, update-manifest.json and the language / links files). BMM 0.9.11 runs the first .msi/.exe of a release: `extras/` (NSIS / MSI) is never uploaded.',
-    '- update.json and update-manifest.json expire 7 days after signing: publish within that window or re-sign first.',
-    '- Publishing stays manual. Run the command below yourself, after reading `github-release.md`.', ''];
+    '- update.json and update-manifest.json expire 7 days after signing. `--steps publish` re-signs both when fewer than 14 days are left (so, with 7-day signatures, every time), re-verifies and refreshes the checksums.',
+    '- Publishing runs only with `--steps publish --yes-publish`; otherwise run the commands below yourself, after reading `github-release.md`.', ''];
   if (ctx.state.ghCommand) md.push('```bash', ctx.state.ghCommand, '```', '');
   md.push(`Checksums of everything in this folder: \`${SUMS_NAME}\`.`, '');
   writeText(join(rel, 'RELEASE-SUMMARY.md'), md.join('\n'));

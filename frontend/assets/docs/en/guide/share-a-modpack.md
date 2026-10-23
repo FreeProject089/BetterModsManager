@@ -55,5 +55,3 @@ be up all day, host the files on a static web host, or use the standalone mini-s
 ## Next
 
 [Follow a repo](doc-page:guide/follow-a-repo) is the friend's side. Details: [Modpacks](doc-page:features/modpacks), [Server Repo](doc-page:features/repo).
-
-<div class="bmm-replay" data-src="assets/docs/media/replays/share-setup.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/share-setup.bmmreplay" data-page="guide/share-a-modpack" data-title="Watch it: a profile becomes a modpack, a repo, and a friend's sync"></div>

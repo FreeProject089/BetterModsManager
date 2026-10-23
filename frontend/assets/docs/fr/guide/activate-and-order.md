@@ -44,5 +44,3 @@ Le panneau de détails d'un mod a une zone **Ordre d'activation** avec Haut, Mon
 ## Ensuite
 
 [Régler un conflit](doc-page:guide/fix-a-conflict). Détails : [Ordre d'activation](doc-page:how-it-works/load-order), [Bibliothèque](doc-page:features/library).
-
-<div class="bmm-replay" data-src="assets/docs/media/replays/share-list.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/share-list.bmmreplay" data-page="guide/activate-and-order" data-title="Regarde : fixer un ordre, le garder comme liste, le partager"></div>

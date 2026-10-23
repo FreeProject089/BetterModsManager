@@ -4,24 +4,27 @@
 // Per-release wording lives in tools/release/media/cards.<version>.json (or
 // Release/<version>/media/cards.json):
 //   { "shots": { "social": "notifications", "discord": "conflicts", "blog": ["library", "conflicts"], "square": … },
-//     "en": { headline, subline, whatsNew, highlights: [{ icon, title, shot, crop }] },
+//     "en": { headline, subline, whatsNew, meta, highlights: [{ icon, title, desc, shot, crop }] },
 //     "fr": { … } }
 // The rules the owner set (2026-10): one headline of six words at most (a \n is kept as a line
 // break), one subline of twelve words at most, three highlights of five words at most; written
-// for players and modders, benefit first, no internal names. icon: a Lucide name
+// for players and modders, benefit first, no internal names. Each highlight has a one-line desc of
+// eight words at most (the « what's new » tiles); meta is the line under the « what's new » title.
+// icon: a Lucide name
 // (frontend/assets/icons/lucide.json). shot / crop: the screenshot (a shoot.mjs scene) and the
 // part of it [x, y, w, h] (canvas px, 1640×1040) the « what's new » tile shows.
 // Older files ({ sub, chips[], features[[t, d]] }) still read: sub becomes the subline,
 // features the highlights. Without a file, a neutral text is used and the step warns.
 
 export const FOOT = 'github.com/FreeProject089/BetterModsManager';
-export const LIMITS = { headline: 6, subline: 12, highlight: 5, highlights: 3 };
+export const LIMITS = { headline: 6, subline: 12, highlight: 5, highlights: 3, desc: 8 };
 
 const DEFAULTS = {
   en: {
     headline: 'Every game setup, one manager.',
     subline: 'Profiles, a mod library, modpacks and repos, in one Windows app.',
     whatsNew: (v) => `What's new in ${v}`,
+    meta: 'Windows · Free and open source',
     highlights: [
       { icon: 'user', title: 'A profile per setup' },
       { icon: 'package', title: 'Share a whole modpack' },
@@ -32,6 +35,7 @@ const DEFAULTS = {
     headline: 'Chaque config, un seul gestionnaire.',
     subline: 'Profils, bibliothèque de mods, modpacks et dépôts, dans une appli Windows.',
     whatsNew: (v) => `Les nouveautés de la ${v}`,
+    meta: 'Windows · Gratuit et open source',
     highlights: [
       { icon: 'user', title: 'Un profil par config' },
       { icon: 'package', title: 'Partage un modpack entier' },
@@ -48,17 +52,17 @@ const ICONS = ['bell', 'git-merge', 'history', 'wrench'];
 /** highlights, or the features [[title, desc]] of an older file, or null. */
 function highlightsOf(c) {
   if (Array.isArray(c?.highlights) && c.highlights.length) {
-    return c.highlights.map((h, i) => ({ icon: h.icon || ICONS[i % ICONS.length], title: String(h.title ?? ''), shot: h.shot ?? null, crop: Array.isArray(h.crop) ? h.crop : null }));
+    return c.highlights.map((h, i) => ({ icon: h.icon || ICONS[i % ICONS.length], title: String(h.title ?? ''), desc: String(h.desc ?? ''), shot: h.shot ?? null, crop: Array.isArray(h.crop) ? h.crop : null }));
   }
   if (Array.isArray(c?.features) && c.features.length) {
-    return c.features.map(([title], i) => ({ icon: ICONS[i % ICONS.length], title, shot: null, crop: null }));
+    return c.features.map(([title, desc], i) => ({ icon: ICONS[i % ICONS.length], title, desc: String(desc ?? ''), shot: null, crop: null }));
   }
   return null;
 }
 
 /**
  * The text of every card for `version` in `lang`, merged over the defaults.
- * custom = parsed cards JSON (or null). Returns { headline, subline, whatsNew, highlights
+ * custom = parsed cards JSON (or null). Returns { headline, subline, whatsNew, meta, highlights
  * (three at most), shots, foot, version, generic }.
  */
 export function cardText(version, lang, custom = null) {
@@ -69,6 +73,7 @@ export function cardText(version, lang, custom = null) {
     headline: c?.headline ?? d.headline,
     subline: c?.subline ?? c?.sub ?? d.subline,
     whatsNew: typeof c?.whatsNew === 'string' ? c.whatsNew.replaceAll('{version}', version) : d.whatsNew(version),
+    meta: typeof c?.meta === 'string' ? c.meta : d.meta,
     highlights: (highlightsOf(c) ?? d.highlights).slice(0, LIMITS.highlights),
     shots: { ...DEFAULT_SHOTS, ...(custom?.shots || {}) },
     foot: FOOT,
@@ -88,19 +93,17 @@ export function textProblems(custom) {
     const hl = c.highlights || [];
     if (hl.length > LIMITS.highlights) out.push(`${lang}: ${hl.length} highlights (${LIMITS.highlights} at most)`);
     for (const h of hl) if (words(h.title) > LIMITS.highlight) out.push(`${lang} highlight « ${h.title} »: ${words(h.title)} words (${LIMITS.highlight} at most)`);
+    for (const h of hl) if (words(h.desc ?? '') > LIMITS.desc) out.push(`${lang} description « ${h.desc} »: ${words(h.desc)} words (${LIMITS.desc} at most)`);
   }
   return out;
 }
 
-/** The two variants of every card: with Tasky placed in the composition, and without. */
-export const VARIANTS = ['tasky', 'plain'];
-
-/** File name of a card: bmm-<v>-<format>-<variant>[.fr] (no extension). */
-export const cardFile = (spec, variant) => `${spec.base}-${variant}${spec.lang === 'fr' ? '.fr' : ''}`;
+/** File name of a card: bmm-<v>-<format>[.fr] (no extension). */
+export const cardFile = (spec) => `${spec.base}${spec.lang === 'fr' ? '.fr' : ''}`;
 
 /**
  * Card list (base name, size, layout, language, safe zone) for a version. Names carry the
- * version. safe = the rectangle every text (and Tasky) stays inside: what each platform keeps
+ * version. safe = the rectangle every text stays inside: what each platform keeps
  * visible (X and Mastodon cut 1.91:1 from the centre, Discord rounds the corners, Instagram's
  * 3:4 grid shows the middle 810 px of a square, a blog header shared as a link is cut to 1.91:1).
  */

@@ -106,7 +106,11 @@
 .nbx-orphans { display: flex; flex-direction: column; gap: 2px; padding-top: 10px; border-top: 1px solid var(--bmm-border); }
 .nbx-orphans[hidden] { display: none; }
 .nbx-orphans-head { font-size: 11px; font-weight: 700; color: var(--bmm-text-secondary); padding: 0 4px 4px; }
-.nbx-orphan { display: flex; align-items: center; gap: 8px; padding: 3px 4px; color: var(--bmm-text-secondary); }
+.nbx-orphan { display: flex; align-items: center; gap: 4px; padding: 3px 4px; border-radius: 7px; color: var(--bmm-text-secondary); }
+.nbx-orphan .nbx-name { margin-left: 4px; }
+.nbx-orphan.is-sel { background: var(--bmm-s06); color: var(--bmm-text-primary); }
+/* « Edit page » on a row of the sidebar preview: same footprint as the eye beside it. */
+.nbx-row-edit svg { width: 14px; height: 14px; }
 
 /* ── Right: the pane ───────────────────────────────────────────────────────── */
 .nbx-pane {
@@ -317,6 +321,14 @@ p.nbx-hint { margin: 0; display: block; }
 .nbx-code-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-bottom: 12px; border-bottom: 1px solid var(--bmm-border); }
 .nbx-code-top .btn { display: inline-flex; align-items: center; gap: 6px; }
 .nbx-code .nbe-code { width: 100%; box-sizing: border-box; }
+.nbx-code-title { display: inline-flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.nbx-code-title b { font-size: 14px; color: var(--bmm-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; }
+.nbx-badge--warn { color: var(--bmm-warning); border-color: currentColor; background: transparent; }
+.nbx-badge[hidden] { display: none; }
+.nbx-live { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--bmm-text-secondary); cursor: pointer; }
+.nbx-code-manage { display: flex; flex-direction: column; gap: 8px; padding-top: 14px; border-top: 1px solid var(--bmm-border); }
+.nbx-code-manage .btn { display: inline-flex; align-items: center; gap: 6px; }
+.nbx-revert-select { width: auto; min-width: 180px; max-width: 100%; }
 
 /* The import row (Share / Import → Paste a link) sits under the two columns. */
 .nbx-modal .nbe-import-row { margin: 0; padding: 10px 16px; border-top: 1px solid var(--bmm-border); }

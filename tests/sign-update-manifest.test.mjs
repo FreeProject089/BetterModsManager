@@ -2,7 +2,7 @@
 // and the two workflows that run it.
 //
 // BMM refuses an update-manifest.json that is not signed, is for another app, has expired or
-// claims more than 7 days (src-tauri/src/commands/autoupdate.rs, verify_manifest_text). If the
+// claims more than 90 days (src-tauri/src/commands/autoupdate.rs, verify_manifest_text). If the
 // signer drifted from that verifier, every release would publish a manifest no installed BMM
 // accepts — and nothing would say so, because a refused manifest only hides a button. So the
 // constants are compared with the Rust ones, and the Rust test module verifies a document this
@@ -70,9 +70,19 @@ describe('sign-update-manifest', () => {
         assert.doesNotThrow(() => M.verifyManifest(ok, { publicKey: PUB, now: T0 + 7 * DAY - 1000 }));
     });
 
+    test('the default is 7 days; 90 days signs and verifies, 91 is refused when read', () => {
+        assert.equal(M.MANIFEST_DEFAULT_VALIDITY_DAYS, 7);
+        assert.equal(M.MANIFEST_MAX_VALIDITY_DAYS, 90);
+        const week = JSON.parse(JSON.parse(M.signManifest(unsigned(), SEED, { now: T0 })).signed);
+        assert.equal(Date.parse(week.expires) - T0, 7 * DAY);
+        const ninety = M.signManifest(unsigned(), SEED, { now: T0, validDays: 90 });
+        assert.doesNotThrow(() => M.verifyManifest(ninety, { publicKey: PUB, now: T0 + 90 * DAY - 1000 }));
+        assert.throws(() => M.verifyManifest(ninety, { publicKey: PUB, now: T0 + 90 * DAY }), /expired/);
+    });
+
     test('it refuses to sign what BMM would refuse', () => {
-        assert.throws(() => M.signManifest(unsigned(), SEED, { validDays: 8 }), /1 to 7 days/);
-        assert.throws(() => M.signManifest(unsigned(), SEED, { validDays: 0 }), /1 to 7 days/);
+        assert.throws(() => M.signManifest(unsigned(), SEED, { validDays: 91 }), /1 to 90 days/);
+        assert.throws(() => M.signManifest(unsigned(), SEED, { validDays: 0 }), /1 to 90 days/);
         const http = [{ ...FILES[0], download_url: 'http://github.com/x' }];
         assert.throws(() => M.signManifest(unsigned(http), SEED), /not https/);
         const up = [{ ...FILES[0], path: '_up_/../../evil.dll' }];

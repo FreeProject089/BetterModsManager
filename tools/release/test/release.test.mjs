@@ -10,8 +10,8 @@ import { parseVersion, compareVersions, bumpVersion, previousVersion, VERSION_FI
 import { classifyCommit, groupCommits, renderCommitsMd, cleanSubject } from '../lib/commits.mjs';
 import { formatSums, parseSums, sumsFilter, sumsTable } from '../lib/checksums.mjs';
 import { updateReadme, readmeVersion } from '../lib/readme.mjs';
-import { renderGithubRelease, ghCommand, assetProblems, orderAssets, changelogBody, GENERATED_MARK } from '../lib/notes.mjs';
-import { cardText, cardSpecs, cardFile, textProblems, VARIANTS } from '../media/cards-text.mjs';
+import { renderGithubRelease, ghCommand, assetProblems, orderAssets, changelogBody, GENERATED_MARK, publishProblems, publishCommands, stripComments, replaceSumsTable, RESIGN_BELOW_DAYS } from '../lib/notes.mjs';
+import { cardText, cardSpecs, cardFile, textProblems } from '../media/cards-text.mjs';
 import { verdict, compareSummaries, tally, fmtNs } from '../bench/compare.mjs';
 import { packBits, writePsd, literalPack, readPsd, layerNames } from '../lib/psd.mjs';
 import { decodePng } from '../lib/png.mjs';
@@ -177,6 +177,53 @@ describe('notes', () => {
     assert.equal(changelogBody('# T\n\nx'), 'x');
     assert.equal(ghCommand('1.0.3', ['BMM-Setup.exe'], 'n.md'), 'gh release create v1.0.3 "Release/1.0.3/BMM-Setup.exe" --title "Better Mods Manager 1.0.3" --latest --notes-file "n.md"');
   });
+  test('the public body has no comment: neither the generated mark nor the maintainer notes', () => {
+    const md = renderGithubRelease({ version: '1.0.4', assets, changelog: '# Changelog v1.0.4\n\nBody text.\n' });
+    const body = stripComments(md);
+    assert.ok(!body.includes('<!--') && !body.includes('-->'), body.slice(0, 200));
+    assert.ok(!/MAINTAINER NOTES/.test(body));
+    assert.ok(body.startsWith('# Better Mods Manager 1.0.4'));
+    assert.equal(stripComments('<!-- a -->\n<!--\nb\n-->\n\nText <!-- c --> end'), 'Text end');
+  });
+  test('publish: the upload list rules (one BMM-Setup.exe, no extras/, no .msi/.zip, every required asset)', () => {
+    const eight = ['BMM-Setup.exe', 'bmm.bpkg', 'update.json', 'update-manifest.json', 'lang-en.json', 'lang-fr.json', 'lang-template.json', 'links.json'];
+    assert.deepEqual(publishProblems(eight), []);
+    assert.ok(publishProblems([...eight, 'extras/BMM-1.0.4-classic-msi.msi']).length >= 2, 'extras and a second installer');
+    assert.ok(publishProblems([...eight, 'extras/README.txt']).some((p) => /top-level/.test(p)));
+    assert.ok(publishProblems([...eight, 'Better Mod Manager_1.0.4_x64-setup.exe']).some((p) => /exactly one installer/.test(p)));
+    assert.ok(publishProblems([...eight, 'bmm.zip']).some((p) => /\.zip/.test(p)));
+    assert.ok(publishProblems(eight.filter((n) => n !== 'update-manifest.json')).some((p) => /missing from the upload: update-manifest\.json/.test(p)));
+    assert.equal(RESIGN_BELOW_DAYS, 14);
+  });
+  test('publish: tag, push, then gh release create with the body file', () => {
+    const cmds = publishCommands('1.0.4', ['BMM-Setup.exe', 'bmm.bpkg'], 'Release/1.0.4/github-release.body.md');
+    assert.deepEqual(cmds.map((x) => x.text.split(' ').slice(0, 3).join(' ')), ['git tag v1.0.4', 'git push origin', 'gh release create']);
+    assert.deepEqual(cmds[0].args, ['tag', 'v1.0.4']);
+    assert.deepEqual(cmds[1].args, ['push', 'origin', 'v1.0.4']);
+    assert.deepEqual(cmds[2].args, ['release', 'create', 'v1.0.4', 'Release/1.0.4/BMM-Setup.exe', 'Release/1.0.4/bmm.bpkg', '--title', 'Better Mods Manager 1.0.4', '--latest', '--notes-file', 'Release/1.0.4/github-release.body.md']);
+    assert.equal(cmds[2].text, ghCommand('1.0.4', ['BMM-Setup.exe', 'bmm.bpkg'], 'Release/1.0.4/github-release.body.md'));
+  });
+  test('publish: the SHA-256 table is replaced in place, the rest kept (CRLF too)', () => {
+    const md = ['# Title', '', 'Hand-written words.', '', '### Checksums (SHA-256)', '', '| File | SHA-256 |', '|---|---|', `| \`BMM-Setup.exe\` | \`${'0'.repeat(64)}\` |`, '', '## Links', ''].join('\r\n');
+    const out = replaceSumsTable(md, [{ path: 'BMM-Setup.exe', sha256: 'a'.repeat(64) }, { path: 'bmm.bpkg', sha256: 'b'.repeat(64) }]);
+    assert.ok(out.includes('Hand-written words.') && out.includes('## Links'));
+    assert.ok(out.includes(`| \`BMM-Setup.exe\` | \`${'a'.repeat(64)}\` |\r\n| \`bmm.bpkg\` | \`${'b'.repeat(64)}\` |\r\n\r\n## Links`));
+    assert.ok(!out.includes('0'.repeat(64)));
+    assert.equal(replaceSumsTable('# no table', []), null);
+  });
+  test('publish is a step only by name: never in --all or the menu « a »', async () => {
+    const { STEPS } = await import('../steps.mjs');
+    const p = STEPS.find((s) => s.id === 'publish');
+    assert.ok(p && p.manual === true, 'publish exists and is manual');
+    assert.equal(STEPS.filter((s) => s.manual).map((s) => s.id).join(), 'publish');
+    const src = readFileSync(new URL('../release.mjs', import.meta.url), 'utf8');
+    assert.match(src, /const ALL = STEPS\.filter\(\(s\) => !s\.manual\)/);
+    assert.match(src, /if \(opts\.all\) steps = ALL;/);
+    assert.match(src, /if \(\/\^a\/i\.test\(a\)\) steps = ALL;/);
+    assert.match(src, /case '--yes-publish': o\.yesPublish = true;/);
+    const steps = readFileSync(new URL('../steps.mjs', import.meta.url), 'utf8');
+    assert.match(steps, /if \(!ctx\.opts\.yesPublish\) \{/, 'the commands run only with --yes-publish');
+  });
 });
 
 describe('card text', () => {
@@ -188,14 +235,14 @@ describe('card text', () => {
     assert.equal(cardText('2.0.0', 'fr').whatsNew, 'Les nouveautés de la 2.0.0');
     assert.equal(cardText('2.0.0', 'fr').generic, true);
   });
-  test('specs: five formats × EN/FR, each in two variants named …-tasky / …-plain, version in every name', () => {
+  test('specs: five formats × EN/FR, one family, version in every name', () => {
     const s = cardSpecs('3.1.4');
     assert.equal(s.length, 10);
-    assert.deepEqual(VARIANTS, ['tasky', 'plain']);
-    const files = s.flatMap((x) => VARIANTS.map((v) => cardFile(x, v)));
-    assert.equal(new Set(files).size, 20);
-    for (const f of files) assert.match(f, /^bmm-3\.1\.4-.+-(tasky|plain)(\.fr)?$/);
-    assert.ok(files.includes('bmm-3.1.4-social-1200x630-tasky.fr'));
+    const files = s.map((x) => cardFile(x));
+    assert.equal(new Set(files).size, 10);
+    for (const f of files) assert.match(f, /^bmm-3\.1\.4-[a-z-]+-\d+(x\d+)?(\.fr)?$/);
+    assert.ok(files.includes('bmm-3.1.4-social-1200x630.fr'));
+    assert.ok(files.includes('bmm-3.1.4-square-1080'));
     for (const x of s) {
       assert.ok(x.safe.x >= 0 && x.safe.y >= 0 && x.safe.x + x.safe.w <= x.w && x.safe.y + x.safe.h <= x.h, x.base);
     }
@@ -235,36 +282,96 @@ describe('card drawing', () => {
     assert.notDeepEqual(a, c);
     assert.ok(a.length > 10 && a.every((d) => /^M[-\d.]+ [-\d.]+(L[-\d.]+ [-\d.]+)+$/.test(d)));
   });
-  test('layouts: groups, Tasky only in the tasky variant, text inside the safe zone', async () => {
+  test('card type: both brand faces are embedded with their OFL licence, every text face is measured, the tag sits on the lockup line', async () => {
+    const { FONT_FILES, backgroundLayers, badge, lockup, tagAfter, TYPE } = await import('../media/cards.mjs');
+    const { ADVANCE } = await import('../media/metrics.mjs');
+    const fonts = new URL('../media/fonts/', import.meta.url);
+    for (const [fam, , file] of FONT_FILES) {
+      assert.ok(readFileSync(new URL(file, fonts)).length > 10000, file);
+      const ofl = readFileSync(new URL(file.replace(/-latin\.woff2$/, '-OFL.txt'), fonts), 'utf8');
+      assert.match(ofl, /SIL Open Font License/, `${fam} licence`);
+    }
+    const bg = backgroundLayers(400, 300)[0].body;
+    for (const [fam] of FONT_FILES) assert.ok(bg.includes(`font-family:'${fam}'`), `${fam} embedded`);
+    for (const face of Object.values(TYPE)) for (const ch of 'éèàçôœ«»’') assert.ok(ADVANCE[face][ch] > 0, `${face} ${ch}`);
+    const lk = lockup(0, 100, 40);
+    const tg = tagAfter(lk, 0, 30, '1.0.4');
+    const rect = tg.svg.match(/<rect x="[\d.]+" y="([\d.]+)" width="\d+" height="30"/);
+    assert.ok(rect && Math.abs(+rect[1] + 15 - lk.cy) < 0.6, 'tag centred on the lockup');
+    assert.match(badge(0, 0, 30, '1.0.4').svg, />Version <\/text>[\s\S]*>1\.0\.4<\/text>/);
+  });
+  test("what's new: every tile has a vignette inside its screenshot, a title and a one-line description; no subline", async () => {
+    const { VIGNETTES, vignetteOf } = await import('../media/vignettes.mjs');
     const { cardLayout } = await import('../media/cards.mjs');
+    const custom = JSON.parse(readFileSync(new URL('../media/cards.1.0.4.json', import.meta.url), 'utf8'));
+    for (const name of Object.keys(VIGNETTES)) {
+      const v = vignetteOf(name);
+      for (const p of v.pieces) {
+        const [x, y, w, h] = p.crop;
+        assert.ok(x >= 0 && y >= 0 && x + w <= 1640 && y + h <= 1040, `${name} crop ${p.crop}`);
+        assert.ok(p.x >= -1 && p.y >= -1 && p.x + w * p.s <= v.w + 1 && p.y + h * p.s <= v.h + 1, `${name} piece ${p.crop} inside its vignette`);
+        assert.ok(p.s >= 1, `${name}: pieces are zoomed in, not shrunk`);
+      }
+    }
+    assert.deepEqual(textProblems({ en: { headline: 'a', subline: 'b', highlights: [{ title: 'x', desc: 'one two three four five six seven eight nine' }] } }), ['en description « one two three four five six seven eight nine »: 9 words (8 at most)']);
+    const shot = { src: 'data:image/png;base64,', w: 1640, h: 1040 };
+    for (const lang of ['en', 'fr']) {
+      const t = cardText('1.0.4', lang, custom);
+      for (const hl of t.highlights) { assert.ok(hl.desc, `${lang} ${hl.title}: description`); assert.ok(VIGNETTES[hl.shot], `${lang} ${hl.title}: vignette`); }
+      const lay = cardLayout(cardSpecs('1.0.4').find((s) => s.layout === 'whatsnew' && s.lang === lang), t, new Proxy({}, { get: () => shot }));
+      assert.ok(!lay.layers.some((l) => l.id === 'subline'), "no subline on the what's new card");
+      assert.ok(lay.layers.find((l) => l.id === 'meta').body.includes(lang === 'fr' ? 'Gratuit' : 'Free'));
+      const tiles = lay.layers.find((l) => l.id === 'tiles').body;
+      for (const hl of t.highlights) assert.ok(tiles.includes(hl.desc), `${lang} ${hl.desc}`);
+    }
+  });
+  test('layouts: groups, text in the safe zone, Flow editor in front of the Library, no shot under the text', async () => {
+    const { cardLayout, VIEW } = await import('../media/cards.mjs');
+    const itemBox = (it) => ({ x: it.x, y: it.y, r: it.x + it.w, b: it.y + it.w * (it.crop.h / it.crop.w) });
+    const { textWidth } = await import('../media/metrics.mjs');
     const custom = JSON.parse(readFileSync(new URL('../media/cards.1.0.4.json', import.meta.url), 'utf8'));
     const shot = { src: 'data:image/png;base64,', w: 1640, h: 1040 };
     const shots = new Proxy({}, { get: () => shot });
+    const unesc = (s) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+    const boxes = (svg) => [...svg.matchAll(/<text font-family="([^"]*)" font-weight="(\d+)" font-size="([\d.]+)"[^>]*>([\s\S]*?)<\/text>/g)].flatMap(([, fam, wt, fs, inner]) =>
+      [...inner.matchAll(/<tspan x="([\d.]+)" y="([\d.]+)">([\s\S]*?)<\/tspan>/g)].map(([, x, y, s]) => {
+        const size = +fs, face = /^'Bricolage/.test(fam) ? `bg${wt}` : /^'Atkinson/.test(fam) ? `ahn${wt}` : wt === '700' ? 'seg700' : wt === '600' ? 'seg600' : 'seg500';
+        return { x: +x, y: +y - size * 0.8, r: +x + textWidth(unesc(s), size, face), b: +y + size * 0.25, s };
+      }));
     for (const spec of cardSpecs('1.0.4')) {
       const t = cardText('1.0.4', spec.lang, custom);
-      const plain = cardLayout(spec, t, shots, null), withT = cardLayout(spec, t, shots, { src: 'data:,' });
-      assert.ok(!plain.layers.some((l) => l.group === 'Tasky'), spec.base);
-      assert.equal(withT.layers.filter((l) => l.group === 'Tasky').length, 1, spec.base);
-      assert.deepEqual(plain.layers.slice(0, 2).map((l) => `${l.group}/${l.label}`), ['Background/Field and glow', 'Background/Grid']);
-      for (const l of plain.layers) assert.ok(['Background', 'Product shot', 'Brand', 'Text', 'Screenshots'].includes(l.group), `${spec.base} ${l.label}`);
-      // Every text x / y (tspans and the footer) lies in the safe zone.
-      for (const l of plain.layers.filter((x) => x.group === 'Text' || x.group === 'Brand')) {
+      const lay = cardLayout(spec, t, shots);
+      assert.deepEqual(lay.layers.slice(0, 2).map((l) => `${l.group}/${l.label}`), ['Background/Field and glow', 'Background/Grid']);
+      for (const l of lay.layers) assert.ok(['Background', 'Product shot', 'Brand', 'Text', 'Screenshots'].includes(l.group), `${spec.base} ${l.label}`);
+      assert.ok(!lay.layers.some((l) => /tasky/i.test(l.label)), 'no Tasky on the cards');
+      const text = lay.layers.filter((x) => x.group === 'Text' || x.group === 'Brand');
+      for (const l of text) {
         for (const m of l.body.matchAll(/<tspan x="([\d.]+)" y="([\d.]+)"/g)) {
           const [x, y] = [+m[1], +m[2]];
           assert.ok(x >= spec.safe.x - 0.5 && x <= spec.safe.x + spec.safe.w && y >= spec.safe.y && y <= spec.safe.y + spec.safe.h + 1, `${spec.base} ${spec.lang} ${l.label} at ${x},${y}`);
         }
       }
+      if (spec.layout === 'whatsnew') { assert.equal(lay.items.length, 0); continue; }
+      // The product shots: the Flow editor in front (the editor panel only, no dimmed backdrop), the
+      // Library behind where there is one; large and allowed to run off the right / bottom edge, never under text.
+      assert.ok(lay.items.length >= 1, spec.base);
+      const front = lay.items.at(-1);
+      assert.deepEqual(front.crop, VIEW.flow, `${spec.base}: the Flow editor leads`);
+      if (lay.items.length === 2) assert.deepEqual(lay.items[0].crop, VIEW.window, `${spec.base}: the Library window behind`);
+      for (const it of lay.items) {
+        const b = itemBox(it);
+        for (const l of text) for (const bx of boxes(l.body)) assert.ok(bx.r <= b.x || bx.x >= b.r || bx.b <= b.y || bx.y >= b.b, `${spec.base} ${spec.lang}: ${it.id} over « ${bx.s} »`);
+      }
     }
   });
   test('stage: a floating window comes back to where it started (the loop closes)', async () => {
     const { itemTransform, stageHtml, stageLayerIds } = await import('../media/stage.mjs');
-    const it = { id: 'w', rotate: { x: 7, y: -19, z: 1 }, float: { amp: 10, rot: 0.4, phase: 0.3 }, z: 0 };
+    const it = { id: 'w', rotate: { x: 3, y: -8, z: 0 }, float: { amp: 10, rot: 0.4, phase: 0.3 }, z: 0 };
     assert.equal(itemTransform(it, 0, 6), itemTransform(it, 6, 6));
     assert.notEqual(itemTransform(it, 0, 6), itemTransform(it, 1.5, 6));
-    const st = { w: 100, h: 50, under: '<svg/>', over: '<svg/>', items: [{ ...it, src: 'data:,', srcW: 10, srcH: 10, crop: { x: 0, y: 0, w: 10, h: 10 }, x: 0, y: 0, w: 50, perch: { id: 'tasky', src: 'data:,', size: 10, along: 0.2, behind: true } }] };
-    assert.deepEqual(stageLayerIds(st).map((x) => x.id), ['under', 'w', 'tasky', 'over']);
-    const html = stageHtml(st);
-    assert.ok(html.indexOf('data-perch="w"') < html.indexOf('data-item="w"'), 'a Tasky peeking from behind is painted first');
+    const st = { w: 100, h: 50, under: '<svg/>', over: '<svg/>', items: [{ ...it, src: 'data:,', srcW: 10, srcH: 10, crop: { x: 0, y: 0, w: 10, h: 10 }, x: 0, y: 0, w: 50 }] };
+    assert.deepEqual(stageLayerIds(st).map((x) => x.id), ['under', 'w', 'over']);
+    assert.ok(stageHtml(st).includes('data-item="w"'));
   });
 });
 
@@ -280,15 +387,17 @@ describe('screenshots and hero', () => {
     const custom = JSON.parse(readFileSync(new URL('../media/cards.1.0.4.json', import.meta.url), 'utf8'));
     for (const n of [...Object.values(custom.shots).flat(), ...custom.en.highlights.map((h) => h.shot)]) assert.ok(names.includes(n), `cards need ${n}`);
   });
-  test('hero layers: background group first, windows and Tasky, then the text', async () => {
+  test('hero: the Library behind, the Flow editor in front, then the text', async () => {
     const { heroItems, heroTextLayers } = await import('../screenshots/hero3d.mjs');
+    const { VIEW } = await import('../media/cards.mjs');
     const shot = { src: 'data:,', w: 1640, h: 1040 };
-    const items = heroItems({ library: shot, 'theme-editor': shot, 'automations-flow': shot }, { src: 'data:,' });
-    assert.deepEqual(items.map((i) => i.id), ['window-back', 'window-middle', 'window-front']);
-    assert.ok(items[2].perch && !items[0].perch);
+    const items = heroItems({ library: shot, 'automations-flow': shot });
+    assert.deepEqual(items.map((i) => i.id), ['window-back', 'window-front']);
+    assert.deepEqual(items[1].crop, VIEW.flow);
+    assert.deepEqual(items[0].crop, VIEW.window);
     const t = heroTextLayers('1.0.4', 'en');
     assert.deepEqual(t.under.map((l) => l.label), ['Field and glow', 'Grid']);
-    assert.ok(t.over.some((l) => l.id === 'version' && /Version 1\.0\.4/.test(l.body)));
+    assert.ok(t.over.some((l) => l.id === 'version' && /Version 1\.0\.4/.test(l.body.replace(/<[^>]+>/g, ''))));
   });
 });
 

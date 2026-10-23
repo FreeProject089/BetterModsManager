@@ -144,8 +144,9 @@ Caché jusqu'au clic.
 :::
 ```
 
-Joue un enregistrement `.bmmreplay` dans la page. Préférez un fichier hébergé à côté de la page
-— un replay en 404 laisse un cadre mort en plein milieu.
+Joue un enregistrement `.bmmreplay` dans la page. **BMM Docs ne l'utilise plus** : ce site montre des GIF
+et n'y charge pas le lecteur interactif. Le B.MD de l'app gère toujours la directive dans les blogs et
+les documents de l'app.
 
 ### Feuille de route
 

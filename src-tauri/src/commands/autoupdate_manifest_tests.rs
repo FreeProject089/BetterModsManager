@@ -116,16 +116,27 @@ fn an_expired_manifest_is_refused() {
 }
 
 #[test]
-fn a_manifest_valid_for_more_than_seven_days_is_refused() {
-    assert!(check(&good_doc()).is_ok(), "control: exactly 7 days is allowed");
+fn a_manifest_valid_for_more_than_ninety_days_is_refused() {
+    assert_eq!(MANIFEST_MAX_VALIDITY_DAYS, 90);
+    assert!(check(&good_doc()).is_ok(), "control: 7 days (what the publisher signs today) is allowed");
+    let ninety = doc(&test_key(), MANIFEST_SIG_CONTEXT,
+                     &body(MANIFEST_APP_ID, "1.2.0", good_files(), t0(), t0() + Duration::days(90)));
+    assert!(check(&ninety).is_ok(), "exactly 90 days is allowed");
     let over = doc(&test_key(), MANIFEST_SIG_CONTEXT,
-                   &body(MANIFEST_APP_ID, "1.2.0", good_files(), t0(), t0() + Duration::days(7) + Duration::seconds(1)));
-    assert!(check(&over).unwrap_err().contains("7 days"));
+                   &body(MANIFEST_APP_ID, "1.2.0", good_files(), t0(), t0() + Duration::days(90) + Duration::seconds(1)));
+    assert!(check(&over).unwrap_err().contains("90 days"));
+    let d91 = doc(&test_key(), MANIFEST_SIG_CONTEXT, &body(MANIFEST_APP_ID, "1.2.0", good_files(), t0(), t0() + Duration::days(91)));
+    assert!(check(&d91).unwrap_err().contains("90 days"));
     let year = doc(&test_key(), MANIFEST_SIG_CONTEXT, &body(MANIFEST_APP_ID, "1.2.0", good_files(), t0(), t0() + Duration::days(365)));
-    assert!(check(&year).unwrap_err().contains("7 days"));
+    assert!(check(&year).unwrap_err().contains("90 days"));
+    // A 90-day manifest still expires.
+    let key = test_key().verifying_key();
+    let end = t0() + Duration::days(90);
+    assert!(verify_manifest_text(&ninety, &key, "1.1.0", end - Duration::seconds(1)).is_ok());
+    assert!(verify_manifest_text(&ninety, &key, "1.1.0", end).unwrap_err().contains("expired"));
     // expires <= issued.
     let backwards = doc(&test_key(), MANIFEST_SIG_CONTEXT, &body(MANIFEST_APP_ID, "1.2.0", good_files(), t0(), t0()));
-    assert!(check(&backwards).unwrap_err().contains("7 days"));
+    assert!(check(&backwards).unwrap_err().contains("90 days"));
 }
 
 #[test]

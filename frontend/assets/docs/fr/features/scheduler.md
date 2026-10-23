@@ -25,7 +25,6 @@ sans que vous la pilotiez.
     sur laquelle tu cliques, et les ids de tâches sont des horodatages, donc devinables. La
     tâche enregistrée est le seul appelant qui puisse prouver qu'il n'est pas une page.
 
-<div class="bmm-replay" data-src="assets/docs/media/replays/scheduler.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/scheduler.bmmreplay" data-page="features/scheduler" data-title="Créer une tâche planifiée"></div>
 
 
 
@@ -34,7 +33,6 @@ sans que vous la pilotiez.
 
 *Automatiser les corvées. Une tâche planifiée qui vérifie les repos suivis et sauvegarde les profils chaque soir, prévisualisée avant d’être enregistrée.*
 
-<div class="bmm-replay" data-src="assets/docs/media/replays/automate.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/automate.bmmreplay" data-page="features/scheduler" data-title="Automatiser les corvées"></div>
 <!-- /story:automate -->
 
 ## Une tâche a trois parties
@@ -133,7 +131,7 @@ plutôt qu'empilée.
 
 En BMMScript, les trois s'écrivent :
 
-```
+```bmms
 task "Réparer après la synchro de nuit" {
     after task "t-42" failed
 }

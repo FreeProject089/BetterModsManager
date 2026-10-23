@@ -100,10 +100,12 @@ pub const MANIFEST_APP_ID: &str = "com.bettermm.desktop";
 pub const MANIFEST_PUBLIC_KEY_HEX: &str =
     "8e0647c277dd67158d34dd1c10d0a2d97191716dc4f92aebde6d349d1c0f168b";
 
-/// Longest `expires - issued` accepted. The publisher re-signs weekly
-/// (.github/workflows/resign-manifests.yml); a host that stops receiving fresh copies — a
-/// freeze, or a stalled job — stops being believed after this long.
-pub const MANIFEST_MAX_VALIDITY_DAYS: i64 = 7;
+/// Longest `expires - issued` accepted, for update-manifest.json and the release's update.json.
+/// A host that stops receiving fresh copies — a freeze, or a stalled job — stops being believed
+/// after at most this long. BMM 1.0.2 and 0.9.12 accept only 7 days, so the publisher still
+/// signs for 7 and re-signs weekly (.github/workflows/resign-manifests.yml); signing switches to
+/// 90 days once those versions are no longer in use (RELEASE.md).
+pub const MANIFEST_MAX_VALIDITY_DAYS: i64 = 90;
 
 /// The signed body. Every field is required (a body missing one is not a manifest), except
 /// `installers`, which manifests signed before the full-installer check do not carry.
@@ -275,7 +277,7 @@ fn is_https(url: &str) -> bool {
 
 /// Read an `update-manifest.json`, refusing it unless every rule holds:
 /// signed by `key` over [`MANIFEST_SIG_CONTEXT`] ‖ `signed`; for [`MANIFEST_APP_ID`];
-/// `issued < expires`, `expires - issued <= 7 days`, `now < expires`; a version strictly newer
+/// `issued < expires`, `expires - issued <= MANIFEST_MAX_VALIDITY_DAYS`, `now < expires`; a version strictly newer
 /// than `current_version`; every file with an https URL, a SHA-256 and a safe relative path.
 /// Only the signed body is read.
 pub(crate) fn verify_manifest_text(
@@ -325,7 +327,7 @@ pub(crate) fn verify_manifest_text(
     }
     if now >= expires {
         return refuse(format!(
-            "it expired on {expires} (the publisher re-signs it every week; an expired copy means \
+            "it expired on {expires} (the publisher re-signs it before it expires; an expired copy means \
              the host is not serving a current one, or this PC's clock is wrong)"
         ));
     }
@@ -1084,7 +1086,7 @@ async fn launch_installer_and_exit(app_handle: &tauri::AppHandle, file_path: &st
 // own GitHub releases only, and compares the downloaded bytes with the SHA-256 the release's
 // `update.json` declares for that file. update.json is BetterInstaller's signed manifest, read
 // the way BetterInstaller reads it with a pinned key: publisher signature over its own context
-// string, BMM's app id, at most 7 days valid and not expired, a version newer than this one.
+// string, BMM's app id, at most MANIFEST_MAX_VALIDITY_DAYS valid and not expired, a version newer than this one.
 //
 // When that cannot vouch for the file (no update.json, an invalid one, no entry for the
 // installer, or bytes that differ) the dialog says what failed and the installer runs only if
@@ -1244,7 +1246,7 @@ pub(crate) fn update_json_checksum(
     }
     if now >= expires {
         return bad(format!(
-            "The release's update.json expired on {} (the publisher renews it every week; or this PC's clock is wrong).",
+            "The release's update.json expired on {} (the publisher renews it before it expires; or this PC's clock is wrong).",
             expires.format("%Y-%m-%d")
         ));
     }

@@ -4,6 +4,7 @@
 //     docs/doc-replays.ts. Every replay embed renders as nothing and nothing fetches one.
 //   * BMM Docs (site): `extra: bmm_replays: false` in mkdocs.yml, or BMM_DOCS_REPLAYS=off,
 //     read by the hook tools/md_directives.py: blocks dropped, no .bmmreplay copied, no player.
+//     BMM Docs ships it OFF since 1.0.4 (GIFs only, no replay files); the hook stays for a stray block.
 //
 // The Rust parser of the app.cfg line has its own tests in commands/settings.rs.
 
@@ -154,6 +155,9 @@ test('BMM Docs: BMM_DOCS_REPLAYS overrides mkdocs.yml both ways', { skip: skipPy
     assert.match(on.yml_off.md, /apps\.bmmreplay/);
 });
 
-test('BMM Docs: mkdocs.yml carries the switch, on', { skip: !existsSync(join(ROOT, 'BMM Docs/mkdocs.yml')) && 'BMM Docs not checked out' }, () => {
-    assert.match(read('BMM Docs/mkdocs.yml'), /^\s+bmm_replays: true$/m);
+test('BMM Docs: mkdocs.yml carries the switch, off (BMM Docs shows GIFs only)', { skip: !existsSync(join(ROOT, 'BMM Docs/mkdocs.yml')) && 'BMM Docs not checked out' }, () => {
+    assert.match(read('BMM Docs/mkdocs.yml'), /^\s+bmm_replays: false\r?$/m);
+    // The player and the recordings are gone from the docs tree.
+    assert.doesNotMatch(read('BMM Docs/mkdocs.yml'), /assets\/rrweb\//);
+    assert.equal(existsSync(join(ROOT, 'BMM Docs/docs/assets/replays')), false);
 });

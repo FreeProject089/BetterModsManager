@@ -4,23 +4,23 @@
 // The look (2026-10, redone from zero): the BMM identity first (the « Better Mod.Manager »
 // wordmark in Bricolage Grotesque 800, outlined; the app tile; the brand amber on the app's navy),
 // one headline, one subline, three highlights at most, and a REAL product shot: the release
-// screenshots (shoot.mjs) tilted in perspective with a soft shadow and a glow, over a navy field
-// with a distorted grid (seeded, so every run draws the same). Two variants of every card: with
-// Tasky (upright, peeking over the top edge of the product shot, or sitting on a tile) and plain.
+// screenshots (shoot.mjs): the Automations editor in Flow mode in front of the Mod Library, large,
+// tilted in perspective with a soft shadow and a glow, coming in from the right / bottom edge, over
+// a navy field with a distorted grid (seeded, so every run draws the same). No Tasky on the cards.
 // Every format is composed for its own ratio and keeps its text inside the zone its platform shows
 // (cardSpecs().safe). Text contrast is AAA (7:1) over what it sits on.
 //
-// Every card is a LAYERED SVG (Inkscape layers in groups: Background, Product shot, Tasky, Brand,
-// Text, Screenshots; the shots and Tasky are raster layers drawn in 3D by stage.mjs, the rest is
-// vector), a grouped PSD with the sRGB profile (+ a .txt of its words) and a PNG.
+// Every card is a LAYERED SVG (Inkscape layers in groups: Background, Product shot, Brand, Text,
+// Screenshots; the shots are raster layers drawn in 3D by stage.mjs, the rest is vector), a grouped PSD with the sRGB profile (+ a .txt of its words) and a PNG.
 //
 //   node tools/release/media/cards.mjs --version 1.0.4 [--out Release/1.0.4/media] [--shots <dir>] [--no-psd]
 
 import { readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { cardText, cardSpecs, cardFile, textProblems, VARIANTS } from './cards-text.mjs';
+import { cardText, cardSpecs, cardFile, textProblems } from './cards-text.mjs';
 import { textWidth, fitText } from './metrics.mjs';
 import { openStage, WINDOW, dataUri } from './stage.mjs';
+import { vignetteOf } from './vignettes.mjs';
 import { ROOT, TOOL_DIR, writeText, releaseDir, ensureDir, readJson } from '../lib/util.mjs';
 import { launch, svgToPng } from '../lib/browser.mjs';
 import { decodePng } from '../lib/png.mjs';
@@ -31,25 +31,35 @@ import { ratio, blend } from '../lib/contrast.mjs';
 /** The palette: the app's navy and brand amber (frontend/css/tokens.css), inks chosen for AAA. */
 export const C = {
   top: '#0d1426', bottom: '#060912', ink: '#f8fafc', ink2: '#e2e8f0', muted: '#cbd5e1',
-  amber: '#fbbf24', amber2: '#f59e0b', blue: '#3b82f6', badgeInk: '#0a0e17', tile: '#ffffff',
+  amber: '#fbbf24', amber2: '#f59e0b', blue: '#3b82f6', badgeInk: '#0a0e17', tile: '#ffffff', tileFill: '#141b2e',
 };
 export const AAA = 7;
+// Type: the BetterCommunity brand pair, embedded in every SVG (media/fonts/, SIL OFL 1.1), so a card
+// renders the same on any machine and offline. Bricolage Grotesque (the face the wordmark is drawn
+// from) sets the headlines; Atkinson Hyperlegible Next sets the text and the version tag. Both files
+// cover Latin-1 (French accents, « », œ, ’). Segoe stays for the hero's tagline (seg* faces).
 const DISPLAY = "'Segoe UI Variable Display','Segoe UI',Inter,'Helvetica Neue',Arial,sans-serif";
 const TEXT = "'Segoe UI Variable Text','Segoe UI',Inter,'Helvetica Neue',Arial,sans-serif";
 const BRAND = "'Bricolage Grotesque','Segoe UI Variable Display','Segoe UI',sans-serif";
-const FAMILY = { seg700: DISPLAY, seg600: DISPLAY, seg500: TEXT, brico: BRAND };
-const WEIGHT = { seg700: 700, seg600: 600, seg500: 500, brico: 800 };
-export const FONT_NOTE = 'Fonts: Segoe UI Variable Display 700/600 and Segoe UI Variable Text 500 (Windows; fallback Segoe UI, Inter, Arial); version numbers in Bricolage Grotesque 800 (embedded, SIL OFL); the wordmark is outlined.';
+const BODY = "'Atkinson Hyperlegible Next','Segoe UI Variable Text','Segoe UI',Arial,sans-serif";
+const FAMILY = { seg700: DISPLAY, seg600: DISPLAY, seg500: TEXT, brico: BRAND, bg800: BRAND, bg700: BRAND, ahn400: BODY, ahn500: BODY, ahn600: BODY, ahn700: BODY };
+const WEIGHT = { seg700: 700, seg600: 600, seg500: 500, brico: 800, bg800: 800, bg700: 700, ahn400: 400, ahn500: 500, ahn600: 600, ahn700: 700 };
+/** The faces of each role on the cards (keys of FAMILY and of metrics ADVANCE). */
+export const TYPE = { head: 'bg800', body: 'ahn500', strong: 'ahn600', tile: 'ahn700', tag: 'bg700' };
+export const FONT_NOTE = 'Fonts (embedded, SIL OFL 1.1, tools/release/media/fonts): Bricolage Grotesque 800 for the headlines, Atkinson Hyperlegible Next 500/600/700 for the text and the version tag; the wordmark is outlined.';
 
 // Every text colour with the colour under it (the glows and the tiles blended in, at their
 // strongest where text can sit), so the tests and the step measure contrast instead of trusting the eye.
 const AMBER_GLOW = blend(C.amber2, C.top, 0.14), BLUE_GLOW = blend(C.blue, C.top, 0.3), TILE = blend(C.tile, C.top, 0.07);
+const TAG = blend('#ffffff', AMBER_GLOW, 0.06);
 export const TEXT_PAIRS = [
   ['headline', C.ink, AMBER_GLOW], ['headline over the blue glow', C.ink, BLUE_GLOW],
   ['kicker (amber)', C.amber, AMBER_GLOW], ['kicker over the blue glow', C.amber, BLUE_GLOW],
   ['highlight title', C.ink2, AMBER_GLOW], ['highlight title on a tile', C.ink2, TILE],
   ['description, footer', C.muted, BLUE_GLOW], ['description on a tile', C.muted, TILE],
-  ['version badge', C.badgeInk, C.amber2],
+  ['version tag label', C.ink2, TAG], ['version tag number (amber)', C.amber, TAG], ['tag « NEW » on amber (split style)', C.badgeInk, C.amber],
+  ['feature tile title (amber glow)', C.ink, blend(C.amber2, C.tileFill, 0.16)], ['feature tile title (blue glow)', C.ink, blend(C.blue, C.tileFill, 0.16)],
+  ['feature tile description (amber glow)', C.muted, blend(C.amber2, C.tileFill, 0.16)], ['feature tile description (blue glow)', C.muted, blend(C.blue, C.tileFill, 0.16)],
 ];
 /** { min, rows: [{ what, ratio, ok }] } over TEXT_PAIRS; ok = AAA (7:1). */
 export function cardContrast() {
@@ -98,18 +108,31 @@ function githubMark(x, y, size, color) {
   return _gh ? `<path transform="translate(${r1(x)} ${r1(y)}) scale(${size / 24})" fill="${color}" d="${_gh}"/>` : '';
 }
 
-let _brico = null;
+/** The embedded faces: [family, weight range, file in media/fonts/]. Variable fonts (wght axis). */
+export const FONT_FILES = [
+  ['Bricolage Grotesque', '600 800', 'bricolage-grotesque-latin.woff2'],
+  ['Atkinson Hyperlegible Next', '400 700', 'atkinson-hyperlegible-next-latin.woff2'],
+];
+let _faces = null;
 function fontFace() {
-  if (_brico === null) {
-    const p = join(ROOT, 'frontend', 'assets', 'fonts', 'bricolage-grotesque', 'BricolageGrotesque-ExtraBold.subset.woff2');
-    _brico = existsSync(p) ? readFileSync(p).toString('base64') : '';
+  if (_faces === null) {
+    _faces = FONT_FILES.map(([fam, wt, file]) => {
+      const p = join(TOOL_DIR, 'media', 'fonts', file);
+      return existsSync(p) ? `@font-face{font-family:'${fam}';font-weight:${wt};src:url(data:font/woff2;base64,${readFileSync(p).toString('base64')}) format('woff2')}` : '';
+    }).join('');
   }
-  return _brico ? `<style>@font-face{font-family:'Bricolage Grotesque';font-weight:800;src:url(data:font/woff2;base64,${_brico}) format('woff2')}</style>` : '';
+  return _faces ? `<style>${_faces}</style>` : '';
 }
 
 // ── Text ─────────────────────────────────────────────────────────────────────────────────────
 /** Tracking (px) of the display face at size z: tight for big type, as display faces want. */
-export const tight = (z) => (z >= 40 ? -z * 0.022 : z >= 28 ? -z * 0.012 : 0);
+export const tight = (z) => (z >= 40 ? -z * 0.03 : z >= 28 ? -z * 0.018 : 0);
+/** Line height of the headlines (Bricolage has a tall x-height: set solid, not loose). */
+const HEAD_LH = 1.02;
+/** Cap height of both embedded faces (em): a first baseline at y + size × CAP puts the caps' top at y. */
+const CAP = 0.672;
+/** Line height of the sublines (Atkinson Hyperlegible Next: open, for two lines read at a glance). */
+const SUB_LH = 1.36;
 
 /** A <text> of several lines; y is the first baseline. Returns { svg, bottom } (last baseline). */
 export function lines(x, y, ls, { size, face = 'seg700', fill = C.ink, lh = 1.12, tracking = 0, anchor = 'start' }) {
@@ -119,43 +142,102 @@ export function lines(x, y, ls, { size, face = 'seg700', fill = C.ink, lh = 1.12
   return { svg: `<text font-family="${FAMILY[face]}" font-weight="${WEIGHT[face]}" font-size="${size}" fill="${fill}"${tr}${an}>${spans}</text>`, bottom: y + (ls.length - 1) * size * lh };
 }
 
-/** The version pill: « v1.0.4 » in Bricolage on brand amber. Returns { svg, w }. */
-export function badge(x, y, h, version, { prefix = 'v' } = {}) {
-  const fs = Math.round(h * 0.56), label = `${prefix}${version}`;
-  const w = Math.round(textWidth(label, fs, 'brico') + h * 0.9);
+/** « New » in the card's language, for the split tag. */
+const NEW_WORD = { en: 'NEW', fr: 'NOUVEAU' };
+/** The tag style the cards and the hero use (see badge()). */
+// Chosen 2026-10 over « outline » (amber on amber next to the amber « Mod.Manager »: too loud) and
+// « split » (a solid amber block reads as a button again, and « NOUVEAU » doubles its width in French).
+export const BADGE = { style: 'glass', prefix: 'Version ' };
+
+/**
+ * The release tag: h px high at (x, y), the label `${prefix}${version}` set in Atkinson Hyperlegible
+ * Next 700 with its caps centred on the tag. Styles:
+ *   outline  a pill with an amber hairline over a faint amber wash, a lit amber dot, amber label
+ *   split    « NEW » on solid amber, then the version on the navy with an amber hairline
+ *   glass    (the cards' and the hero's) a frosted pill with an amber hairline, a lit amber dot,
+ *            « Version » in the text face and the number in Bricolage amber
+ * Returns { svg, w }.
+ */
+export function badge(x, y, h, version, { prefix = BADGE.prefix, style = BADGE.style, lang = 'en' } = {}) {
+  const fs = r1(h * 0.44), base = r1(y + h / 2 + fs * CAP / 2), track = r1(fs * 0.01);
+  const txt = (tx, s, fill, { face = TYPE.tag, size = fs, ls = track, anchor = 'start' } = {}) =>
+    `<text x="${r1(tx)}" y="${base}" font-family="${FAMILY[face]}" font-weight="${WEIGHT[face]}" font-size="${size}" letter-spacing="${ls}"${anchor !== 'start' ? ` text-anchor="${anchor}"` : ''} fill="${fill}">${esc(s)}</text>`;
+  const pad = h * 0.4, dotR = r1(h * 0.1);
+  if (style === 'split') {
+    const word = NEW_WORD[lang] ?? NEW_WORD.en, ws = r1(h * 0.34), wls = r1(ws * 0.09);
+    const lw = Math.round(textWidth(word, ws, 'bg800', wls) + pad * 1.5);
+    const label = `${prefix}${version}`;
+    const vw = Math.round(textWidth(label, fs, TYPE.tag, track) + pad * 1.7);
+    const w = lw + vw, rx = r1(h * 0.26);
+    return {
+      w,
+      svg: `<defs><clipPath id="tag-clip"><rect x="${r1(x)}" y="${r1(y)}" width="${w}" height="${h}" rx="${rx}"/></clipPath></defs>
+    <g clip-path="url(#tag-clip)"><rect x="${r1(x)}" y="${r1(y)}" width="${w}" height="${h}" fill="${C.amber}" fill-opacity="0.08"/><rect x="${r1(x)}" y="${r1(y)}" width="${lw}" height="${h}" fill="${C.amber}"/></g>
+    <rect x="${r1(x + 0.75)}" y="${r1(y + 0.75)}" width="${r1(w - 1.5)}" height="${r1(h - 1.5)}" rx="${rx}" fill="none" stroke="${C.amber}" stroke-opacity="0.75" stroke-width="1.5"/>
+    ${txt(x + lw / 2, word, C.badgeInk, { face: 'bg800', size: ws, ls: wls, anchor: 'middle' }).replace(`y="${base}"`, `y="${r1(y + h / 2 + ws * CAP / 2)}"`)}
+    ${txt(x + lw + vw / 2, label, C.amber, { anchor: 'middle' })}`,
+    };
+  }
+  if (style === 'glass') {
+    const pre = prefix.trim() ? prefix : '', num = version;
+    const gap = h * 0.24;
+    const pw = pre ? textWidth(pre, fs, 'ahn500', track) : 0, nw = textWidth(num, fs, TYPE.tag, track);
+    const w = Math.round(pad + dotR * 2 + gap + pw + nw + pad);
+    const tx = x + pad + dotR * 2 + gap;
+    return {
+      w,
+      svg: `<rect x="${r1(x)}" y="${r1(y)}" width="${w}" height="${h}" rx="${h / 2}" fill="#ffffff" fill-opacity="0.06" stroke="${C.amber}" stroke-opacity="0.38"/>
+    <circle cx="${r1(x + pad + dotR)}" cy="${r1(y + h / 2)}" r="${r1(dotR * 2.1)}" fill="${C.amber}" fill-opacity="0.18"/><circle cx="${r1(x + pad + dotR)}" cy="${r1(y + h / 2)}" r="${dotR}" fill="${C.amber}"/>
+    ${pre ? txt(tx, pre, C.ink2, { face: 'ahn500' }) : ''}${txt(tx + pw, num, C.amber)}`,
+    };
+  }
+  // outline (default)
+  const label = `${prefix}${version}`, gap = h * 0.26;
+  const w = Math.round(pad * 0.9 + dotR * 2 + gap + textWidth(label, fs, TYPE.tag, track) + pad);
+  const cx = x + pad * 0.9 + dotR;
   return {
     w,
-    svg: `<defs><linearGradient id="badge-fill" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${C.amber}"/><stop offset="1" stop-color="${C.amber2}"/></linearGradient></defs>
-    <rect x="${r1(x)}" y="${r1(y)}" width="${w}" height="${h}" rx="${h / 2}" fill="url(#badge-fill)"/>
-    <rect x="${r1(x + 1)}" y="${r1(y + 1)}" width="${w - 2}" height="${h - 2}" rx="${h / 2 - 1}" fill="none" stroke="#ffffff" stroke-opacity="0.35"/>
-    <text x="${r1(x + w / 2)}" y="${r1(y + h * 0.69)}" text-anchor="middle" font-family="${BRAND}" font-weight="800" font-size="${fs}" fill="${C.badgeInk}">${esc(label)}</text>`,
+    svg: `<rect x="${r1(x + 0.75)}" y="${r1(y + 0.75)}" width="${r1(w - 1.5)}" height="${r1(h - 1.5)}" rx="${r1(h / 2 - 0.75)}" fill="${C.amber}" fill-opacity="0.1" stroke="${C.amber}" stroke-opacity="0.7" stroke-width="1.5"/>
+    <circle cx="${r1(cx)}" cy="${r1(y + h / 2)}" r="${r1(dotR * 2.2)}" fill="${C.amber}" fill-opacity="0.2"/><circle cx="${r1(cx)}" cy="${r1(y + h / 2)}" r="${dotR}" fill="${C.amber}"/>
+    ${txt(cx + dotR + gap, label, C.amber)}`,
   };
 }
 
-/** Lockup: app tile + wordmark, h px high, at (x, y). Returns { svg, w }. */
+/** Lockup: app tile + wordmark, h px high, at (x, y). Returns { svg, w, cy } (cy = the tile's centre line). */
 export function lockup(x, y, h) {
   const tile = logoTile(x, y, h);
   const gap = Math.round(h * 0.32);
   const wm = wordmark(x + h + gap, y + h * 0.04, h * 0.92);
-  return { svg: `${tile ? `<rect x="${x}" y="${r1(y + h * 0.06)}" width="${h}" height="${h}" rx="${r1(h * 0.22)}" fill="#000" opacity="0.35"/>${tile}` : ''}${wm.svg}`, w: h + gap + wm.w };
+  return { svg: `${tile ? `<rect x="${x}" y="${r1(y + h * 0.06)}" width="${h}" height="${h}" rx="${r1(h * 0.22)}" fill="#000" opacity="0.35"/>${tile}` : ''}${wm.svg}`, w: h + gap + wm.w, cy: y + h / 2 };
+}
+
+/**
+ * The release tag after a lockup: a hairline divider, then the tag centred on the lockup's centre
+ * line. lk = lockup(), h = tag height. Returns { svg, w } (w from the lockup's right edge).
+ */
+export function tagAfter(lk, x, h, version, opts = {}) {
+  const gap = Math.round(h * 0.55);
+  const dx = x + lk.w + gap, top = lk.cy - h / 2;
+  const bd = badge(dx + gap, top, h, version, opts);
+  return { svg: `<rect x="${r1(dx)}" y="${r1(lk.cy - h * 0.5)}" width="1" height="${h}" fill="#ffffff" fill-opacity="0.2"/>${bd.svg}`, w: gap * 2 + 1 + bd.w };
 }
 
 /** One highlight row: icon tile + title. Returns { svg, h }. */
 function highlightRow(x, y, hl, { size, maxW }) {
   const t = Math.round(size * 1.7);
   const tx = x + t + Math.round(size * 0.7);
-  const title = fitText(hl.title, { face: 'seg600', maxW: maxW - (tx - x), maxLines: 1, size, min: Math.round(size * 0.8) });
+  const title = fitText(hl.title, { face: TYPE.strong, maxW: maxW - (tx - x), maxLines: 1, size, min: Math.round(size * 0.8) });
   const svg = `<rect x="${x}" y="${y}" width="${t}" height="${t}" rx="${Math.round(t * 0.28)}" fill="${C.amber}" fill-opacity="0.12" stroke="${C.amber}" stroke-opacity="0.45"/>
     ${icon(hl.icon, x + t * 0.21, y + t * 0.21, t * 0.58, C.amber)}
-    ${lines(tx, y + t * 0.5 + title.size * 0.36, title.lines, { size: title.size, face: 'seg600', fill: C.ink2 }).svg}`;
+    ${lines(tx, y + t * 0.5 + title.size * CAP / 2, title.lines, { size: title.size, face: TYPE.strong, fill: C.ink2 }).svg}`;
   return { svg, h: t };
 }
 
 function footer(x, y, size, text, anchor = 'start') {
-  const w = textWidth(text, size, 'seg500');
+  const w = textWidth(text, size, TYPE.body);
   const gx = anchor === 'end' ? x - w - size * 1.5 : x;
   const tx = anchor === 'end' ? x - w : x + size * 1.5;
-  return `${githubMark(gx, y - size * 0.95, size * 1.05, C.muted)}${lines(tx, y, [text], { size, face: 'seg500', fill: C.muted }).svg}`;
+  return `${githubMark(gx, y - size * 0.95, size * 1.05, C.muted)}${lines(tx, y, [text], { size, face: TYPE.body, fill: C.muted }).svg}`;
 }
 
 // ── Background ───────────────────────────────────────────────────────────────────────────────
@@ -222,46 +304,74 @@ export function backgroundLayers(w, h, { blue = [w * 0.75, h * 0.55], amber = [w
 
 // ── Product shots (stage items) ──────────────────────────────────────────────────────────────
 /**
- * A window item for the stage: the screenshot `shot` ({ src, w, h }) cropped to BMM's window,
- * at (x, y) w px wide, tilted. perch ({ src, size, along, sink }) puts Tasky upright on its top
- * edge, peeking over it (stage.mjs).
+ * What a card shows of a screenshot: BMM's window, or for the Automations editor (shown in BMM as
+ * a panel over the dimmed app) the editor panel alone, so no backdrop ever shows.
  */
-export function windowItem(id, label, shot, { x, y, w, rotate, perspective = 2000, origin = '0% 50%', glow = 'rgba(59,130,246,0.30)', reflect = 0, perch = null, z = 0, float = null, shadow }) {
-  const it = { id, label, src: shot.src, srcW: shot.w, srcH: shot.h, crop: { x: WINDOW.x, y: WINDOW.y, w: WINDOW.w, h: WINDOW.h }, x, y, w, rotate, perspective, origin, glow, reflect, z, float, shadow };
-  if (perch?.src) it.perch = { id: perch.id ?? 'tasky', label: 'Tasky', behind: true, sink: 0.34, ...perch };
-  return it;
+export const VIEW = {
+  window: { x: WINDOW.x, y: WINDOW.y, w: WINDOW.w, h: WINDOW.h },
+  flow: { x: 88, y: 88, w: 1496, h: 896 },
+};
+/** The view each screenshot is shown with (shoot.mjs scene name → VIEW key; default: window). */
+export const VIEW_OF = { 'automations-flow': 'flow' };
+export const viewOf = (name) => VIEW[VIEW_OF[name] ?? 'window'];
+
+/**
+ * A window item for the stage: the screenshot `shot` ({ src, w, h }) cropped to `view` (BMM's
+ * window by default), at (x, y) w px wide, tilted.
+ */
+export function windowItem(id, label, shot, { x, y, w, view = VIEW.window, rotate, perspective = 2000, origin = '0% 50%', glow = 'rgba(59,130,246,0.30)', reflect = 0, z = 0, float = null, shadow }) {
+  return { id, label, src: shot.src, srcW: shot.w, srcH: shot.h, crop: { ...view }, x, y, w, rotate, perspective, origin, glow, reflect, z, float, shadow };
+}
+
+// ── « What's new » vignettes ──────────────────────────────────────────────────────────────────
+/**
+ * The picture of a « what's new » tile in the box { x, y, w, h }: the scene's vignette (vignettes.mjs)
+ * scaled to fit with a margin, or, for a scene without one, the highlight's crop zoomed to fill.
+ * The screenshot is embedded once per tile and each piece reuses it.
+ */
+export function vignetteSvg(hl, shot, i, box) {
+  const id = `shot-${i}`;
+  const img = `<defs><image id="${id}" href="${shot.src}" width="${shot.w}" height="${shot.h}"/></defs>`;
+  const v = vignetteOf(hl.shot);
+  if (!v) {
+    const [cx0, cy0, cw, chh] = hl.crop || [WINDOW.x, WINDOW.y, WINDOW.w, WINDOW.h];
+    return `${img}<svg x="${r1(box.x)}" y="${r1(box.y)}" width="${r1(box.w)}" height="${r1(box.h)}" viewBox="${cx0} ${cy0} ${cw} ${chh}" preserveAspectRatio="xMidYMid slice"><use href="#${id}"/></svg>`;
+  }
+  const m = 14, k = Math.min((box.w - 2 * m) / v.w, (box.h - 2 * m) / v.h);
+  const ox = box.x + (box.w - v.w * k) / 2, oy = box.y + (box.h - v.h * k) / 2;
+  const pieces = v.pieces.map((p) => { const [cx, cy, cw, ch] = p.crop; return `<svg x="${r1(p.x)}" y="${r1(p.y)}" width="${r1(cw * p.s)}" height="${r1(ch * p.s)}" viewBox="${cx} ${cy} ${cw} ${ch}"><use href="#${id}"/></svg>`; }).join('');
+  return `${img}<g transform="translate(${r1(ox)} ${r1(oy)}) scale(${k.toFixed(4)})">${v.under || ''}${pieces}${v.over || ''}</g>`;
 }
 
 // ── Layouts ──────────────────────────────────────────────────────────────────────────────────
 // The text boxes of each layout, shared by the drawing and by overflowReport().
-const BOX = {
-  social: { headline: { face: 'seg700', maxW: 500, maxLines: 3, size: 52, min: 38, tracking: tight, balance: true }, subline: { face: 'seg500', maxW: 500, maxLines: 2, size: 22, min: 18, balance: true } },
-  discord: { headline: { face: 'seg700', maxW: 450, maxLines: 3, size: 54, min: 40, tracking: tight, balance: true }, subline: { face: 'seg500', maxW: 440, maxLines: 3, size: 22, min: 19, balance: true } },
-  blog: { headline: { face: 'seg700', maxW: 580, maxLines: 2, size: 60, min: 42, tracking: tight, balance: true }, subline: { face: 'seg500', maxW: 560, maxLines: 2, size: 24, min: 19, balance: true } },
-  square: { headline: { face: 'seg700', maxW: 810, maxLines: 3, size: 80, min: 54, tracking: tight, balance: true }, subline: { face: 'seg500', maxW: 780, maxLines: 2, size: 30, min: 24, balance: true } },
-  whatsnew: { title: { face: 'seg700', maxW: 1088, maxLines: 1, size: 50, min: 36, tracking: tight }, subline: { face: 'seg500', maxW: 900, maxLines: 1, size: 22, min: 17 },
-    tileTitle: { face: 'seg700', maxW: 290, maxLines: 2, size: 23, min: 19, balance: true } },
-};
+const boxes = () => ({
+  social: { headline: { face: TYPE.head, maxW: 500, maxLines: 3, size: 52, min: 38, tracking: tight, balance: true }, subline: { face: TYPE.body, maxW: 500, maxLines: 2, size: 22, min: 18, balance: true } },
+  discord: { headline: { face: TYPE.head, maxW: 450, maxLines: 3, size: 54, min: 40, tracking: tight, balance: true }, subline: { face: TYPE.body, maxW: 440, maxLines: 3, size: 22, min: 19, balance: true } },
+  blog: { headline: { face: TYPE.head, maxW: 580, maxLines: 2, size: 60, min: 42, tracking: tight, balance: true }, subline: { face: TYPE.body, maxW: 560, maxLines: 2, size: 24, min: 19, balance: true } },
+  square: { headline: { face: TYPE.head, maxW: 810, maxLines: 3, size: 80, min: 54, tracking: tight, balance: true }, subline: { face: TYPE.body, maxW: 780, maxLines: 2, size: 30, min: 24, balance: true } },
+  whatsnew: { title: { face: TYPE.head, maxW: 1088, maxLines: 1, size: 50, min: 36, tracking: tight }, meta: { face: TYPE.body, maxW: 900, maxLines: 1, size: 19, min: 16 },
+    tileTitle: { face: TYPE.tile, maxW: 270, maxLines: 1, size: 21, min: 17 }, desc: { face: TYPE.body, maxW: 317, maxLines: 1, size: 16, min: 13 } },
+});
 
 const TEXT_FILL = { headline: C.ink, subline: C.ink2 };
 const g = (L, group) => { L.group = group; return L; };
 
 /**
  * The layers and stage items of one card. t = cardText(), shots = { name: { src, w, h } } (may be
- * empty: the card is then drawn without product shots), tasky = { src } for the « tasky »
- * variant, null for « plain ». Returns { layers, items, sprites, texts }: layers in paint order
- * with a group each (Background, Product shot, Tasky, Brand, Text, Screenshots); raster layers
+ * empty: the card is then drawn without product shots). Returns { layers, items, texts }: layers
+ * in paint order with a group each (Background, Product shot, Brand, Text, Screenshots); raster layers
  * hold a placeholder filled by the stage; texts = [{ layer, text }] for the PSD sidecar.
  */
-export function cardLayout(spec, t, shots = {}, tasky = null) {
+export function cardLayout(spec, t, shots = {}) {
   const { w, h, safe } = spec;
-  const pick = (v) => shots[Array.isArray(v) ? v[0] : v] ?? null;
-  const items = [], sprites = [], texts = [];
+  const items = [], texts = [];
   const L = [];
   const x = safe.x;
+  const BOX = boxes();
   const T = (id, label, svg, text) => { L.push(g(layer(id, label, svg), id === 'brand' || id === 'version' ? 'Brand' : 'Text')); if (text) texts.push({ layer: label, text }); };
-  const head = (box, y0) => { const f = fitText(t.headline, box); return { f, b: lines(x, y0 + f.size * 0.78, f.lines, { size: f.size, lh: 1.06, tracking: tight(f.size), fill: TEXT_FILL.headline }) }; };
-  const sub = (box, y0) => { const f = fitText(t.subline, box); return { f, b: lines(x, y0 + f.size * 0.8, f.lines, { size: f.size, face: 'seg500', lh: 1.32, fill: TEXT_FILL.subline }) }; };
+  const head = (box, y0) => { const f = fitText(t.headline, box); return { f, b: lines(x, y0 + f.size * CAP, f.lines, { size: f.size, face: TYPE.head, lh: HEAD_LH, tracking: tight(f.size), fill: TEXT_FILL.headline }) }; };
+  const sub = (box, y0) => { const f = fitText(t.subline, box); return { f, b: lines(x, y0 + f.size * CAP, f.lines, { size: f.size, face: TYPE.body, lh: SUB_LH, fill: TEXT_FILL.subline }) }; };
   const rows = (y0, size, maxW, limit = Infinity) => {
     let svg = '', yy = y0;
     for (const hl of t.highlights) {
@@ -272,110 +382,122 @@ export function cardLayout(spec, t, shots = {}, tasky = null) {
     return { svg, bottom: yy };
   };
   const hlText = t.highlights.map((hl) => `• ${hl.title}`).join('\n');
-  const perch = (o) => (tasky ? { src: tasky.src, ...o } : null);
+  // The product shots: the names of t.shots.<format> in paint order ([behind, front], or one).
+  // The front window keeps the large placement each format had; the one behind sits up and right.
+  const pair = (names, front, back) => {
+    const list = (Array.isArray(names) ? names : [names]).filter((n) => shots[n]).slice(-2);
+    if (list.length === 2 && back) items.push(windowItem('product-back', 'Product shot (back)', shots[list[0]], { view: viewOf(list[0]), glow: 'rgba(59,130,246,0.22)', ...back }));
+    const f = list.at(-1);
+    if (f) items.push(windowItem('product', list.length === 2 && back ? 'Product shot (front)' : 'Product shot', shots[f], { view: viewOf(f), ...front }));
+  };
 
   if (spec.layout === 'social') {
     L.push(...backgroundLayers(w, h, { blue: [w * 0.8, h * 0.6], amber: [w * 0.05, 0], focus: [w * 0.78, h * 0.5], seed: 11 }));
     const lk = lockup(x, safe.y, 40);
-    const bd = badge(x + lk.w + 18, safe.y + 3, 34, t.version);
-    const hd = head(BOX.social.headline, safe.y + 40 + 44);
-    const sb = sub(BOX.social.subline, hd.b.bottom + 24);
+    const bd = tagAfter(lk, x, 30, t.version, { lang: spec.lang });
+    const hd = head(BOX.social.headline, safe.y + 40 + 46);
+    const sb = sub(BOX.social.subline, hd.b.bottom + 30);
     const rw = rows(sb.b.bottom + 34, 20, 500, safe.y + safe.h - 40);
     T('brand', 'Wordmark', lk.svg); T('version', 'Badge', bd.svg, `v${t.version}`);
     T('headline', 'Headline', hd.b.svg, t.headline); T('subline', 'Subline', sb.b.svg, t.subline);
     T('highlights', 'Highlights', rw.svg, hlText); T('footer', 'Footer', footer(x, safe.y + safe.h, 16, t.foot), t.foot);
-    const s = pick(t.shots.social);
-    if (s) items.push(windowItem('product', 'Product shot', s, { x: 640, y: 150, w: 800, rotate: { x: 6, y: -22, z: 1.5 }, perspective: 1700, perch: perch({ size: 92, along: 0.22 }) }));
+    pair(t.shots.social, { x: 640, y: 150, w: 800, rotate: { x: 6, y: -22, z: 1.5 }, perspective: 1700 }, { x: 770, y: 36, w: 760, rotate: { x: 6, y: -22, z: 1.5 }, perspective: 1700 });
   } else if (spec.layout === 'discord') {
     L.push(...backgroundLayers(w, h, { blue: [w * 0.8, h * 0.62], amber: [0, 0], focus: [w * 0.78, h * 0.55], seed: 12 }));
     const lk = lockup(x, safe.y, 36);
-    const bd = badge(x + lk.w + 16, safe.y + 2, 32, t.version);
+    const bd = tagAfter(lk, x, 28, t.version, { lang: spec.lang });
     const f = fitText(t.headline, BOX.discord.headline);
     const fs = fitText(t.subline, BOX.discord.subline);
-    const blockH = f.size * 0.78 + (f.lines.length - 1) * f.size * 1.06 + 26 + fs.size * 0.8 + (fs.lines.length - 1) * fs.size * 1.32;
+    const blockH = f.size * CAP + (f.lines.length - 1) * f.size * HEAD_LH + 30 + fs.size * CAP + (fs.lines.length - 1) * fs.size * SUB_LH;
     const room0 = safe.y + 36 + 20, room1 = safe.y + safe.h;
     const hd = head(BOX.discord.headline, room0 + Math.max(0, (room1 - room0 - blockH) / 2));
-    const sb = sub(BOX.discord.subline, hd.b.bottom + 26);
+    const sb = sub(BOX.discord.subline, hd.b.bottom + 30);
     T('brand', 'Wordmark', lk.svg); T('version', 'Badge', bd.svg, `v${t.version}`);
     T('headline', 'Headline', hd.b.svg, t.headline); T('subline', 'Subline', sb.b.svg, t.subline);
-    const s = pick(t.shots.discord);
-    if (s) items.push(windowItem('product', 'Product shot', s, { x: 545, y: 150, w: 620, rotate: { x: 6, y: -24, z: 1.5 }, perspective: 1500, perch: perch({ size: 80, along: 0.2 }) }));
+    pair(t.shots.discord, { x: 545, y: 150, w: 620, rotate: { x: 6, y: -24, z: 1.5 }, perspective: 1500 }, { x: 650, y: 48, w: 580, rotate: { x: 6, y: -24, z: 1.5 }, perspective: 1500 });
   } else if (spec.layout === 'blog') {
     L.push(...backgroundLayers(w, h, { blue: [w * 0.74, h * 0.55], amber: [w * 0.12, 0], focus: [w * 0.74, h * 0.5], seed: 13 }));
     const f = fitText(t.headline, BOX.blog.headline), fs = fitText(t.subline, BOX.blog.subline);
-    const blockH = 52 + 52 + f.size * 0.78 + (f.lines.length - 1) * f.size * 1.06 + 26 + fs.size * 0.8 + (fs.lines.length - 1) * fs.size * 1.32;
+    const blockH = 52 + 52 + f.size * CAP + (f.lines.length - 1) * f.size * HEAD_LH + 32 + fs.size * CAP + (fs.lines.length - 1) * fs.size * SUB_LH;
     const top = safe.y + Math.max(0, (safe.h - blockH) / 2);
     const lk = lockup(x, top, 52);
-    const bd = badge(x + lk.w + 20, top + 8, 38, t.version);
+    const bd = tagAfter(lk, x, 34, t.version, { lang: spec.lang });
     const hd = head(BOX.blog.headline, top + 52 + 52);
-    const sb = sub(BOX.blog.subline, hd.b.bottom + 26);
+    const sb = sub(BOX.blog.subline, hd.b.bottom + 32);
     T('brand', 'Wordmark', lk.svg); T('version', 'Badge', bd.svg, `v${t.version}`);
     T('headline', 'Headline', hd.b.svg, t.headline); T('subline', 'Subline', sb.b.svg, t.subline);
-    const names = Array.isArray(t.shots.blog) ? t.shots.blog : [t.shots.blog];
-    const back = shots[names[0]], front = shots[names[1] ?? names[0]];
-    if (back) items.push(windowItem('product-back', 'Product shot (back)', back, { x: 880, y: 40, w: 680, rotate: { x: 5, y: -26, z: 1 }, perspective: 1800, glow: 'rgba(59,130,246,0.22)' }));
-    if (front) items.push(windowItem('product', 'Product shot (front)', front, { x: 1010, y: 230, w: 620, rotate: { x: 5, y: -26, z: 1 }, perspective: 1800, shadow: { dy: 50, blur: 80, alpha: 0.7 }, perch: perch({ size: 86, along: 0.26 }) }));
+    pair(t.shots.blog, { x: 1010, y: 230, w: 620, rotate: { x: 5, y: -26, z: 1 }, perspective: 1800, shadow: { dy: 50, blur: 80, alpha: 0.7 } }, { x: 880, y: 40, w: 680, rotate: { x: 5, y: -26, z: 1 }, perspective: 1800 });
   } else if (spec.layout === 'square') {
     L.push(...backgroundLayers(w, h, { blue: [w * 0.66, h * 0.8], amber: [w * 0.1, 0], focus: [w * 0.62, h * 0.78], seed: 14 }));
     const lk = lockup(x, safe.y, 48);
-    const bd = badge(x + lk.w + 20, safe.y + 5, 38, t.version);
-    const hd = head(BOX.square.headline, safe.y + 48 + 70);
-    const sb = sub(BOX.square.subline, hd.b.bottom + 32);
+    const bd = tagAfter(lk, x, 36, t.version, { lang: spec.lang });
+    const hd = head(BOX.square.headline, safe.y + 48 + 72);
+    const sb = sub(BOX.square.subline, hd.b.bottom + 40);
     const rw = rows(sb.b.bottom + 44, 25, safe.w);
     T('brand', 'Wordmark', lk.svg); T('version', 'Badge', bd.svg, `v${t.version}`);
     T('headline', 'Headline', hd.b.svg, t.headline); T('subline', 'Subline', sb.b.svg, t.subline); T('highlights', 'Highlights', rw.svg, hlText);
-    const s = pick(t.shots.square);
-    if (s) items.push(windowItem('product', 'Product shot', s, { x: 300, y: Math.max(rw.bottom + 80, 690), w: 980, rotate: { x: 18, y: -16, z: 1.5 }, perspective: 2000, origin: '50% 0%', perch: perch({ size: 116, along: 0.42 }) }));
+    const fy = Math.max(rw.bottom + 80, 690);
+    pair(t.shots.square, { x: 300, y: fy, w: 980, rotate: { x: 18, y: -16, z: 1.5 }, perspective: 2000, origin: '50% 0%' }, { x: 560, y: fy - 120, w: 860, rotate: { x: 18, y: -16, z: 1.5 }, perspective: 2000, origin: '50% 0%' });
   } else {
-    // « What's new »: header, subline, then the three highlights as tiles, each with its crop of the app.
+    // « What's new »: the title and a meta line, then three feature tiles. Each tile: a vignette of
+    // the feature (real pixels, zoomed until they read; vignettes.mjs) in a dark well whose edges
+    // fade instead of cutting, then an icon, a title and a one-line description. Depth: a soft
+    // shadow under each tile, a light on its top edge, an inner glow (amber, blue, amber).
     L.push(...backgroundLayers(w, h, { blue: [w * 0.85, h * 0.15], amber: [w * 0.05, 0], focus: [w * 0.5, h * 0.62], seed: 15 }));
     const lk = lockup(x, safe.y, 38);
-    const bw = badge(0, 0, 36, t.version).w;
+    const bw = badge(0, 0, 32, t.version, { lang: spec.lang }).w;
     const ft = fitText(t.whatsNew, BOX.whatsnew.title);
-    const ty = safe.y + 38 + 34 + ft.size * 0.78;
-    const title = lines(x, ty, ft.lines, { size: ft.size, tracking: tight(ft.size) });
-    const sb = (() => { const f = fitText(t.subline, BOX.whatsnew.subline); return lines(x, ty + 22 + f.size, f.lines, { size: f.size, face: 'seg500', fill: C.ink2 }); })();
-    const gy = sb.bottom + 34, gap = 20, n = Math.max(1, Math.min(3, t.highlights.length));
+    const ty = safe.y + 38 + 32 + ft.size * CAP;
+    const title = lines(x, ty, ft.lines, { size: ft.size, face: TYPE.head, tracking: tight(ft.size) });
+    const fm = fitText(t.meta, BOX.whatsnew.meta);
+    const my = ty + ft.size * 0.25 + 16 + fm.size * CAP;
+    const meta = lines(x, my, fm.lines, { size: fm.size, face: TYPE.body, fill: C.muted });
+    const gy = my + fm.size * 0.3 + 26, gap = 20, n = Math.max(1, Math.min(3, t.highlights.length));
     const tw = (safe.w - gap * (n - 1)) / n, th = safe.y + safe.h - gy;
+    const pad = 12, capH = 96, ibh = th - pad - capH, glows = [C.amber2, C.blue, C.amber2];
+    let under = `<defs><filter id="tile-shadow" x="-20%" y="-20%" width="140%" height="150%"><feGaussianBlur stdDeviation="14"/></filter>
+      <linearGradient id="tile-light" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0.22"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.07"/><stop offset="1" stop-color="#fff" stop-opacity="0.05"/></linearGradient></defs>`;
     let tiles = '', thumbs = '';
     t.highlights.slice(0, 3).forEach((hl, i) => {
       const tx = x + i * (tw + gap);
-      const pad = 12, capH = 84, ths = th - pad - capH;
+      const bx = tx + pad, by = gy + pad, bwid = tw - 2 * pad;
+      under += `<rect x="${r1(tx + 6)}" y="${r1(gy + 18)}" width="${r1(tw - 12)}" height="${r1(th - 10)}" rx="18" fill="#000" opacity="0.55" filter="url(#tile-shadow)"/>`;
+      tiles += `<defs><radialGradient id="tile-glow-${i}" cx="${r1(tx + tw / 2)}" cy="${r1(gy)}" r="${r1(tw * 0.9)}" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="${glows[i]}" stop-opacity="0.16"/><stop offset="1" stop-color="${glows[i]}" stop-opacity="0"/></radialGradient></defs>
+        <rect x="${r1(tx)}" y="${r1(gy)}" width="${r1(tw)}" height="${r1(th)}" rx="18" fill="${C.tileFill}"/>
+        <rect x="${r1(tx)}" y="${r1(gy)}" width="${r1(tw)}" height="${r1(th)}" rx="18" fill="url(#tile-glow-${i})"/>
+        <rect x="${r1(tx + 0.5)}" y="${r1(gy + 0.5)}" width="${r1(tw - 1)}" height="${r1(th - 1)}" rx="17.5" fill="none" stroke="url(#tile-light)"/>`;
+      // Caption: icon tile, title, description.
+      const cy0 = by + ibh + 14, it = 34, tx2 = bx + 4 + it + 12;
+      const tt = fitText(hl.title, { ...BOX.whatsnew.tileTitle, maxW: tx + tw - pad - 4 - tx2 });
+      const dd = fitText(hl.desc || '', { ...BOX.whatsnew.desc, maxW: bwid - 8 });
+      tiles += `<rect x="${r1(bx + 4)}" y="${r1(cy0)}" width="${it}" height="${it}" rx="9" fill="${C.amber}" fill-opacity="0.12" stroke="${C.amber}" stroke-opacity="0.45"/>
+        ${icon(hl.icon, bx + 4 + it * 0.21, cy0 + it * 0.21, it * 0.58, C.amber)}
+        ${lines(tx2, cy0 + it / 2 + tt.size * CAP / 2, tt.lines, { size: tt.size, face: TYPE.tile, fill: C.ink }).svg}
+        ${hl.desc ? lines(bx + 4, cy0 + it + 12 + dd.size * CAP, dd.lines, { size: dd.size, face: TYPE.body, fill: C.muted }).svg : ''}`;
+      // The well and its vignette; its edges fade to the well (a mask), so nothing ends on a hard cut.
       const s = hl.shot ? shots[hl.shot] : null;
-      const tt = fitText(hl.title, { ...BOX.whatsnew.tileTitle, maxW: tw - 2 * pad - 40 });
-      const cy = gy + pad + ths + capH / 2;
-      const ty0 = cy - ((tt.lines.length - 1) * tt.size * 1.12) / 2 + tt.size * 0.36;
-      tiles += `<rect x="${r1(tx)}" y="${r1(gy)}" width="${r1(tw)}" height="${r1(th)}" rx="18" fill="${C.tile}" fill-opacity="0.07" stroke="${C.tile}" stroke-opacity="0.12"/>
-        ${icon(hl.icon, tx + pad + 4, cy - 12, 24, C.amber)}
-        ${lines(tx + pad + 40, ty0, tt.lines, { size: tt.size, tracking: tight(tt.size), fill: C.ink }).svg}`;
-      if (s) {
-        const [cx0, cy0, cw, chh] = hl.crop || [WINDOW.x, WINDOW.y, WINDOW.w, WINDOW.h];
-        const bx = tx + pad, by = gy + pad, bwid = tw - 2 * pad;
-        thumbs += `<defs><clipPath id="thumb-${i}"><rect x="${r1(bx)}" y="${r1(by)}" width="${r1(bwid)}" height="${r1(ths)}" rx="11"/></clipPath></defs>
-          <g clip-path="url(#thumb-${i})"><rect x="${r1(bx)}" y="${r1(by)}" width="${r1(bwid)}" height="${r1(ths)}" fill="#0a0e17"/><svg x="${r1(bx)}" y="${r1(by)}" width="${r1(bwid)}" height="${r1(ths)}" viewBox="${cx0} ${cy0} ${cw} ${chh}" preserveAspectRatio="xMidYMid slice"><image href="${s.src}" width="${s.w}" height="${s.h}"/></svg></g>
-          <rect x="${r1(bx + 0.5)}" y="${r1(by + 0.5)}" width="${r1(bwid - 1)}" height="${r1(ths - 1)}" rx="11" fill="none" stroke="#ffffff" stroke-opacity="0.14"/>`;
-      }
+      thumbs += `<defs><clipPath id="well-${i}"><rect x="${r1(bx)}" y="${r1(by)}" width="${r1(bwid)}" height="${r1(ibh)}" rx="11"/></clipPath>
+          <linearGradient id="well-fade-x-${i}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#000"/><stop offset="0.035" stop-color="#fff"/><stop offset="0.965" stop-color="#fff"/><stop offset="1" stop-color="#000"/></linearGradient>
+          <linearGradient id="well-fade-y-${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000"/><stop offset="0.04" stop-color="#fff"/><stop offset="0.96" stop-color="#fff"/><stop offset="1" stop-color="#000"/></linearGradient>
+          <mask id="well-mask-y-${i}" maskUnits="userSpaceOnUse" x="${r1(bx)}" y="${r1(by)}" width="${r1(bwid)}" height="${r1(ibh)}"><rect x="${r1(bx)}" y="${r1(by)}" width="${r1(bwid)}" height="${r1(ibh)}" fill="url(#well-fade-y-${i})"/></mask>
+          <mask id="well-mask-x-${i}" maskUnits="userSpaceOnUse" x="${r1(bx)}" y="${r1(by)}" width="${r1(bwid)}" height="${r1(ibh)}"><rect x="${r1(bx)}" y="${r1(by)}" width="${r1(bwid)}" height="${r1(ibh)}" fill="url(#well-fade-x-${i})"/></mask>
+          <radialGradient id="well-glow-${i}" cx="0.5" cy="0.45" r="0.7"><stop offset="0" stop-color="${glows[i]}" stop-opacity="0.2"/><stop offset="1" stop-color="${glows[i]}" stop-opacity="0"/></radialGradient></defs>
+        <rect x="${r1(bx)}" y="${r1(by)}" width="${r1(bwid)}" height="${r1(ibh)}" rx="11" fill="#0a0f1c"/>
+        <rect x="${r1(bx)}" y="${r1(by)}" width="${r1(bwid)}" height="${r1(ibh)}" rx="11" fill="url(#well-glow-${i})"/>`;
+      if (s) thumbs += `<g clip-path="url(#well-${i})"><g mask="url(#well-mask-x-${i})"><g mask="url(#well-mask-y-${i})">${vignetteSvg(hl, s, i, { x: bx, y: by, w: bwid, h: ibh })}</g></g></g>`;
+      thumbs += `<rect x="${r1(bx + 0.5)}" y="${r1(by + 0.5)}" width="${r1(bwid - 1)}" height="${r1(ibh - 1)}" rx="10.5" fill="none" stroke="#ffffff" stroke-opacity="0.1"/>`;
     });
-    T('brand', 'Wordmark', lk.svg); T('version', 'Badge', badge(safe.x + safe.w - bw, safe.y + 1, 36, t.version).svg, `v${t.version}`);
-    T('title', 'Title', title.svg, t.whatsNew); T('subline', 'Subline', sb.svg, t.subline);
-    L.push(g(layer('tiles', 'Highlight tiles', tiles), 'Text'));
-    texts.push({ layer: 'Highlight tiles', text: hlText });
+    T('brand', 'Wordmark', lk.svg); T('version', 'Badge', badge(safe.x + safe.w - bw, lk.cy - 16, 32, t.version, { lang: spec.lang }).svg, `Version ${t.version}`);
+    T('title', 'Title', title.svg, t.whatsNew); T('meta', 'Meta', meta.svg, t.meta);
+    L.push(g(layer('tile-shadows', 'Tile shadows', under), 'Text'));
+    L.push(g(layer('tiles', 'Feature tiles', tiles), 'Text'));
+    texts.push({ layer: 'Feature tiles', text: t.highlights.map((hl) => `• ${hl.title}${hl.desc ? ` (${hl.desc})` : ''}`).join('\n') });
     L.push(g(layer('thumbnails', 'Screenshots', thumbs), 'Screenshots'));
-    if (tasky) {
-      // Tasky sits on the top edge of the last tile, by its right corner, under the badge.
-      const size = 84, lastX = x + (n - 1) * (tw + gap);
-      sprites.push({ id: 'tasky', label: 'Tasky', src: tasky.src, x: Math.round(lastX + tw - 36 - size), y: Math.round(gy - size * 0.78), w: size });
-    }
   }
-  // The raster layers (filled from the stage) go right above the background.
-  const ras = items.flatMap((it) => [{ id: it.id, label: it.label, body: '', raster: true, group: 'Product shot' }, ...(it.perch ? [{ id: it.perch.id, label: 'Tasky', body: '', raster: true, group: 'Tasky', behind: true }] : [])]);
-  // A perched Tasky peeks from BEHIND its window: in paint order he comes before it.
-  const ordered = [];
-  for (const r of ras) { if (r.behind) ordered.splice(ordered.length - 1, 0, r); else ordered.push(r); }
+  // The product shots (raster layers filled from the stage) go right above the background.
   const firstText = L.findIndex((l) => l.group !== 'Background');
-  L.splice(firstText, 0, ...ordered);
-  for (const sp of sprites) L.push({ id: sp.id, label: sp.label, body: '', raster: true, group: 'Tasky' });
-  return { layers: L, items, sprites, texts };
+  L.splice(firstText, 0, ...items.map((it) => ({ id: it.id, label: it.label, body: '', raster: true, group: 'Product shot' })));
+  return { layers: L, items, texts };
 }
 
 /**
@@ -440,12 +562,6 @@ export function findShots(names, dirs) {
   return out;
 }
 
-/** Tasky as the app shows him (frontend/assets/Tasky_Happy.png), or null. */
-export function taskyHref() {
-  const p = join(ROOT, 'frontend', 'assets', 'Tasky_Happy.png');
-  return existsSync(p) ? { src: dataUri(p) } : null;
-}
-
 /** Every screenshot name a card text asks for. */
 export function shotNames(t) {
   const flat = (v) => (Array.isArray(v) ? v : [v]);
@@ -457,20 +573,22 @@ export function overflowReport(version, custom) {
   const out = [];
   for (const spec of cardSpecs(version)) {
     const t = cardText(version, spec.lang, custom);
-    const check = (what, s, o) => { if (!fitText(s, o).fits) out.push({ card: cardFile(spec, 'plain'), what }); };
-    const box = BOX[spec.layout];
+    const check = (what, s, o) => { if (!fitText(s, o).fits) out.push({ card: cardFile(spec), what }); };
+    const box = boxes()[spec.layout];
     if (box.headline) check('headline', t.headline, box.headline);
     if (box.title) check('title', t.whatsNew, box.title);
     if (box.subline) check('subline', t.subline, box.subline);
-    if (box.tileTitle) for (const hl of t.highlights) check(`highlight « ${hl.title} »`, hl.title, { ...box.tileTitle, maxW: 290 });
+    if (box.meta) check('meta', t.meta, box.meta);
+    if (box.tileTitle) for (const hl of t.highlights) check(`highlight « ${hl.title} »`, hl.title, box.tileTitle);
+    if (box.desc) for (const hl of t.highlights) check(`description « ${hl.desc} »`, hl.desc || '', box.desc);
   }
   return out;
 }
 
-/** Fill the raster layers of a layout from the stage (one transparent PNG per window / Tasky). */
+/** Fill the raster layers of a layout from the stage (one transparent PNG per window). */
 async function rasterise(browser, spec, layout, scale = 1) {
-  if (!layout.items.length && !layout.sprites.length) return;
-  const st = await openStage(browser, { w: spec.w, h: spec.h, items: layout.items, sprites: layout.sprites }, { scale });
+  if (!layout.items.length) return;
+  const st = await openStage(browser, { w: spec.w, h: spec.h, items: layout.items }, { scale });
   try {
     for (const L of layout.layers.filter((l) => l.raster)) {
       const png = await st.shot({ only: L.id });
@@ -485,7 +603,7 @@ export function textSidecar(name, texts, svgRel) {
 }
 
 /**
- * Write every card of `version`, in both variants (with Tasky, plain) and both languages:
+ * Write every card of `version` in both languages (bmm-<v>-<format>[.fr]):
  *   <outDir>/<file>.png, <outDir>/source/svg/<file>.svg, <outDir>/source/psd/<file>.psd + .txt
  * shotsDirs: where the screenshots are (the media step passes the fresh ones, then .github/screenshots).
  */
@@ -495,14 +613,13 @@ export async function renderCards(version, { outDir = join(releaseDir(version), 
   const dirs = shotsDirs ?? [join(releaseDir(version), 'media', 'screenshots'), join(ROOT, '.github', 'screenshots')];
   const written = [], cards = [];
   const missingShots = new Set();
-  const tasky = taskyHref();
   for (const spec of cardSpecs(version)) {
     const t = cardText(version, spec.lang, custom);
     const shots = browser ? findShots(shotNames(t), dirs) : {};
     if (browser) for (const n of shotNames(t)) if (!shots[n]) missingShots.add(n);
-    for (const variant of VARIANTS) {
-      const file = cardFile(spec, variant);
-      const layout = cardLayout(spec, t, shots, variant === 'tasky' ? tasky : null);
+    {
+      const file = cardFile(spec);
+      const layout = cardLayout(spec, t, shots);
       if (browser) await rasterise(browser, spec, layout);
       const layers = layout.layers.filter((l) => l.body);
       writeText(join(svgDir, `${file}.svg`), assembleSvg(spec.w, spec.h, layers)); written.push(`source/svg/${file}.svg`);

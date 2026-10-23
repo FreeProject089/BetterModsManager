@@ -10,7 +10,6 @@ fixes that without you unzipping anything by hand.
 
 > Reorganize your mod structure to match the destination folder.
 
-<div class="bmm-replay" data-src="assets/docs/media/replays/mapper.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/mapper.bmmreplay" data-page="features/mapper" data-title="Remapping a badly-packaged mod"></div>
 
 
 
@@ -19,7 +18,6 @@ fixes that without you unzipping anything by hand.
 
 *Fix a badly packaged mod. A mod whose archive puts its files one folder too deep: the Mapper shows where they would land, the root is moved, the result checked and the mod updated.*
 
-<div class="bmm-replay" data-src="assets/docs/media/replays/fix-a-mod.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/fix-a-mod.bmmreplay" data-page="features/mapper" data-title="Fix a badly packaged mod"></div>
 <!-- /story:fix-a-mod -->
 
 ## When you need it

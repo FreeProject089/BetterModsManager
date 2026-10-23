@@ -4,7 +4,6 @@ The features have their own pages. This one is about the *interactions* — the 
 small conveniences that aren't obvious until someone points at them. Skim it once; it pays for
 itself.
 
-<div class="bmm-replay" data-src="assets/docs/media/replays/bmm-demo.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/bmm-demo.bmmreplay" data-page="reference/tips" data-title="A recorded BMM session"></div>
 
 *Click **Play** above to watch a real BMM session, reconstructed in your browser — not a
 video, the actual interface replayed.*
@@ -15,7 +14,6 @@ video, the actual interface replayed.*
 
 *Write an interactive tutorial. A tutorial of your own for your friends: steps that point at the interface, a check that waits for an action, tried out, then exported.*
 
-<div class="bmm-replay" data-src="assets/docs/media/replays/create-tutorial.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/create-tutorial.bmmreplay" data-page="reference/tips" data-title="Write an interactive tutorial"></div>
 <!-- /story:create-tutorial -->
 
 ## Keyboard shortcuts

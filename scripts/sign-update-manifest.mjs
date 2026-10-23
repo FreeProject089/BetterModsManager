@@ -3,8 +3,8 @@
  * sign-update-manifest.mjs — sign, re-sign and verify BMM's incremental `update-manifest.json`.
  *
  * BMM (src-tauri/src/commands/autoupdate.rs, verify_manifest_text) refuses a manifest that is
- * not signed by the publisher key, is for another app, has expired, claims more than 7 days of
- * validity, or does not offer a newer version. This is the publisher half.
+ * not signed by the publisher key, is for another app, has expired, claims more than 90 days of
+ * validity (BMM 1.0.2 and 0.9.12: 7), or does not offer a newer version. This is the publisher half.
  *
  * Format (the same scheme as BetterInstaller's signed update.json, with its own context):
  *
@@ -16,7 +16,7 @@
  *
  * Usage:
  *   node scripts/sign-update-manifest.mjs sign   <update-manifest.json> --key <private.key>
- *                                                 [--valid-days 1..7] [--out <file>]
+ *                                                 [--valid-days 1..90, default 7] [--out <file>]
  *                                                 [--require-signed]   (renew only; the weekly job)
  *   node scripts/sign-update-manifest.mjs verify <update-manifest.json> [--pubkey <hex>]
  *
@@ -47,7 +47,13 @@ export const MANIFEST_APP_ID = 'com.bettermm.desktop';
 /** Same value as MANIFEST_PUBLIC_KEY_HEX in autoupdate.rs and [security].public_key in
  *  BetterInstaller/examples/bmm/installer.toml (tests/sign-update-manifest.test.mjs checks). */
 export const MANIFEST_PUBLIC_KEY_HEX = '8e0647c277dd67158d34dd1c10d0a2d97191716dc4f92aebde6d349d1c0f168b';
-export const MANIFEST_MAX_VALIDITY_DAYS = 7;
+/** Longest validity a client accepts (MANIFEST_MAX_VALIDITY_DAYS in autoupdate.rs; the tests compare). */
+export const MANIFEST_MAX_VALIDITY_DAYS = 90;
+/** What `sign` uses by default. BMM 1.0.2 and 0.9.12 accept only 7 days, so the publisher signs
+ *  for 7 until they are no longer in use (RELEASE.md, « Manifest validity »). */
+export const MANIFEST_DEFAULT_VALIDITY_DAYS = 7;
+/** The limit of BMM 1.0.2 / 0.9.12 and of their BetterInstaller engine: signing for longer warns. */
+export const MANIFEST_LEGACY_MAX_VALIDITY_DAYS = 7;
 
 const DAY_MS = 86_400_000;
 const PKCS8_ED25519_PREFIX = Buffer.from('302e020100300506032b657004220420', 'hex');
@@ -139,7 +145,7 @@ export function verifyManifest(text, { publicKey = MANIFEST_PUBLIC_KEY_HEX, now 
  * @param {string} seedHex       private.key contents
  * @param {{validDays?: number, now?: number}} opts
  */
-export function signManifest(text, seedHex, { validDays = MANIFEST_MAX_VALIDITY_DAYS, now = Date.now(), requireSigned = false } = {}) {
+export function signManifest(text, seedHex, { validDays = MANIFEST_DEFAULT_VALIDITY_DAYS, now = Date.now(), requireSigned = false } = {}) {
     if (!Number.isInteger(validDays) || validDays < 1 || validDays > MANIFEST_MAX_VALIDITY_DAYS) {
         throw new Error(`a manifest is valid for 1 to ${MANIFEST_MAX_VALIDITY_DAYS} days, not ${validDays}`);
     }
@@ -192,7 +198,10 @@ function main(argv) {
     if (cmd === 'sign') {
         const keyPath = arg(argv, '--key');
         if (!keyPath) { console.error('--key <private.key> is required'); return 2; }
-        const validDays = arg(argv, '--valid-days') !== undefined ? Number(arg(argv, '--valid-days')) : MANIFEST_MAX_VALIDITY_DAYS;
+        const validDays = arg(argv, '--valid-days') !== undefined ? Number(arg(argv, '--valid-days')) : MANIFEST_DEFAULT_VALIDITY_DAYS;
+        if (validDays > MANIFEST_LEGACY_MAX_VALIDITY_DAYS) {
+            console.warn(`[sign-update-manifest] warning: --valid-days ${validDays} is longer than ${MANIFEST_LEGACY_MAX_VALIDITY_DAYS} days; BMM 1.0.2 and 0.9.12 refuse this manifest`);
+        }
         const out = signManifest(text, readFileSync(keyPath, 'utf8'), { validDays, requireSigned: argv.includes('--require-signed') });
         // Never publish something the pinned key would refuse (a wrong private.key, say).
         const body = verifyManifest(out, { publicKey: arg(argv, '--pubkey') || MANIFEST_PUBLIC_KEY_HEX });

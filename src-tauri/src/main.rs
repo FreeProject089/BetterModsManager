@@ -853,6 +853,7 @@ fn main() {
             commands::custom_pages::get_custom_page_source,
             commands::custom_pages::update_custom_page,
             commands::custom_pages::delete_custom_page,
+            commands::custom_pages::duplicate_custom_page,
             commands::custom_pages::import_page_file,
             commands::custom_pages::list_page_files,
             commands::custom_pages::import_page_path,

@@ -52,5 +52,3 @@ Le serveur intégré de BMM est disponible tant que BMM est ouvert et que le por
 ## Ensuite
 
 [Suivre un dépôt](doc-page:guide/follow-a-repo) est le côté de l'ami. Détails : [Modpacks](doc-page:features/modpacks), [Dépôt Serveur](doc-page:features/repo).
-
-<div class="bmm-replay" data-src="assets/docs/media/replays/share-setup.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/share-setup.bmmreplay" data-page="guide/share-a-modpack" data-title="Regarde : un profil devient un modpack, un dépôt, et la synchro d'un ami"></div>

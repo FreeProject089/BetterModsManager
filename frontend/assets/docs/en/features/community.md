@@ -45,7 +45,6 @@ Three different empty states, because three different things can be true:
 - **Could not load** — a *Retry* button. The feed comes from the network, so this is the state
   you will see offline, and it says so instead of pretending the blog is empty.
 
-<div class="bmm-replay" data-src="assets/docs/media/replays/community.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/community.bmmreplay" data-page="features/community" data-title="Reading the community blog"></div>
 
 
 ## The feed

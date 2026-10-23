@@ -11,7 +11,7 @@ import { headInfo, statusLines, detectPrevious, logRange, gitlinks, hasCommit, r
 import { renderCommitsMd } from './lib/commits.mjs';
 import { formatSums, sumsFilter, SUMS_NAME, parseSums } from './lib/checksums.mjs';
 import { updateReadme, readmeVersion } from './lib/readme.mjs';
-import { renderGithubRelease, ghCommand, orderAssets, assetProblems, GENERATED_MARK } from './lib/notes.mjs';
+import { renderGithubRelease, ghCommand, orderAssets, assetProblems, GENERATED_MARK, RESIGN_BELOW_DAYS, publishCommands, publishProblems, stripComments, replaceSumsTable } from './lib/notes.mjs';
 import { idleReport, cpuLoad } from './lib/idle.mjs';
 import { launch } from './lib/browser.mjs';
 import { ensureFreshFrontend } from './lib/fresh.mjs';
@@ -19,6 +19,8 @@ import { ensureFreshFrontend } from './lib/fresh.mjs';
 const rel = (p) => relative(ROOT, p).split('\\').join('/');
 const PUBLIC_ASSETS = ['BMM-Setup.exe', 'bmm.bpkg', 'update.json', 'update-manifest.json'];
 const changelogPath = (v, lang) => join(ROOT, 'Update', `changelog_v${v}_${lang}.md`);
+/** The top-level files of Release/<v>/ that go on the GitHub release. */
+const publicAssets = (dir) => readdirSync(dir).filter((n) => statSync(join(dir, n)).isFile() && (PUBLIC_ASSETS.includes(n) || /^lang-.*\.json$|^links\.json$/.test(n)));
 
 /** Previous version + the commit the changelog starts from (memoised in ctx.state). */
 export function previousOf(ctx) {
@@ -270,8 +272,12 @@ const verify = {
         }
       } catch (e) { ok = false; ctx.log.fail(`${n}: ${e.message}`); }
     }
+    if (have('update-manifest.json')) {
+      const sv = await run(process.execPath, ['scripts/sign-update-manifest.mjs', 'verify', f('update-manifest.json')], { cwd: ROOT, log: ctx.log, quiet: true });
+      if (sv.code) { ok = false; ctx.log.fail(`sign-update-manifest verify: ${sv.out.trim().split(/\r?\n/).pop()}`); } else ctx.log.ok('update-manifest.json: signature by the pinned key, app, dates');
+    }
     ctx.state.expires = expires;
-    const pub = readdirSync(ctx.rel).filter((n) => statSync(join(ctx.rel, n)).isFile() && (PUBLIC_ASSETS.includes(n) || /^lang-.*\.json$|^links\.json$/.test(n)));
+    const pub = publicAssets(ctx.rel);
     for (const p of assetProblems(pub)) { ok = false; ctx.log.fail(p); }
     // check-release-versions --artifacts reads Release/ and dist/release-assets-v<V>/ (where the build left them).
     // It judges Release/ (root) + dist/, where the build leaves them: only meaningful when they
@@ -309,7 +315,7 @@ const docs = {
 
 // ── 7. Media ─────────────────────────────────────────────────────────────────────────────────
 const media = {
-  id: 'media', title: 'Media', desc: 'compiles the frontend first and fails on a stale build; screenshots of the current app composed like BMM (Tasky top-left), release cards in two variants (with Tasky, plain) × EN/FR, the semi-3D README hero (PNG 1x/2x + MP4/WebM/GIF loop) and the flat one; every layered PSD and SVG in media/source/, each PSD read back and checked; usage GIFs with --gifs',
+  id: 'media', title: 'Media', desc: 'compiles the frontend first and fails on a stale build; screenshots of the current app composed like BMM (Tasky top-left), release cards × EN/FR (no Tasky), the README hero (Library + Flow editor, PNG 1x/2x + MP4/WebM/GIF loop) and the flat one; every layered PSD and SVG in media/source/, each PSD read back and checked; usage GIFs with --gifs',
   async run(ctx) {
     const notes = [], outputs = [];
     const mdir = ensureDir(join(ctx.rel, 'media'));
@@ -336,7 +342,7 @@ const media = {
     let browser = null;
     try { browser = await launch(); } catch (e) { ctx.log.warn(`no browser: ${e.message} (SVG only)`); }
     try {
-      // 2. Cards: every format × with Tasky / plain × EN / FR.
+      // 2. Cards: every format × EN / FR.
       const { renderCards } = await import('./media/cards.mjs');
       const cr = await renderCards(ctx.version, { outDir: mdir, browser, shotsDirs, log });
       for (const c of cr.cards) if (c.png) pngs[c.file] = c.png;
@@ -345,17 +351,19 @@ const media = {
       if (cr.missingShots.length) notes.push(`cards drawn without screenshots: ${cr.missingShots.join(', ')}`);
       for (const o of cr.overflow) notes.push(`card ${o.card}: ${o.what} too long`);
       for (const p of cr.wording) notes.push(`card text: ${p}`);
-      outputs.push(`Release/${ctx.version}/media/*-tasky|-plain[.fr].png (${cr.cards.length}), source/svg + source/psd`);
+      outputs.push(`Release/${ctx.version}/media/bmm-${ctx.version}-*[.fr].png (${cr.cards.length}), source/svg + source/psd`);
       if (!browser) return { ok: true, outputs, notes: [...notes, 'no browser: SVG sources only'] };
       // 3. The semi-3D hero (hero.png, hero@2x.png, the loop) and the flat one (hero-flat.png).
       const { buildHero3d } = await import('./screenshots/hero3d.mjs');
       const { buildHero } = await import('./screenshots/hero.mjs');
       const svgDir = join(mdir, 'source', 'svg'), psdDir = join(mdir, 'source', 'psd');
+      // Pictures of earlier drafts (Tasky cards and hero, -plain names) are not made any more.
+      for (const d of [mdir, sdir, svgDir, psdDir, gh, join(gh, 'source')]) if (existsSync(d)) for (const f of readdirSync(d)) if (/-tasky|-plain|^hero-tasky/.test(f)) rmSync(join(d, f), { force: true });
       ensureDir(sdir);
       const h3 = await buildHero3d({ version: ctx.version, browser, shotsDirs, pngDir: sdir, svgDir, psdDir, loopDir: sdir, loop: !ctx.opts.noLoop, log });
       pngs.hero = h3.png;
       outputs.push(rel(h3.png), rel(h3.png2x), rel(h3.psd));
-      if (h3.loop) outputs.push(`${rel(h3.loop.mp4)}, hero.webm, hero.gif (${h3.loop.frames} frames)`);
+      if (h3.loop) outputs.push(`${rel(h3.loop.mp4)} + .webm + .gif (${h3.loop.frames} frames)`);
       else if (!ctx.opts.noLoop) notes.push('hero loop not rendered (no ffmpeg)');
       const flatDir = existsSync(join(sdir, 'library.png')) ? sdir : gh;
       const hf = await buildHero({ version: ctx.version, browser, shotsDir: flatDir, pngDir: sdir, fullSourceDir: svgDir, psdDir, name: 'hero-flat' });
@@ -371,12 +379,14 @@ const media = {
         writeText(join(ghSrc, `${s.name}.svg`), screenshotSvg(s.name, s.w, s.h, ctx.version, { tasky: s.tasky }));
       }
       for (const f of ['hero.png', 'hero@2x.png', 'hero-flat.png']) copyFileSync(join(sdir, f), join(gh, f));
+      // Layers of earlier hero drafts are not linked any more: start from a clean set.
+      for (const f of readdirSync(join(gh, 'layers'))) if (/^hero(-tasky)?\.[a-z-]+\.png$/.test(f)) rmSync(join(gh, 'layers', f));
       await buildHero3d({ version: ctx.version, browser, shotsDirs: [gh], pngDir: join(mdir, '.gh-hero'), svgDir: join(mdir, '.gh-hero'), psdDir: join(mdir, '.gh-hero'), loop: false, linkedSourceDir: ghSrc, layersDir: join(gh, 'layers'), linkPrefix: '../layers/', log });
       rmSync(join(mdir, '.gh-hero'), { recursive: true, force: true });
       await buildHero({ version: ctx.version, browser, shotsDir: gh, pngDir: join(mdir, '.gh-flat'), linkedSourceDir: ghSrc, linkPrefix: '../', name: 'hero-flat' });
       rmSync(join(mdir, '.gh-flat'), { recursive: true, force: true });
       outputs.push(`.github/screenshots/ (${shots.filter((x) => x.readme).length} pictures, hero.png, hero@2x.png, hero-flat.png, layers/, source/*.svg)`);
-      writeText(join(ghSrc, 'README.md'), `# Editable sources of the README pictures\n\nGenerated by \`tools/release\` (media step) for BMM ${ctx.version}.\n\n- \`hero.svg\`: the semi-3D banner, layered (background and grid, the three windows and Tasky as raster layers drawn in perspective, linked from \`../layers/hero.*.png\`, then the wordmark, tagline and version).\n- \`hero-flat.svg\`: the flat banner of earlier releases (\`../hero-flat.png\`), its screenshots linked from \`../\`.\n- \`<name>.svg\`: each screenshot as two layers, *screenshot* and *Tasky*, linked from \`../layers/\`.\n\nLayered **PSD** files of every picture (cards, heroes, screenshots), self-contained, with a README listing their layers, are in \`Release/<version>/media/source/psd/\` (not committed).\n`);
+      writeText(join(ghSrc, 'README.md'), `# Editable sources of the README pictures\n\nGenerated by \`tools/release\` (media step) for BMM ${ctx.version}.\n\n- \`hero.svg\`: the banner, layered (background and grid, the Mod Library and the Automations editor in Flow mode as raster layers, linked from \`../layers/hero.*.png\`, then the wordmark, tagline and version).\n- \`hero-flat.svg\`: the flat banner of earlier releases (\`../hero-flat.png\`), its screenshots linked from \`../\`.\n- \`<name>.svg\`: each screenshot as two layers, *screenshot* and *Tasky*, linked from \`../layers/\`.\n\nLayered **PSD** files of every picture (cards, heroes, screenshots), self-contained, with a README listing their layers, are in \`Release/<version>/media/source/psd/\` (not committed).\n`);
       if (existsSync(join(gh, 'library-light.png'))) notes.push('.github/screenshots/library-light.png is no longer shot (scene removed in 1.0.4): README_EN/README_FR still show it');
     } finally { await browser?.close(); }
     // 5. Every PSD in one place, read back and checked, with a README of their layers.
@@ -469,7 +479,7 @@ const notesStep = {
   id: 'notes', title: 'Release notes', desc: 'github-release.md (maintainer header + curated changelog + checksums) and the gh command (printed only)',
   async run(ctx) {
     const notes = [], outputs = [];
-    const names = orderAssets(readdirSync(ctx.rel).filter((n) => statSync(join(ctx.rel, n)).isFile() && (PUBLIC_ASSETS.includes(n) || /^lang-.*\.json$|^links\.json$/.test(n))));
+    const names = orderAssets(publicAssets(ctx.rel));
     if (!names.length) return { ok: false, notes: [`no assets in Release/${ctx.version}/: run the build step`] };
     const assets = [];
     for (const n of names) assets.push({ name: n, sha256: await sha256File(join(ctx.rel, n)), size: statSync(join(ctx.rel, n)).size });
@@ -486,12 +496,14 @@ const notesStep = {
     }
     writeText(file, md);
     const body = join(ctx.rel, 'github-release.body.md');
-    writeText(body, md.slice(md.indexOf('-->') + 3).replace(/^\s+/, ''));
+    // Every comment out: the generated mark AND the maintainer notes (slicing at the first « --> »
+    // stopped at the end of the mark and kept the notes in the public body).
+    writeText(body, stripComments(md));
     outputs.push(rel(file), rel(body));
     for (const p of assetProblems(names)) { ctx.log.fail(p); notes.push(p); }
     const cmd = ghCommand(ctx.version, names, `Release/${ctx.version}/github-release.body.md`);
     ctx.state.ghCommand = cmd;
-    console.log(`\n  ${c.bold('Publish (manual, not run):')}\n  ${c.cyan(cmd)}\n`);
+    console.log(`\n  ${c.bold('Publish (not run here; the publish step re-signs, re-checks and prints tag + push + this):')}\n  ${c.cyan(cmd)}\n`);
     ctx.log.line(`gh command (not run): ${cmd}`);
     return { ok: assetProblems(names).length === 0, outputs, notes };
   },
@@ -499,4 +511,91 @@ const notesStep = {
 
 // gource sits BEFORE build: it regenerates frontend/assets/videos/credits_bg.mp4, which the
 // build bundles into the installer. After build, the shipped credits video would be the old one.
-export const STEPS = [preflight, version, changelog, gource, build, verify, docs, media, readme, bench, notesStep];
+// ── 12. Publish (only with --steps publish; never in --all) ──────────────────────────────────
+/** Days left before each signed manifest of Release/<v>/ expires (NaN when unreadable). */
+function daysLeft(file, now = Date.now()) {
+  try { return (Date.parse(JSON.parse(readJson(file).signed).expires) - now) / 86400000; } catch { return NaN; }
+}
+
+const publish = {
+  id: 'publish', title: 'Publish', manual: true,
+  desc: 're-sign update.json + update-manifest.json when < 14 days are left, re-verify, SHA256SUMS + SHA-256 table, then print git tag / push / gh release create (run only with --yes-publish; never in --all)',
+  async run(ctx) {
+    const notes = [], outputs = [];
+    const f = (n) => join(ctx.rel, n);
+    for (const n of PUBLIC_ASSETS) if (!existsSync(f(n))) return { ok: false, notes: [`${n} missing in Release/${ctx.version}/: run the build step`] };
+    // 1. Fresh signatures. Both are re-signed together, so they always expire at the same time.
+    const left = Object.fromEntries(['update.json', 'update-manifest.json'].map((n) => [n, daysLeft(f(n))]));
+    for (const [n, d] of Object.entries(left)) ctx.log.info(Number.isFinite(d) ? `  ${n}: ${d.toFixed(1)} days left` : `  ${n}: no readable signed expiry`);
+    if (Object.values(left).some((d) => !Number.isFinite(d) || d < RESIGN_BELOW_DAYS)) {
+      const priv = join(BI_DIR, 'examples', 'bmm', 'keys', 'private.key');
+      if (!existsSync(priv)) return { ok: false, notes: [`fewer than ${RESIGN_BELOW_DAYS} days left and no signing key at ${rel(priv)}: re-sign by hand`] };
+      if (!existsSync(BPKG)) return { ok: false, notes: ['bpkg.exe not built: cannot re-sign update.json'] };
+      ctx.log.info(`  re-signing both (fewer than ${RESIGN_BELOW_DAYS} days left; the key is read from its file, never printed)`);
+      // The key goes by path only: neither command prints it.
+      const a = await run(BPKG, ['resign-manifest', f('update.json'), '--key', priv], { log: ctx.log, quiet: true });
+      if (a.code) { ctx.log.fail(`bpkg resign-manifest: ${a.out.trim().split(/\r?\n/).pop()}`); return { ok: false, notes: ['update.json could not be re-signed'] }; }
+      const b = await run(process.execPath, ['scripts/sign-update-manifest.mjs', 'sign', f('update-manifest.json'), '--key', priv, '--require-signed'], { cwd: ROOT, log: ctx.log, quiet: true });
+      if (b.code) { ctx.log.fail(`sign-update-manifest: ${b.out.trim().split(/\r?\n/).pop()}`); return { ok: false, notes: ['update-manifest.json could not be re-signed'] }; }
+      for (const n of ['update.json', 'update-manifest.json']) { ctx.log.ok(`${n} re-signed: expires ${JSON.parse(readJson(f(n)).signed).expires}`); outputs.push(`Release/${ctx.version}/${n}`); }
+      notes.push(`re-signed: update.json and update-manifest.json now expire ${JSON.parse(readJson(f('update.json')).signed).expires.slice(0, 10)}`);
+      // check-release-versions --artifacts reads Release/update.json and dist/release-assets-v<v>/:
+      // give them the fresh copies when they hold this same build.
+      const rootSetup = join(ROOT, 'Release', 'BMM-Setup.exe');
+      if (existsSync(rootSetup) && await sha256File(rootSetup) === await sha256File(f('BMM-Setup.exe'))) {
+        copyFileSync(f('update.json'), join(ROOT, 'Release', 'update.json'));
+        const dist = join(ROOT, 'dist', `release-assets-v${ctx.version}`);
+        if (existsSync(join(dist, 'update-manifest.json'))) copyFileSync(f('update-manifest.json'), join(dist, 'update-manifest.json'));
+      }
+    } else ctx.log.ok(`both manifests have at least ${RESIGN_BELOW_DAYS} days left: not re-signed`);
+    // 2. Re-verify everything the verify step checks (signatures, setup ↔ manifest, SHA-256s), SHA256SUMS.txt.
+    const v = await verify.run(ctx);
+    outputs.push(...v.outputs); notes.push(...v.notes);
+    if (!v.ok) return { ok: false, outputs, notes: [...notes, 'verification failed after re-signing: nothing to publish'] };
+    // 3. The release text: the SHA-256 table and a body without any comment.
+    const mdFile = f('github-release.md'), bodyFile = f('github-release.body.md');
+    if (!existsSync(mdFile) || readText(mdFile).startsWith(GENERATED_MARK)) {
+      const n = await notesStep.run(ctx);
+      outputs.push(...n.outputs); notes.push(...n.notes);
+      if (!n.ok) return { ok: false, outputs, notes };
+    } else {
+      const names = orderAssets(publicAssets(ctx.rel));
+      const entries = [];
+      for (const n of names) entries.push({ path: n, sha256: await sha256File(f(n)) });
+      const md = replaceSumsTable(readText(mdFile), entries);
+      if (md == null) return { ok: false, outputs, notes: [...notes, 'github-release.md (hand-edited) has no « ### Checksums » table to refresh'] };
+      writeText(mdFile, md);
+      writeText(bodyFile, stripComments(md));
+      ctx.log.ok('github-release.md (hand-edited): SHA-256 table refreshed, wording kept');
+      outputs.push(rel(mdFile), rel(bodyFile));
+    }
+    const body = readText(bodyFile);
+    if (body.includes('<!--')) { writeText(bodyFile, stripComments(body)); ctx.log.warn('github-release.body.md carried a comment: stripped'); }
+    // 4. What would be uploaded, and the refusals.
+    const names = orderAssets(publicAssets(ctx.rel));
+    const problems = publishProblems(names);
+    const strays = readdirSync(ctx.rel).filter((n) => statSync(f(n)).isFile() && /\.(exe|msi|zip)$/i.test(n) && n !== 'BMM-Setup.exe');
+    if (strays.length) problems.push(`Release/${ctx.version}/ holds another installer or archive (${strays.join(', ')}): move it to extras/ or out of the folder`);
+    for (const p of problems) ctx.log.fail(p);
+    const notesFile = `Release/${ctx.version}/github-release.body.md`;
+    const cmds = publishCommands(ctx.version, names, notesFile);
+    ctx.state.ghCommand = cmds.map((x) => x.text).join('\n');
+    console.log(`\n  ${c.bold(`Publish ${ctx.version}: ${names.length} assets (${names.join(', ')})`)}`);
+    for (const x of cmds) { console.log(`  ${c.cyan(x.text)}`); ctx.log.line(`publish command: ${x.text}`); }
+    if (problems.length) return { ok: false, outputs, notes: [...notes, ...problems, 'refused: nothing was tagged or uploaded'] };
+    if (!ctx.opts.yesPublish) {
+      console.log(c.dim('  Not run. Pass --yes-publish to run these three commands.\n'));
+      return { ok: true, outputs, notes: [...notes, 'publish commands printed, not run (no --yes-publish)'] };
+    }
+    // 5. --yes-publish: tag, push the tag, create the release. Stops at the first failure.
+    for (const x of cmds) {
+      const r = await run(x.cmd, x.args, { cwd: ROOT, log: ctx.log });
+      if (r.code) { ctx.log.fail(`${x.text} failed`); return { ok: false, outputs, notes: [...notes, `stopped: « ${x.text} » failed (exit ${r.code})`] }; }
+      ctx.log.ok(x.text);
+    }
+    return { ok: true, outputs, notes: [...notes, `published v${ctx.version} as Latest`] };
+  },
+};
+
+// publish is `manual`: only `--steps publish` (or its number) runs it, never --all or the menu's « a ».
+export const STEPS = [preflight, version, changelog, gource, build, verify, docs, media, readme, bench, notesStep, publish];

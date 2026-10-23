@@ -42,5 +42,3 @@ Un `.zip` reste zippé. BMM le décompresse dans un cache temporaire seulement q
 
 [Activer et ordonner les mods](doc-page:guide/activate-and-order), puis [Régler un conflit](doc-page:guide/fix-a-conflict) quand deux mods se rencontrent.
 Détails de l'écran : [Bibliothèque](doc-page:features/library).
-
-<div class="bmm-replay" data-src="assets/docs/media/replays/new-game.bmmreplay" data-remote="https://freeproject089.github.io/BMM-Docs/assets/replays/new-game.bmmreplay" data-page="guide/install-first-mod" data-title="Regarde toute l'histoire : un nouveau jeu, du premier mod au dossier du jeu"></div>
